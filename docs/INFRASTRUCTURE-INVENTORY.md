@@ -1,13 +1,15 @@
 # Inventário da infraestrutura e prontidão dos acessos
 
-> **Estado:** diagnóstico parcial de STK-M0-02. A VPS não foi acessada porque o
-> destino e o usuário SSH não estão identificados no ambiente local. Este
-> documento não autoriza provisionamento, instalação ou alteração remota.
+> **Estado:** inventário remoto de STK-M0-02 concluído em modo somente leitura;
+> a VPS foi acessada com host key estrita e os resultados estão registrados
+> abaixo. A shape no painel Oracle ainda não foi confirmada. Este documento não
+> autoriza provisionamento, instalação ou alteração remota.
 
 ## 1. Escopo e data da observação
 
 A observação foi realizada em **2026-09-05**, com relógio local observado em
-13:31:48 no fuso `-03:00` (16:31:48 UTC).
+13:53:10 no fuso `-03:00` (16:53:10 UTC). A consulta do domínio ocorreu na
+mesma data antes do acesso remoto.
 
 O objetivo desta rodada foi separar fatos informados pelo proprietário,
 fatos observados localmente e fatos confirmados em fontes externas. Nenhuma
@@ -16,104 +18,135 @@ credencial, sessão, chave privada, IP administrativo ou identificador de conta
 
 ### Classificação dos fatos
 
-| Classificação                   | Resultado                                                                                                                                                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Informado pelo proprietário     | Existe uma VPS Oracle Always Free com 2 CPU, 12 GB de RAM e 50 GB de armazenamento total.                                                                                                                     |
-| Observado localmente            | Existe um par de chave SSH no perfil privado local; a chave pública correspondente passou por validação de formato. `~/.ssh/config` não existe, não há configuração OCI local e o OCI CLI não foi encontrado. |
-| Confirmado no painel/API Oracle | Nada. Não há acesso local ao painel/API Oracle confirmado nesta rodada.                                                                                                                                       |
-| Confirmado na VPS               | Nada. Não foi feita conexão SSH.                                                                                                                                                                              |
+| Classificação                   | Resultado                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Informado pelo proprietário     | Existe uma VPS Oracle Always Free com 2 CPU, 12 GB de RAM e 50 GB de armazenamento total.                                                                                                                                                                                             |
+| Observado localmente            | Existe um par de chave SSH no perfil privado local; a chave pública correspondente passou por validação de formato. `~/.ssh/config` não existe, não há configuração OCI local e o OCI CLI não foi encontrado.                                                                         |
+| Observado na VPS                | Ubuntu 24.04.4 LTS, kernel Linux 6.17.0-1020-oracle, máquina `aarch64`, 2 CPUs lógicas, 11 GiB de memória exibidos pelo `free`, 2 GiB de swap, disco raiz de 48 GiB com 43 GiB livres, Docker 29.7.2/Compose 5.5.0, zero containers e listeners somente em 22, 111 e DNS de loopback. |
+| Confirmado no painel/API Oracle | Nada. A shape, volumes, rede e regras de ingresso do painel Oracle não foram consultados.                                                                                                                                                                                             |
 
-A capacidade informada de 50 GB é capacidade total declarada, não espaço livre.
-CPU, shape, arquitetura, sistema operacional e ocupação ainda não podem ser
-inferidos a partir desses números.
+A capacidade informada de 50 GB foi confirmada pelo disco `sda` observado, mas
+a capacidade livre é a medida operacional relevante: a raiz tinha 43 GB livres
+e 2% dos inodes usados no momento da coleta. A arquitetura observada é ARM64;
+isso não permite inferir a shape Oracle.
 
 ## 2. Acesso à VPS
 
-### Evidência local
+### Evidência local e validação da sessão
 
 - A chave privada local existe, mas seu conteúdo não foi lido, copiado ou
   impresso.
 - A chave pública correspondente foi aceita pelo `ssh-keygen`, sem registrar o
   fingerprint no repositório.
-- Há um arquivo `known_hosts`, mas seus registros não foram usados para
-  identificar o destino. A existência de uma entrada não prova que ela pertence
-  à VPS do projeto.
+- Há um arquivo `known_hosts`. Depois que o proprietário identificou o destino,
+  os três tipos de chave apresentados pelo host coincidiram com as entradas
+  conhecidas; não houve divergência de fingerprint.
 - Não há `~/.ssh/config` associando host, usuário e chave.
 - Não há `~/.oci/config` nem o executável `oci` disponível.
-- Nenhum comando SSH foi executado contra um destino desconhecido; portanto não
-  houve validação de host key nem conflito de fingerprint a resolver.
+- A conexão foi feita com `BatchMode`, `IdentitiesOnly` e
+  `StrictHostKeyChecking=yes`; o caminho da chave e os identificadores do
+  destino permanecem fora deste documento.
+- A sonda SSH e o coletor remoto terminaram com sucesso, sem criar arquivos
+  persistentes no servidor.
 
-### Informação necessária para continuar
+O usuário de acesso observado pertence aos grupos administrativos e do Docker;
+um teste não interativo de `sudo -n id -u` retornou UID 0. Nenhuma permissão,
+usuário, chave ou configuração foi alterada.
 
-No ambiente privado, ainda são necessários:
+Os identificadores administrativos são deliberadamente representados apenas por
+placeholders neste repositório público:
 
 ```text
-VPS_HOST_OR_IP=<endereco-publico-ou-hostname-da-vps>
-SSH_USER=<usuario-ssh-da-vps>
-SSH_KEY_PATH=<caminho-local-da-chave-privada-ja-existente>
+VPS_HOST_OR_IP=<endereco-publico-ou-hostname>
+SSH_USER=<usuario-ssh>
+SSH_KEY_PATH=<caminho-local-da-chave-privada>
+ORACLE_TENANCY_ID=<identificador-da-tenancy>
 ```
 
-O proprietário deve fornecer somente o host/endereço público, o usuário SSH e
-confirmar o caminho local da chave. O conteúdo da chave, tokens, sessões e
-senhas não devem ser enviados.
+## 3. Inventário remoto observado
 
-Quando esses dados forem fornecidos, a primeira conexão deverá manter a
-verificação padrão de host key. Se a chave apresentada divergir de uma entrada
-conhecida, a conexão deve parar para reconciliação; não é permitido desativar a
-verificação nem aceitar uma chave por conveniência.
+A coleta foi executada em 2026-09-05 às 16:53:10 UTC, com SSH em modo
+não interativo e host key estrita. As saídas abaixo foram selecionadas para não
+ler variáveis de ambiente, argumentos de processos, logs completos ou conteúdo
+de dados.
 
-## 3. Inventário remoto pendente
+| Item                                         | Resultado observado                                                                                                                                                                                                              | Interpretação e limitação                                                                                                                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Distribuição e versão do sistema operacional | Ubuntu 24.04.4 LTS (`ID=ubuntu`, `VERSION_ID=24.04`); kernel `6.17.0-1020-oracle`.                                                                                                                                               | Sistema observado na VPS; nenhuma atualização foi executada.                                                                                                                     |
+| Arquitetura, CPU e shape                     | `aarch64`/ARM64; 2 CPUs lógicas, 2 cores, 1 socket e 1 nó NUMA.                                                                                                                                                                  | A contagem de CPU e a arquitetura foram observadas. A shape Oracle não foi confirmada no painel/API e não é inferida.                                                            |
+| Memória e swap                               | `free -h`: total 11 GiB, usado 590 MiB, livre 9,1 GiB, disponível 11 GiB. Swap de 2,0 GiB, usado 0 B. O Docker reportou `MemTotal=12506689536` bytes.                                                                            | A leitura é um retrato do momento da observação; não é benchmark nem garantia de carga futura.                                                                                   |
+| Discos, partições e volumes                  | `sda` com 50 GB; `sda1` com 49 GB em `/`; `sda16` com 891 MiB em `/boot`; `sda15` com 98 MiB em `/boot/efi`.                                                                                                                     | Não foi identificado volume adicional dedicado ao projeto.                                                                                                                       |
+| Espaço e inodes                              | `/`: 48 GB, 4,5 GB usados, 43 GB disponíveis, 10%. Inodes da raiz: 6,2 milhões, 84 mil usados, 2%. `/boot` e EFI também tinham folga.                                                                                            | A margem atual não inclui PostgreSQL, anexos, backups ou imagens futuras.                                                                                                        |
+| Horário e sincronização                      | Fuso `Etc/UTC`; `NTP=yes`; `NTPSynchronized=yes`.                                                                                                                                                                                | Nenhum relógio foi ajustado.                                                                                                                                                     |
+| Docker e Compose                             | Docker Engine/cliente `29.7.2`, API `1.55`; Docker Compose `v5.5.0`; daemon ativo e disponível.                                                                                                                                  | A arquitetura reportada pelo daemon também foi `aarch64`; nenhum pacote foi instalado ou atualizado.                                                                             |
+| Containers, projetos e volumes               | `docker compose ls` sem projetos; `docker ps -a` sem containers. `docker system df`: 1 imagem, 0 containers, 0 volumes e 0 build cache. A única imagem listada era `hello-world:latest`.                                         | Não há aplicação Stakeframe/OmniRoute em execução nem conflito de container observado.                                                                                           |
+| Serviços existentes                          | Ativos: `docker`/`containerd`, SSH, Fail2Ban, agente de monitoramento unificado da Oracle/Fluentd, `systemd-resolved`, `systemd-timesyncd`, `rpcbind`, `iscsid`, `unattended-upgrades`, `fwupd` e serviços básicos do sistema.   | Não foi identificada unidade ativa de Caddy, Nginx, PostgreSQL, Redis, Stakeframe ou OmniRoute. A lista é de serviços ativos, não uma auditoria de todas as unidades instaladas. |
+| Portas em escuta                             | TCP/UDP 22 em todas as interfaces (`sshd`); TCP/UDP 111 em todas as interfaces (`rpcbind`); DNS somente em `127.0.0.53`/`127.0.0.54`.                                                                                            | A escuta em 111 é um conflito/exposição concreta a revisar antes do provisionamento. Não houve scan externo.                                                                     |
+| 80/443                                       | Nenhum processo escutando em TCP 80 ou 443 na coleta.                                                                                                                                                                            | As regras locais permitem novas conexões TCP em 80/443; o ingresso na rede Oracle não foi confirmado. Isso não equivale a HTTPS funcionando.                                     |
+| Firewall                                     | UFW ausente. `iptables`: políticas `INPUT ACCEPT`, `FORWARD DROP`, `OUTPUT ACCEPT`, com accepts explícitos para novas conexões TCP em 22, 80 e 443. `nftables` também está presente, com múltiplas tabelas/políticas observadas. | A saída foi filtrada; é necessário revisar o conjunto efetivo e as regras de ingresso OCI antes de publicar serviços. Nenhuma regra foi alterada.                                |
+| Backups e monitoramento                      | Agente `unified-monitoring-agent` ativo, com coletor Fluentd. Timer `dpkg-db-backup` presente para a base de pacotes do sistema.                                                                                                 | Não foi identificado backup da aplicação, PostgreSQL ou anexos entre os timers/serviços selecionados. Monitoramento externo do Stakeframe ainda não existe/verificado.           |
+| Permissões para futura instalação            | O usuário de acesso pertence a grupos administrativos e `docker`; `sudo -n id -u` retornou UID 0.                                                                                                                                | Há capacidade administrativa observada, mas qualquer instalação futura continua dependendo de tarefa autorizada e revisão do Codex.                                              |
 
-Nenhuma linha abaixo foi marcada como observada, porque a conexão ainda não foi
-possível.
+### Consultas executadas
 
-| Item                                         | Estado         | Evidência que falta                                                                                                                                 |
-| -------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Distribuição e versão do sistema operacional | Não observado  | Consulta remota somente leitura a `/etc/os-release` e informações do kernel.                                                                        |
-| Arquitetura, CPU e shape                     | Não observado  | `uname`, `lscpu`/`nproc` e confirmação posterior no painel Oracle, se disponível. Não inferir shape pela contagem de CPU.                           |
-| Memória total, disponível e swap             | Não observado  | `free`, `swapon` e leitura selecionada de `/proc/meminfo`.                                                                                          |
-| Discos, partições, volumes, espaço e inodes  | Não observado  | `lsblk`, `df -hT` e `df -ih`, sem ler arquivos de dados.                                                                                            |
-| Horário, fuso e sincronização                | Não observado  | `timedatectl` ou equivalente, sem ajustar o relógio.                                                                                                |
-| Docker e Compose                             | Não observado  | Versões do cliente/Compose e estado do daemon; não instalar nem atualizar.                                                                          |
-| Containers e serviços                        | Não observado  | Lista selecionada de nomes, imagens, estado, consumo e portas publicadas; não usar `docker inspect` amplo, variáveis de ambiente ou logs completos. |
-| Portas em escuta e firewall local            | Não observado  | `ss`/`nft`/`ufw`/unidades de firewall disponíveis, somente leitura. Não haverá scan externo.                                                        |
-| Conflitos em 80/443                          | Não verificado | Portas em escuta e regras locais da VPS. Nenhuma ocupação pode ser afirmada hoje.                                                                   |
-| Backups e monitoramento                      | Não observado  | Nomes/estados de serviços e tarefas, sem abrir conteúdos sensíveis nem logs completos.                                                              |
-| Permissões para futura instalação            | Não observado  | Usuário efetivo e capacidade administrativa a confirmar depois do acesso; não alterar permissões.                                                   |
-
-### Comandos previstos para a próxima observação
-
-Após validar a identidade do destino, a coleta deve ser limitada a consultas
-selecionadas equivalentes a:
+A coleta remota usou consultas selecionadas equivalentes às seguintes, sem
+persistência no servidor:
 
 ```bash
 cat /etc/os-release
+uname -sr
 uname -m
 nproc
+lscpu -b -p=CPU,Core,Socket,Node
 free -h
 swapon --show
-lsblk -e7 -o NAME,SIZE,FSTYPE,MOUNTPOINTS
+lsblk -e7 -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS
 df -hT
 df -ih
-timedatectl
+findmnt -rn -o TARGET,SOURCE,FSTYPE
+date --iso-8601=seconds
+timedatectl show -p Timezone -p NTPSynchronized -p NTP
 
-docker version --format '{{.Client.Version}} / {{.Server.Version}}'
+id -Gn
+sudo -n id -u
+docker --version
 docker compose version
-docker info --format '{{.ServerVersion}} {{.OperatingSystem}} {{.Architecture}}'
-docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
-docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
+docker version --format '...'
+docker info --format '...'
+docker compose ls
+docker ps -a --format '...'
+docker stats --no-stream --format '...'
+docker system df
+systemctl list-units --type=service --state=running --no-legend --no-pager
+systemctl list-timers --all --no-legend --no-pager
 ss -lntup
+ufw status verbose
+nft list ruleset
+iptables -S
 ```
 
-A consulta de firewall deve usar somente o mecanismo já instalado e disponível.
-A ausência de `sudo` ou de um comando não deve ser corrigida instalando pacote;
-deve ser registrada como limitação.
+A ausência de `sudo` ou de um comando teria sido registrada sem instalar pacote;
+no inventário observado, os comandos necessários estavam disponíveis.
 
 ## 4. Capacidade e conflitos conhecidos
 
-Não existe conflito concreto confirmado na VPS nesta rodada. Em particular,
-não é possível declarar se 80/443, armazenamento, memória, Docker ou alguma
-porta administrativa já estão ocupados.
+A capacidade observada é compatível com a informação inicial do proprietário em
+CPU, RAM e disco total, mas há pontos que precisam de revisão antes de qualquer
+provisionamento:
+
+- `rpcbind` ocupa TCP/UDP 111 em IPv4 e IPv6 em todas as interfaces. Sua
+  necessidade e exposição devem ser decididas antes de publicar o projeto.
+- Não há listener em 80/443, mas o firewall local aceita novas conexões TCP
+  nessas portas. A política de ingresso da rede Oracle ainda não foi confirmada;
+  não se deve interpretar isso como HTTPS disponível.
+- A política `INPUT ACCEPT` do `iptables`, combinada com múltiplas tabelas
+  `nftables`, requer uma revisão de segurança do conjunto efetivo e das regras
+  do painel Oracle. Nenhuma regra foi modificada.
+- A raiz tem 43 GB livres e 2% dos inodes usados, mas esse espaço terá de
+  comportar banco, anexos, imagens e cópias temporárias futuras. Não foi feito
+  benchmark nem estimativa de carga.
+- Não existem containers ou projetos Compose ativos; portanto não há conflito
+  atual com Stakeframe ou OmniRoute no daemon Docker.
 
 Como referência **local do OmniRoute, não como inventário da VPS**, o Compose
 consultado publica por padrão:
@@ -131,14 +164,14 @@ este inventário não escolhe portas, shape, distribuição, topologia ou servi�
 
 ## 5. Matriz de prontidão dos acessos e integrações
 
-| Item                      | Estado atual                                            | Já existe/verificado                                                                                                                                                                | Falta e dependências                                                                                                                                                              | Ação pessoal necessária                                                                                                                              |
-| ------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Oracle/VPS                | **Parcial — acesso bloqueado**                          | Capacidade declarada pelo proprietário; chave local existente e chave pública validada.                                                                                             | Host/IP, usuário SSH, confirmação do caminho da chave, host key e inventário remoto. Shape, arquitetura e painel Oracle continuam sem confirmação.                                | Fornecer host e usuário; confirmar a chave local. Login/MFA do painel, se o proprietário quiser disponibilizar consulta, ocorre fora do repositório. |
-| Domínio e DNS             | **Disponibilidade e preço verificados; não registrado** | ISAVAIL do Registro.br retornou código `0` para `stakeframe.com.br`; a página oficial informa `R$ 40,00` por 1 ano. Consulta DNS local não resolveu o nome.                         | Compra, titularidade, servidores autoritativos e registros DNS ainda não existem/verificados nesta tarefa. Disponibilidade pode mudar antes da compra.                            | Decidir se compra e executar eventual login/pagamento no Registro.br; nenhuma compra foi feita.                                                      |
-| Cloudflare R2             | **Não verificado**                                      | Nenhuma conta, bucket ou credencial foi criada ou testada nesta tarefa.                                                                                                             | Conta, buckets privados separados, política de retenção, credenciais de escopo mínimo e teste de upload/download.                                                                 | Login/MFA e eventual contratação, se necessário; criar recursos somente com autorização posterior.                                                   |
-| Google OAuth              | **Não verificado**                                      | Nenhum client, consent screen ou credencial foi criado/testado.                                                                                                                     | Projeto, tela de consentimento, client restrito à identidade do proprietário, callback e segredos de ambiente.                                                                    | Login/MFA e configuração da identidade autorizada; não enviar credenciais ao repositório.                                                            |
-| Telegram                  | **Não verificado**                                      | Nenhum bot ou token foi criado/testado para o Stakeframe.                                                                                                                           | Bot, token fora do repositório, chat/usuário permitido e teste controlado de recebimento.                                                                                         | Criar o bot com o BotFather e informar somente identificadores não secretos no canal privado apropriado.                                             |
-| OmniRoute dedicado na VPS | **Referência local; destino pendente**                  | Instalação local consultada: pacote `omniroute` na versão `3.8.50`. Manifesto oficial da imagem `diegosouzapw/omniroute:3.8.50` publicou descritores `linux/amd64` e `linux/arm64`. | Arquitetura da VPS, tag/digest a fixar, consumo, limites, armazenamento, saída estruturada e provedores efetivamente disponíveis. Sessões e bancos locais não serão transferidos. | Nenhuma chamada paga foi feita; decidir provedores e limites somente após o inventário e revisão do Codex.                                           |
+| Item                      | Estado atual                                            | Já existe/verificado                                                                                                                                                                                     | Falta e dependências                                                                                                                                          | Ação pessoal necessária                                                                                                      |
+| ------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Oracle/VPS                | **Inventário remoto verificado; painel pendente**       | Acesso SSH com host key estrita; Ubuntu 24.04.4 LTS, ARM64, 2 CPUs, memória/swap, armazenamento, Docker/Compose, serviços, sockets e firewall local observados.                                          | Shape, volumes/rede no painel Oracle e regras de ingresso OCI ainda não confirmados; revisar `rpcbind`, `INPUT ACCEPT` e espaço antes de provisionar.         | Nenhuma ação adicional de acesso nesta rodada; eventual login/MFA do painel, se disponibilizado, ocorre fora do repositório. |
+| Domínio e DNS             | **Disponibilidade e preço verificados; não registrado** | ISAVAIL do Registro.br retornou código `0` para `stakeframe.com.br`; a página oficial informa `R$ 40,00` por 1 ano. Consulta DNS local não resolveu o nome.                                              | Compra, titularidade, servidores autoritativos e registros DNS ainda não existem/verificados nesta tarefa. Disponibilidade pode mudar antes da compra.        | Decidir se compra e executar eventual login/pagamento no Registro.br; nenhuma compra foi feita.                              |
+| Cloudflare R2             | **Não verificado**                                      | Nenhuma conta, bucket ou credencial foi criada ou testada nesta tarefa.                                                                                                                                  | Conta, buckets privados separados, política de retenção, credenciais de escopo mínimo e teste de upload/download.                                             | Login/MFA e eventual contratação, se necessário; criar recursos somente com autorização posterior.                           |
+| Google OAuth              | **Não verificado**                                      | Nenhum client, consent screen ou credencial foi criado/testado.                                                                                                                                          | Projeto, tela de consentimento, client restrito à identidade do proprietário, callback e segredos de ambiente.                                                | Login/MFA e configuração da identidade autorizada; não enviar credenciais ao repositório.                                    |
+| Telegram                  | **Não verificado**                                      | Nenhum bot ou token foi criado/testado para o Stakeframe.                                                                                                                                                | Bot, token fora do repositório, chat/usuário permitido e teste controlado de recebimento.                                                                     | Criar o bot com o BotFather e informar somente identificadores não secretos no canal privado apropriado.                     |
+| OmniRoute dedicado na VPS | **Compatibilidade base verificada; não implantado**     | Instalação local consultada: pacote `omniroute` na versão `3.8.50`. A VPS reportou `aarch64`; o manifesto oficial de `diegosouzapw/omniroute:3.8.50` publicou descritores `linux/amd64` e `linux/arm64`. | Tag/digest a fixar, consumo, limites, armazenamento, saída estruturada e provedores efetivamente disponíveis. Sessões e bancos locais não serão transferidos. | Nenhuma chamada paga foi feita; decidir provedores e limites somente após revisão do Codex.                                  |
 
 Ter uma chave ou uma conta disponível não equivale a ter a integração testada.
 Cada integração deverá ter um teste explícito, não destrutivo e com resultado
@@ -172,12 +205,12 @@ projeto antigo e sem copiar dados. O `package.json` local reporta a versão
 `3.8.50`; o Compose documenta perfis `base`, `web`, `cli`, `host` e sidecars
 opcionais.
 
-A leitura somente do manifesto do registry oficial para
-`diegosouzapw/omniroute:3.8.50` encontrou imagens Linux para `amd64` e `arm64`.
-Isso confirma cobertura dessas duas arquiteturas no manifesto consultado, mas
-**não confirma a arquitetura da VPS**, que ainda depende do SSH/painel Oracle.
-Também não valida automaticamente cada perfil, dependência nativa, provedor,
-limite ou custo em produção.
+A VPS reportou `aarch64`/ARM64 e a leitura somente do manifesto do registry
+oficial para `diegosouzapw/omniroute:3.8.50` encontrou imagens Linux para
+`amd64` e `arm64`. Portanto, a compatibilidade de plataforma base está coberta
+pelo manifesto consultado; isso não valida automaticamente cada perfil,
+dependência nativa, provedor, limite ou custo em produção. A imagem não foi
+baixada nem executada na VPS.
 
 Nenhuma chamada de inferência foi feita nesta tarefa. Não houve transferência de
 sessões, bancos, arquivos `.env` ou credenciais do OmniRoute local.
@@ -186,34 +219,34 @@ sessões, bancos, arquivos `.env` ou credenciais do OmniRoute local.
 
 Esta sequência é proposta de execução, não decisão arquitetural aprovada:
 
-1. Receber no ambiente privado o host/IP e usuário SSH; confirmar a chave sem
-   revelar seu conteúdo.
-2. Validar host key e executar o inventário remoto somente leitura, registrando
-   valores selecionados e sanitizados.
-3. Se houver acesso já configurado ao painel Oracle, confirmar por leitura shape,
-   volumes, rede e regras de ingresso; não instalar OCI CLI apenas para isso.
-4. Submeter ao Codex os conflitos concretos de CPU, RAM, disco, 80/443, portas,
-   firewall, permissões e serviços existentes.
+1. Manter host, usuário, caminho da chave e fingerprints somente no ambiente
+   privado; a sessão usada nesta rodada já foi encerrada.
+2. Submeter ao Codex o inventário observado e os conflitos concretos de CPU,
+   RAM, disco, 80/443, porta 111, firewall, permissões e serviços existentes.
+3. Se houver acesso ao painel Oracle, confirmar por leitura shape, volumes, rede
+   e regras de ingresso; não instalar OCI CLI apenas para isso.
+4. Após a revisão, decidir o tratamento de `rpcbind`, a política de firewall e
+   as regras de ingresso antes de publicar qualquer serviço.
 5. Após decisão sobre domínio, configurar DNS e HTTPS somente em tarefa
    autorizada; a disponibilidade atual não reserva o nome.
 6. Provisionar R2, OAuth e Telegram com credenciais fora do repositório e testes
    de escopo mínimo, cada integração com evidência própria.
-7. Escolher a imagem e o perfil do OmniRoute depois de confirmar a arquitetura,
-   fixando versão/digest e validando consumo, healthcheck e saída estruturada.
+7. Escolher a imagem e o perfil do OmniRoute depois da revisão, fixando
+   versão/digest e validando consumo, healthcheck e saída estruturada.
 8. Só então preparar os serviços do Stakeframe, backup, monitoramento e
    recuperação, com autorizações específicas para qualquer alteração remota.
 
 ## 9. Fontes e limitações
 
-| Fonte                                                                                                                             | Uso                                                                  | Data/limitação                                                                                            |
-| --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [Serviço de disponibilidade do Registro.br](https://registro.br/tecnologia/provedores-de-hospedagem/disponibilidade-de-dominios/) | Endpoint oficial e transporte ISAVAIL.                               | Consultado em 2026-09-05; resposta específica registrada acima.                                           |
-| [Protocolo ISAVAIL v2](https://registro.br/tecnologia/Protocolo-ISAVAILv2.txt)                                                    | Interpretação de `ST 0`.                                             | Fonte oficial consultada em 2026-09-05.                                                                   |
-| [Preço de domínio — Registro.br](https://registro.br/ajuda/pagamento-de-dominio/)                                                 | Preço oficial de R$ 40,00 por 1 ano.                                 | Consultado em 2026-09-05; não houve checkout.                                                             |
-| [Repositório oficial do OmniRoute](https://github.com/diegosouzapw/OmniRoute)                                                     | Identificação do projeto e referência de instalação.                 | Fonte pública; a cópia local observada é `3.8.50` e possui alterações não relacionadas, não reutilizadas. |
-| [Guia Docker oficial do OmniRoute](https://github.com/diegosouzapw/OmniRoute/blob/main/docs/guides/DOCKER_GUIDE.md)               | Referência de execução por Docker/Compose.                           | Consultado em 2026-09-05; guia pode evoluir independentemente deste projeto.                              |
-| [Imagem oficial no Docker Hub](https://hub.docker.com/r/diegosouzapw/omniroute)                                                   | Manifesto da tag `3.8.50` e plataformas `linux/amd64`/`linux/arm64`. | Consulta GET ao registry; não houve pull, execução ou alteração remota.                                   |
-| Ambiente local de execução                                                                                                        | Git, SSH, OCI CLI, DNS e arquivos públicos do projeto.               | Host/IP, usuário, painel Oracle e todos os dados da VPS continuam indisponíveis.                          |
+| Fonte                                                                                                                             | Uso                                                                  | Data/limitação                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [Serviço de disponibilidade do Registro.br](https://registro.br/tecnologia/provedores-de-hospedagem/disponibilidade-de-dominios/) | Endpoint oficial e transporte ISAVAIL.                               | Consultado em 2026-09-05; resposta específica registrada acima.                                                    |
+| [Protocolo ISAVAIL v2](https://registro.br/tecnologia/Protocolo-ISAVAILv2.txt)                                                    | Interpretação de `ST 0`.                                             | Fonte oficial consultada em 2026-09-05.                                                                            |
+| [Preço de domínio — Registro.br](https://registro.br/ajuda/pagamento-de-dominio/)                                                 | Preço oficial de R$ 40,00 por 1 ano.                                 | Consultado em 2026-09-05; não houve checkout.                                                                      |
+| [Repositório oficial do OmniRoute](https://github.com/diegosouzapw/OmniRoute)                                                     | Identificação do projeto e referência de instalação.                 | Fonte pública; a cópia local observada é `3.8.50` e possui alterações não relacionadas, não reutilizadas.          |
+| [Guia Docker oficial do OmniRoute](https://github.com/diegosouzapw/OmniRoute/blob/main/docs/guides/DOCKER_GUIDE.md)               | Referência de execução por Docker/Compose.                           | Consultado em 2026-09-05; guia pode evoluir independentemente deste projeto.                                       |
+| [Imagem oficial no Docker Hub](https://hub.docker.com/r/diegosouzapw/omniroute)                                                   | Manifesto da tag `3.8.50` e plataformas `linux/amd64`/`linux/arm64`. | Consulta GET ao registry; não houve pull, execução ou alteração remota.                                            |
+| Ambiente local de execução                                                                                                        | Git, SSH, OCI CLI, DNS e arquivos públicos do projeto.               | Host/IP e usuário foram utilizados somente em ambiente privado; painel Oracle e shape ainda não foram confirmados. |
 
 As limitações são deliberadas: não houve scan externo, benchmark, teste de
 carga, instalação, atualização, reinício, mudança de firewall, alteração de

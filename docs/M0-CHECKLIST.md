@@ -1,8 +1,8 @@
 # Checklist do M0 — Setup
 
 Tarefa atual: **STK-M0-02** (inventário da VPS e preparação dos acessos).
-STK-M0-02 está em andamento; o inventário remoto aguarda a identificação
-inequívoca do destino e do usuário SSH.
+STK-M0-02 está em andamento; o inventário remoto foi executado em leitura,
+sanitizado no documento próprio e aguarda revisão do Codex.
 O M0 só é considerado concluído quando todos os itens abaixo estiverem
 verificados e o Codex autorizar o avanço.
 
@@ -44,14 +44,17 @@ verificados e o Codex autorizar o avanço.
 
 ### VPS Oracle Always Free
 
-- [ ] Confirmar acesso de leitura à VPS e inventariar a VPS existente
-      informada pelo proprietário: **2 CPU, 12 GB RAM, 50 GB**; shape e
-      arquitetura ainda não verificadas. A chave local foi localizada, mas
-      host e usuário SSH ainda faltam; nenhuma conexão foi tentada.
-- [ ] Inventariar CPU, memória, disco e serviços existentes na VPS.
-- [ ] Verificar Docker + Docker Compose na VPS (versões).
+- [x] Confirmar acesso de leitura à VPS e inventariar a VPS existente
+      informada pelo proprietário: **2 CPU, 12 GB RAM, 50 GB**. A conexão
+      confirmou Ubuntu 24.04.4 LTS, `aarch64`/ARM64 e 2 CPUs; a shape Oracle
+      permanece não confirmada no painel.
+- [x] Inventariar CPU, memória, swap, disco, inodes, relógio, containers,
+      serviços, listeners e firewall local na VPS; evidência sanitizada em
+      [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
+- [x] Verificar Docker + Docker Compose na VPS: Docker 29.7.2, API 1.55 e
+      Compose v5.5.0; daemon disponível, zero containers e zero projetos Compose.
 - [ ] Definir e documentar política de recuperação de instâncias ociosas.
-- [x] Registrar o diagnóstico parcial e as pendências de acesso em
+- [x] Registrar o diagnóstico e as pendências restantes de acesso em
       [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
 
 ### Domínio
@@ -72,8 +75,13 @@ verificados e o Codex autorizar o avanço.
 
 - [ ] Planejar instância Docker independente do computador pessoal; inventariar
       provedores disponíveis, limites e custos; validar suporte a imagens e
-      saída estruturada antes de depender deles. - [x] Referência local consultada: OmniRoute `3.8.50`; manifesto oficial
-      da imagem `3.8.50` reportou `linux/amd64` e `linux/arm64`. - [ ] Arquitetura da VPS e compatibilidade do destino ainda não verificadas.
+      saída estruturada antes de depender deles.
+  - [x] Referência local consultada: OmniRoute `3.8.50`; manifesto oficial da
+        imagem `3.8.50` reportou `linux/amd64` e `linux/arm64`.
+  - [x] Arquitetura observada da VPS: `aarch64`/ARM64; compatibilidade de
+        plataforma base da imagem confirmada no manifesto.
+  - [ ] Perfil, consumo, limites, healthcheck, provedores e custo de produção
+        ainda não validados.
 
 ### Infraestrutura e operação
 
@@ -88,8 +96,9 @@ verificados e o Codex autorizar o avanço.
 
 ## Registro de decisões pendentes para o Codex
 
-- Inventário da VPS: confirmar shape e arquitetura (spec informada:
-  2 CPU / 12 GB / 50 GB; shape e arquitetura não verificadas).
+- Inventário da VPS: arquitetura observada como `aarch64`/ARM64, com 2 CPU,
+  12 GB informados e 50 GB totais observados; confirmar shape, volumes, rede e
+  regras de ingresso no painel Oracle.
 - Ordem das integrações (R2 → OAuth → Telegram → OmniRoute) após o domínio.
 - Critério de quando instalar o Postgres na VPS vs. desenvolver com Docker
   local primeiro.
