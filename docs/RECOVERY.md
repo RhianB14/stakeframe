@@ -19,10 +19,14 @@
   inteiro, executado por agendamento a cada 30 minutos.
 - O dump é **criptografado antes de sair da VPS** e enviado ao bucket privado
   de backups no Cloudflare R2.
-- A restauração usa `pg_restore` em um cluster PostgreSQL recém-provisionado,
-  seguida de **recriação das roles e permissões** necessárias (a restauração
-  lógica não recria papéis de instância): recriar a role da aplicação a partir
-  de segredo gerenciado e reaplicar os grants do schema.
+- A restauração começa pela preparação do PostgreSQL de destino: provisionar
+  o cluster e preparar o banco de destino. As **roles referenciadas no dump
+  são recriadas previamente**, pois a restauração lógica não recria papéis de
+  instância; credenciais são fornecidas fora do repositório. Depois, executar
+  `pg_restore --exit-on-error` usando uma conta com as permissões necessárias
+  para restaurar objetos, proprietários e ACLs. Ao final, conferir
+  proprietários e permissões antes de prosseguir com os anexos e as demais
+  verificações.
 - **Sem PITR nesta etapa.** Backup físico com arquivamento de WAL
   (point-in-time recovery) fica fora do M0 e dependerá de decisão futura;
   nenhum procedimento deste documento depende de WAL.
@@ -56,15 +60,19 @@
 
 ## Procedimento de restauração (a implementar e testar)
 
-1. Provisionar/recriar a VPS.
-2. Restaurar o dump PostgreSQL mais recente válido com `pg_restore`.
-3. Recriar roles e permissões do banco.
-4. Restaurar anexos a partir das cópias de recuperação e conferir contra o
+1. Provisionar/recriar a VPS e preparar o cluster PostgreSQL de destino.
+2. Selecionar o dump PostgreSQL válido mais recente, recriar previamente as
+   roles referenciadas nele e preparar o banco de destino; credenciais são
+   fornecidas fora do repositório.
+3. Executar `pg_restore --exit-on-error` usando uma conta com as permissões
+   necessárias para restaurar objetos, proprietários e ACLs.
+4. Conferir proprietários e permissões após a restauração.
+5. Restaurar anexos a partir das cópias de recuperação e conferir contra o
    manifesto (checksums) e a política de retenção.
-5. Restaurar configuração do OmniRoute.
-6. Subir o compose com as imagens por digest.
-7. Verificação de integridade (conciliação de saldos, contagens, smoke tests).
-8. Registro do teste (data, duração, RTO medido, problemas).
+6. Restaurar configuração do OmniRoute.
+7. Subir o compose com as imagens por digest.
+8. Verificação de integridade (conciliação de saldos, contagens, smoke tests).
+9. Registro do teste (data, duração, RTO medido, problemas).
 
 ## Métricas que a validação futura deve medir
 

@@ -18,8 +18,9 @@ A execução correta é feita com ferramentas isoladas em `dev\tools\stakeframe`
 - `node.exe` v24.20.0 — zip oficial do nodejs.org, SHA-256 conferido contra o
   `SHASUMS256.txt` oficial da distribuição.
 - `pnpm.exe` 11.24.0 — binário standalone oficial da release do GitHub do
-  pnpm (asset `pnpm-win32-x64.zip`); a release não publica checksum file,
-  então a integridade é garantida pela origem oficial + execução validada.
+  pnpm (asset `pnpm-win32-x64.zip`); binário obtido da release oficial e
+  validado funcionalmente. Não foi realizada verificação independente de
+  checksum do pnpm.
 
 ### Procedimento reproduzível
 

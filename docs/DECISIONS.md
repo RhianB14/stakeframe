@@ -92,12 +92,17 @@ recebem status `Superseded` e apontam a substituta.
   implementado no M0 ([referência](https://www.postgresql.org/docs/current/continuous-archiving.html)).
 - **Decisão:** recuperação por backups **lógicos completos** (`pg_dump -Fc`,
   a cada 30 minutos, criptografados antes de sair da VPS, enviados ao bucket
-  privado de backups no R2), restaurados com `pg_restore` + recriação de
-  roles/permissões. Sem PITR; backup físico com arquivamento de WAL fica
-  para decisão futura. Anexos: objetos com identificadores únicos, sem
-  sobrescrita, com cópia de recuperação no bucket de backups, manifesto com
-  checksums e política de exclusão aplicada também às cópias.
+  privado de backups no R2). Na restauração, as roles referenciadas são
+  recriadas previamente e o banco de destino é preparado com credenciais
+  fornecidas fora do repositório; em seguida, o dump é restaurado com
+  `pg_restore --exit-on-error` por uma conta com permissões para restaurar
+  objetos, proprietários e ACLs, que são conferidos ao final. Sem PITR; backup
+  físico com arquivamento de WAL fica para decisão futura. Anexos: objetos com
+  identificadores únicos, sem sobrescrita, com cópia de recuperação no bucket
+  de backups, manifesto com checksums e política de exclusão aplicada também
+  às cópias.
 - **Consequências:** o RPO de 1 hora depende da cadência dos dumps completos
-  (idade do snapshot recuperável ≤ 1 hora, a medir na validação); restauração
-  é mais lenta que PITR em bases grandes — aceitável na escala do projeto e
-  coberta pelo RTO de 4 horas.
+  (idade do snapshot recuperável ≤ 1 hora, a medir na validação). A duração
+  da restauração e o atendimento ao RTO de 4 horas serão demonstrados no teste
+  real; esta decisão não presume desempenho relativo a PITR nem declara o RTO
+  atendido.
