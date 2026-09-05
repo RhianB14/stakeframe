@@ -1,0 +1,16 @@
+{
+  "name": "stakeframe",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=24.20.0"
+  },
+  "scripts": {
+    "format:check": "prettier --check .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.6"
+  }
+}

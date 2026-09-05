@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# environments and secrets — never commit
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+client_secret*.json
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# test and coverage
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# tool caches
+.cache/
+.turbo/
+.eslintcache
+.vite/
