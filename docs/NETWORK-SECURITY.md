@@ -21,7 +21,8 @@
 - **Proposta R2:** scripts locais e testes com substitutos inofensivos.
   Nenhum SSH, upload para a VPS, firewall real ou systemd real nos testes R2.
 - **Pendente:** validar IAM, transporte serial e login/recuperação do Ubuntu
-  em uma tarefa separada, e obter revisão/autorização específica de aplicação.
+  ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md)) e obter revisão/autorização
+  específica de aplicação.
 
 Esta revisão substitui os blocos de aplicação/rollback da R1. Há uma única
 implementação em [scripts/network_security](../scripts/network_security/),
@@ -286,6 +287,21 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
 connection**. A tabela não exibiu conexão existente. Os botões **Launch Cloud
 Shell connection** e **Create local connection** estavam disponíveis, mas não
 foram acionados. **IAM, conexão serial e login/recuperação Ubuntu não validados.**
+
+**Leitura focada do guest (STK-M0-04):** console serial em `ttyAMA0`
+(`console=tty1 console=ttyAMA0`) com `serial-getty@ttyAMA0` ativo — o guest
+exibirá prompt serial assim que existir conexão de console; getty ativo
+comprova configuração do guest, e transporte/prompt interativo seguem
+dependendo do teste OCI. Classificação de forma do shadow (sem hashes):
+nenhuma conta pertinente possui hash (root `*`, usuário padrão `!`) — não
+existe senha anterior a desbloquear; o teste exigirá **definir** senha
+temporária. sshd em execução sem opções alternativas; configuração carregada
+verificada (include único, **nenhuma linha `Match` nos arquivos carregados**)
+e campos de autenticação registrados (`PasswordAuthentication no`,
+`KbdInteractiveAuthentication no`, `UsePAM yes`, `AuthenticationMethods any`),
+idênticos no contexto padrão e no contexto da tupla real observada pelo
+servidor: senha definida no guest não autentica via SSH. Estado, pré-requisitos
+e sequência proposta: [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md).
 
 [Referência oficial consultada pelo Hermes](https://docs.oracle.com/en-us/iaas/Content/Compute/References/serialconsole.htm)
 para documentar pré-requisitos, sem acessar a conta:
