@@ -168,6 +168,10 @@ habilitado para boot.
 
 O adaptador consulta estados/resultado/status/start timestamp e jobs pendentes;
 usa D-Bus para ler microsegundos monotônicos sem interpretar durações humanas.
+A aplicação repete essa validação após a última mutação e gravação do estado
+aplicado. Se o rollback iniciou ou foi enfileirado, libera o lock para o worker,
+aguarda sua conclusão e retorna falha de aplicação. A espera relê o delta ativo
+recuperado e o bundle sob o lock; não aceita somente o journal de sucesso.
 A confirmação para somente o timer, sob coordenação do lock. Um recibo privado
 registra a entrada do rollback antes de ele aguardar o lock. Se a service já
 iniciou, liberar o lock conforme o protocolo, aguardar e revalidar: **isso não
@@ -183,6 +187,10 @@ a service para produzir aparência de sucesso.
 
 A recuperação restaura e confirma políticas anteriores antes de retirar regras
 que preservam acesso; remove somente recursos cuja propriedade foi estabelecida.
+Depois do detach, remove regras tagged exatas com `-D` em ordem inversa; não
+oferece `flush`, nem na chain própria. Regras/referências externas concorrentes
+fazem `-X` falhar sem apagá-las. Falha parcial mantém um prefixo próprio válido
+para retry; conteúdo externo exige inspeção manual, nunca adoção por nome.
 Erro de registro não deve impedir outras ações seguras. Um timer ainda pendente
 não deve ser cancelado enquanto restarem restrições próprias após rollback
 incompleto. Conservar um timer já disparado não implica novo retry; falhas

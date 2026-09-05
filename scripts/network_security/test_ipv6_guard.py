@@ -127,7 +127,11 @@ class FakeLinux:
             self.fw["chains"]["INPUT"].remove(list(args[1]))
         elif op == "flush":
             self.fw["chains"][args[0]] = []
+        elif op == "delete_rule":
+            self.fw["chains"][args[0]].remove(list(args[1]))
         elif op == "delete_chain":
+            if self.fw["chains"][args[0]] or any(args[0] in rule for rules in self.fw["chains"].values() for rule in rules):
+                raise OSError("chain is not empty or is still referenced")
             del self.fw["chains"][args[0]]
         else:
             raise AssertionError("unexpected mutation " + op)
@@ -236,6 +240,87 @@ class WorkflowTests(unittest.TestCase):
         self.worker.join(2)
         self.assertFalse(self.worker.is_alive())
         self.assertEqual(self.controller.store.read(self.run_id)["phase"], "rolled_back")
+
+    def test_apply_waits_for_rollback_started_during_final_save(self):
+        state = self.prepare()
+        evidence = self.evidence(state, "preflight")
+        save = self.controller.store.save
+        fired, waited, recovery_threads = [], [], []
+        original_mutate = self.backend.mutate
+        original_wait = self.controller._wait_rollback
+        def mutate(op, *args):
+            if fired:
+                recovery_threads.append(threading.current_thread())
+            return original_mutate(op, *args)
+        def racing_save(current):
+            save(current)
+            if current["phase"] == "applied" and not fired:
+                fired.append(True)
+                self.start_timer_worker(current)
+        def wait(current, seconds):
+            with self.controller.store.lock(timeout=2):
+                waited.append(True)  # Application released its lock for worker.
+            return original_wait(current, seconds)
+        self.backend.mutate = mutate
+        self.controller.store.save = racing_save
+        self.controller._wait_rollback = wait
+        try:
+            with self.assertRaisesRegex(guard.GuardError, "application failed"):
+                self.controller.apply(self.run_id, *evidence)
+        finally:
+            if fired:
+                self.worker.join(2)
+        self.assertEqual(waited, [True])
+        self.assertFalse(self.worker.is_alive())
+        self.assertEqual(self.worker_errors, [])
+        self.assertTrue(recovery_threads)
+        self.assertTrue(all(thread is self.worker for thread in recovery_threads))
+        self.assertEqual(self.backend.snapshot(), state["before"])
+        self.assertEqual(self.controller.store.read(self.run_id)["phase"], "rolled_back")
+
+    def test_final_apply_observation_rejects_queued_failed_and_deactivating(self):
+        original_save = self.controller.store.save
+        original_wait = self.controller._wait_rollback
+        for index, condition in enumerate(("queued", "failed", "deactivating"), 1):
+            with self.subTest(condition=condition):
+                self.run_id = format(index, "020x")
+                state = self.prepare()
+                evidence = self.evidence(state, "preflight")
+                fired, waited = [], []
+                def racing_save(current):
+                    original_save(current)
+                    if current["phase"] == "applied" and not fired:
+                        fired.append(True)
+                        if condition == "queued":
+                            self.backend.jobs = [["42", guard.unit_names(self.run_id)[0]]]
+                        else:
+                            self.backend.service.update(active=condition, sub=condition, result="exit-code" if condition == "failed" else "success",
+                                                        status=1 if condition == "failed" else 0, start_us=self.backend.now // 1000)
+                def wait(current, seconds):
+                    waited.append(True)
+                    return original_wait(current, 0)  # Deterministic bounded wait, no worker in this scenario.
+                self.controller.store.save = racing_save
+                self.controller._wait_rollback = wait
+                with self.assertRaisesRegex(guard.GuardError, "application failed"):
+                    self.controller.apply(self.run_id, *evidence)
+                latest = self.controller.store.read(self.run_id)
+                self.assertEqual(waited, [] if condition == "failed" else [True])
+                self.assertEqual(latest["phase"], "rolled_back" if condition == "failed" else "rollback_required")
+                if condition != "failed":
+                    self.assertEqual(self.backend.timer["active"], "active")
+                self.backend.jobs = []
+                self.backend.service.update(active="inactive", sub="dead", result="success", status=0, start_us=0)
+                self.controller.store.save = original_save
+                self.controller.rollback(self.run_id)
+
+    def test_wait_revalidates_active_state_after_successful_worker_journal(self):
+        self.apply()
+        state = self.controller.rollback(self.run_id)
+        self.backend.service.update(start_us=self.backend.monotonic_ns() // 1000)
+        self.backend.fw["policies"]["INPUT"] = "DROP"  # Drift after worker's readback.
+        with self.assertRaisesRegex(guard.GuardError, "rollback.*readback"):
+            self.controller._wait_rollback(state, 0)
+        self.assertEqual(self.backend.fw["policies"]["INPUT"], "DROP", "readback must not overwrite external drift")
 
     def test_timer_started_strictly_after_confirmation_is_noop(self):
         state = self.apply()
@@ -518,6 +603,57 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn(state["chain"], self.backend.fw["chains"])
         self.assertEqual(self.backend.timer["active"], "inactive")
 
+    def test_partial_exact_cleanup_retries_before_and_after_lost_ack(self):
+        for index, (operation, after) in enumerate((("delete_rule", False), ("delete_rule", True),
+                                                     ("delete_chain", False), ("delete_chain", True)), 1):
+            with self.subTest(operation=operation, after=after):
+                self.run_id = format(index, "020x")
+                state = self.apply()
+                seen = []
+                def fail(event):
+                    if event[0] == operation:
+                        seen.append(event)
+                        return len(seen) == (2 if operation == "delete_rule" else 1)
+                    return False
+                self.backend.fail, self.backend.after = fail, after
+                with self.assertRaisesRegex(guard.GuardError, "incomplete"):
+                    self.controller.rollback(self.run_id)
+                self.assertEqual(self.backend.fw["policies"], state["before"]["policies"])
+                self.assertEqual(self.backend.timer["active"], "active")
+                self.controller.rollback(self.run_id)
+                self.assertEqual(self.backend.snapshot(), state["before"])
+                self.assertEqual(self.backend.timer["active"], "inactive")
+
+    def test_cleanup_preserves_foreign_rule_inserted_after_ownership_read(self):
+        state = self.apply()
+        foreign = ["-p", "udp", "--dport", "9999", "-j", "ACCEPT"]
+        mutate = self.backend.mutate
+        calls, inserted = [], []
+        def runner(argv):
+            self.assertEqual(argv[:5], [guard.LinuxAdapter.IP6, "-w", "5", "-t", "filter"])
+            command, chain, *rule = argv[5:]
+            calls.append(argv)
+            if chain == state["chain"] and command in ("-F", "-D", "-X") and not inserted:
+                inserted.append(True)
+                self.backend.fw["chains"][chain].append(foreign.copy())
+            if command == "-P":
+                mutate("policy", chain, *rule)
+            elif command == "-D":
+                mutate("delete_jump" if chain == "INPUT" else "delete_rule", state["chain"] if chain == "INPUT" else chain, rule)
+            elif command in ("-F", "-X"):
+                mutate("flush" if command == "-F" else "delete_chain", chain)
+            else:
+                raise AssertionError("unexpected simulated adapter call: " + repr(argv))
+            return ""
+        self.backend.mutate = guard.LinuxAdapter(runner=runner).mutate
+        with self.assertRaisesRegex(guard.GuardError, "incomplete"):
+            self.controller.rollback(self.run_id)
+        self.assertEqual(self.backend.fw["chains"][state["chain"]], [foreign])
+        self.assertEqual(self.backend.fw["policies"], state["before"]["policies"])
+        self.assertEqual(self.backend.fw["chains"]["INPUT"], state["before"]["chains"]["INPUT"])
+        self.assertFalse(any("-F" in argv for argv in calls))
+        self.assertEqual(self.backend.timer["active"], "active")
+
     def test_corrupt_evidence_causes_recovery_instead_of_confirmation(self):
         state = self.apply()
         path, sha = self.evidence(state, "post")
@@ -576,6 +712,19 @@ class LockTests(unittest.TestCase):
 
 
 class AdapterTests(unittest.TestCase):
+    def test_adapter_deletes_exact_tagged_rules_and_rejects_even_owned_flush(self):
+        calls = []
+        adapter = guard.LinuxAdapter(runner=lambda argv: calls.append(argv) or "")
+        rid = "0123456789abcdefabcd"
+        chain = guard.chain_name(rid)
+        rule = guard.input_rules("stk6:" + rid + ":simulated")[-1]
+        adapter.mutate("delete_rule", chain, rule)
+        self.assertEqual(calls, [[adapter.IP6, "-w", "5", "-t", "filter", "-D", chain, *rule]])
+        for operation, args in (("flush", (chain,)), ("delete_rule", (chain, ["-j", "ACCEPT"]))):
+            with self.subTest(operation=operation), self.assertRaises(guard.GuardError):
+                adapter.mutate(operation, *args)
+        self.assertEqual(len(calls), 1)
+
     def test_oci_gate_uses_existing_codex_relay_not_repeated_panel_inspection(self):
         self.assertIn("oci_codex_relay_reviewed", guard.PREFLIGHT_CHECKS)
         self.assertNotIn("oci_readback", guard.PREFLIGHT_CHECKS)

@@ -276,18 +276,6 @@ class Controller:
         if actual != expected:
             raise GuardError("IPv6 readback differs (including unowned chains/OUTPUT)")
 
-    @contextlib.contextmanager
-    def _recover_on_failure(self, state):
-        try:
-            yield
-        except BaseException as failure:
-            try:
-                state["application_error"] = type(failure).__name__ + ": " + str(failure)
-                self._rollback_locked(state)
-            except BaseException as recovery:
-                raise GuardError("application failed; rollback INCOMPLETE; inspect private journal and retry rollback") from recovery
-            raise GuardError("application failed; active rollback verified; not confirmed") from failure
-
     def _rollback_locked(self, state, initial_errors=()):
         if self.backend.boot_id() != state["boot_id"]:
             raise GuardError("boot changed; refuse stale policy writes; reconcile manually")
@@ -355,7 +343,11 @@ class Controller:
                         self.backend.mutate("delete_jump", state["chain"], jump)
                 if jump in self.backend.snapshot()["chains"]["INPUT"]:
                     raise GuardError("owned jump removal not verified")
-                self.backend.mutate("flush", state["chain"])
+                # External writers do not share our lock. Delete exact owned
+                # rules, never flush; -X must refuse concurrent foreign content.
+                # Reverse order retains the validated prefix on a partial retry.
+                for rule in reversed(own):
+                    self.backend.mutate("delete_rule", state["chain"], rule)
                 self.backend.mutate("delete_chain", state["chain"])
                 if state["chain"] in self.backend.snapshot()["chains"]:
                     raise GuardError("owned chain removal not verified")
@@ -445,11 +437,18 @@ class Controller:
                 observed = self.backend.observe(state)
                 service = observed["service"]
                 latest = self.store.read(state["run_id"])
-            if not self._in_flight(observed):
-                if (latest["phase"] == "rolled_back" and service["active"] == "inactive" and service["sub"] == "dead"
-                        and service["result"] == "success" and service["status"] == 0 and service["start_us"] > 0):
-                    return
-                raise GuardError("rollback service completed unsuccessfully or lacks verified journal result")
+                if not self._in_flight(observed):
+                    if (latest["phase"] == "rolled_back" and service["active"] == "inactive" and service["sub"] == "dead"
+                            and service["result"] == "success" and service["status"] == 0 and service["start_us"] > 0):
+                        actual = self.backend.snapshot()
+                        touched = {a["args"][0] for a in latest["actions"] if a["op"] == "policy" and a["intent"]}
+                        if (self.backend.boot_id() != latest["boot_id"] or latest["chain"] in actual["chains"]
+                                or self._jump(latest) in actual["chains"]["INPUT"]
+                                or any(actual["policies"][c] != latest["before"]["policies"][c] for c in touched)):
+                            raise GuardError("active rollback readback differs from recovered owned state")
+                        self._verify_bundle(latest)
+                        return
+                    raise GuardError("rollback service completed unsuccessfully or lacks verified journal result")
             if time.monotonic() >= deadline:
                 raise GuardError("rollback still queued/running; NOT cancelled; inspect journal and wait/retry")
             time.sleep(0.02)
@@ -510,6 +509,8 @@ class Controller:
         raise GuardError("confirmation refused; active rollback verified; never stopped rollback service") from failure
 
     def apply(self, run_id, evidence, sha256):
+        waiting = False
+        failure = recovery_error = None
         with self.store.lock():
             state = self.store.read(run_id)
             if state["phase"] != "prepared":
@@ -526,7 +527,7 @@ class Controller:
             private_write(active, encoded({"run_id": run_id}))
             state["phase"] = "applying"
             state["original_session"] = proof["original_session"]
-            with self._recover_on_failure(state):
+            try:
                 self.store.save(state)
                 self.backend.arm(state, self.store.directory(run_id), lambda name, event: self._unit_event(state, name, event))
                 self._armed(state)
@@ -547,7 +548,39 @@ class Controller:
                 state["phase"] = "applied"
                 state["applied_monotonic_ns"] = self.backend.monotonic_ns()
                 self.store.save(state)
+                self._armed(state)  # Catch activation/jobs/receipt racing the last mutation/save.
                 return state
+            except BaseException as exc:
+                failure = exc
+                state["application_error"] = type(exc).__name__ + ": " + str(exc)
+                timer = state.get("units", {}).get(unit_names(run_id)[1], {})
+                try:
+                    waiting = bool(timer.get("acquired") and timer.get("installed")
+                                   and self._in_flight(self.backend.observe(state)))
+                except Exception:
+                    # Unknown service state cannot suppress safe locked recovery.
+                    waiting = False
+                if waiting:
+                    state["phase"] = "rollback_required"
+                    try:
+                        self.store.save(state)
+                    except Exception as save_error:
+                        recovery_error = save_error
+                else:
+                    try:
+                        self._rollback_locked(state)
+                    except BaseException as recovery:
+                        recovery_error = recovery
+        if waiting:
+            # The worker needs the same lock. Never stop its service or compete
+            # with it; wait outside the lock and reject this application anyway.
+            try:
+                self._wait_rollback(state, 30)
+            except BaseException as recovery:
+                recovery_error = recovery
+        if recovery_error:
+            raise GuardError("application failed; rollback INCOMPLETE; inspect private journal and retry rollback") from recovery_error
+        raise GuardError("application failed; active rollback verified; not confirmed") from failure
 
 
 def unit_names(run_id):
@@ -698,13 +731,13 @@ class LinuxAdapter:
             if not args or not re.fullmatch(r"STK6_[0-9a-f]{20}", args[0]):
                 raise GuardError("chain mutation outside owned namespace")
             chain = args[0]
-            simple = {"create": "-N", "flush": "-F", "delete_chain": "-X"}
+            simple = {"create": "-N", "delete_chain": "-X"}
             if op in simple and len(args) == 1:
                 command = [simple[op], chain]
-            elif op == "append" and len(args) == 2:
+            elif op in ("append", "delete_rule") and len(args) == 2:
                 if "--comment" not in args[1] or not args[1][args[1].index("--comment") + 1].startswith("stk6:" + chain[5:] + ":"):
                     raise GuardError("rule lacks ownership tag")
-                command = ["-A", chain, *args[1]]
+                command = ["-A" if op == "append" else "-D", chain, *args[1]]
             elif op in ("jump", "delete_jump") and len(args) == 2:
                 rule = args[1]
                 if len(rule) != 6 or rule[:3] != ["-m", "comment", "--comment"] or rule[-2:] != ["-j", chain] or not rule[3].startswith("stk6:" + chain[5:] + ":"):

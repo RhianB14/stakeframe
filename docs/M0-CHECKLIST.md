@@ -86,7 +86,7 @@ verificados e o Codex autorizar o avanço.
 - [ ] Concluir preparação para execução: revisão do Codex, recuperação
       demonstrada e gates reais de janela; simulação não é teste na VPS.
 - [x] Preparar implementação única em `scripts/network_security/ipv6_guard.py`,
-      com runbook referenciado, sintaxe/CLI offline e 45 testes simulados
+      com runbook referenciado, sintaxe/CLI offline e 51 testes simulados
       aprovados localmente. CI inclui job separado de simulação, sem comandos
       reais de firewall/systemd. Isso não valida o runtime da VPS.
 - [x] Revisar dependências de `rpcbind`: somente `portmapper` foi retornado,

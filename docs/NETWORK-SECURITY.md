@@ -239,6 +239,9 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
   não valida esse tipo de agendamento.
 - Criar e completar a chain antes de conectá-la a INPUT e antes de DROP.
   Qualquer falha interrompe aplicação e inicia recuperação delimitada.
+  Depois da última alteração e gravação do estado aplicado, reler timer,
+  service, jobs e recibo antes de retornar. Rollback iniciado/queued exige
+  liberar o lock, aguardar o worker e retornar falha, nunca sucesso de apply.
 - Depois das alterações, abrir **segunda conexão SSH independente** e executar
   probes de leitura de políticas/regras, listeners, rotas, DNS/NTP, Docker,
   Fail2Ban e serviços. Uma conexão prévia ou apenas formato válido de um arquivo
@@ -254,6 +257,8 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
   quando necessário para ela progredir, aguardar término, reler o estado e
   retornar aplicação **não confirmada**. Timeout/falha exige recuperação; não
   matar o processo nem declarar sucesso com base no timer parado.
+  A espera revalida políticas tocadas, ausência dos recursos próprios e bundle
+  sob o lock; journal de sucesso não substitui o readback ativo.
 - Rollback restaura primeiro as políticas anteriores realmente modificadas
   (incluindo intent pendente de verificação); confirmar readback de todas antes
   de remover regras que preservam acesso. Tentar outras restaurações seguras
@@ -262,6 +267,10 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
 - Só retirar o salto/chain cuja propriedade pertence à execução. Colisão ou
   alteração externa não autoriza apagar recursos. Não restaurar snapshot global,
   não tocar OUTPUT, IPv4, NAT ou recursos Docker/Fail2Ban.
+  Remover regras exatas tagged com `-D`, em ordem inversa, sem `-F` nem mesmo
+  na chain própria. `-X` deve falhar se houver conteúdo/referência externa
+  inserida concorrentemente; preservar esse recurso e reportar recuperação
+  incompleta. A remoção parcial própria pode ser repetida.
 - Em rollback incompleto, preservar timer **ainda pendente** até confirmar
   políticas e retirada das restrições próprias: ACCEPT na política não neutraliza
   uma chain terminal DROP que continua conectada. Timer já disparado não promete
