@@ -1,8 +1,11 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-02** (inventário da VPS e preparação dos acessos).
-STK-M0-02 está em andamento; o inventário remoto foi executado em leitura,
-sanitizado no documento próprio e aguarda revisão do Codex.
+Tarefa atual: **STK-M0-03** (revisão de rede e preparação da segurança).
+STK-M0-02 foi concluída pela PR #4, integrada por squash na `main` em
+`666f915ab0c94eeef3f792f5eed88809a049297e`. STK-M0-03 está em andamento:
+a proposta foi documentada, mas a leitura completa da rede convidada, do painel
+Oracle e do caminho de recuperação permanece pendente. Nenhuma alteração remota
+foi autorizada ou executada.
 O M0 só é considerado concluído quando todos os itens abaixo estiverem
 verificados e o Codex autorizar o avanço.
 
@@ -56,6 +59,23 @@ verificados e o Codex autorizar o avanço.
 - [ ] Definir e documentar política de recuperação de instâncias ociosas.
 - [x] Registrar o diagnóstico e as pendências restantes de acesso em
       [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
+- [x] STK-M0-02 concluída pela [PR #4](https://github.com/RhianB14/stakeframe/pull/4),
+      integrada na `main` em `666f915ab0c94eeef3f792f5eed88809a049297e`.
+
+### STK-M0-03 — Revisão de rede e preparação da segurança
+
+- [ ] Completar leitura somente leitura da rede convidada: backend efetivo,
+      IPv4/IPv6, NAT, Docker, Fail2Ban, persistência, rotas, SSH e `rpcbind`.
+- [ ] Confirmar no painel Oracle shape, volumes, VNIC, subnet, rotas, IP,
+      Security Lists, NSGs, egress/ingress e stateful/stateless.
+- [ ] Identificar e validar o caminho de recuperação caso o SSH seja perdido.
+- [x] Preparar a proposta sanitizada em
+      [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md), incluindo matriz,
+      aplicação, rollback e critérios de aceite; nenhuma regra foi aplicada.
+- [ ] Revisar dependências de `rpcbind` antes de decidir manter com alcance
+      controlado ou desativar serviço/socket em tarefa autorizada.
+- [ ] Executar a futura alteração somente após autorização específica do Codex,
+      com segunda conexão SSH, rollback temporizado e reconciliação Oracle.
 
 ### Domínio
 
