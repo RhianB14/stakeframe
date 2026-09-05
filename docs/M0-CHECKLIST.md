@@ -110,21 +110,29 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       (`ttyAMA0`), getty serial ativo, autenticação PAM do console, estado das
       contas (sem ler/copiar hashes), sudo existente e contextos `sshd -T`
       com a identidade real do cliente.
-- [x] Contexto `sshd -T -C host=` validado com a identidade do cliente
-      (IP público resolvido na mesma rede) e contraste; os três contextos são
-      idênticos — não há blocos `Match`; limitação da R1 encerrada.
+- [x] Contexto `sshd -T -C host=` validado com a tupla real observada pelo
+      servidor (`SSH_CONNECTION`) e campos de autenticação registrados;
+      configuração carregada verificada (include único, nenhuma linha `Match`
+      nos arquivos carregados). Prova por configuração, não por igualdade de
+      saídas; `sshd -T` requer sudo para ler chaves de host.
 - [x] Preparar [docs/ACCESS-RECOVERY.md](ACCESS-RECOVERY.md): estado
       observado, pré-requisitos não comprovados, sequência A–F do teste
       futuro, mutações previstas com impacto/limpeza e critérios de
       sucesso/interrupção/evidências. Não confunde saída serial com
       recuperação nem recuperação de acesso com restauração de banco
-      ([RECOVERY.md](RECOVERY.md)).
+      ([RECOVERY.md](RECOVERY.md)). Revisão R1: credencial reclassificada de
+      desbloqueio para **definição** (nenhuma conta pertinente tem hash);
+      operação responsável pelo segredo documentada sem senha em
+      argumentos/histórico/logs; limpeza cobre falhas desde a criação da
+      conexão OCI; separação explícita entre teste pontual concluído e
+      recuperação pronta para janela futura.
 - [x] Consultas adicionais de painel sinalizadas ao Codex em
       ACCESS-RECOVERY §6; inspeção OCI anterior permanece válida; painel não
       repetido.
 - [ ] Executar o teste de recuperação (fases A–F) — exige autorização
-      específica; mutações previstas: conexão de console OCI e senha
-      temporária com re-bloqueio confirmado.
+      específica; mutações previstas: conexão de console OCI e **definição**
+      de senha temporária (não há senha anterior), com bloqueio/verificação
+      por forma de shadow na limpeza (ACCESS-RECOVERY §4–§5).
 
 ### Domínio
 

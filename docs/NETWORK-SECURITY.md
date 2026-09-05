@@ -290,12 +290,17 @@ foram acionados. **IAM, conexão serial e login/recuperação Ubuntu não valida
 
 **Leitura focada do guest (STK-M0-04):** console serial em `ttyAMA0`
 (`console=tty1 console=ttyAMA0`) com `serial-getty@ttyAMA0` ativo — o guest
-exibirá prompt serial assim que existir conexão de console. `passwd -S`
-mostra as contas pertinentes com senha **bloqueada**: nenhuma credencial
-autentica hoje no serial; o teste exigirá desbloqueio temporário autorizado.
-Contextos `sshd -T` (sem `-C`, identidade real do cliente, contraste) são
-idênticos — **não há blocos `Match`**; `PasswordAuthentication no` e
-`PermitRootLogin without-password` valem globalmente. Estado, pré-requisitos
+exibirá prompt serial assim que existir conexão de console; getty ativo
+comprova configuração do guest, e transporte/prompt interativo seguem
+dependendo do teste OCI. Classificação de forma do shadow (sem hashes):
+nenhuma conta pertinente possui hash (root `*`, usuário padrão `!`) — não
+existe senha anterior a desbloquear; o teste exigirá **definir** senha
+temporária. sshd em execução sem opções alternativas; configuração carregada
+verificada (include único, **nenhuma linha `Match` nos arquivos carregados**)
+e campos de autenticação registrados (`PasswordAuthentication no`,
+`KbdInteractiveAuthentication no`, `UsePAM yes`, `AuthenticationMethods any`),
+idênticos no contexto padrão e no contexto da tupla real observada pelo
+servidor: senha definida no guest não autentica via SSH. Estado, pré-requisitos
 e sequência proposta: [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md).
 
 [Referência oficial consultada pelo Hermes](https://docs.oracle.com/en-us/iaas/Content/Compute/References/serialconsole.htm)
