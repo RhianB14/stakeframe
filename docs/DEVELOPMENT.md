@@ -2,20 +2,48 @@
 
 ## Pré-requisitos
 
-| Ferramenta | Versão        | Observação                                          |
-| ---------- | ------------- | --------------------------------------------------- |
-| Node.js    | v24.20.0      | Fixado em `.nvmrc`; CI usa exatamente esta versão   |
-| pnpm       | 11.24.0       | Declarado em `packageManager`; corepack pode ativar |
-| Git        | 2.x           | Identity configurada para commits                   |
-| Docker     | qualquer 29.x | Necessário apenas em etapas futuras                 |
+| Ferramenta | Versão        | Observação                                        |
+| ---------- | ------------- | ------------------------------------------------- |
+| Node.js    | v24.20.0      | Fixado em `.nvmrc`; CI usa exatamente esta versão |
+| pnpm       | 11.24.0       | Declarado em `packageManager`                     |
+| Git        | 2.x           | Identity configurada para commits                 |
+| Docker     | qualquer 29.x | Necessário apenas em etapas futuras               |
 
-> Pendência conhecida: o ambiente local atual roda Node v22.23.2. Alinhar para
-> v24.20.0 (nvm-windows, fnm ou volta). A CI já usa a versão correta.
+## Runtime isolado do projeto (Windows)
+
+O runtime do sistema/Hermes usa Node v26.7.0 e o `pnpm.ps1` do PATH resolve o
+`node.exe` do próprio Hermes — o projeto **não deve depender do PATH global**.
+A execução correta é feita com ferramentas isoladas em `dev\tools\stakeframe`:
+
+- `node.exe` v24.20.0 — zip oficial do nodejs.org, SHA-256 conferido contra o
+  `SHASUMS256.txt` oficial da distribuição.
+- `pnpm.exe` 11.24.0 — binário standalone oficial da release do GitHub do
+  pnpm (asset `pnpm-win32-x64.zip`); a release não publica checksum file,
+  então a integridade é garantida pela origem oficial + execução validada.
+
+### Procedimento reproduzível
+
+1. Baixar `node-v24.20.0-win-x64.zip` e `SHASUMS256.txt` de
+   `https://nodejs.org/dist/v24.20.0/` para `dev\tools\stakeframe\` e conferir
+   o SHA-256 do zip contra o `SHASUMS256.txt`.
+2. Extrair para `dev\tools\stakeframe\node-v24.20.0-win-x64\`.
+3. Baixar `pnpm-win32-x64.zip` da release `v11.24.0` do pnpm no GitHub e
+   extrair para `dev\tools\stakeframe\pnpm\` (contém `pnpm.exe`).
+4. Em cada sessão, preceder o PATH (git-bash):
+   ```bash
+   export PATH="/c/Users/Rhian Batista/dev/tools/stakeframe/node-v24.20.0-win-x64:/c/Users/Rhian Batista/dev/tools/stakeframe/pnpm:$PATH"
+   ```
+   (PowerShell equivalente: `$env:Path = "C:\Users\Rhian Batista\dev\tools\stakeframe\node-v24.20.0-win-x64;C:\Users\Rhian Batista\dev\tools\stakeframe\pnpm;$env:Path"`.)
+5. Confirmar `node --version` → `v24.20.0` e `pnpm --version` → `11.24.0`
+   antes de rodar qualquer comando do projeto.
+
+Não instalar Node/pnpm globalmente nem alterar o runtime interno do Hermes ou
+de outros projetos.
 
 ## Setup
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ## Comandos

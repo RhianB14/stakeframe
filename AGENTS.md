@@ -44,7 +44,7 @@ Este documento define como os agentes operam no repositório Stakeframe.
    verificáveis, alterações de banco e limitações.
 2. Codex revisa o diff e as evidências; pede correções quando necessário.
 3. Codex emite a autorização de merge no formato definido em
-   [docs/PLAN.md](PLAN.md) §5.3.
+   [docs/PLAN.md](docs/PLAN.md) §5.3.
 4. Hermes confirma que a PR corresponde à autorização (head SHA, base,
    checks) e só então executa o squash merge.
 5. Hermes reporta o commit resultante, a CI na `main` e o encerramento da

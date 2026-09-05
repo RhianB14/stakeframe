@@ -54,7 +54,11 @@ uma aprovação independente. O protocolo é:
 ## Regras de invalidação
 
 - **Novo commit na branch da PR** invalida qualquer autorização anterior.
-- **Mudança da base** (rebase/merge da `main` na PR) exige nova validação.
+- **Qualquer mudança do SHA da `main`** (merge de outra PR, push de emergência
+  autorizado, correção de histórico autorizada) exige nova validação da base,
+  **mesmo sem rebase ou merge na branch da PR**.
+- **Mudança da base da PR** (rebase/merge da `main` na branch) exige nova
+  validação.
 - **Falha de check obrigatório** impede o merge e devolve a PR à revisão.
 - Aprovação **não é inferida** de silêncio, elogio, ausência de comentários ou
   sucesso de testes.

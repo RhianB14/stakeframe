@@ -32,14 +32,18 @@ verificados e o Codex autorizar o avanço.
 
 ### Ambiente local
 
-- [ ] Alinhar Node local para v24.20.0 (atual: v22.23.2) — via nvm-windows,
-      fnm ou volta. CI já usa a versão correta.
+- [x] Runtime local alinhado: execução isolada com Node v24.20.0 e pnpm
+      11.24.0 em `dev\tools\stakeframe` (zip oficial do nodejs.org com SHA-256
+      conferido + pnpm standalone oficial). Verificado: `node --version` =
+      v24.20.0, `pnpm --version` = 11.24.0, `pnpm exec node --version` =
+      v24.20.0. Procedimento em [docs/DEVELOPMENT.md](DEVELOPMENT.md). CI já
+      usava a versão correta.
 
 ### VPS Oracle Always Free
 
-- [ ] Confirmar acesso SSH à VPS (somente leitura nesta fase) e registrar
-      sistema operacional e arquitetura (A1 Flex ARM x2 OCPU/12 GB ou E2.1
-      Micro AMD x2 — a definir pela disponibilidade real da tenancy).
+- [ ] Confirmar acesso de leitura à VPS e inventariar a VPS existente
+      informada pelo proprietário: **2 CPU, 12 GB RAM, 50 GB**; shape e
+      arquitetura ainda não verificadas.
 - [ ] Inventariar CPU, memória, disco e serviços existentes na VPS.
 - [ ] Verificar Docker + Docker Compose na VPS (versões).
 - [ ] Definir e documentar política de recuperação de instâncias ociosas.
@@ -76,8 +80,8 @@ verificados e o Codex autorizar o avanço.
 
 ## Registro de decisões pendentes para o Codex
 
-- Escolha da shape da VPS (A1 ARM vs. E2.1 Micro) conforme disponibilidade
-  real da tenancy.
+- Inventário da VPS: confirmar shape e arquitetura (spec informada:
+  2 CPU / 12 GB / 50 GB; shape e arquitetura não verificadas).
 - Ordem das integrações (R2 → OAuth → Telegram → OmniRoute) após o domínio.
 - Critério de quando instalar o Postgres na VPS vs. desenvolver com Docker
   local primeiro.

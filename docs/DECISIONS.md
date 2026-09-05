@@ -25,16 +25,22 @@ recebem status `Superseded` e apontam a substituta.
 - **Consequências:** a exceção é única e documentada; qualquer push futuro
   direto à `main` é violação de protocolo (e será bloqueado pela proteção).
 
-## D003 — Node.js 24 LTS com versão exata fixada
+## D003 — Node.js 24 LTS com versão exata fixada e runtime isolado no Windows
 
-- **Contexto:** o plano define Node 24 LTS; o ambiente local ainda roda Node
-  v22.23.2 (limitação registrada).
-- **Decisão:** `.nvmrc` com `v24.20.0` (LTS "Krypton", primeira linha LTS da
-  linha 24); CI executa com essa versão via `node-version-file`. `engines` em
-  `package.json` exige `>=24.20.0`.
-- **Consequências:** desenvolvimento local em Node 22 dispara aviso de engine
-  (funcional, mas registrada a pendência de alinhar o ambiente local — ex. via
-  nvm-windows/fnm/volta).
+- **Contexto:** o plano define Node 24 LTS; o runtime do sistema/Hermes roda
+  Node v26.7.0 e o `pnpm.ps1` do PATH do Windows resolve o `node.exe` do
+  próprio Hermes, misturando runtimes entre projetos.
+- **Decisão:** `.nvmrc` com `v24.20.0`; CI executa com essa versão via
+  `node-version-file`; `engines` em `package.json` exige `>=24.20.0 <25`. No
+  Windows, o projeto usa um **runtime isolado** em `dev\tools\stakeframe`
+  (Node v24.20.0 do zip oficial + pnpm standalone 11.24.0), precedido no PATH
+  por sessão — sem alterar o runtime global do Hermes ou de outros projetos.
+  Procedimento reproduzível em [docs/DEVELOPMENT.md](DEVELOPMENT.md).
+- **Consequências:** execução local validada em 2026-09-05 com `node
+--version` = v24.20.0, `pnpm --version` = 11.24.0 e `pnpm exec node
+--version` = v24.20.0. Gerenciadores de versão (nvm-windows/fnm/volta)
+  continuam opcionalmente adequados; o PATH global não é fonte de verdade
+  para este projeto.
 
 ## D004 — pnpm como gerenciador de pacotes
 
@@ -78,3 +84,20 @@ recebem status `Superseded` e apontam a substituta.
   decisões neste arquivo, trabalho rastreado em issues e milestones.
 - **Consequências:** discussões técnicas ficam em issues ou na PR
   correspondente.
+
+## D009 — Recuperação por dump lógico completo, sem PITR no M0
+
+- **Contexto:** a estratégia inicial "dump lógico + WAL" misturava dois
+  mecanismos; PITR exige arquivamento contínuo de WAL, que não será
+  implementado no M0 ([referência](https://www.postgresql.org/docs/current/continuous-archiving.html)).
+- **Decisão:** recuperação por backups **lógicos completos** (`pg_dump -Fc`,
+  a cada 30 minutos, criptografados antes de sair da VPS, enviados ao bucket
+  privado de backups no R2), restaurados com `pg_restore` + recriação de
+  roles/permissões. Sem PITR; backup físico com arquivamento de WAL fica
+  para decisão futura. Anexos: objetos com identificadores únicos, sem
+  sobrescrita, com cópia de recuperação no bucket de backups, manifesto com
+  checksums e política de exclusão aplicada também às cópias.
+- **Consequências:** o RPO de 1 hora depende da cadência dos dumps completos
+  (idade do snapshot recuperável ≤ 1 hora, a medir na validação); restauração
+  é mais lenta que PITR em bases grandes — aceitável na escala do projeto e
+  coberta pelo RTO de 4 horas.

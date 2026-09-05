@@ -29,4 +29,5 @@
 
 > **Nota de protocolo:** o merge desta PR depende de autorização específica do
 > Codex (head SHA + base validados). CI verde não autoriza merge.
-> Ver [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
+> Ver
+> [docs/GOVERNANCE.md](https://github.com/RhianB14/stakeframe/blob/main/docs/GOVERNANCE.md).

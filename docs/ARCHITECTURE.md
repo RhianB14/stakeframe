@@ -20,7 +20,9 @@ Monorepo TypeScript estrito com pnpm workspaces:
 
 Infraestrutura de execução (VPS Oracle Always Free): Docker Compose com
 aplicação, API, worker, PostgreSQL, Caddy (HTTPS) e OmniRoute (IA). Backups
-externos criptografados no Cloudflare R2.
+externos criptografados no Cloudflare R2 (dumps lógicos do banco e cópias de
+recuperação de anexos imutáveis, com manifesto e checksums —
+[docs/RECOVERY.md](RECOVERY.md)).
 
 ## Princípios de dados e interfaces (vinculantes desde já)
 
