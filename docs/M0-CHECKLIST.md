@@ -2,10 +2,12 @@
 
 Tarefa atual: **STK-M0-03** (revisão de rede e preparação da segurança).
 STK-M0-02 foi concluída pela PR #4, integrada por squash na `main` em
-`666f915ab0c94eeef3f792f5eed88809a049297e`. Na STK-M0-03, a coleta somente
-leitura da VPS foi concluída e a proposta host-specific foi documentada; a
-leitura Oracle e o caminho de recuperação continuam pendentes. Nenhuma
-alteração remota foi autorizada ou executada.
+`666f915ab0c94eeef3f792f5eed88809a049297e`. Na STK-M0-03-R2, a inspeção OCI
+realizada pelo Codex em 05/09/2026 foi incorporada por retransmissão do
+proprietário, somando-se à coleta guest da R1. O caminho do console foi
+identificado, mas IAM, serial e recuperação administrativa do Ubuntu ainda
+não foram validados. Preparação local limitada a INPUT/FORWARD IPv6 ativo;
+nenhuma aplicação remota autorizada ou executada. PR #6 permanece draft.
 O M0 só é considerado concluído quando todos os itens abaixo estiverem
 verificados e o Codex autorizar o avanço.
 
@@ -49,8 +51,9 @@ verificados e o Codex autorizar o avanço.
 
 - [x] Confirmar acesso de leitura à VPS e inventariar a VPS existente
       informada pelo proprietário: **2 CPU, 12 GB RAM, 50 GB**. A conexão
-      confirmou Ubuntu 24.04.4 LTS, `aarch64`/ARM64 e 2 CPUs; a shape Oracle
-      permanece não confirmada no painel.
+      confirmou Ubuntu 24.04.4 LTS, `aarch64`/ARM64 e 2 CPUs. Inspeção do
+      Codex retransmitida na R2 confirmou `VM.Standard.A1.Flex`, 2 OCPUs,
+      12 GB RAM, 2 Gbps e boot volume 50 GB (detalhes em NETWORK-SECURITY).
 - [x] Inventariar CPU, memória, swap, disco, inodes, relógio, containers,
       serviços, listeners e firewall local na VPS; evidência sanitizada em
       [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
@@ -66,20 +69,34 @@ verificados e o Codex autorizar o avanço.
 
 - [x] Completar leitura somente leitura da rede convidada: backend efetivo
       `iptables-nft`, IPv4/IPv6, NAT, Docker, Fail2Ban, persistência, rotas,
-      DNS/NTP, SSH contextual e `rpcbind`/RPC/NFS.
-- [ ] Confirmar no painel Oracle shape, volumes, VNIC, subnet, rotas, IP,
-      Security Lists, NSGs, egress/ingress e stateful/stateless.
-- [ ] Identificar e validar o caminho de recuperação caso o SSH seja perdido.
-- [x] Preparar a proposta host-specific em
-      [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md), incluindo diferença
-      atual/proposta, aplicação incremental, persistência e rollback delimitado;
-      nenhuma regra foi aplicada.
+      DNS/NTP, campos efetivos de SSH e `rpcbind`/RPC/NFS. Revalidar contexto
+      `Match Host` do cliente antes da janela; limitação do coletor R1 registrada
+      em `docs/NETWORK-SECURITY.md`.
+- [x] Incorporar inspeção OCI do Codex retransmitida pelo proprietário:
+      shape, volumes, VNIC, subnet, rotas, Security List, NSG e regras stateful.
+      Sem IPv6 público, regras ou rotas IPv6; não pedir repetição do painel.
+- [x] Identificar caminho instância → OS Management → Console connection;
+      nenhuma conexão existente exibida e nenhum botão acionado.
+- [ ] Validar IAM, transporte serial e login/recuperação do Ubuntu em tarefa
+      separada; chave de transporte não equivale a login no guest.
+- [x] Substituir os exemplos R1 por implementação local única e proposta
+      somente IPv6 INPUT/FORWARD ativo, sem persistência nesta janela, em
+      [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md). IPv4, OUTPUT, Docker,
+      Fail2Ban, SSH, rpcbind e OCI preservados.
+- [ ] Concluir preparação para execução: revisão do Codex, recuperação
+      demonstrada e gates reais de janela; simulação não é teste na VPS.
+- [x] Preparar implementação única em `scripts/network_security/ipv6_guard.py`,
+      com runbook referenciado, sintaxe/CLI offline e 45 testes simulados
+      aprovados localmente. CI inclui job separado de simulação, sem comandos
+      reais de firewall/systemd. Isso não valida o runtime da VPS.
 - [x] Revisar dependências de `rpcbind`: somente `portmapper` foi retornado,
       não há montagem NFS e nenhum consumidor NFS/RPC ativo foi observado.
       Eventual desativação de serviço/socket continua sendo tarefa separada.
-- [ ] Validar segunda conexão SSH, revisar a proposta e executar a futura
-      alteração somente após autorização específica do Codex, com cópia de
-      rollback no servidor, timer/service temporários e reconciliação Oracle.
+- [ ] Obter autorização específica do Codex para a futura aplicação, com
+      recuperação validada, cópia no servidor/externa, timer monotônico e lock.
+- [ ] Após as alterações da futura janela, abrir segunda conexão SSH
+      independente e executar probes; só então confirmar, sem matar rollback
+      já iniciado. OCI sem mudanças.
 
 ### Domínio
 
@@ -120,9 +137,11 @@ verificados e o Codex autorizar o avanço.
 
 ## Registro de decisões pendentes para o Codex
 
-- Inventário da VPS: arquitetura observada como `aarch64`/ARM64, com 2 CPU,
-  12 GB informados e 50 GB totais observados; confirmar shape, volumes, rede e
-  regras de ingresso no painel Oracle.
+- Inspeção OCI concluída pelo Codex e retransmitida na R2; pendência de
+  recuperação IAM/serial/Ubuntu, não de repetir o painel. Inventário histórico
+  STK-M0-02 é complementado por NETWORK-SECURITY §3.
+- Primeira janela proposta somente IPv6 ativo; persistência e publicação de
+  aplicação fora do escopo, sujeitas a tarefas/autorização separadas.
 - Ordem das integrações (R2 → OAuth → Telegram → OmniRoute) após o domínio.
 - Critério de quando instalar o Postgres na VPS vs. desenvolver com Docker
   local primeiro.
