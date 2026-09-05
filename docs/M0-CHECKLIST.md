@@ -2,10 +2,10 @@
 
 Tarefa atual: **STK-M0-03** (revisão de rede e preparação da segurança).
 STK-M0-02 foi concluída pela PR #4, integrada por squash na `main` em
-`666f915ab0c94eeef3f792f5eed88809a049297e`. STK-M0-03 está em andamento:
-a proposta foi documentada, mas a leitura completa da rede convidada, do painel
-Oracle e do caminho de recuperação permanece pendente. Nenhuma alteração remota
-foi autorizada ou executada.
+`666f915ab0c94eeef3f792f5eed88809a049297e`. Na STK-M0-03, a coleta somente
+leitura da VPS foi concluída e a proposta host-specific foi documentada; a
+leitura Oracle e o caminho de recuperação continuam pendentes. Nenhuma
+alteração remota foi autorizada ou executada.
 O M0 só é considerado concluído quando todos os itens abaixo estiverem
 verificados e o Codex autorizar o avanço.
 
@@ -64,18 +64,22 @@ verificados e o Codex autorizar o avanço.
 
 ### STK-M0-03 — Revisão de rede e preparação da segurança
 
-- [ ] Completar leitura somente leitura da rede convidada: backend efetivo,
-      IPv4/IPv6, NAT, Docker, Fail2Ban, persistência, rotas, SSH e `rpcbind`.
+- [x] Completar leitura somente leitura da rede convidada: backend efetivo
+      `iptables-nft`, IPv4/IPv6, NAT, Docker, Fail2Ban, persistência, rotas,
+      DNS/NTP, SSH contextual e `rpcbind`/RPC/NFS.
 - [ ] Confirmar no painel Oracle shape, volumes, VNIC, subnet, rotas, IP,
       Security Lists, NSGs, egress/ingress e stateful/stateless.
 - [ ] Identificar e validar o caminho de recuperação caso o SSH seja perdido.
-- [x] Preparar a proposta sanitizada em
-      [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md), incluindo matriz,
-      aplicação, rollback e critérios de aceite; nenhuma regra foi aplicada.
-- [ ] Revisar dependências de `rpcbind` antes de decidir manter com alcance
-      controlado ou desativar serviço/socket em tarefa autorizada.
-- [ ] Executar a futura alteração somente após autorização específica do Codex,
-      com segunda conexão SSH, rollback temporizado e reconciliação Oracle.
+- [x] Preparar a proposta host-specific em
+      [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md), incluindo diferença
+      atual/proposta, aplicação incremental, persistência e rollback delimitado;
+      nenhuma regra foi aplicada.
+- [x] Revisar dependências de `rpcbind`: somente `portmapper` foi retornado,
+      não há montagem NFS e nenhum consumidor NFS/RPC ativo foi observado.
+      Eventual desativação de serviço/socket continua sendo tarefa separada.
+- [ ] Validar segunda conexão SSH, revisar a proposta e executar a futura
+      alteração somente após autorização específica do Codex, com cópia de
+      rollback no servidor, timer/service temporários e reconciliação Oracle.
 
 ### Domínio
 

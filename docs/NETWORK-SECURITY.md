@@ -1,463 +1,583 @@
 # STK-M0-03 — Revisão de rede e preparação da segurança
 
-> **Estado:** proposta bloqueada, não aplicada e não autorizada para execução.
-> A documentação separa fatos observados, proposta condicional e itens não
-> verificados. Nenhum comando desta proposta foi executado na VPS ou na Oracle.
+> **Estado:** análise somente leitura da VPS concluída; leitura Oracle e caminho de
+> recuperação permanecem pendentes. A proposta abaixo é host-specific, não foi
+> aplicada e não autoriza mudança remota.
 >
-> **Base:** `main` em `666f915ab0c94eeef3f792f5eed88809a049297e`.
+> **Base da PR:** `main` em `666f915ab0c94eeef3f792f5eed88809a049297e`.
 >
-> **Identificadores privados:** host, usuário SSH, caminho da chave, endereços,
-> OCIDs, tenancy e regras do painel permanecem fora deste documento.
+> **Identificadores privados:** host, endereços, usuário SSH, caminho da chave,
+> fingerprints, OCIDs, tenancy, região exata e regras do painel permanecem fora
+> deste documento.
 
 ## 1. Escopo e veredito desta rodada
 
-Esta rodada deveria completar a leitura da rede convidada e do painel Oracle e
-preparar uma política aplicável com rollback. A leitura local da VPS permanece
-incompleta porque a sessão SSH autorizada não pôde ser reconstruída sem adivinhar
-o usuário, e a sessão autenticada do painel Oracle não ficou disponível. A
-proposta abaixo é, portanto, uma base de revisão do Codex, não uma autorização de
-mudança.
+A conexão SSH autorizada foi retomada com os dados privados já confirmados pelo
+proprietário. A identidade do login foi verificada, e a coleta abaixo foi
+executada de forma não interativa, somente leitura, transmitindo um script por
+stdin; nenhum arquivo temporário foi criado na VPS.
+
+A análise local agora cobre backend, regras IPv4/IPv6, NAT, Docker, Fail2Ban,
+persistência, interfaces, rotas, DNS/NTP, SSH efetivo e dependências
+RPC/NFS. As saídas brutas foram mantidas somente em arquivos temporários
+privados locais e não entram no repositório.
+
+A sessão Oracle Cloud não ficou acessível ao Hermes: a tentativa em uma sessão
+local nova para o console expirou sem produzir uma página ou dados utilizáveis.
+Não há OCI CLI/configuração local disponível. Portanto, esta PR continua draft.
 
 ### Classificação usada
 
-| Estado             | Significado                                                      |
-| ------------------ | ---------------------------------------------------------------- |
-| **Observado**      | Resultado retornado pela leitura SSH aprovada em STK-M0-02.      |
-| **Proposto**       | Política ou procedimento para uma futura tarefa autorizada.      |
-| **Não verificado** | Evidência ainda ausente; não pode ser preenchida por inferência. |
-| **Bloqueador**     | Item que impede aplicar a política com segurança nesta rodada.   |
+| Estado             | Significado                                                         |
+| ------------------ | ------------------------------------------------------------------- |
+| **Observado**      | Resultado da coleta somente leitura na VPS ou da verificação local. |
+| **Proposto**       | Procedimento e estado desejado para uma futura tarefa autorizada.   |
+| **Não verificado** | Evidência ausente; não pode ser preenchida por inferência.          |
+| **Bloqueador**     | Item que impede aplicar a política com segurança nesta rodada.      |
 
 ### Bloqueadores atuais
 
-1. **Acesso SSH:** a chave privada local está no caminho privado já validado,
-   mas o usuário remoto não está disponível em configuração ou histórico local
-   recuperável nesta sessão. Não será tentado `ubuntu`, `opc` ou outro usuário
-   por inferência.
-2. **Rede convidada completa:** o inventário aprovado consultou `iptables` e
-   `nftables`, mas não preservou a visão completa de backend, IPv4/IPv6, NAT,
-   chains Docker/Fail2Ban, persistência, rotas, autenticação SSH e dependências
-   RPC necessárias para uma alteração segura.
-3. **Oracle:** shape, volumes, VNIC, subnet, rotas, Security Lists, NSGs,
-   regras IPv4/IPv6 e semântica stateful/stateless não foram confirmados no
-   painel/API.
-4. **Recuperação:** o caminho de recuperação de acesso SSH pelo provedor não
-   foi identificado nem validado.
+1. **Camada Oracle:** shape, volumes, VNIC, subnet, rotas, conectividade
+   pública, Security Lists, NSGs, regras IPv4/IPv6, stateful/stateless e
+   políticas adicionais continuam não verificados.
+2. **Recuperação:** o caminho de recuperação caso o SSH seja perdido não foi
+   identificado nem validado. O timer do host não recupera uma alteração da
+   Oracle nem um host que perdeu conectividade.
+3. **Execução:** a proposta exata, a segunda conexão independente, a política
+   Oracle e o rollback precisam de revisão/autorização específica do Codex.
+4. **Exposição de aplicação:** não há listener HTTP/HTTPS e não há aplicação
+   Stakeframe implantada; a abertura final de 80/443 deve ser separada da
+   alteração de hardening do host.
 
-Enquanto esses bloqueadores existirem, a PR deve permanecer **draft** e nenhum
-comando de aplicação deve ser executado.
+O bloqueador de usuário SSH desconhecido foi removido após a conexão autorizada.
+Nenhuma regra, serviço, socket, pacote, container, volume, configuração SSH,
+Security List, NSG, rota ou recurso Oracle foi alterado.
 
-## 2. Evidências já observadas na VPS
+## 2. Evidências sanitizadas da VPS
 
-As linhas abaixo são fatos do inventário sanitizado aprovado em STK-M0-02; não
-foram reinterpretadas como prova de exposição pública.
+### 2.1. Sistema, interfaces e serviços
 
-| Item                         | Estado              | Observação e limite                                                                                                                                                                                              |
-| ---------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sistema                      | Observado           | Ubuntu 24.04.4 LTS, kernel `6.17.0-1020-oracle`, arquitetura `aarch64`/ARM64.                                                                                                                                    |
-| Capacidade                   | Observado/informado | 2 CPUs observadas; 12 GB informados pelo proprietário; `free` exibiu 11 GiB; disco observado de 50 GB. A shape Oracle não foi inferida.                                                                          |
-| Serviços ativos selecionados | Observado           | SSH, Docker/containerd, Fail2Ban, agente Oracle/Fluentd, `systemd-resolved`, `systemd-timesyncd`, `rpcbind`, `iscsid`, `unattended-upgrades`, `fwupd` e serviços básicos.                                        |
-| Containers                   | Observado           | Nenhum container ou projeto Compose ativo; somente `hello-world:latest` estava presente. Chains dinâmicas do Docker não foram coletadas na íntegra.                                                              |
-| Listeners                    | Observado           | TCP 22 em IPv4/IPv6; TCP e UDP 111 em IPv4/IPv6; DNS somente em loopback; nenhum listener UDP 22; nenhum listener TCP 80/443.                                                                                    |
-| `rpcbind`                    | Observado           | Escuta TCP/UDP 111 em IPv4/IPv6 e todas as interfaces. Necessidade, clientes RPC e alcançabilidade externa não foram determinados.                                                                               |
-| Firewall                     | Observado parcial   | UFW não está instalado. A coleta consultou `iptables` e `nftables`; foram registradas as políticas `INPUT ACCEPT`, `FORWARD DROP`, `OUTPUT ACCEPT` e accepts explícitos para novas conexões TCP em 22, 80 e 443. |
-| Oracle ingress               | Não verificado      | Não houve confirmação das regras de Security List/NSG nem teste externo. Uma regra local ou listener não prova exposição pública.                                                                                |
+| Item                      | Resultado observado                                                                                                                                               | Limite                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Sistema                   | Ubuntu 24.04.4 LTS, kernel `6.17.0-1020-oracle`, `aarch64`/ARM64                                                                                                  | Evidência do guest; não confirma shape Oracle.                   |
+| Interface principal       | `enp0s6`, estado routable/configured, MTU 9000                                                                                                                    | Endereços e gateway foram mantidos privados.                     |
+| Configuração da interface | DHCPv4 via `systemd-networkd`; `systemd-resolved` recebe DNS pela interface                                                                                       | Não substitui a leitura da subnet/route table OCI.               |
+| IPv6                      | Somente endereços/rotas link-local foram observados no guest                                                                                                      | Não confirma ausência ou presença de IPv6 na camada OCI.         |
+| Bridge Docker             | `docker0` presente, sem carrier e sem container ativo                                                                                                             | Não remover a bridge nem suas chains; o daemon pode reativá-las. |
+| Rotas                     | Default IPv4 via DHCP em `enp0s6`; tabelas de regras padrão sem policy routing extra                                                                              | O gateway/IP real não é publicado.                               |
+| DNS                       | `systemd-resolved` ativo; `resolv.conf` em modo stub; DNS efetivo vindo da interface                                                                              | Não publicar servidores ou domínio interno.                      |
+| Relógio                   | NTP habilitado e sincronizado; timezone do guest em UTC                                                                                                           | Nenhuma alteração foi feita.                                     |
+| Serviços relevantes       | `ssh`, `docker`, `containerd`, `fail2ban`, `rpcbind`, `iscsid`, agentes Oracle/monitoramento, `systemd-networkd`, `systemd-resolved` e `systemd-timesyncd` ativos | A lista é selecionada, não um dump de logs.                      |
+| Listeners                 | TCP 22 em IPv4/IPv6; TCP/UDP 111 em IPv4/IPv6; DNS local; DHCPv4; nenhum TCP 80/443 e nenhum UDP 22                                                               | Listener local não prova exposição pública.                      |
 
-`iptables-nft` e `nftables` não devem ser tratados como dois firewalls
-independentes. O backend efetivo, a relação entre as ferramentas e o caminho de
-persistência ainda precisam ser identificados por leitura explícita.
+### 2.2. Backend efetivo e regras atuais
 
-## 3. Leitura convidada que falta
+A leitura retornou:
 
-### 3.1. Backend e regras completas
+- `iptables` e `ip6tables` versão `1.8.10 (nf_tables)`;
+- `nft` versão `1.0.9`;
+- Docker informa firewall backend `iptables`;
+- `iptables-nft` e `nftables` são duas interfaces sobre o mesmo backend nftables
+  quando usadas para as mesmas tabelas; não são dois firewalls independentes;
+- UFW não está instalado/disponível. Isso registra a indisponibilidade do
+  comando UFW; não é usado como prova de que não existe outro firewall.
 
-Antes de escrever regras, deve ser preservado em armazenamento privado o estado
-completo e selecionado abaixo. A captura não deve ser publicada, enviada ao
-repositório ou misturada com variáveis de ambiente, logs ou dados da aplicação.
+#### Políticas e filtros IPv4
 
-```bash
-sudo -n iptables -V
-sudo -n ip6tables -V
-sudo -n update-alternatives --display iptables 2>/dev/null || true
-sudo -n update-alternatives --display ip6tables 2>/dev/null || true
-sudo -n nft --version
-sudo -n iptables-save -c
-sudo -n ip6tables-save -c
-sudo -n iptables -S
-sudo -n ip6tables -S
-sudo -n iptables -t nat -S
-sudo -n ip6tables -t nat -S
-sudo -n iptables -t mangle -S
-sudo -n ip6tables -t mangle -S
-sudo -n iptables -t raw -S
-sudo -n ip6tables -t raw -S
-sudo -n nft -a list ruleset
+| Chain     | Política atual | Elementos relevantes                                                                                   |
+| --------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| `INPUT`   | `ACCEPT`       | Loopback, estado `ESTABLISHED,RELATED`, ICMP, TCP novo em 22/80/443 e rejeição final foram observados. |
+| `FORWARD` | `DROP`         | Saltos para `DOCKER-USER` e `DOCKER-FORWARD`; chains Docker sem regras de publicação de aplicação.     |
+| `OUTPUT`  | `ACCEPT`       | Há tratamento adicional de `InstanceServices`/egress Oracle no ruleset observado.                      |
+
+Também foram consultadas as tabelas `nat`, `mangle`, `raw` e `security`. No NAT
+IPv4 há saltos Docker e masquerade da rede Docker; não há regra de publicação
+de porta de container no snapshot. O ruleset inclui as chains Docker abaixo,
+mesmo sem containers ativos:
+
+```text
+DOCKER
+DOCKER-BRIDGE
+DOCKER-CT
+DOCKER-FORWARD
+DOCKER-INTERNAL
+DOCKER-USER
 ```
 
-A leitura deve identificar, sem substituir ou limpar:
+#### Políticas e filtros IPv6
 
-- política e ordem efetiva de `INPUT`, `OUTPUT` e `FORWARD` em IPv4 e IPv6;
-- `PREROUTING`, `POSTROUTING`, `DOCKER`, `DOCKER-USER`,
-  `DOCKER-FORWARD`, chains de compatibilidade e regras de NAT;
-- chains e jails criadas pelo Fail2Ban, especialmente para SSH;
-- regras de ICMP/ICMPv6, `ESTABLISHED,RELATED`, loopback e rejeições finais;
-- diferença real entre `iptables`/`ip6tables` e o backend nftables instalado.
+| Chain     | Política atual | Elementos relevantes                                                                      |
+| --------- | -------------- | ----------------------------------------------------------------------------------------- |
+| `INPUT`   | `ACCEPT`       | Não havia filtro equivalente de entrada para SSH/web além da política aberta no snapshot. |
+| `FORWARD` | `ACCEPT`       | Saltos Docker estavam presentes, mas a política padrão era aberta.                        |
+| `OUTPUT`  | `ACCEPT`       | Nenhuma alteração foi feita.                                                              |
 
-A ausência atual de containers não autoriza remover chains Docker. Elas podem ser
-criadas pelo daemon quando o primeiro Compose for iniciado.
+As mesmas chains Docker de compatibilidade foram observadas no IPv6. Não há
+regra de publicação de container no snapshot. A política IPv6 `INPUT ACCEPT` e
+`FORWARD ACCEPT` é o principal ponto de hardening do guest: ainda não é prova
+de exposição pública, pois as regras Oracle não foram lidas.
 
-### 3.2. Interfaces, rotas e serviços essenciais
+#### Fail2Ban
 
-```bash
-ip -brief address
-ip route show table main
-ip -6 route show table main
-ip rule show
-ip -6 rule show
-resolvectl status
-resolvectl dns
-systemctl is-active systemd-resolved.service systemd-timesyncd.service
-systemctl is-enabled systemd-resolved.service systemd-timesyncd.service
-systemctl list-units --type=service --state=running --no-pager --no-legend
-systemctl list-units --type=socket --state=running --no-pager --no-legend
-ss -H -lntup
+- `fail2ban.service` está ativo.
+- O jail `sshd` está carregado.
+- O ruleset nft contém `inet f2b-table`, com conjunto de endereços do jail SSH
+  e rejeição de TCP/22 para endereços banidos.
+- A chain/tabela dinâmica do Fail2Ban não deve ser sobrescrita por um restore
+  global ou por edição manual de `nftables.conf`.
+
+#### Docker
+
+- Docker Engine `29.7.2`, API `1.55`, arquitetura ARM64.
+- O backend de firewall informado pelo daemon é `iptables`.
+- Não havia containers ativos nem projetos Compose ativos.
+- As chains Docker existiam, mas não havia regra de porta publicada de aplicação.
+- O fato de a bridge estar sem carrier não autoriza remover chains; elas são
+  administradas pelo daemon e podem mudar quando o primeiro Compose iniciar.
+
+### 2.3. Persistência observada
+
+A persistência efetiva não é `nftables.service`:
+
+- `netfilter-persistent.service` está habilitado e termina com sucesso (`active
+exited`), usando os plugins `15-ip4tables` e `25-ip6tables`.
+- Os arquivos persistentes observados são `/etc/iptables/rules.v4` e
+  `/etc/iptables/rules.v6`, com propriedade/permissões restritas.
+- `/etc/default/netfilter-persistent` informa:
+
+```text
+FLUSH_ON_STOP=0
+IPTABLES_TEST_RULESET=yes
+IP6TABLES_TEST_RULESET=yes
+IPTABLES_RESTORE_NOFLUSH=yes
+IP6TABLES_RESTORE_NOFLUSH=yes
 ```
 
-Esses comandos devem esclarecer interface principal, rota default, IPv6 global
-ou somente local, resolvedor efetivo, NTP e eventual DHCP. O inventário anterior
-confirmou `systemd-resolved` e `systemd-timesyncd`, mas não confirmou servidores
-DNS, rotas, DHCP ou endereços públicos.
+- `nftables.service` está desabilitado/inativo.
+- `/etc/nftables.conf` existe e contém `flush ruleset`; ele não deve ser
+  iniciado como caminho alternativo, pois poderia apagar tabelas dinâmicas.
+- Não foi executado `netfilter-persistent save`, `reload`, `restart` ou
+  qualquer operação equivalente.
 
-### 3.3. Autenticação SSH sem segredos
+A persistência é compatível com o backend `iptables-nft`, mas o conteúdo salvo
+precisa ser revisado após qualquer mudança. Não se deve salvar um estado que
+inclua regras efêmeras de publicação Docker sem uma decisão explícita.
 
-A configuração efetiva deve ser lida sem exibir chaves, tokens ou conteúdo de
-`authorized_keys`:
+### 2.4. SSH efetivo
+
+Foram executados `sshd -t`, `sshd -T` e `sshd -T -C` com o contexto da conexão
+autorizada. Os campos selecionados não mudaram entre a configuração genérica
+e o contexto `Match`:
+
+| Campo                | Resultado                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| Porta/família        | `22`, `addressfamily any`, escuta IPv4/IPv6                                                   |
+| Chave pública        | habilitada                                                                                    |
+| Senha                | `PasswordAuthentication no`                                                                   |
+| Keyboard-interactive | `KbdInteractiveAuthentication no`                                                             |
+| PAM                  | `UsePAM yes`                                                                                  |
+| Tentativas           | `MaxAuthTries 6`                                                                              |
+| Root                 | `PermitRootLogin without-password` — acesso por chave ainda é permitido por esta configuração |
+| X11                  | `X11Forwarding yes`                                                                           |
+| `Match`              | Nenhuma diferença nos campos selecionados para o contexto da conexão                          |
+
+A política de root por chave e X11 forwarding não foram alteradas nesta tarefa;
+qualquer endurecimento adicional de SSH deve ser uma decisão separada e não
+pode ser misturado ao primeiro hardening de rede.
+
+### 2.5. `rpcbind`, RPC e NFS
+
+A leitura direta e reversa produziu:
+
+- `rpcbind.service` e `rpcbind.socket` ativos e habilitados.
+- Dependências diretas do serviço: socket, `remote-fs-pre.target` e
+  `rpcbind.target`, além das unidades básicas do systemd.
+- Dependências reversas observadas: cadeia de `multi-user.target`/`graphical.target`;
+  não apareceu uma aplicação ou serviço NFS consumidor direto.
+- `rpcbind.socket` é requerido pelo serviço e é requerido por `sockets.target`;
+  não deve ser tratado separadamente.
+- `rpcinfo` IPv4 e IPv6 retornou somente o programa `portmapper` em TCP/UDP
+  111; não foram registrados programas NFS adicionais.
+- `findmnt -t nfs,nfs4` e a consulta corrigida de `/proc/mounts` não retornaram
+  montagens NFS.
+- `nfs-server.service` não está instalado; `nfs-utils`, `rpc-gssd` e
+  `rpc-svcgssd` estão inativos; `rpc-statd-notify` aparece como `active exited`.
+
+Conclusão operacional: **nenhum consumidor NFS/RPC ativo foi observado**, mas
+isso não prova que a remoção seja necessária ou segura para todos os usos
+futuros. Nesta tarefa, `rpcbind` permanece ativo e inalterado. A evidência
+permite preparar uma tarefa futura separada para desativar serviço **e** socket,
+com rollback e autorização própria, depois de confirmar a camada Oracle e a
+necessidade operacional. Até lá, a política de entrada proposta deve negar
+alcance público a TCP/UDP 111 sem desligar o serviço.
+
+## 3. Oracle Cloud e recuperação — pendentes
+
+| Evidência Oracle                               | Estado         | Motivo                                                                 |
+| ---------------------------------------------- | -------------- | ---------------------------------------------------------------------- |
+| Shape, região e capacidade configurada         | Não verificado | Painel/API não ficou acessível.                                        |
+| Boot volume e volumes anexados                 | Não verificado | Painel/API não ficou acessível.                                        |
+| VNIC, subnet, IP público/privado e route table | Não verificado | Painel/API não ficou acessível.                                        |
+| Internet Gateway e conectividade pública       | Não verificado | Não há teste externo autorizado nesta rodada.                          |
+| Security Lists                                 | Não verificado | Sem leitura do painel/API.                                             |
+| NSGs                                           | Não verificado | Sem leitura do painel/API.                                             |
+| Ingress/egress IPv4 e IPv6                     | Não verificado | Sem leitura do painel/API.                                             |
+| Stateful/stateless                             | Não verificado | Sem leitura do painel/API.                                             |
+| Políticas adicionais                           | Não verificado | Sem leitura do painel/API.                                             |
+| Console/caminho de recuperação SSH             | Não verificado | Nenhum console foi iniciado e os pré-requisitos não foram confirmados. |
+
+A janela Oracle acessível ao Hermes não produziu conteúdo após a tentativa de
+navegação; o carregamento expirou. Se for necessário continuar, o proprietário
+deve fazer login e MFA no navegador Oracle Cloud que esteja efetivamente
+acessível ao Hermes. Não devem ser enviados senha, token, cookie ou conteúdo de
+sessão. Não serão criados recursos, chaves, credenciais ou conexões de console
+nesta tarefa.
+
+Security Lists e NSGs precisam ser avaliados em conjunto: um NSG restritivo não
+neutraliza uma Security List permissiva em todas as combinações. A regra
+convidada local e um listener também não provam exposição pública.
+
+## 4. Proposta concreta compatível com o host observado
+
+### 4.1. Decisões de backend e escopo
+
+A proposta usa **somente `iptables`/`ip6tables` sobre o backend `nf_tables`**
+e a persistência já instalada pelo `netfilter-persistent`. Ela não usa UFW,
+não inicia `nftables.service`, não edita `/etc/nftables.conf` e não usa
+`iptables-restore`/`ip6tables-restore` para substituir o ruleset inteiro.
+
+A primeira mudança futura deve ser incremental e tocar apenas:
+
+- política das chains base `INPUT`/`FORWARD` quando explicitamente autorizada;
+- uma chain própria `STAKEFRAME_M003_R1` em cada família, se necessária;
+- um salto da chain base para a chain própria;
+- regras explicitamente identificadas pela tarefa.
+
+Não deve tocar `DOCKER*`, `DOCKER-USER`, `DOCKER-FORWARD`, chains nft do
+Fail2Ban, `inet f2b-table`, NAT Docker ou regras de `OUTPUT` do agente Oracle.
+
+### 4.2. Diferença entre estado atual e estado proposto
+
+| Área                       | Atual observado                                             | Proposta para revisão do Codex                                                                                                                                   |
+| -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend                    | `iptables-nft`/`ip6tables-nft`, representação nftables      | Manter o backend; não misturar com um segundo gerenciador.                                                                                                       |
+| Persistência               | `netfilter-persistent`, arquivos v4/v6, restore `--noflush` | Manter o serviço e revisar o diff salvo; não executar `save` com Docker dinâmico sem inspeção.                                                                   |
+| IPv4 `INPUT`               | Política `ACCEPT`, regras explícitas e rejeição final       | Preservar as regras existentes na primeira janela; opcionalmente mudar somente a política para `DROP` após validar a ordem. Nenhuma regra SSH deve ser removida. |
+| IPv4 `FORWARD`             | `DROP` com saltos Docker                                    | Manter `DROP` e os saltos Docker; não editar chains administradas pelo daemon.                                                                                   |
+| IPv4 `OUTPUT`              | `ACCEPT` com tratamento `InstanceServices`                  | Manter; não bloquear DNS/NTP/APIs/agentes sem análise de egress.                                                                                                 |
+| IPv6 `INPUT`               | `ACCEPT` sem filtro equivalente                             | Preparar chain própria com loopback, `ESTABLISHED,RELATED`, ICMPv6 aplicável e SSH; mudar política para `DROP` somente após validação.                           |
+| IPv6 `FORWARD`             | `ACCEPT` com saltos Docker                                  | Mudar política para `DROP` somente após confirmar que os saltos Docker continuam antes da política e que não há necessidade de forwarding externo.               |
+| TCP 22                     | Listener IPv4/IPv6 e regra IPv4 observados                  | Preservar durante toda a primeira mudança; não restringir ao IP momentâneo.                                                                                      |
+| TCP 80/443                 | Sem listener; accept IPv4 existente; OCI desconhecida       | Não publicar via OCI nem declarar disponibilidade agora. Liberar guest e OCI somente em mudança posterior com proxy/listener autorizado.                         |
+| TCP/UDP 111                | `rpcbind` escuta nas duas famílias                          | Negar ingresso público nas duas camadas; manter serviço até tarefa separada de remoção/restrição.                                                                |
+| PostgreSQL/Redis/OmniRoute | Sem listeners atuais                                        | Não publicar; manter em rede interna/loopback quando implantados.                                                                                                |
+| Docker/Fail2Ban            | Chains e proteção SSH dinâmicas ativas                      | Preservar; rollback não pode fazer flush nem restaurar essas chains indiscriminadamente.                                                                         |
+
+A decisão recomendada para a primeira aplicação de hardening é: fechar a
+política IPv6 de entrada/encaminhamento com regras explícitas e preservar o
+estado IPv4 funcional, em vez de combinar hardening, publicação de aplicação,
+remoção de `rpcbind` e alteração OCI em uma única janela. A política IPv4
+`INPUT DROP` pode ser adotada na mesma janela somente se a revisão confirmar
+que a rejeição final atual e todos os accepts necessários continuam presentes.
+
+### 4.3. Forma parametrizada das regras futuras
+
+O bloco abaixo é um modelo host-specific para revisão, não foi executado e não
+é um instalador genérico. Os comandos devem ser preenchidos a partir do
+snapshot da janela e executados somente após autorização.
 
 ```bash
-sudo -n sshd -T
-sudo -n systemctl status ssh.service ssh.socket --no-pager
-sudo -n systemctl cat ssh.service ssh.socket
-sudo -n systemctl show ssh.service ssh.socket \
-  -p FragmentPath -p DropInPaths -p Requires -p Wants -p After -p Before
+# Variáveis apenas conceituais; não preencher com valores publicados.
+CHAIN='STAKEFRAME_M003_R1'
+
+# Criar a chain somente se não existir e inserir um único salto na frente.
+iptables  -n -L "$CHAIN" >/dev/null 2>&1 || iptables  -N "$CHAIN"
+ip6tables -n -L "$CHAIN" >/dev/null 2>&1 || ip6tables -N "$CHAIN"
+iptables  -C INPUT -j "$CHAIN" >/dev/null 2>&1 || iptables  -I INPUT 1 -j "$CHAIN"
+ip6tables -C INPUT -j "$CHAIN" >/dev/null 2>&1 || ip6tables -I INPUT 1 -j "$CHAIN"
+
+# Regras mínimas da chain própria; cada regra real deve ser idempotente.
+iptables  -C "$CHAIN" -i lo -j ACCEPT 2>/dev/null || iptables  -A "$CHAIN" -i lo -j ACCEPT
+iptables  -C "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
+  iptables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+ip6tables -C "$CHAIN" -i lo -j ACCEPT 2>/dev/null || ip6tables -A "$CHAIN" -i lo -j ACCEPT
+ip6tables -C "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
+  ip6tables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+ip6tables -C "$CHAIN" -p ipv6-icmp -j ACCEPT 2>/dev/null || \
+  ip6tables -A "$CHAIN" -p ipv6-icmp -j ACCEPT
+
+# SSH deve ser inserido antes da mudança de política IPv6.
+iptables  -C "$CHAIN" -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT 2>/dev/null || \
+  iptables -A "$CHAIN" -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+ip6tables -C "$CHAIN" -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT 2>/dev/null || \
+  ip6tables -A "$CHAIN" -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+
+# A chain própria sempre devolve o restante ao fluxo original.
+iptables  -C "$CHAIN" -j RETURN 2>/dev/null || iptables  -A "$CHAIN" -j RETURN
+ip6tables -C "$CHAIN" -j RETURN 2>/dev/null || ip6tables -A "$CHAIN" -j RETURN
+
+# Só depois de uma segunda sessão SSH e dos probes, se autorizado:
+# iptables  -P INPUT DROP       # mudança opcional da política IPv4
+# ip6tables -P INPUT DROP
+# ip6tables -P FORWARD DROP
+
+# 80/443 não entram neste hardening enquanto não houver proxy/listener aprovado.
+# A futura publicação deverá adicionar regras v4/v6 e OCI em mudança separada.
 ```
 
-A saída deve ser capturada privadamente e revisada para `PasswordAuthentication`,
-`KbdInteractiveAuthentication`, `PermitRootLogin`, `PubkeyAuthentication`,
-`AllowUsers`/`AllowGroups`, `ListenAddress`, `AddressFamily`, limites de tentativas
-e o uso de `fail2ban`. A leitura não deve abrir nem imprimir chaves privadas ou
-arquivos de autorização.
+O uso de uma chain própria torna o rollback delimitado. Mesmo assim, a revisão
+deve confirmar que a versão instalada aceita exatamente os módulos e sintaxe
+usados, que a regra SSH original não foi sombreada e que a chain está antes de
+qualquer rejeição final.
 
-### 3.4. `rpcbind`, sockets e dependências RPC/NFS
+### 4.4. Publicação futura de HTTP/HTTPS
 
-O fato de `rpcbind` estar ativo não prova que pode ser removido. A próxima leitura
-deve separar unidade, socket, consumidores locais e montagens:
+Quando houver um proxy/listener autorizado:
 
-```bash
-systemctl status rpcbind.service rpcbind.socket --no-pager
-systemctl cat rpcbind.service rpcbind.socket
-systemctl show rpcbind.service rpcbind.socket \
-  -p ActiveState -p SubState -p FragmentPath -p DropInPaths \
-  -p Requires -p Wants -p After -p Before
-systemctl list-dependencies --all rpcbind.service
-systemctl list-dependencies --all rpcbind.socket
-rpcinfo -p 127.0.0.1
-ss -H -lntup '( sport = :111 )'
-findmnt -t nfs,nfs4
-mount | awk '$5 ~ /^nfs/ {print $0}'
-systemctl list-units --type=service --all --no-pager --no-legend \
-  | grep -Ei 'nfs|rpc|mountd|statd|lockd' || true
-```
+1. Confirmar bind do processo em TCP 80/443 localmente.
+2. Adicionar as regras de guest IPv4 e IPv6 na chain aprovada, mantendo
+   `ESTABLISHED,RELATED`, loopback e ICMP/ICMPv6.
+3. Reconciliar as mesmas portas na Security List e em todos os NSGs associados.
+4. Não abrir 5432, 6379, 111 ou portas administrativas do OmniRoute.
+5. Testar de origem externa autorizada e registrar resposta real.
+6. Persistir somente depois de revisar o diff e confirmar que não foram incluídas
+   regras efêmeras Docker/Fail2Ban.
 
-Até essa leitura, a conclusão correta é: **dependência de NFS/RPC não
-comprovada, mas também não descartada**. `iscsid` apareceu na lista selecionada
-de serviços, porém isso não demonstra dependência de `rpcbind`. Não será
-executado `disable`, `stop`, `mask` ou alteração de socket nesta tarefa.
+Nenhum desses passos foi executado nesta PR.
 
-### 3.5. Persistência e Docker/Fail2Ban
+## 5. Runbook futuro de captura, rollback e persistência
 
-A forma de persistir deve ser descoberta, não escolhida por preferência:
+Os comandos desta seção são preparação documental. Nenhum timer será armado
+nesta rodada.
 
-```bash
-systemctl list-unit-files --no-pager --no-legend \
-  | grep -Ei 'netfilter|nftables|iptables|firewalld' || true
-systemctl list-timers --all --no-pager --no-legend \
-  | grep -Ei 'netfilter|nftables|iptables' || true
-find /etc -maxdepth 3 -type f \( \
-  -path '*/iptables/*' -o -name 'rules.v4' -o -name 'rules.v6' \
-  -o -name 'nftables.conf' \) -print 2>/dev/null
-sudo -n docker network ls
-sudo -n docker info --format '{{json .}}'
-sudo -n fail2ban-client status
-sudo -n fail2ban-client status sshd 2>/dev/null || true
-```
+### 5.1. Captura antes da alteração
 
-Os resultados devem ser tratados como configuração operacional sensível e
-armazenados somente no ambiente privado do operador. Não se deve alterar
-`DOCKER-USER`, chains Docker ou jails Fail2Ban antes de conhecer o gerenciador
-que as mantém.
-
-## 4. Leitura Oracle pendente
-
-### 4.1. Estado desta rodada
-
-| Evidência Oracle                              | Estado         | Motivo                                                                |
-| --------------------------------------------- | -------------- | --------------------------------------------------------------------- |
-| Shape, região e capacidade configurada        | Não verificado | Sem leitura de painel/API disponível.                                 |
-| Boot volume e volumes anexados                | Não verificado | Sem leitura de painel/API disponível.                                 |
-| VNICs, subnet, IP público e privado           | Não verificado | Sem leitura de painel/API disponível; nenhum endereço será publicado. |
-| Route table, Internet Gateway e conectividade | Não verificado | Sem leitura de painel/API disponível.                                 |
-| Security Lists associadas                     | Não verificado | Sem leitura de painel/API disponível.                                 |
-| NSGs associados                               | Não verificado | Sem leitura de painel/API disponível.                                 |
-| Ingress/egress IPv4 e IPv6                    | Não verificado | Sem leitura de painel/API disponível.                                 |
-| Stateful/stateless                            | Não verificado | Sem leitura de painel/API disponível.                                 |
-| Políticas adicionais de rede                  | Não verificado | Sem leitura de painel/API disponível.                                 |
-| Caminho de recuperação do SSH                 | Não verificado | Console e pré-requisitos não foram identificados.                     |
-
-Não há OCI CLI/configuração local disponível. A sessão do navegador local não
-produziu uma sessão Oracle Cloud utilizável nesta rodada. Se o painel for
-necessário, o proprietário deverá fazer login e MFA no navegador apropriado;
-nenhuma senha, token ou cookie deve ser enviado ao Hermes.
-
-### 4.2. Checklist de leitura para o painel
-
-Com a sessão legítima disponível, a coleta deve registrar apenas fatos
-sanitizados e placeholders:
-
-1. Instância, região, Availability Domain, shape, OCPU/vCPU, memória e status.
-2. Boot volume, tamanho, performance e volumes anexados; sem baixar dados.
-3. VNIC primária, subnet, route table, Internet Gateway e estado de IP público.
-4. Todas as Security Lists associadas à subnet, com direção, protocolo, CIDR,
-   porta, descrição e indicação stateful/stateless.
-5. Todos os NSGs efetivamente associados à VNIC, com as mesmas colunas.
-6. Regras de egress e eventual política adicional de rede.
-7. Caminho de recuperação disponível, tipo de console, pré-requisitos de
-   autorização/chave, necessidade de parar a instância e procedimento de acesso.
-8. Ausência ou presença de regras que permitam TCP/UDP 111, PostgreSQL, Redis,
-   OmniRoute e interfaces administrativas.
-
-Security List e NSG devem ser avaliados em conjunto. Um NSG restritivo não prova
-que uma Security List permissiva deixou de permitir tráfego; o conjunto efetivo
-e a direção das regras é que precisam ser comparados.
-
-Nenhum console de recuperação, chave, recurso, regra ou instância foi criado.
-
-## 5. Política proposta para revisão
-
-Esta é uma proposta condicional. A primeira alteração deve preservar SSH e não
-pode restringir o acesso ao IP momentâneo da conexão presumindo que seja fixo.
-A regra atual de SSH deve ser identificada e mantida durante a primeira janela.
-
-### 5.1. Matriz de regras
-
-| Origem                  | Destino                      | Protocolo     | Porta               | Finalidade                               | Estado atual                                                                                      | Estado proposto                                                                                                              | Camada responsável                                |
-| ----------------------- | ---------------------------- | ------------- | ------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Operador autorizado     | VPS                          | TCP           | 22                  | Administração SSH                        | Listener observado em IPv4/IPv6; origem e Oracle não verificadas                                  | Preservar durante toda a primeira mudança; restringir somente após CIDR estável e autorização própria                        | Security List/NSG + firewall convidado + Fail2Ban |
-| Internet autorizada     | VPS                          | TCP           | 80                  | HTTP para Caddy/reverso futuro           | Nenhum listener observado; accept local para novas conexões foi registrado; Oracle não verificado | Permitir somente quando houver listener autorizado e HTTPS/redirect planejado                                                | Security List/NSG + firewall convidado            |
-| Internet autorizada     | VPS                          | TCP           | 443                 | HTTPS público                            | Nenhum listener observado; Oracle não verificado                                                  | Permitir para o proxy público futuro, em IPv4 e IPv6                                                                         | Security List/NSG + firewall convidado            |
-| Qualquer origem pública | VPS                          | TCP/UDP       | 111                 | `rpcbind`/RPC                            | `rpcbind` escuta em todas as interfaces; dependências não verificadas                             | Não publicar; manter serviço até a análise de dependências; se houver uso privado, permitir apenas origem privada comprovada | Security List/NSG + firewall convidado            |
-| Qualquer origem pública | VPS                          | TCP           | 5432                | PostgreSQL                               | Nenhum listener PostgreSQL observado                                                              | Negar/não criar ingresso público; usar somente rede interna ou túnel administrativo autorizado                               | Security List/NSG + Compose/firewall              |
-| Qualquer origem pública | VPS                          | TCP           | 6379                | Redis                                    | Nenhum listener Redis observado                                                                   | Negar/não publicar; bind interno/loopback quando o serviço existir                                                           | Security List/NSG + Compose/firewall              |
-| Qualquer origem pública | VPS                          | TCP           | 20128, 20129, 20132 | Interfaces/API/WebSocket do OmniRoute    | Nenhum listener OmniRoute observado; portas são somente referência local                          | Negar publicação direta; acesso interno ou administrativo separado                                                           | Security List/NSG + Compose/firewall              |
-| Loopback                | Loopback                     | IPv4/IPv6     | qualquer            | Serviços locais                          | DNS de loopback observado; regra completa não verificada                                          | Preservar loopback sem alteração                                                                                             | Firewall convidado                                |
-| Qualquer origem/destino | VPS                          | IPv4/IPv6     | estado              | Respostas e conexões estabelecidas       | Não verificado no conjunto completo                                                               | Preservar `ESTABLISHED,RELATED` antes de filtros finais                                                                      | Firewall convidado                                |
-| VPS                     | Resolvedor configurado       | UDP/TCP       | 53                  | DNS                                      | `systemd-resolved` ativo; servidores e egress não verificados                                     | Permitir somente resolvedores efetivamente configurados; não abrir entrada pública                                           | Firewall convidado + route/egress Oracle          |
-| VPS                     | Servidores NTP               | UDP           | 123                 | Sincronização de relógio                 | `systemd-timesyncd` ativo e NTP sincronizado no inventário                                        | Preservar egress necessário; sem ingresso público                                                                            | Firewall convidado + egress Oracle                |
-| VPS                     | APIs, atualizações e backups | TCP           | 443                 | Operação, atualizações e backups futuros | Destinos não verificados                                                                          | Preservar egress necessário, sujeito à política Oracle observada                                                             | Firewall convidado + egress Oracle                |
-| VPS                     | Rede de diagnóstico          | ICMP/ICMPv6   | tipos aplicáveis    | MTU, descoberta e diagnóstico            | Regras completas não verificadas                                                                  | Preservar o mínimo necessário para operação e diagnóstico; não bloquear ICMPv6 indiscriminadamente                           | Firewall convidado + Security List/NSG            |
-| Interface usando DHCP   | Servidor DHCP                | UDP           | 67/68 ou 546/547    | Configuração automática, se aplicável    | Não verificado                                                                                    | Permitir somente se a interface efetivamente depender de DHCP                                                                | Firewall convidado                                |
-| Docker bridge           | Containers/host              | TCP/UDP       | conforme Compose    | Redes internas e portas publicadas       | Nenhum container e nenhuma rede de aplicação observados                                           | Manter chains Docker administradas pelo daemon; publicar somente proxy e portas aprovadas                                    | Docker/DOCKER-USER + firewall convidado           |
-| Fail2Ban                | Chains de proteção           | conforme jail | conforme jail       | Bloqueios dinâmicos de SSH               | Serviço ativo; chains/jails não foram lidos                                                       | Preservar e não sobrescrever chains administradas pelo Fail2Ban                                                              | Fail2Ban + firewall convidado                     |
-
-A matriz não autoriza abrir 80/443 agora. Ela define o estado desejado para uma
-futura aplicação após existir Caddy/listener e após a confirmação da camada
-Oracle. PostgreSQL, Redis e OmniRoute não devem ser publicados diretamente.
-
-### 5.2. Decisão proposta para `rpcbind`
-
-A decisão segura nesta fase é **não desativar** `rpcbind` e seu socket. A escuta
-em 111 é observada, mas a ausência de containers não prova ausência de NFS/RPC.
-
-A sequência proposta é:
-
-1. Ler dependências de `rpcbind.service` e `rpcbind.socket`, `rpcinfo` local,
-   montagens NFS e unidades RPC/NFS.
-2. Ler ingress/egress Oracle e confirmar se 111 é alcançável externamente.
-3. Se não houver consumidor RPC/NFS e houver autorização específica, preparar
-   desativação do serviço **e do socket** em tarefa separada, com rollback.
-4. Se houver consumidor, manter o serviço e restringir o alcance às origens
-   privadas comprovadas; nunca deixar a decisão baseada somente em `ss`.
-5. Em todos os casos, documentar a diferença entre serviço ativo, listener local
-   e exposição pública.
-
-Nenhuma dessas decisões foi aplicada nesta tarefa.
-
-## 6. Procedimento proposto de aplicação e recuperação
-
-Os comandos desta seção são um runbook futuro, parametrizado e **não executado**.
-Os placeholders devem ser preenchidos somente após a revisão do Codex. O backend
-observado deve determinar se o procedimento usa `iptables-restore`/`ip6tables-restore`
-ou `nft`; nunca se devem restaurar os dois formatos por hábito.
-
-### 6.1. Pré-condições
-
-A aplicação fica bloqueada até todos os itens abaixo serem verdadeiros:
-
-- usuário, host, chave e fingerprints SSH confirmados em fonte privada;
-- backend efetivo e cadeia de persistência identificados;
-- estado completo IPv4/IPv6, NAT, Docker e Fail2Ban capturado;
-- dependências de `rpcbind` classificadas;
-- Security Lists e NSGs reconciliados para IPv4 e IPv6;
-- caminho de recuperação Oracle identificado e acessível;
-- sessão SSH atual mantida aberta;
-- segunda conexão SSH independente preparada, de origem distinta quando
-  possível, sem restringir ao IP momentâneo;
-- janela de rollback temporizado armada e verificada;
-- proposta exata revisada e autorização explícita do Codex para aplicação.
-
-### 6.2. Captura privada do estado anterior
-
-A captura deve ser local, fora do repositório, com permissões restritas. Exemplo
-parametrizado para a futura janela:
+A captura precisa existir em dois lugares: cópia privada fora da VPS e cópia
+privada no próprio servidor antes de qualquer alteração. A cópia no servidor é
+necessária para que o rollback temporizado não dependa da conexão SSH depois da
+mudança.
 
 ```bash
 umask 077
-SNAPSHOT="<PRIVATE_SNAPSHOT_DIR>/stakeframe-network-<UTC_TIMESTAMP>"
-mkdir -p "$SNAPSHOT"
+RUN_ID='<UTC_RUN_ID>'
+LOCAL_SNAPSHOT='<PRIVATE_LOCAL_SNAPSHOT_DIR>/stakeframe-m0-03-'"$RUN_ID"
+mkdir -p "$LOCAL_SNAPSHOT"
 
-ssh -o BatchMode=yes -o IdentitiesOnly=yes \
-  -o StrictHostKeyChecking=yes \
-  -o UserKnownHostsFile='<PRIVATE_KNOWN_HOSTS>' \
-  -i '<SSH_KEY_PATH>' '<SSH_USER>@<VPS_HOST_OR_IP>' \
-  'sudo -n iptables-save -c' > "$SNAPSHOT/iptables.v4"
-ssh ... 'sudo -n ip6tables-save -c' > "$SNAPSHOT/ip6tables.v6"
-ssh ... 'sudo -n nft -a list ruleset' > "$SNAPSHOT/nft.rules"
-ssh ... 'ip -brief address; ip route; ip -6 route; ss -H -lntup' \
-  > "$SNAPSHOT/network-state.txt"
-ssh ... 'sudo -n sshd -T; systemctl status rpcbind.service rpcbind.socket --no-pager' \
-  > "$SNAPSHOT/ssh-rpc-state.txt"
-sha256sum "$SNAPSHOT"/* > "$SNAPSHOT/SHA256SUMS"
+# Executar com os parâmetros privados já confirmados; não publicar os valores.
+ssh <PRIVATE_SSH_OPTIONS> <PRIVATE_SSH_TARGET> 'sudo -n iptables-save -c' \
+  > "$LOCAL_SNAPSHOT/iptables.v4.before"
+ssh <PRIVATE_SSH_OPTIONS> <PRIVATE_SSH_TARGET> 'sudo -n ip6tables-save -c' \
+  > "$LOCAL_SNAPSHOT/ip6tables.v6.before"
+ssh <PRIVATE_SSH_OPTIONS> <PRIVATE_SSH_TARGET> 'sudo -n nft -a list ruleset' \
+  > "$LOCAL_SNAPSHOT/nft.before"
+ssh <PRIVATE_SSH_OPTIONS> <PRIVATE_SSH_TARGET> 'sudo -n sha256sum /etc/iptables/rules.v4 /etc/iptables/rules.v6' \
+  > "$LOCAL_SNAPSHOT/persistent-sha256.before"
+sha256sum "$LOCAL_SNAPSHOT"/* > "$LOCAL_SNAPSHOT/SHA256SUMS"
 ```
 
-O `...` acima representa a repetição dos mesmos parâmetros privados, não um
-comando pronto para copiar. O snapshot deve ser lido e conferido antes de
-qualquer alteração; não deve conter `env`, logs completos, chaves ou dados de
-aplicação.
+No host, antes da aplicação, o operador deve criar uma área root-only com:
 
-### 6.3. Validação antes da aplicação
+```text
+<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/iptables.v4.before
+<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/ip6tables.v6.before
+<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/rules.v4.before
+<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/rules.v6.before
+<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/rollback.sh
+<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/SHA256SUMS
+```
 
-- Comparar o snapshot com a política aprovada e confirmar que a regra SSH atual
-  continuará presente.
-- Validar sintaxe no backend identificado, sem carregar a mudança:
-  `iptables-restore --test`/`ip6tables-restore --test` para candidatos do
-  backend iptables, ou `nft -c -f <candidate>` para candidato nftables.
-- Confirmar que o candidato não contém flush global, alteração de Docker/Fail2Ban,
-  regra pública de 5432/6379/OmniRoute ou bloqueio de loopback/estabelecidas.
-- Conferir a ordem das regras, especialmente antes de qualquer REJECT/DROP final.
-- Registrar a identificação da Security List/NSG que será alterada, sem publicar
-  OCIDs.
+A cópia de `rules.v4`/`.v6` é para rollback da **configuração persistente**;
+não deve ser usada automaticamente para fazer restore do estado ativo, porque
+o arquivo pode conter chains administradas dinamicamente pelo Docker.
 
-Validação de sintaxe não é teste real de firewall, de exposição pública ou de
-rollback.
+### 5.2. Script de rollback ativo
 
-### 6.4. Rollback local temporizado
+O script deve ser criado no servidor, tornar-se root-owned e ser testado apenas
+por validação sintática/leitura antes da janela. Ele remove somente a chain e o
+salto identificados por esta tarefa e reverte somente as políticas que a tarefa
+alterar. Não deve usar `iptables-restore`, `ip6tables-restore`, `nft flush
+ruleset` ou apagar chains Docker/Fail2Ban.
 
-Antes da primeira alteração convidada, preparar um script privado de rollback que
-restaure **somente** o backend identificado a partir do snapshot e registrar seu
-hash. Armá-lo como unidade transitória do systemd, com prazo curto e explícito:
+Modelo da parte ativa, ajustado ao delta efetivamente aprovado:
 
 ```bash
-sudo systemd-run \
-  --unit='stakeframe-network-rollback-<RUN_ID>' \
-  --on-active=10min \
-  --collect \
-  /root/<PRIVATE_ROLLBACK_DIR>/rollback-<RUN_ID>.sh
-sudo systemctl show \
-  'stakeframe-network-rollback-<RUN_ID>.timer' \
-  -p Id -p ActiveState -p NextElapseUSecRealtime
+#!/bin/sh
+set -eu
+CHAIN='STAKEFRAME_M003_R1'
+
+remove_jump() {
+  tool="$1"
+  family="$2"
+  while "$tool" -C INPUT -j "$CHAIN" >/dev/null 2>&1; do
+    "$tool" -D INPUT -j "$CHAIN"
+  done
+  if "$tool" -n -L "$CHAIN" >/dev/null 2>&1; then
+    "$tool" -F "$CHAIN"
+    "$tool" -X "$CHAIN"
+  fi
+  printf '%s active chain removed\n' "$family"
+}
+
+remove_jump iptables ipv4
+remove_jump ip6tables ipv6
+
+# Executar somente se a janela tiver alterado estas políticas.
+# iptables  -P INPUT ACCEPT
+# ip6tables -P INPUT ACCEPT
+# ip6tables -P FORWARD ACCEPT
+
+# Não tocar: DOCKER*, DOCKER-USER, DOCKER-FORWARD, inet f2b-table, NAT Docker.
 ```
 
-A forma exata da unidade e a restauração devem ser confirmadas no host antes da
-janela. O rollback não deve usar `iptables-restore`, `ip6tables-restore` e `nft`
-ao mesmo tempo. O script precisa registrar sucesso/erro em local privado e ser
-idempotente.
+As linhas de política ficam comentadas até o snapshot registrar quais políticas
+foram realmente alteradas. O script definitivo precisa conter somente as
+inversões da tarefa autorizada, com hash registrado, e não pode restaurar
+indiscriminadamente o snapshot inteiro.
 
-O timer deve permanecer armado até:
+### 5.3. Unidades `.service` e `.timer`
 
-1. a sessão SSH original continuar funcionando;
-2. uma segunda conexão SSH independente autenticar e executar apenas probes de
-   leitura;
-3. listeners, rotas, DNS/NTP, `rpcbind`, Docker e Fail2Ban apresentarem o estado
-   esperado;
-4. a leitura do painel Oracle confirmar as regras efetivas;
-5. o operador conferir o snapshot pós-mudança.
+O rollback temporizado deve ser uma unidade explícita. `systemctl stop` no timer
+não cancela um serviço que já tenha sido disparado; os dois estados precisam ser
+verificados separadamente.
 
-Somente então o operador cancela a unidade com o comando correspondente ao nome
-real validado, por exemplo `sudo systemctl stop <ROLLBACK_UNIT>`. Não cancelar
-por decurso de tempo nem por uma única conexão.
+Arquivo futuro:
+`/etc/systemd/system/stakeframe-m0-03-rollback-<RUN_ID>.service`
 
-### 6.5. Ordem futura das mudanças
+```ini
+[Unit]
+Description=Rollback delimitado da alteração de rede STK-M0-03
 
-1. Confirmar o caminho de recuperação Oracle e deixar o console acessível.
-2. Capturar e validar o estado local e a política Oracle.
-3. Armar o rollback local e verificar que ele está agendado.
-4. Preservar a regra de SSH na Security List/NSG e no host.
-5. Aplicar mudanças pequenas no host, sem flush global e sem tocar chains
-   administradas por Docker/Fail2Ban.
-6. Abrir/reter somente 80/443 nas duas camadas quando houver serviço autorizado.
-7. Remover alcance público de 111 somente após a análise de dependências e a
-   decisão do Codex; não desligar `rpcbind` nesta sequência automaticamente.
-8. Abrir uma segunda conexão SSH independente e executar probes de leitura.
-9. Se qualquer probe falhar, não cancelar o rollback; deixar a restauração
-   temporizada ocorrer ou usar o caminho Oracle separado.
-10. Depois de todos os critérios de aceite, persistir pelo mecanismo nativo
-    confirmado e cancelar o rollback.
+[Service]
+Type=oneshot
+User=root
+ExecStart=/root/<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/rollback.sh
+NoNewPrivileges=no
+```
 
-### 6.6. Oracle e rollback são camadas separadas
+Arquivo futuro:
+`/etc/systemd/system/stakeframe-m0-03-rollback-<RUN_ID>.timer`
 
-O timer local só pode restaurar regras do host se o host continuar executando.
-Ele **não desfaz** Security Lists, NSGs, route tables, IP público ou qualquer
-alteração da Oracle. Para a camada Oracle, o runbook futuro deve guardar
-privadamente o estado anterior, aplicar a mudança pelo painel/API autorizado,
-ler novamente o conjunto efetivo e ter uma sequência independente de reversão no
-mesmo painel/API. Perder SSH exige o caminho de recuperação confirmado; não se
-pode prometer que o timer local resolverá isso.
+```ini
+[Unit]
+Description=Janela temporizada de rollback STK-M0-03
 
-### 6.7. Persistência após sucesso
+[Timer]
+OnActiveSec=10min
+AccuracySec=1s
+Persistent=false
+Unit=stakeframe-m0-03-rollback-<RUN_ID>.service
 
-A persistência só pode ser configurada depois de identificar o mecanismo já
-instalado. O futuro operador deve:
+[Install]
+WantedBy=timers.target
+```
 
-- salvar pelo serviço nativo já presente, sem instalar UFW ou trocar backend;
-- reler a configuração salva e comparar com o estado ativo;
-- testar a carga em uma janela autorizada, sem reiniciar nesta tarefa;
-- em tarefa posterior, verificar após reinício autorizado que SSH, IPv4/IPv6,
-  80/443, loopback, egress, Docker e Fail2Ban continuam corretos.
+Sequência futura, somente após autorização da janela:
 
-## 7. Critérios de aceite para a futura aplicação
+```bash
+sudo install -o root -g root -m 0700 <rollback.sh> \
+  /root/<PRIVATE_SERVER_ROLLBACK_DIR>/<RUN_ID>/rollback.sh
+sudo install -o root -g root -m 0644 <service> \
+  /etc/systemd/system/stakeframe-m0-03-rollback-<RUN_ID>.service
+sudo install -o root -g root -m 0644 <timer> \
+  /etc/systemd/system/stakeframe-m0-03-rollback-<RUN_ID>.timer
+sudo systemctl daemon-reload
+sudo systemctl start stakeframe-m0-03-rollback-<RUN_ID>.timer
+sudo systemctl show stakeframe-m0-03-rollback-<RUN_ID>.timer \
+  -p Id -p ActiveState -p SubState -p NextElapseUSecRealtime
+```
 
-- [ ] Host, usuário, chave e fingerprints confirmados sem publicar valores.
-- [ ] Backend efetivo e persistência identificados.
-- [ ] IPv4 e IPv6 conferidos separadamente, incluindo NAT e chains finais.
-- [ ] Docker e Fail2Ban preservados e suas chains compreendidas.
-- [ ] SSH original mantido; segunda conexão independente validada.
-- [ ] Oracle Security Lists e NSGs reconciliados, sem regras permissivas
-      esquecidas em uma camada.
-- [ ] 80/443 liberados somente para o proxy autorizado e em ambas as camadas.
-- [ ] 5432, 6379, portas administrativas e OmniRoute sem publicação direta.
-- [ ] `rpcbind` mantido ou restringido com dependências documentadas; nenhuma
-      desativação sem tarefa e autorização próprias.
-- [ ] Loopback, estabelecidas, ICMP/ICMPv6 aplicável, DNS, NTP e egress mantidos.
-- [ ] Snapshot privado, hashes e rollback temporizado verificados antes da
-      primeira alteração.
-- [ ] Rollback cancelado somente após segunda conexão e probes completos.
-- [ ] Persistência conferida e eventual reinício autorizado verificado.
+A unidade não deve ser habilitada para boot; `start` arma somente a janela
+transitória. Antes da alteração, deve-se confirmar `ActiveState=active` do timer
+e uma próxima execução futura.
 
-## 8. Arquivos e limites desta PR
+Depois de validar a sessão original, a segunda sessão SSH, listeners, rotas,
+DNS/NTP, Docker, Fail2Ban e a leitura Oracle, cancelar assim:
 
-Foi preparado somente este documento. Nenhum arquivo de configuração de firewall
-foi criado porque os dados observados não permitem escolher com segurança entre
-backend iptables-nft/nftables, cadeia Docker/Fail2Ban ou mecanismo de persistência.
-Criar um instalador genérico neste estado esconderia justamente os riscos que a
-tarefa exige revisar.
+```bash
+sudo systemctl stop stakeframe-m0-03-rollback-<RUN_ID>.timer
 
-Nenhuma regra, serviço, socket, pacote, container, volume, usuário, permissão,
-configuração SSH, Security List, NSG, rota ou recurso Oracle foi alterado.
+# Parar o service somente se ele estiver em execução; parar o timer não basta.
+if [ "$(sudo systemctl show -p ActiveState --value \
+  stakeframe-m0-03-rollback-<RUN_ID>.service)" = active ]; then
+  sudo systemctl stop stakeframe-m0-03-rollback-<RUN_ID>.service
+fi
+
+sudo systemctl show stakeframe-m0-03-rollback-<RUN_ID>.timer \
+  -p ActiveState -p SubState -p NextElapseUSecRealtime
+sudo systemctl show stakeframe-m0-03-rollback-<RUN_ID>.service \
+  -p ActiveState -p SubState
+```
+
+O sucesso só pode ser declarado quando o timer estiver inativo, o service não
+estiver em execução e não houver uma execução futura agendada. `reset-failed`,
+remoção das unidades e limpeza dos artefatos ficam para depois da conferência
+privada dos hashes.
+
+### 5.4. Rollback ativo versus rollback persistente
+
+São operações separadas:
+
+- **Ativo:** executar apenas as inversões das regras/políticas desta tarefa,
+  preservando Docker, Fail2Ban, NAT e chains dinâmicas.
+- **Persistente:** restaurar os arquivos privados `rules.v4`/`.v6` anteriores
+  no caminho correto, conferir proprietário/permissão/hash e somente depois
+  decidir se uma recarga controlada é necessária.
+- **Não fazer:** carregar o snapshot completo durante o rollback ativo, usar
+  `nft flush ruleset`, iniciar `nftables.service` ou recarregar o serviço de
+  persistência sem avaliar o impacto nas chains dinâmicas.
+
+Se uma recarga persistente for necessária, ela deve ser uma etapa manual,
+separada, autorizada e precedida de nova leitura de Docker/Fail2Ban. A cópia
+fora da VPS continua sendo a proteção contra perda simultânea do host e do
+servidor.
+
+### 5.5. Persistência após a aplicação
+
+Depois de a política ativa ser validada:
+
+1. revisar o diff dos arquivos `/etc/iptables/rules.v4` e `.v6`;
+2. confirmar que não há publicação não autorizada nem mudança em chains Docker;
+3. confirmar que o Fail2Ban continua carregado em sua tabela própria;
+4. usar o mecanismo já instalado (`netfilter-persistent`), sem instalar UFW;
+5. reler os arquivos e comparar hashes/estado ativo;
+6. não reiniciar nesta tarefa; um teste pós-reboot exige autorização separada.
+
+O fato de `IPTABLES_RESTORE_NOFLUSH=yes` reduzir o risco de apagar chains durante
+uma carga não transforma qualquer arquivo salvo em seguro. O conteúdo salvo
+continua sujeito a revisão e ordem de inicialização.
+
+## 6. Critérios de aceite para uma futura aplicação
+
+- [ ] Shape, VNIC, subnet, route table, Security Lists, NSGs e IPv4/IPv6 Oracle
+      reconciliados.
+- [ ] Caminho de recuperação SSH identificado, acessível e testado sem criar
+      recursos nesta tarefa.
+- [x] Usuário SSH confirmado em fonte autorizada; não publicado.
+- [x] Backend convidado e persistência identificados.
+- [x] IPv4/IPv6, NAT, Docker, Fail2Ban, rotas, DNS/NTP e SSH coletados.
+- [x] Dependências de `rpcbind`/RPC/NFS consultadas; nenhum consumidor ativo foi
+      observado.
+- [ ] Segunda conexão SSH independente validada antes da aplicação.
+- [ ] Regras exatas da janela aprovadas pelo Codex.
+- [ ] Snapshot local e cópia server-side criados, com hashes conferidos.
+- [ ] Script de rollback root-only disponível no servidor antes da mudança.
+- [ ] `.service` e `.timer` instalados, timer armado e próxima execução conferida.
+- [ ] Loopback, estabelecidas, ICMP/ICMPv6 aplicável, DNS, NTP e egress
+      preservados.
+- [ ] TCP/22 preservado durante toda a janela.
+- [ ] TCP/80/443 liberado somente com listener/proxy e regras Oracle aprovados.
+- [ ] TCP/UDP/111 sem ingresso público; decisão de remoção de `rpcbind` separada.
+- [ ] PostgreSQL, Redis e OmniRoute sem publicação direta.
+- [ ] Rollback ativo e persistente verificados separadamente.
+- [ ] Timer parado e service confirmado inativo somente após todos os probes.
+- [ ] PR revisada pelo Codex; sem merge, deploy ou aplicação implícita.
+
+## 7. Limites desta PR
+
+Esta PR contém documentação de análise e preparação. Não contém credenciais,
+endpoints privados, regras aplicadas, instalador genérico, timer armado ou
+arquivo de configuração pronto para carregamento automático.
+
+Não houve alteração na VPS ou na Oracle, nem instalação/remoção de pacote,
+reinício, mudança de firewall/SSH, alteração de container/volume, criação de
+recurso, compra, deploy, release ou migração.
