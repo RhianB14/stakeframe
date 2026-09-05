@@ -1,6 +1,8 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-01** (bootstrap, configuração do GitHub, diagnóstico).
+Tarefa atual: **STK-M0-02** (inventário da VPS e preparação dos acessos).
+STK-M0-02 está em andamento; o inventário remoto aguarda a identificação
+inequívoca do destino e do usuário SSH.
 O M0 só é considerado concluído quando todos os itens abaixo estiverem
 verificados e o Codex autorizar o avanço.
 
@@ -27,8 +29,9 @@ verificados e o Codex autorizar o avanço.
 - [x] Milestones M0–M6, labels (tipo/prioridade/etapa), issue da tarefa
       STK-M0-01 aberta e vinculada à PR.
 - [x] Diagnóstico do restante do M0 (abaixo).
+- [x] STK-M0-01 concluído pela [PR #2](https://github.com/RhianB14/stakeframe/pull/2), integrada por squash no commit `8be12104f52c06eb7d1456ad9e87895434507ceb`.
 
-## Pendências do M0 (fora do escopo do STK-M0-01)
+## Execução atual e pendências do M0
 
 ### Ambiente local
 
@@ -43,15 +46,19 @@ verificados e o Codex autorizar o avanço.
 
 - [ ] Confirmar acesso de leitura à VPS e inventariar a VPS existente
       informada pelo proprietário: **2 CPU, 12 GB RAM, 50 GB**; shape e
-      arquitetura ainda não verificadas.
+      arquitetura ainda não verificadas. A chave local foi localizada, mas
+      host e usuário SSH ainda faltam; nenhuma conexão foi tentada.
 - [ ] Inventariar CPU, memória, disco e serviços existentes na VPS.
 - [ ] Verificar Docker + Docker Compose na VPS (versões).
 - [ ] Definir e documentar política de recuperação de instâncias ociosas.
+- [x] Registrar o diagnóstico parcial e as pendências de acesso em
+      [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
 
 ### Domínio
 
-- [ ] Consultar disponibilidade e preço de `stakeframe.com.br` (decisão de
-      compra é do proprietário, com autorização do Codex).
+- [x] Consultar disponibilidade e preço de `stakeframe.com.br`: ISAVAIL
+      retornou `ST 0` em 2026-09-05 e a página oficial informa R$ 40,00 por
+      um ano. Nenhuma compra foi realizada; a decisão continua do proprietário.
 
 ### Integrações
 
@@ -65,7 +72,8 @@ verificados e o Codex autorizar o avanço.
 
 - [ ] Planejar instância Docker independente do computador pessoal; inventariar
       provedores disponíveis, limites e custos; validar suporte a imagens e
-      saída estruturada antes de depender deles.
+      saída estruturada antes de depender deles. - [x] Referência local consultada: OmniRoute `3.8.50`; manifesto oficial
+      da imagem `3.8.50` reportou `linux/amd64` e `linux/arm64`. - [ ] Arquitetura da VPS e compatibilidade do destino ainda não verificadas.
 
 ### Infraestrutura e operação
 
