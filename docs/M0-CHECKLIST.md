@@ -1,7 +1,8 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-04** — preparação da validação de recuperação de acesso
-([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md); issue #7 no milestone M0).
+Tarefa atual: **STK-M0-05** — registro da validação de recuperação administrativa
+([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9; issue #9 no milestone M0,
+referenciando a issue #7, que permanece encerrada).
 STK-M0-02 foi concluída pela PR #4, integrada por squash na `main` em
 `666f915ab0c94eeef3f792f5eed88809a049297e`. STK-M0-03 foi concluída pela
 [PR #6](https://github.com/RhianB14/stakeframe/pull/6), integrada por squash
@@ -80,9 +81,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       Sem IPv6 público, regras ou rotas IPv6; não pedir repetição do painel.
 - [x] Identificar caminho instância → OS Management → Console connection;
       nenhuma conexão existente exibida e nenhum botão acionado.
-- [ ] Validar IAM, transporte serial e login/recuperação do Ubuntu em tarefa
+- [x] Validar IAM, transporte serial e login/recuperação do Ubuntu em tarefa
       separada; chave de transporte não equivale a login no guest. Preparação
-      concluída na STK-M0-04 ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md)).
+      concluída na STK-M0-04 ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md));
+      validação executada e registrada na STK-M0-05 (§9).
 - [x] Substituir os exemplos R1 por implementação local única e proposta
       somente IPv6 INPUT/FORWARD ativo, sem persistência nesta janela, em
       [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md). IPv4, OUTPUT, Docker,
@@ -129,10 +131,32 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] Consultas adicionais de painel sinalizadas ao Codex em
       ACCESS-RECOVERY §6; inspeção OCI anterior permanece válida; painel não
       repetido.
-- [ ] Executar o teste de recuperação (fases A–F) — exige autorização
-      específica; mutações previstas: conexão de console OCI e **definição**
-      de senha temporária (não há senha anterior), com bloqueio/verificação
-      por forma de shadow na limpeza (ACCESS-RECOVERY §4–§5).
+- [ ] Executar o teste de recuperação (fases A–F) — **executado na STK-M0-05**
+      dentro da janela autorizada (registro em
+      [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9); a preparação histórica
+      deste bloco permanece como registro.
+
+### STK-M0-05 — Registrar a validação executada
+
+- [x] IAM e transporte validados pelo Codex (Cloud Shell; conexão anterior
+      excluída automaticamente) e autenticação realizada pelo proprietário,
+      com o segredo restrito à digitação própria.
+- [x] Provas executadas pelo Codex no serial: `tty` = `/dev/ttyAMA0`,
+      `id -un` = conta padrão, `sudo -n id -u` = `0`.
+- [x] Restauração verificada pelo Hermes às 23:26:28 UTC: campo de senha da
+      conta padrão de volta à forma sem hash, `lastchg` restaurado (20695) e
+      demais metadados idênticos à linha de base; root inalterado; SSH + sudo
+      operantes.
+- [x] Encerramento confirmado pelo Codex: logout serial e exclusão da conexão
+      (`DELETED` às 23:32:58 UTC; tabela vazia; Cloud Shell encerrado).
+- [ ] Descarte da chave temporária da integração — **não comprovado**:
+      pendência explícita; não afirmar limpeza integral nem supor que um
+      arquivo existiu; a inspeção do Cloud Shell comum não estabelece
+      equivalência com o ambiente da integração serial.
+- [x] Recuperação administrativa **validada como teste pontual concluído** —
+      sem marcar recuperação pronta para janela futura; qualquer janela de
+      firewall exige console independente estabelecido e mantido durante a
+      janela (ACCESS-RECOVERY §5 e §9). M0 permanece em andamento.
 
 ### Domínio
 
