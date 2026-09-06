@@ -1,9 +1,10 @@
 # Recuperação de acesso — preparação da validação
 
-Tarefa: **STK-M0-04** (revisão R1 incorporada). Status: **preparação** — este
-documento organiza o teste futuro de recuperação de acesso OCI/Ubuntu e não
-autoriza a sua execução. Conexão de console, credenciais e mutações no guest
-dependem de autorização específica e separada.
+Tarefas: **STK-M0-04** (preparação, revisão R1 incorporada) e **STK-M0-05**
+(registro da validação, issue #9). Status: **validação executada em 05/09/2026** —
+registro completo no §9. Este documento não autoriza novas execuções: conexão de
+console, credenciais e mutações no guest dependem de autorização específica e
+separada.
 
 - Evidência OCI (inspeção do Codex retransmitida): [NETWORK-SECURITY.md](NETWORK-SECURITY.md)
   §3 e §6. O painel não será repetido; consultas adicionais ficam sinalizadas
@@ -82,6 +83,9 @@ privados; publicam-se conclusões sanitizadas.
 
 ## 2. Pré-requisitos ainda não comprovados
 
+> Estado registrado na preparação. Na STK-M0-05, os itens 1–3 foram validados
+> dentro da janela autorizada (§9); o item 4 permanece inexplorado.
+
 1. **IAM OCI** para leitura da instância e gerenciamento de
    `instance-console-connection` no compartment correto. Presença de botão no
    painel não prova autorização.
@@ -97,6 +101,8 @@ privados; publicam-se conclusões sanitizadas.
    é tarefa separada com autorização própria.
 
 ## 3. Sequência proposta para o teste futuro
+
+> Plano registrado na preparação; a execução efetiva (fases A–F) está em §9.
 
 Cada fase só inicia com a anterior confirmada e com autorização vigente.
 Evidência bruta é privada; publicam-se conclusões sanitizadas. A limpeza é
@@ -210,3 +216,53 @@ endpoint de console da instância; (c) habilitação de Cloud Shell na tenancy.
 - Não foram criados conexão, chave, senha, conta ou recurso OCI; não houve
   reinício, instalação de pacotes, transferência de scripts operacionais,
   armamento de timers nem execução de aplicação/rollback.
+
+## 9. Registro da validação (STK-M0-05, 05/09/2026)
+
+Execução autorizada dentro da janela, seguindo a sequência A–F de §3 com os
+papéis separados por evidência. Base: `main` `98a5b95606098066258c1fcf0fd63fa1c32348a5`.
+Nenhuma operação além do escopo autorizado; sem firewall, reboot, IAM, SSH,
+boot ou persistência.
+
+### Execução e responsabilidade
+
+- **IAM e transporte (Codex):** IAM validado; conexão de console criada via
+  Cloud Shell; prompt de login visível no console serial. A conexão do teste
+  de transporte anterior havia sido excluída automaticamente ao sair.
+- **Credencial (proprietário):** senha temporária definida por digitação
+  própria em `sudo passwd <conta padrão>`, no terminal administrativo
+  entregue para esse fim — o segredo não transitou por chat, argumentos,
+  histórico, logs, transcrições nem documentos; nenhum assistente registrou
+  ou exibiu o valor.
+- **Autenticação serial (Codex, provas):** sessão autenticada com
+  `tty` = `/dev/ttyAMA0`, `id -un` = conta padrão e `sudo -n id -u` = `0` —
+  autenticação e capacidade administrativa comprovadas dentro da janela.
+- **Encerramento (Codex):** logout serial e exclusão da conexão confirmados —
+  estado `DELETED` às 23:32:58 UTC, tabela de conexões vazia e Cloud Shell
+  encerrado.
+
+### Restauração (Hermes, verificada às 23:26:28 UTC)
+
+- Campo de senha da conta padrão restaurado à forma pré-teste (**sem hash** —
+  `!`), removendo integralmente o hash temporário; `passwd -l` sozinho não
+  seria suficiente. Verificação por classificação de forma, sem publicar
+  hashes.
+- Metadados de envelhecimento restaurados e conferidos: `lastchg` de volta ao
+  valor de provisionamento (20695) e min/max/warn/inactive/expire idênticos à
+  linha de base.
+- **root inalterado** (`*`, forma pré-teste); SSH + sudo permaneceram
+  operantes (`sudo -n id -u` = 0; campos de autenticação do sshd sem
+  mudança); `serial-getty@ttyAMA0` ativo ao final.
+- Mutações executadas: `usermod -p` (restauração do campo) e `chage -d`
+  (metadado), ambas com rc=0 e verificação pré→pós integrada.
+
+### Limitações e pendências (não declarar limpeza integral)
+
+- **Descarte da chave temporária da integração não comprovado.** Não afirmar
+  limpeza integral e não supor que um arquivo existiu; a inspeção do Cloud
+  Shell comum não estabelece equivalência com o ambiente da integração serial.
+- Teste pontual concluído **não** marca a recuperação como pronta para janela
+  futura: qualquer janela de firewall exige console independente estabelecido
+  e mantido durante a janela, sem depender de SSH para recriá-lo após bloqueio
+  (§5).
+- Registros históricos da preparação (§1–§8) preservados sem reescrita.

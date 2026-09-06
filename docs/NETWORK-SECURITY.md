@@ -303,6 +303,15 @@ idênticos no contexto padrão e no contexto da tupla real observada pelo
 servidor: senha definida no guest não autentica via SSH. Estado, pré-requisitos
 e sequência proposta: [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md).
 
+**Validação executada (STK-M0-05, 05/09/2026):** IAM, transporte, autenticação
+serial e capacidade administrativa foram validados dentro da janela autorizada
+(condução do Codex; autenticação por digitação própria do proprietário), com
+restauração verificada do estado pré-teste pelo Hermes e exclusão da conexão
+confirmada pelo Codex. Registro completo e limitações — inclusive o descarte
+**não comprovado** da chave temporária da integração — em
+[ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9. O teste pontual concluído **não**
+marca a recuperação como pronta para janela futura (ACCESS-RECOVERY §5).
+
 [Referência oficial consultada pelo Hermes](https://docs.oracle.com/en-us/iaas/Content/Compute/References/serialconsole.htm)
 para documentar pré-requisitos, sem acessar a conta:
 
@@ -361,7 +370,13 @@ associada ao head e na CI; não confundir checks simulados com probes da VPS.
 - [x] Inspeção OCI incorporada com autoria Codex/retransmissão do proprietário.
 - [x] Escopo fechado somente IPv6 INPUT/FORWARD ativo, preservando IPv4/OCI.
 - [x] Caminho de console identificado sem criar conexão.
-- [ ] Recuperação pronta: IAM, serial e administração/recuperação Ubuntu validados.
+- [x] Recuperação administrativa validada como **teste pontual concluído**
+      (STK-M0-05; [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9), com exclusão
+      da conexão confirmada; descarte da chave temporária permanece pendência
+      explícita.
+- [ ] Gate da futura janela: console independente estabelecido e mantido
+      durante toda a janela de firewall, sem depender de SSH para recriá-lo
+      (ACCESS-RECOVERY §5).
 - [ ] Revisão do Codex e autorização explícita para aplicação.
 - [ ] Script/estado/cópia de recuperação presentes no servidor e cópia privada externa.
 - [ ] Timer real armado e agendamento monotônico validado na janela autorizada.
