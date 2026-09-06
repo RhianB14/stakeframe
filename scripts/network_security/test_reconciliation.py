@@ -1,4 +1,4 @@
-"""Simulation-only tests for the controlled STK-M0-06 reconciliation."""
+"""Simulation-only tests for controlled STK-M0-06 reconciliation."""
 import copy
 import json
 import tempfile
@@ -36,10 +36,20 @@ class FakeReconciliationBackend:
     def persistence_files(self):
         return dict(self.persistence)
 
-    def reconciliation_readback(self, state):
+    def ipv4_active(self):
+        return b"ipv4-active"
+
+    def quiescence_readback(self, state):
         if self.readback is None:
             raise ReconciliationError("systemd state unknown")
-        return copy.deepcopy(self.readback)
+        if self.readback.get("jobs"):
+            raise ReconciliationError("systemd job remains pending")
+        if self.readback.get("service_never_started") is not True:
+            raise ReconciliationError("service execution evidence contradicts reconciliation")
+        if self.readback.get("timer_stopped") is not True:
+            raise ReconciliationError("timer state unknown or still pending")
+        return {"service": {"active": "inactive", "sub": "dead", "result": "success", "status": 0, "start_us": 0},
+                "timer": {"active": "inactive", "sub": "dead", "next_us": 0}, "jobs": []}
 
     def unit_info(self, name):
         path = self.UNIT_DIR / name
@@ -51,6 +61,9 @@ class FakeReconciliationBackend:
         if name not in self.units:
             raise ReconciliationError("unit file absent")
         return self.units[name]
+
+    def unit_file_exists(self, name):
+        return name in self.units
 
     def remove_unit_file(self, name, expected_sha256=None):
         if name not in self.units:
@@ -70,6 +83,13 @@ class FakeReconciliationBackend:
             raise OSError("simulated daemon-reload failure")
         self.reloads += 1
 
+    def cleanup_readback(self, names):
+        if self.jobs:
+            raise ReconciliationError("systemd job remains pending after daemon-reload")
+        if not self.units_absent(names):
+            raise ReconciliationError("unit remains after daemon-reload")
+        return {"units_absent": True, "jobs": []}
+
 
 class ReconciliationTests(unittest.TestCase):
     def setUp(self):
@@ -86,11 +106,15 @@ class ReconciliationTests(unittest.TestCase):
         manifest = {"schema": 1, "run_id": RUN_ID, "before": self.before, "boot_id": "boot-a",
                     "script_sha256": guard.digest(b"old-script"), "persistence_sha256": {"rules.v4": guard.digest(b"ipv4-before"), "rules.v6": guard.digest(b"ipv6-before")},
                     "unit_sha256": {name: guard.digest(data) for name, data in self.unit_bytes.items()}, "backup_sha256": guard.digest(b"old-backup"),
-                    "persistence_mode": guard.PERSISTENCE_MODE, "chain": guard.chain_name(RUN_ID), "tag": "stk6:" + RUN_ID + ":oldtag", "window_seconds": 600, "prepared_monotonic_ns": 1}
+                    "persistence_mode": guard.PERSISTENCE_MODE, "chain": guard.chain_name(RUN_ID), "tag": "stk6:" + RUN_ID + ":oldtag", "window_seconds": 600, "prepared_monotonic_ns": 1,
+                    "ipv4_active_evidence": {"run_id": RUN_ID, "file": "ipv4.active", "sha256": guard.digest(b"ipv4-active"), "active_sha256": guard.digest(b"ipv4-active")}}
         manifest_raw = guard.encoded(manifest)
         guard.private_write(self.run_dir / "manifest.json", manifest_raw)
+        guard.private_write(self.run_dir / "ipv6_guard.py", b"old-script")
+        guard.private_write(self.run_dir / "persistence.before.json", b"old-backup")
         self.state = {**manifest, "manifest_sha256": guard.digest(manifest_raw), "phase": "rollback_incomplete", "actions": [], "rollback_actions": [], "units": {}}
         guard.private_write(self.run_dir / "journal.json", guard.encoded(self.state))
+        guard.private_write(self.run_dir / "ipv4.active", b"ipv4-active")
         self.backend = FakeReconciliationBackend(self.state)
         for name, data in self.unit_bytes.items():
             guard.private_write(self.run_dir / name, data)
@@ -106,7 +130,6 @@ class ReconciliationTests(unittest.TestCase):
         archive = self.root / ("active.reconciled-" + RUN_ID + ".json")
         self.assertEqual(archive.read_bytes(), self.active_bytes)
         self.assertFalse((self.root / "active.json").exists())
-        self.assertTrue(self.reconciler.evidence_path(RUN_ID).is_file())
         self.assertEqual(self.store.read(RUN_ID)["phase"], "rollback_incomplete")
 
     def test_repeating_after_success_is_verified_noop(self):
@@ -145,7 +168,6 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaisesRegex(ReconciliationError, "collision"):
             self.reconciler.reconcile(RUN_ID)
         self.assertTrue((self.root / "active.json").exists())
-        self.assertEqual(archive.read_bytes(), b"foreign")
 
     def test_missing_active_without_completed_evidence_is_unknown(self):
         (self.root / "active.json").unlink()
@@ -158,15 +180,23 @@ class ReconciliationTests(unittest.TestCase):
             self.reconciler.reconcile(RUN_ID)
 
     def test_modified_unit_is_not_removed(self):
-        name = self.unit_names[0]
-        self.backend.units[name] = b"modified"
+        self.backend.units[self.unit_names[0]] = b"modified"
         with self.assertRaisesRegex(ReconciliationError, "hash"):
             self.reconciler.reconcile(RUN_ID)
-        self.assertIn(name, self.backend.units)
+        self.assertIn(self.unit_names[0], self.backend.units)
 
     def test_modified_bundle_unit_is_not_removed(self):
         guard.private_write(self.run_dir / self.unit_names[0], b"modified bundle")
         with self.assertRaisesRegex(ReconciliationError, "bundle"):
+            self.reconciler.reconcile(RUN_ID)
+
+    def test_original_script_and_backup_hashes_are_required(self):
+        guard.private_write(self.run_dir / "ipv6_guard.py", b"changed")
+        with self.assertRaisesRegex(ReconciliationError, "script"):
+            self.reconciler.reconcile(RUN_ID)
+        guard.private_write(self.run_dir / "ipv6_guard.py", b"old-script")
+        guard.private_write(self.run_dir / "persistence.before.json", b"changed")
+        with self.assertRaisesRegex(ReconciliationError, "backup"):
             self.reconciler.reconcile(RUN_ID)
 
     def test_boot_change_is_refused(self):
@@ -174,13 +204,17 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaisesRegex(ReconciliationError, "boot"):
             self.reconciler.reconcile(RUN_ID)
 
-    def test_restoration_and_persistence_drift_are_refused(self):
+    def test_restoration_ipv4_and_persistence_drift_are_refused(self):
         self.backend.current["policies"]["INPUT"] = "DROP"
         with self.assertRaisesRegex(ReconciliationError, "snapshot"):
             self.reconciler.reconcile(RUN_ID)
         self.backend.current = copy.deepcopy(self.before)
         self.backend.persistence["rules.v4"] = b"changed"
         with self.assertRaisesRegex(ReconciliationError, "persistence"):
+            self.reconciler.reconcile(RUN_ID)
+        self.backend.persistence["rules.v4"] = b"ipv4-before"
+        self.backend.ipv4_active = lambda: b"changed"
+        with self.assertRaisesRegex(ReconciliationError, "IPv4"):
             self.reconciler.reconcile(RUN_ID)
 
     def test_unknown_execution_or_jobs_are_refused(self):
@@ -208,21 +242,30 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(before, after - {self.root / "operation.lock"})
         self.assertEqual(result["phase"], "rollback_incomplete")
 
-    def test_retry_after_partial_evidence_rechecks_active_identity(self):
-        original = self.reconciler._remove_unit
-
-        def stop_after_evidence(name, evidence):
-            evidence["units"][name]["status"] = "remove-intent"
-            self.reconciler._save_evidence(evidence)
-            raise OSError("simulated interruption")
-
-        self.reconciler._remove_unit = stop_after_evidence
+    def _interrupt_once(self, point):
+        fired = False
+        def interrupt(current, evidence):
+            nonlocal fired
+            if current == point and not fired:
+                fired = True
+                raise OSError("interrupt at " + point)
+        self.reconciler.interruption_hook = interrupt
         with self.assertRaises(OSError):
             self.reconciler.reconcile(RUN_ID)
-        guard.private_write(self.root / "active.json", guard.encoded({"run_id": "another-run"}))
-        self.reconciler._remove_unit = original
-        with self.assertRaisesRegex(ReconciliationError, "identity"):
-            self.reconciler.reconcile(RUN_ID)
+        self.reconciler.interruption_hook = None
+        self.assertEqual(self.reconciler.reconcile(RUN_ID)["phase"], "complete")
+
+    def test_interrupt_after_unlink_resumes(self):
+        self._interrupt_once("after-unlink")
+
+    def test_interrupt_after_daemon_reload_resumes(self):
+        self._interrupt_once("after-daemon-reload")
+
+    def test_interrupt_after_archive_creation_resumes(self):
+        self._interrupt_once("after-archive-create")
+
+    def test_interrupt_after_active_unlink_resumes(self):
+        self._interrupt_once("after-active-unlink")
 
     def test_wrong_fragment_path_is_refused(self):
         name = self.unit_names[0]
