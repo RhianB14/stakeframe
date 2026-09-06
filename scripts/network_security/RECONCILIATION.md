@@ -17,8 +17,7 @@ python -m unittest scripts.network_security.integration_reconciliation -q
 `--execute-reviewed-linux` e o diretório fixo `/var/lib/stk-ipv6`. Em ambos, o
 mesmo `operation.lock` global é adquirido com timeout.
 
-- A execução real requer fornecer `--ipv4-evidence` com um documento privado
-  criado antes da reconciliação, sem editar o bundle antigo.
+A referência IPv4 anterior é fornecida fora do journal/manifest, por exemplo:
 
 ```text
 python -m scripts.network_security.reconciliation reconcile \
