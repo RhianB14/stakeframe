@@ -1,8 +1,8 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-09** — contratos executáveis e documentação OpenAPI
-([issue #18](https://github.com/RhianB14/stakeframe/issues/18)). Base local
-STK-M0-07 e autenticação STK-M0-08 implementadas em PRs ainda abertas. A STK-M0-06
+Tarefa atual: **STK-M0-10** — ensaio isolado de backup e restauração
+([issue #20](https://github.com/RhianB14/stakeframe/issues/20)). Base local,
+autenticação e OpenAPI (STK-M0-07 a STK-M0-09) implementados em PRs ainda abertas. A STK-M0-06
 continua pendente na [issue #11](https://github.com/RhianB14/stakeframe/issues/11):
 PR #13 contém a reconciliação proposta, ainda sem execução na VPS.
 
@@ -257,6 +257,11 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [ ] HTTPS com Caddy + renovação; DNS do domínio.
 - [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
       teste de restauração demonstrado (RPO 1h / RTO 4h).
+- [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
+      de senha, criptografia Restic e restauração em outro cluster, conferindo
+      dados, proprietários, ACLs, recusas e limpeza. Sem acesso ao banco real.
+      [RECOVERY-DRILL.md](RECOVERY-DRILL.md) e [M0-10-VALIDATION.md](M0-10-VALIDATION.md).
+      Não valida R2, agendamento nem os objetivos RPO/RTO de produção.
 - [ ] Monitoramento externo de disponibilidade e alertas deduplicados.
 - [ ] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — hoje apenas esqueleto honesto).

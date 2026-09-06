@@ -35,6 +35,7 @@ pnpm install --frozen-lockfile
 pnpm local:init         # gera .env.local privado, sem imprimir a senha
 pnpm local:up           # compila e aguarda os serviços ficarem saudáveis
 pnpm local:test-db      # integração com PostgreSQL e worker reais
+pnpm recovery:drill     # ensaio isolado de backup criptografado e restauração
 pnpm test              # testes unitários
 pnpm typecheck
 pnpm api:spec:check    # valida OpenAPI e sincronização com os schemas da API
@@ -58,8 +59,11 @@ O fluxo de trabalho exige PR com CI verde para integrar na `main` (veja
 ## Operação
 
 Execução limitada ao computador local. Deploy, HTTPS, integrações externas e
-recuperação de banco continuam pendentes no M0. O Compose local não constitui
+recuperação completa continuam pendentes no M0. O Compose local não constitui
 uma configuração de produção; veja [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+O [ensaio de recuperação](docs/RECOVERY-DRILL.md) valida PostgreSQL com dados
+descartáveis; backups externos e recuperação completa ainda não estão ativos.
 
 ## Licença
 

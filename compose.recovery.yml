@@ -1,0 +1,79 @@
+# Disposable recovery test only. The runner supplies a unique project and secret files.
+x-postgres: &postgres
+  image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+  user: postgres
+  read_only: true
+  tmpfs:
+    - /var/lib/postgresql:uid=70,gid=70,mode=0700,size=256m
+    - /var/run/postgresql:uid=70,gid=70,mode=0770
+    - /tmp:uid=70,gid=70,mode=0700,size=32m
+  networks: [recovery]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  labels:
+    io.stakeframe.recovery-run: ${RECOVERY_RUN_ID:?Use pnpm recovery:drill}
+  healthcheck:
+    test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+    interval: 2s
+    timeout: 3s
+    retries: 30
+
+services:
+  source:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: stk_recovery_admin
+      POSTGRES_DB: stakeframe_recovery
+      POSTGRES_PASSWORD_FILE: /run/secrets/source_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [source_password]
+  target:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: stk_recovery_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/target_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [target_password]
+  tools:
+    build:
+      context: .
+      dockerfile: infra/recovery/Dockerfile
+    profiles: [tools]
+    environment:
+      STAKEFRAME_RUNTIME: recovery-test
+      RESTIC_REPOSITORY: /repository
+      RESTIC_PASSWORD_FILE: /run/secrets/repository_password
+      RESTIC_CACHE_DIR: /work/cache
+      PGCONNECT_TIMEOUT: '5'
+      PGOPTIONS: -c statement_timeout=60000 -c lock_timeout=5000
+    secrets: [source_password, target_password, repository_password, wrong_password]
+    volumes: [repository:/repository]
+    tmpfs:
+      - /work:uid=70,gid=70,mode=0700,size=128m
+      - /tmp:uid=70,gid=70,mode=0700,size=32m
+    networks: [recovery]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    labels:
+      io.stakeframe.recovery-run: ${RECOVERY_RUN_ID:?Use pnpm recovery:drill}
+
+networks:
+  recovery:
+    internal: true
+    labels:
+      io.stakeframe.recovery-run: ${RECOVERY_RUN_ID:?Use pnpm recovery:drill}
+volumes:
+  repository:
+    labels:
+      io.stakeframe.recovery-run: ${RECOVERY_RUN_ID:?Use pnpm recovery:drill}
+secrets:
+  source_password:
+    file: ${RECOVERY_SECRET_DIR:?Use pnpm recovery:drill}/source_password
+  target_password:
+    file: ${RECOVERY_SECRET_DIR:?Use pnpm recovery:drill}/target_password
+  repository_password:
+    file: ${RECOVERY_SECRET_DIR:?Use pnpm recovery:drill}/repository_password
+  wrong_password:
+    file: ${RECOVERY_SECRET_DIR:?Use pnpm recovery:drill}/wrong_password

@@ -78,20 +78,21 @@ checkouts sobre o mesmo projeto/volume. Nenhum comando deste fluxo atua na VPS.
 
 ## Comandos
 
-| Comando                 | O que faz                                                    |
-| ----------------------- | ------------------------------------------------------------ |
-| `pnpm format:check`     | Verifica formatação (CI executa este comando)                |
-| `pnpm format`           | Corrige formatação                                           |
-| `pnpm typecheck`        | Verifica os cinco pacotes e os testes                        |
-| `pnpm lint`             | Verifica TypeScript, React e scripts JavaScript              |
-| `pnpm test`             | Testa API e configuração sem banco externo                   |
-| `pnpm api:spec`         | Gera OpenAPI a partir dos schemas das rotas                  |
-| `pnpm api:spec:check`   | Valida OpenAPI e compara com o documento versionado          |
-| `pnpm build`            | Compila pacotes e assets da web                              |
-| `pnpm local:status`     | Mostra o estado dos containers locais                        |
-| `pnpm local:test-db`    | Testa PostgreSQL 18, fila e autenticação usando `.env.local` |
-| `pnpm test:integration` | Exige `TEST_DATABASE_URL` explícito para banco de teste      |
-| `pnpm test:e2e`         | Testa a web já iniciada em desktop e mobile                  |
+| Comando                 | O que faz                                                          |
+| ----------------------- | ------------------------------------------------------------------ |
+| `pnpm format:check`     | Verifica formatação (CI executa este comando)                      |
+| `pnpm format`           | Corrige formatação                                                 |
+| `pnpm typecheck`        | Verifica os cinco pacotes e os testes                              |
+| `pnpm lint`             | Verifica TypeScript, React e scripts JavaScript                    |
+| `pnpm test`             | Testa API e configuração sem banco externo                         |
+| `pnpm api:spec`         | Gera OpenAPI a partir dos schemas das rotas                        |
+| `pnpm api:spec:check`   | Valida OpenAPI e compara com o documento versionado                |
+| `pnpm build`            | Compila pacotes e assets da web                                    |
+| `pnpm local:status`     | Mostra o estado dos containers locais                              |
+| `pnpm local:test-db`    | Testa PostgreSQL 18, fila e autenticação usando `.env.local`       |
+| `pnpm test:integration` | Exige `TEST_DATABASE_URL` explícito para banco de teste            |
+| `pnpm test:e2e`         | Testa a web já iniciada em desktop e mobile                        |
+| `pnpm recovery:drill`   | Valida backup criptografado e restauração em clusters descartáveis |
 
 ### Testes de navegador
 
@@ -113,6 +114,13 @@ Playwright. A suíte de integração valida o protocolo OAuth com Better Auth e
 PostgreSQL reais, substituindo apenas os endpoints Google. Nenhuma dessas
 suítes substitui a validação posterior com a conta real.
 
+### Ensaio de recuperação
+
+O ensaio `recovery:drill` é independente da aplicação local e dos arquivos de
+credenciais dela. Pode ser executado com a aplicação aberta. Gera seu próprio
+ambiente, testa a restauração e remove os recursos identificados por seu UUID.
+Consulte [RECOVERY-DRILL.md](RECOVERY-DRILL.md).
+
 ### Ciclo de edição
 
 Após alterar código, `pnpm local:up` reconstrói as imagens e atualiza os
@@ -130,7 +138,7 @@ coloque em argumentos, histórico ou documentação.
    (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`...).
 3. Rode formatação, tipos, lint, testes, build e as integrações pertinentes antes do push.
 4. Abra a PR para `main`. A CI executa `format-check`, `application-check` e
-   `network-security-simulation`.
+   `network-security-simulation`, além do ensaio `recovery-check`.
 5. O merge é autorizado pelo Codex conforme [docs/GOVERNANCE.md](GOVERNANCE.md).
 
 Regras:

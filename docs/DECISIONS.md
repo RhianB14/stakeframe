@@ -181,3 +181,28 @@ recebem status `Superseded` e apontam a substituta.
   extras são removidos. Healthcheck indisponível e redirecionamentos mantêm seus
   contratos específicos. A D010 fica atualizada quanto à pendência OpenAPI;
   schema de produto, produção e integrações remanescentes continuam pendentes.
+
+## D013 — Demonstrar recuperação em ambiente descartável (2026-09-06)
+
+- **Contexto:** o M0 exige restauração comprovada. Antes de credenciais R2 e
+  ativação de backups reais, é necessário exercitar o mecanismo com PostgreSQL
+  e falhas reais, mantendo a aplicação e seus dados isolados.
+- **Decisão:** ensaio com dois clusters PostgreSQL 18.4 e Restic 0.19.1 fixados
+  por digest. Dump custom e roles sem hashes de senha ficam temporariamente em
+  `tmpfs`; somente o snapshot criptografado vai para o volume de backup. O fluxo
+  confere integralmente o repositório, restaura por ID completo, valida checksums
+  e manifesto e aplica SQL com interrupção em erro, em um banco novo.
+- **Papéis:** manter o mesmo nome de administrador inicial nos dois clusters,
+  com credenciais independentes. PostgreSQL 18 preserva o grantor de associações
+  de roles; nomes distintos reproduziram a restrição descrita na
+  [discussão oficial](https://www.postgresql.org/message-id/CA%2BC_kKWHMP4c56jx1BPvP1jmjp2pmBu0Cw07fPVECUmkJSnT4w%40mail.gmail.com).
+  Remover somente a criação redundante desse papel na cópia de trabalho do SQL,
+  preservando atributos/grants e sem ignorar falhas. Conferir ACLs, default
+  privileges e grants, além dos dados restaurados.
+- **Isolamento:** transporte Docker local, projeto e labels por UUID, rede
+  interna sem portas publicadas, segredos efêmeros fora do Git e limpeza restrita
+  aos recursos identificados. Relatório contém apenas resultados e tempos.
+- **Consequências:** a implementação valida a parte PostgreSQL da D009 em
+  ambiente de teste. R2, custódia durável da chave, agendamento, retenção, alertas,
+  anexos, OmniRoute e validação completa RPO/RTO permanecem pendentes. Restic é
+  a ferramenta escolhida para o ensaio; a operação externa terá validação própria.
