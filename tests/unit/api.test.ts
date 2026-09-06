@@ -84,6 +84,7 @@ describe('configuration', () => {
       host: '127.0.0.1',
       port: 3000,
       databaseUrl: DATABASE_URL,
+      auth: { enabled: false },
     });
   });
   it.each([undefined, '', 'https://private-secret@example.test/db', 'postgresql://localhost'])(

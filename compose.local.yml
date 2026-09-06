@@ -20,13 +20,17 @@ services:
 
   api:
     build: { context: ., target: api }
+    env_file:
+      - path: .env.auth.local
+        required: false
     environment:
       STAKEFRAME_RUNTIME: local
       API_HOST: 0.0.0.0
       DATABASE_URL: postgresql://stakeframe_local:${LOCAL_DB_PASSWORD:?Run pnpm local:init first}@postgres:5432/stakeframe_local
-    networks: [backend]
+    networks: [backend, auth-egress]
     depends_on:
       postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -42,6 +46,20 @@ services:
       interval: 5s
       timeout: 4s
       retries: 12
+
+  migrate:
+    build: { context: ., target: api }
+    command: [node, packages/db/dist/migrate-cli.js]
+    environment:
+      STAKEFRAME_RUNTIME: local
+      DATABASE_URL: postgresql://stakeframe_local:${LOCAL_DB_PASSWORD:?Run pnpm local:init first}@postgres:5432/stakeframe_local
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 
   worker:
     build: { context: ., target: worker }
@@ -85,6 +103,7 @@ services:
       retries: 12
 
 networks:
+  auth-egress:
   local-access:
   backend:
     internal: true

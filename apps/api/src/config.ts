@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { requireDatabaseUrl } from '@stakeframe/db';
+import { readAuthConfig } from './auth-config.js';
 
 const environmentSchema = z.object({
   STAKEFRAME_RUNTIME: z.literal('local'),
@@ -15,5 +16,6 @@ export function readConfig(environment: NodeJS.ProcessEnv) {
     host: result.data.API_HOST,
     port: result.data.API_PORT,
     databaseUrl: requireDatabaseUrl(environment.DATABASE_URL),
+    auth: readAuthConfig(environment),
   };
 }

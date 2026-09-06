@@ -1,6 +1,8 @@
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
+import { authSchema } from './auth-schema.js';
+export { authSchema } from './auth-schema.js';
 
 export function createDatabase(connectionString: string) {
   const pool = new pg.Pool({
@@ -11,7 +13,7 @@ export function createDatabase(connectionString: string) {
   });
   // A disconnected idle client is replaced by the pool; do not leak URLs/errors to logs.
   pool.on('error', () => undefined);
-  const orm = drizzle(pool);
+  const orm = drizzle(pool, { schema: authSchema });
   return {
     pool,
     orm,
@@ -23,6 +25,8 @@ export function createDatabase(connectionString: string) {
     },
   };
 }
+
+export type Database = ReturnType<typeof createDatabase>;
 
 export function requireDatabaseUrl(value: string | undefined): string {
   try {

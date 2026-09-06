@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import { systemStatusSchema } from '@stakeframe/shared';
+import { registerAuthRoutes } from './auth-routes.js';
+import type { OwnerAuth } from './auth.js';
 
-export function createApp(options: { checkDatabase: () => Promise<void>; logger?: boolean }) {
+export function createApp(options: {
+  checkDatabase: () => Promise<void>;
+  logger?: boolean;
+  ownerAuth?: OwnerAuth;
+}) {
   const app = Fastify({
     logger: options.logger ?? false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -35,10 +41,11 @@ export function createApp(options: { checkDatabase: () => Promise<void>; logger?
       name: 'Stakeframe',
       stage: 'local-setup',
       database,
-      authentication: 'not-configured',
+      authentication: options.ownerAuth ? 'google' : 'not-configured',
       productEnabled: false,
     });
   });
+  registerAuthRoutes(app, options.ownerAuth);
   app.setNotFoundHandler((request, reply) =>
     reply.code(404).send({
       error: { code: 'NOT_FOUND', message: 'Recurso não encontrado.', requestId: request.id },

@@ -1,11 +1,17 @@
 import { createDatabase } from '@stakeframe/db';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
+import { createOwnerAuth } from './auth.js';
 
 async function main() {
   const config = readConfig(process.env);
   const database = createDatabase(config.databaseUrl);
-  const app = createApp({ checkDatabase: database.check, logger: true });
+  const ownerAuth = config.auth.enabled ? createOwnerAuth(config.auth, database) : undefined;
+  const app = createApp({
+    checkDatabase: database.check,
+    logger: true,
+    ...(ownerAuth ? { ownerAuth } : {}),
+  });
   app.addHook('onClose', database.close);
   const stop = () => {
     void app.close().catch(() => {
@@ -15,6 +21,7 @@ async function main() {
   process.once('SIGTERM', stop);
   process.once('SIGINT', stop);
   try {
+    if (ownerAuth) await ownerAuth.auth.$context;
     await app.listen({ host: config.host, port: config.port });
   } catch {
     await app.close();

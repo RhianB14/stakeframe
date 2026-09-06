@@ -7,6 +7,9 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "better-auth": "1.7.3",
+    "@better-auth/drizzle-adapter": "1.7.3",
+    "drizzle-orm": "0.45.2",
     "@stakeframe/db": "workspace:*",
     "@stakeframe/shared": "workspace:*",
     "fastify": "5.12.3",

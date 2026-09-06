@@ -4,8 +4,9 @@ Aplicação pessoal para registro de apostas esportivas, controle de banca e
 acompanhamento de resultados.
 
 > **Estado atual: base local do M0.** Web, API, worker e PostgreSQL executam
-> em Docker Compose. A tela apresenta o estado da conexão; autenticação e
-> funcionalidades de apostas ainda não estão implementadas. Consulte [docs/PLAN.md](docs/PLAN.md)
+> em Docker Compose. O login Google restrito ao proprietário está implementado
+> e validado com a conta real no ambiente local. Funcionalidades de apostas
+> ainda não estão implementadas. Consulte [docs/PLAN.md](docs/PLAN.md)
 > para o plano mestre e [docs/M0-CHECKLIST.md](docs/M0-CHECKLIST.md) para o
 > progresso do setup.
 
@@ -27,7 +28,7 @@ resultados com liquidação manual e auditoria completa.
 
 ## Desenvolvimento
 
-Pré-requisitos: Node.js 24 LTS, pnpm 11.x, Docker.
+Pré-requisitos: Node.js 24 LTS, pnpm 11.x, Docker com Compose 2.24.0 ou superior.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -43,6 +44,9 @@ pnpm build
 Abra [http://127.0.0.1:8088](http://127.0.0.1:8088). Para encerrar preservando o
 banco, execute `pnpm local:down`. Instruções de E2E, portas e configuração em
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+Autenticação fica desativada por padrão e não concede acesso privado nesse
+estado. Configuração, migrações e limites em [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 
 O fluxo de trabalho exige PR com CI verde para integrar na `main` (veja
 [docs/GOVERNANCE.md](docs/GOVERNANCE.md)).

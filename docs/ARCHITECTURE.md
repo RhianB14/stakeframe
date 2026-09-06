@@ -2,8 +2,10 @@
 
 > **Estado real:** base local do M0 implementada na STK-M0-07. Existem web,
 > API, worker, contratos compartilhados e acesso PostgreSQL, além dos scripts
-> de segurança de rede. Autenticação e funcionalidades do produto permanecem
-> pendentes; o M0 não está concluído.
+> de segurança de rede. A STK-M0-08 acrescenta autenticação Google restrita ao
+> proprietário, ativada e validada localmente após autorização para configurar
+> credenciais. Novos ambientes continuam desativados por padrão. Produção e
+> funcionalidades do produto permanecem pendentes; o M0 não está concluído.
 
 ## Implementação local
 
@@ -17,8 +19,15 @@
 - `packages/db`: pool PostgreSQL e Drizzle. Não há tabelas ou migrações de domínio.
 - `packages/shared`: contratos de status, erro e diagnóstico da fila.
 
+A autenticação usa Better Auth, adapter Drizzle e tabelas no schema `auth`.
+`/api/v1/me` exige sessão válida e identidade autorizada; login Google, callback
+e logout são as únicas rotas de autenticação expostas. A interface permite
+entrar/sair e trata falhas de sessão sem exibir conteúdo privado. Política e
+configuração em [AUTHENTICATION.md](AUTHENTICATION.md).
+
 `compose.local.yml` executa PostgreSQL 18.4, API, worker e Caddy com os assets
-da web. API e worker usam apenas a rede interna. Web e PostgreSQL também usam
+da web. O worker usa apenas a rede interna; a API também usa uma bridge de saída
+para o Google, sem publicar portas no host. Web e PostgreSQL também usam
 uma bridge para publicação exclusiva em loopback (8088 e 55432). O banco tem
 volume persistente; API, worker e web usam filesystem somente leitura, usuário
 sem root e capabilities removidas. No Caddy local, a capability do binário é
@@ -31,6 +40,9 @@ ainda contêm as dependências de desenvolvimento; redução da imagem e políti
 de publicação ficam para a preparação do deploy.
 
 O worker cria automaticamente apenas o schema técnico `pgboss` no banco local.
+Um serviço temporário `migrate` aplica as migrações Drizzle antes de iniciar a
+API; o histórico fica no schema `drizzle`. A migração inicial cria o schema
+`auth` e suas tabelas, sem remover dados existentes.
 Credenciais de desenvolvimento são geradas em `.env.local` e excluídas do Git e
 do contexto Docker. Não há autorização para usar este Compose em produção.
 
@@ -69,14 +81,18 @@ recuperação de anexos imutáveis, com manifesto e checksums —
   ([.github/workflows/ci.yml](../.github/workflows/ci.yml)), Node.js v24.20.0
   fixado em [.nvmrc](../.nvmrc).
 
-- `application-check`: tipos, lint, unitários, build, Docker Compose real,
-  integração PostgreSQL 18/pg-boss e E2E Chromium em desktop/mobile.
+- `application-check`: tipos, lint, auditoria de dependências, unitários, build,
+  Docker Compose real, integração PostgreSQL 18/pg-boss/Better Auth e E2E Chromium
+  em desktop/mobile.
 - `network-security-simulation`: simulações Python do guard de rede.
 
 O job de aplicação falha se a integração não puder executar. O comando
 `test:integration` exige `TEST_DATABASE_URL`; não há fallback ou skip por falta
 de banco. Testes usam um schema aleatório `stk_test_<uuid>` e removem somente
-esse schema ao terminar. As proteções de branch existentes não foram alteradas.
+esse schema ao terminar. A suíte de autenticação usa um banco temporário
+`stk_auth_test_<uuid>`, removido ao final, e simula apenas os endpoints Google;
+exige conta local de teste com `CREATEDB`. As proteções de branch existentes não
+foram alteradas.
 
 ## Decisões
 
