@@ -129,6 +129,8 @@ O ensaio `recovery:drill` é independente da aplicação local e dos arquivos de
 credenciais dela. Pode ser executado com a aplicação aberta. Gera seu próprio
 ambiente, testa a restauração e remove os recursos identificados por seu UUID.
 Consulte [RECOVERY-DRILL.md](RECOVERY-DRILL.md).
+O modo `pnpm recovery:r2 <diretório-privado>` acessa R2 real com dados fictícios
+e exige a autorização específica descrita em [R2.md](R2.md). Não roda na CI.
 
 ### Ciclo de edição
 

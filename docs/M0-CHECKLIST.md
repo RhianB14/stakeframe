@@ -251,8 +251,11 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [ ] Google OAuth de produção: projeto/configuração separados, callback HTTPS
       e validação após autorização própria de publicação.
 - [ ] Telegram: criar bot restrito ao chat do proprietário.
-- [ ] Cloudflare R2: criar conta/buckets privados separados (anexos e
-      backups) e credenciais de escopo mínimo.
+- [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
+      criados. Token de ensaio restrito ao bucket de backups, autorizado por
+      30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.
+- [ ] Credencial de anexos e credenciais definitivas da operação R2 na VPS;
+      não reutilizar automaticamente o token temporário de ensaio.
 
 ### OmniRoute na VPS
 
@@ -285,6 +288,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       dados, proprietários, ACLs, recusas e limpeza. Sem acesso ao banco real.
       [RECOVERY-DRILL.md](RECOVERY-DRILL.md) e [M0-10-VALIDATION.md](M0-10-VALIDATION.md).
       Não valida R2, agendamento nem os objetivos RPO/RTO de produção.
+- [x] STK-M0-13: backup fictício criptografado enviado ao R2 e restaurado em
+      cluster novo com a origem parada; acesso ao bucket de anexos recusado,
+      dados/ACLs conferidos e chave preservada fora da VPS.
+      [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Não ativa backups reais.
 - [ ] Monitoramento externo de disponibilidade e alertas deduplicados.
 - [ ] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12;
