@@ -266,3 +266,18 @@ boot ou persistência.
   e mantido durante a janela, sem depender de SSH para recriá-lo após bloqueio
   (§5).
 - Registros históricos da preparação (§1–§8) preservados sem reescrita.
+
+### Adendo (STK-M0-06, 06/09/2026): encerramento pós-janela de firewall
+
+Encerramento do guest executado por SSH+sudo após rollback da janela IPv6
+verificado: campo de senha da conta padrão restaurado à forma pré-janela
+(**sem hash** — `!`), `lastchg` de volta ao valor de provisionamento (20695)
+e min/max/warn idênticos à linha de base; **root inalterado** (`*`,
+envelhecimento próprio); SSH + sudo permaneceram operantes
+(`sudo -n id -u` = 0) e `passwordauthentication no` mantido;
+`serial-getty@ttyAMA0` ativo ao final, com console serial autenticado deixado
+aberto para encerramento pelo Codex. Mutações: `usermod -p` (restauração do
+campo) e `chage -d` (metadado), ambas rc=0 com verificação pré→pós integrada.
+Firewall, persistência e demais serviços não foram tocados neste encerramento;
+o estado do run de firewall e sua reconciliação pendente estão em
+[NETWORK-SECURITY.md](NETWORK-SECURITY.md) §5.

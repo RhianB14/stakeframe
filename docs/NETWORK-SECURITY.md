@@ -281,6 +281,41 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
   Recusar colisões sem parar/adotar unidades externas; registrar aquisição e
   validar o `FragmentPath` carregado antes de parar o timer próprio.
 
+### Registro da primeira janela (STK-M0-06, 06/09/2026)
+
+Resultado real da primeira execução autorizada (base `4a09c4f…`, persistência
+`unchanged-active-only`): apply concluído com delta DROP em INPUT/FORWARD e
+timer armado; uma falha de verificação **determinística** interrompeu a
+confirmação e o rollback automático fechou a janela.
+
+- Causa raiz: unidades quiescentes (timer/service inativas/dead) são
+  descarregadas pelo gerenciador do systemd; o `systemctl show` anterior
+  recarrega a unidade como cliente efêmero e, ao sair, solta o pin — o
+  `busctl GetUnit` seguinte é recusado por identidade ("is not loaded"), não
+  por falha transitória. O guard tratava qualquer falha como erro genérico,
+  classificando estado conhecido como desconhecido.
+- Correção (nesta revisão): classificar a recusa por identidade
+  (`UnitNotLoaded`) e resolver o valor por readback quiescente imediato do
+  `systemctl show` — zero somente com forma inativa/dead, sem job e sem valor
+  não nulo exposto (uma service que rodou e foi coletada mantém timestamp e
+  segue recusa, nunca "nunca iniciou"). Falha D-Bus desconhecida continua
+  recusa dura; nada é convertido em sucesso, e jobs/estados seguem revalidados
+  sob o lock.
+- Resultado de segurança inalterado: firewall restaurado e verificado por
+  evidência externa independente — políticas ACCEPT, chain própria removida,
+  IPv4 idêntico, persistência 6/6, unidades `inactive/dead` com
+  `NextElapse=infinity`. A confirmação não ocorreu e o journal do run
+  permanece `rollback_incomplete`: a verificação interna do stop do timer
+  falhou pela recusa acima; as ações de rollback foram aplicadas.
+- Reconciliação pendente: as unidades do run permanecem em
+  `/run/systemd/system` e `active.json` segue presente no estado do guard;
+  reconciliação idempotente foi proposta em tarefa separada e **não
+  executada** (o script corrigido tem hash diferente do preparado no run).
+- Encerramento do guest concluído: conta padrão restaurada à forma
+  pré-janela (campo sem hash, `lastchg` de provisionamento), root inalterado,
+  console serial mantido autenticado para encerramento pelo Codex
+  (adendo em [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9).
+
 ## 6. Recuperação OCI/Ubuntu — caminho identificado, não pronta
 
 **Inspeção do Codex retransmitida:** instância → **OS Management → Console
