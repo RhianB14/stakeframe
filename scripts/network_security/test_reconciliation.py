@@ -1,14 +1,17 @@
 """Simulation-only tests for controlled STK-M0-06 reconciliation."""
 import copy
 import json
+import os
 import tempfile
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
 import ipv6_guard as guard
-from reconciliation import ReconciliationError, Reconciler, ReconciliationLinuxBackend
+from reconciliation import ReconciliationError, Reconciler, ReconciliationLinuxBackend, load_ipv4_evidence
 
 RUN_ID = "f15efb347860c80f9271"
 
@@ -39,7 +42,7 @@ class FakeReconciliationBackend:
     def ipv4_active(self):
         return b"ipv4-active"
 
-    def quiescence_readback(self, state):
+    def quiescence_readback(self, state, removed=()):
         if self.readback is None:
             raise ReconciliationError("systemd state unknown")
         if self.readback.get("jobs"):
@@ -125,6 +128,8 @@ class ReconciliationTests(unittest.TestCase):
             self.backend,
             timeout=0.2,
             ipv4_evidence={
+                "schema": 1,
+                "data_file": "ipv4.active",
                 "run_id": RUN_ID,
                 "boot_id": "boot-a",
                 "manifest_sha256": self.state["manifest_sha256"],
@@ -303,7 +308,7 @@ class ReconciliationTests(unittest.TestCase):
             self.reconciler.reconcile(RUN_ID)
         self.reconciler.interruption_hook = None
         original = self.backend.quiescence_readback
-        self.backend.quiescence_readback = lambda state: (_ for _ in ()).throw(ReconciliationError("service execution evidence contradicts reconciliation"))
+        self.backend.quiescence_readback = lambda state, **kwargs: (_ for _ in ()).throw(ReconciliationError("service execution evidence contradicts reconciliation"))
         with self.assertRaisesRegex(ReconciliationError, "execution"):
             self.reconciler.reconcile(RUN_ID)
         self.assertEqual(set(self.backend.units), set(self.unit_names))
@@ -321,7 +326,7 @@ class ReconciliationTests(unittest.TestCase):
             self.reconciler.reconcile(RUN_ID)
         self.reconciler.interruption_hook = None
         original = self.backend.quiescence_readback
-        self.backend.quiescence_readback = lambda state: (_ for _ in ()).throw(ReconciliationError("timer is active and job remains pending"))
+        self.backend.quiescence_readback = lambda state, **kwargs: (_ for _ in ()).throw(ReconciliationError("timer is active and job remains pending"))
         with self.assertRaisesRegex(ReconciliationError, "timer"):
             self.reconciler.reconcile(RUN_ID)
         self.assertEqual(set(self.backend.units), set(self.unit_names))
@@ -335,7 +340,7 @@ class ReconciliationTests(unittest.TestCase):
 
     def test_timer_deadline_must_be_zero(self):
         original = self.backend.quiescence_readback
-        self.backend.quiescence_readback = lambda state: {"service": {"start_us": 0}, "timer": {"next_us": 1}, "jobs": []}
+        self.backend.quiescence_readback = lambda state, **kwargs: {"service": {"start_us": 0}, "timer": {"next_us": 1}, "jobs": []}
         with self.assertRaisesRegex(ReconciliationError, "zero"):
             self.reconciler.reconcile(RUN_ID)
         self.backend.quiescence_readback = original
@@ -357,13 +362,202 @@ class ReconciliationTests(unittest.TestCase):
         adapter = Adapter()
         backend = ReconciliationLinuxBackend(adapter=adapter)
         self.assertEqual(backend.ipv4_active(), b"-P INPUT ACCEPT\\n")
-        self.assertEqual(adapter.argv, ["/usr/sbin/iptables", "-t", "filter", "-S"])
+        self.assertEqual(adapter.argv, ["/usr/sbin/iptables", "-w", "5", "-t", "filter", "-S"])
         with self.assertRaisesRegex(ReconciliationError, "empty"):
             ReconciliationLinuxBackend(adapter=adapter, ipv4_reader=lambda: None).ipv4_active()
 
         with self.assertRaisesRegex(ReconciliationError, "identity"):
             self.reconciler.reconcile("0123456789abcdefabcd")
         self.assertTrue((self.root / "active.json").exists())
+
+    def _pause(self, point):
+        def interrupt(current, evidence):
+            if current == point:
+                raise OSError("reviewed interruption: " + point)
+        self.reconciler.interruption_hook = interrupt
+        with self.assertRaises(OSError):
+            self.reconciler.reconcile(RUN_ID)
+        self.reconciler.interruption_hook = None
+
+    def test_ipv4_timestamp_type_and_preparation_boundary(self):
+        for value in (None, 0, -1, True, "1", 1.5, 2, time.monotonic_ns() + 10**15):
+            with self.subTest(timestamp=value):
+                self.reconciler.ipv4_evidence["observed_monotonic_ns"] = value
+                with self.assertRaisesRegex(ReconciliationError, "observation"):
+                    self.reconciler.reconcile(RUN_ID)
+                self.assertEqual(set(self.backend.units), set(self.unit_names))
+        self.reconciler.ipv4_evidence["observed_monotonic_ns"] = 1
+        self.assertEqual(self.reconciler.reconcile(RUN_ID)["phase"], "complete")
+
+    def test_ipv4_loader_rejects_non_integer_timestamp(self):
+        for value in (-1, True, "not-a-timestamp"):
+            proof = {key: value for key, value in self.reconciler.ipv4_evidence.items() if key != "active_bytes"}
+            proof["observed_monotonic_ns"] = value
+            proof["data_file"] = "prior.txt"
+            guard.private_write(self.root / "prior.txt", b"ipv4-active")
+            guard.private_write(self.root / "prior.json", guard.encoded(proof))
+            with self.assertRaisesRegex(ReconciliationError, "timestamp"):
+                load_ipv4_evidence(self.root / "prior.json")
+
+    def test_ipv4_reference_is_pinned_on_retry_and_noop(self):
+        for phase in ("interrupted", "complete"):
+            with self.subTest(phase=phase):
+                case = ReconciliationTests()
+                case.setUp()
+                self.addCleanup(case.doCleanups)
+                if phase == "interrupted":
+                    case._pause("after-evidence")
+                else:
+                    case.reconciler.reconcile(RUN_ID)
+                case.backend.ipv4_active = lambda: b"changed current firewall"
+                case.reconciler.ipv4_evidence.update(active_bytes=b"changed current firewall", active_sha256=guard.digest(b"changed current firewall"))
+                with self.assertRaisesRegex(ReconciliationError, "reference differs"):
+                    case.reconciler.reconcile(RUN_ID)
+
+    def test_archive_created_missing_or_corrupt_preserves_active(self):
+        for change in ("missing", "corrupt", "unsafe-mode"):
+            with self.subTest(change=change):
+                if change == "unsafe-mode" and os.name != "posix":
+                    continue
+                case = ReconciliationTests()
+                case.setUp()
+                self.addCleanup(case.doCleanups)
+                original_journal = (case.run_dir / "journal.json").read_bytes()
+                case._pause("after-archive-created")
+                archive = case.reconciler.archive_path(RUN_ID)
+                if change == "missing":
+                    archive.unlink()
+                elif change == "corrupt":
+                    guard.private_write(archive, b"corrupt archive")
+                else:
+                    archive.chmod(0o644)
+                with self.assertRaises(guard.GuardError):
+                    case.reconciler.reconcile(RUN_ID)
+                self.assertEqual((case.root / "active.json").read_bytes(), case.active_bytes)
+                self.assertEqual((case.run_dir / "journal.json").read_bytes(), original_journal)
+                self.assertNotEqual(case.reconciler._load_evidence(RUN_ID)["phase"], "complete")
+
+    def test_archived_evidence_before_complete_still_checks_archive(self):
+        original = self.reconciler._save_evidence
+        def interrupt(evidence):
+            original(evidence)
+            if evidence.get("archive", {}).get("status") == "archived":
+                raise OSError("after durable archived, before complete")
+        self.reconciler._save_evidence = interrupt
+        with self.assertRaises(OSError):
+            self.reconciler.reconcile(RUN_ID)
+        self.reconciler._save_evidence = original
+        guard.private_write(self.reconciler.archive_path(RUN_ID), b"corrupted")
+        with self.assertRaisesRegex(ReconciliationError, "archive readback"):
+            self.reconciler.reconcile(RUN_ID)
+        self.assertNotEqual(self.reconciler._load_evidence(RUN_ID)["phase"], "complete")
+
+    def test_archive_created_checkpoint_resumes(self):
+        self._pause("after-archive-created")
+        self.assertEqual(self.reconciler.reconcile(RUN_ID)["phase"], "complete")
+
+    def test_failed_archive_publication_preserves_active_and_retries(self):
+        with mock.patch("reconciliation.os.link", side_effect=OSError("link failed")):
+            with self.assertRaisesRegex(OSError, "link failed"):
+                self.reconciler.reconcile(RUN_ID)
+        self.assertEqual((self.root / "active.json").read_bytes(), self.active_bytes)
+        self.assertFalse(self.reconciler.archive_path(RUN_ID).exists())
+        self.assertEqual(list(self.root.glob(".archive-stage-*")), [])
+        self.assertEqual(self.reconciler.reconcile(RUN_ID)["phase"], "complete")
+
+    def test_between_unlinks_state_change_stops_before_second_removal(self):
+        for change in ("service", "timer", "job", "firewall"):
+            with self.subTest(change=change):
+                case = ReconciliationTests()
+                case.setUp()
+                self.addCleanup(case.doCleanups)
+                def intervene(point, evidence):
+                    if point != "after-unlink":
+                        return
+                    if change == "service":
+                        case.backend.readback["service_never_started"] = False
+                    elif change == "timer":
+                        case.backend.readback["timer_stopped"] = False
+                    elif change == "job":
+                        case.backend.readback["jobs"] = [["42", case.unit_names[0]]]
+                    else:
+                        case.backend.current["policies"]["INPUT"] = "DROP"
+                case.reconciler.interruption_hook = intervene
+                with self.assertRaises(ReconciliationError):
+                    case.reconciler.reconcile(RUN_ID)
+                self.assertNotIn(case.unit_names[0], case.backend.units)
+                self.assertIn(case.unit_names[1], case.backend.units)
+                self.assertEqual((case.root / "active.json").read_bytes(), case.active_bytes)
+
+    def test_drift_before_active_unlink_preserves_pointer(self):
+        def intervene(point, evidence):
+            if point == "after-archive-created":
+                self.backend.current["policies"]["INPUT"] = "DROP"
+        self.reconciler.interruption_hook = intervene
+        with self.assertRaisesRegex(ReconciliationError, "snapshot"):
+            self.reconciler.reconcile(RUN_ID)
+        self.assertEqual((self.root / "active.json").read_bytes(), self.active_bytes)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX symlink regression")
+    def test_dangling_pointer_or_archive_is_not_absence(self):
+        for filename in ("active.json", "active.reconciled-" + RUN_ID + ".json"):
+            with self.subTest(filename=filename):
+                case = ReconciliationTests()
+                case.setUp()
+                self.addCleanup(case.doCleanups)
+                path = case.root / filename
+                if path.exists():
+                    path.unlink()
+                path.symlink_to(case.root / "missing-target")
+                with self.assertRaisesRegex(ReconciliationError, "symlink"):
+                    case.reconciler.reconcile(RUN_ID)
+                self.assertEqual(set(case.backend.units), set(case.unit_names))
+
+
+class LinuxReadbackTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.backend = ReconciliationLinuxBackend()
+        self.backend.UNIT_DIR = Path(self.tmp.name)
+        self.names = guard.unit_names(RUN_ID)
+        self.state = {"run_id": RUN_ID}
+        self.properties = {name: {"LoadState": "loaded", "ActiveState": "inactive", "SubState": "dead", "Job": "",
+                                  "Result": "success", "ExecMainStatus": "0", "ExecMainStartTimestampMonotonic": "0",
+                                  "NextElapseUSecMonotonic": "infinity"} for name in self.names}
+        self.backend.unit_info = lambda name: self.properties[name]
+        self.backend._jobs = lambda names: []
+
+    def test_real_deadline_parser_refuses_positive_missing_invalid(self):
+        for value in ("1234567", None, "invalid"):
+            self.properties[self.names[1]]["NextElapseUSecMonotonic"] = value
+            with self.assertRaises(ReconciliationError):
+                self.backend.quiescence_readback(self.state)
+
+    def test_absent_service_is_only_allowed_with_removal_evidence(self):
+        self.properties[self.names[0]] = {"LoadState": "not-found", "ActiveState": "inactive", "SubState": "dead", "Job": ""}
+        with self.assertRaisesRegex(ReconciliationError, "removal intent"):
+            self.backend.quiescence_readback(self.state)
+        result = self.backend.quiescence_readback(self.state, removed=(self.names[0],))
+        self.assertIsNone(result["service"]["start_us"])
+
+    def test_unit_job_property_cannot_be_hidden_by_empty_list_jobs(self):
+        self.properties[self.names[0]]["Job"] = "42 /job/42"
+        with self.assertRaisesRegex(ReconciliationError, "job"):
+            self.backend.quiescence_readback(self.state)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX symlink regression")
+    def test_dangling_unit_and_directory_are_not_absence(self):
+        name = self.names[0]
+        path = self.backend.UNIT_DIR / name
+        self.properties[name]["LoadState"] = "not-found"
+        path.symlink_to(self.backend.UNIT_DIR / "missing-target")
+        with self.assertRaisesRegex(ReconciliationError, "symlink"):
+            self.backend.cleanup_readback(self.names)
+        path.unlink()
+        path.mkdir()
+        with self.assertRaisesRegex(ReconciliationError, "file type"):
+            self.backend.units_absent(self.names)
 
 
 if __name__ == "__main__":

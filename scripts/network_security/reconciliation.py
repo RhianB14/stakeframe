@@ -3,7 +3,9 @@ import argparse
 import json
 import os
 from pathlib import Path
+import stat
 import sys
+import tempfile
 import time
 
 try:
@@ -13,6 +15,32 @@ except ModuleNotFoundError:
 
 
 RUN_ID = "f15efb347860c80f9271"
+IPV4_FIELDS = ("schema", "source", "run_id", "boot_id", "manifest_sha256",
+               "observed_monotonic_ns", "active_sha256", "data_file")
+
+
+def regular_file_present(path):
+    """Absence is ENOENT only; a symlink (even dangling) is a collision."""
+    try:
+        info = Path(path).lstat()
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISREG(info.st_mode):
+        raise ReconciliationError("unexpected file type or symlink: " + Path(path).name)
+    return True
+
+
+def sync_directory(path):
+    if os.name == "posix":
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def positive_timestamp(value):
+    return type(value) is int and value > 0
 
 
 def load_ipv4_evidence(path):
@@ -22,9 +50,11 @@ def load_ipv4_evidence(path):
         document = json.loads(guard.private_read(evidence_path))
     except (TypeError, ValueError) as exc:
         raise ReconciliationError("IPv4 evidence document is invalid") from exc
-    required = ("schema", "source", "run_id", "boot_id", "manifest_sha256", "observed_monotonic_ns", "active_sha256", "data_file")
-    if document.get("schema") != 1 or any(not document.get(key) for key in required[1:]):
+    if (not isinstance(document, dict) or type(document.get("schema")) is not int
+            or document.get("schema") != 1 or any(not document.get(key) for key in IPV4_FIELDS[1:])):
         raise ReconciliationError("IPv4 evidence document is incomplete")
+    if not positive_timestamp(document["observed_monotonic_ns"]):
+        raise ReconciliationError("IPv4 observation timestamp must be a positive integer")
     if document["source"] != "external-private-observation":
         raise ReconciliationError("IPv4 evidence source is not a prior private observation")
     data_name = document["data_file"]
@@ -43,7 +73,7 @@ def _require_private_file(path):
         info = path.lstat()
     except FileNotFoundError as exc:
         raise ReconciliationError("private IPv4 evidence file is missing") from exc
-    if path.is_symlink() or not path.is_file():
+    if not stat.S_ISREG(info.st_mode):
         raise ReconciliationError("private IPv4 evidence file is not a regular file")
     if os.name == "posix" and (info.st_uid != os.geteuid() or info.st_mode & 0o077):
         raise ReconciliationError("IPv4 evidence file must be private and user-owned")
@@ -62,7 +92,7 @@ class ReconciliationLinuxBackend:
         self.UNIT_DIR = self.adapter.UNIT_DIR
 
     def _read_ipv4_active(self):
-        return self.adapter._call(["/usr/sbin/iptables", "-t", "filter", "-S"]).encode()
+        return self.adapter._call(["/usr/sbin/iptables", "-w", "5", "-t", "filter", "-S"]).encode()
 
     def boot_id(self):
         return self.adapter.boot_id()
@@ -108,8 +138,7 @@ class ReconciliationLinuxBackend:
         return self.adapter._system_read(self.UNIT_DIR / name)
 
     def unit_file_exists(self, name):
-        path = self.UNIT_DIR / name
-        return path.is_file() and not path.is_symlink()
+        return regular_file_present(self.UNIT_DIR / name)
 
     def list_jobs(self, names):
         return self._jobs(names)
@@ -125,10 +154,11 @@ class ReconciliationLinuxBackend:
         if guard.digest(self.read_unit_file(name)) != expected_sha256:
             raise ReconciliationError("runtime unit hash changed")
         os.unlink(path)
+        sync_directory(path.parent)
         if self.unit_file_exists(name):
             raise ReconciliationError("unit removal not verified")
 
-    def quiescence_readback(self, state):
+    def quiescence_readback(self, state, removed=()):
         """Read current state without a newly acquired historical reference.
 
         A reference acquired now cannot prove that an old service never ran.
@@ -140,24 +170,37 @@ class ReconciliationLinuxBackend:
         service_name, timer_name = names
         service, timer = self.unit_info(service_name), self.unit_info(timer_name)
         jobs = self._jobs(names)
+        for name, info in ((service_name, service), (timer_name, timer)):
+            if guard.parse_unit_job(info):
+                jobs.append([name, info["Job"]])
+            if info.get("LoadState") == "not-found":
+                if name not in removed or self.unit_file_exists(name):
+                    raise ReconciliationError("unit absent without verified removal intent")
+            elif info.get("LoadState") != "loaded":
+                raise ReconciliationError("unit load state is unknown")
         if jobs:
             raise ReconciliationError("systemd job remains pending")
         if (service.get("ActiveState"), service.get("SubState")) != ("inactive", "dead"):
             raise ReconciliationError("service is not quiescent")
         if (timer.get("ActiveState"), timer.get("SubState")) != ("inactive", "dead"):
             raise ReconciliationError("timer is not stopped")
-        if service.get("Result") != "success" or service.get("ExecMainStatus") != "0":
+        service_absent = service.get("LoadState") == "not-found"
+        timer_absent = timer.get("LoadState") == "not-found"
+        if not service_absent and (service.get("Result") != "success" or service.get("ExecMainStatus") != "0"):
             raise ReconciliationError("service result is not a clean quiescent result")
         try:
-            start_us = guard.service_start_value(service.get("ExecMainStartTimestampMonotonic"))
-            next_us = guard.parse_systemd_next_elapse(timer.get("NextElapseUSecMonotonic"))
+            start_us = None if service_absent else guard.service_start_value(service.get("ExecMainStartTimestampMonotonic"))
+            next_us = None if timer_absent else guard.parse_systemd_next_elapse(timer.get("NextElapseUSecMonotonic"))
         except guard.GuardError as exc:
             raise ReconciliationError("systemd history or timer deadline is unknown") from exc
         previous = state.get("systemd_observation", {}).get("service", {}).get("start_us", 0)
-        if previous > 0 or start_us > 0:
+        if previous > 0 or (start_us is not None and start_us > 0):
             raise ReconciliationError("positive service execution evidence blocks reconciliation")
-        return {"service": {"active": service["ActiveState"], "sub": service["SubState"], "result": service["Result"], "status": 0, "start_us": start_us},
-                "timer": {"active": timer["ActiveState"], "sub": timer["SubState"], "next_us": next_us}, "jobs": []}
+        if not timer_absent and next_us != 0:
+            raise ReconciliationError("timer next_us must be zero")
+        return {"service": {"load": service["LoadState"], "active": service["ActiveState"], "sub": service["SubState"],
+                            "result": service.get("Result"), "start_us": start_us},
+                "timer": {"load": timer["LoadState"], "active": timer["ActiveState"], "sub": timer["SubState"], "next_us": next_us}, "jobs": []}
 
     def cleanup_readback(self, names):
         jobs = self._jobs(names)
@@ -169,7 +212,7 @@ class ReconciliationLinuxBackend:
             info = self.unit_info(name)
             if info.get("LoadState") != "not-found":
                 raise ReconciliationError("daemon-reload did not clear removed unit")
-            if info.get("ActiveState") not in (None, "inactive") or info.get("SubState") not in (None, "dead"):
+            if (info.get("ActiveState"), info.get("SubState")) != ("inactive", "dead") or guard.parse_unit_job(info):
                 raise ReconciliationError("removed unit is active")
         return {"units_absent": True, "jobs": []}
 
@@ -177,8 +220,8 @@ class ReconciliationLinuxBackend:
 class Reconciler:
     """Durable cleanup with explicit intent, readbacks, and safe retry."""
 
-    SCHEMA = 2
-    INTERRUPT_POINTS = ("after-evidence", "after-unlink", "after-daemon-reload", "after-archive-create", "after-active-unlink")
+    SCHEMA = 3
+    INTERRUPT_POINTS = ("after-evidence", "after-unlink", "after-daemon-reload", "after-archive-create", "after-archive-created", "after-active-unlink")
 
     def __init__(self, root, backend, timeout=30, interruption_hook=None, ipv4_evidence=None):
         self.store = guard.Store(root)
@@ -202,10 +245,13 @@ class Reconciler:
     def _archive_provenance_check(self, run_id, evidence):
         archive = self.archive_path(run_id)
         status = (evidence or {}).get("archive", {}).get("status", "pending")
-        if archive.exists() and status == "pending":
+        exists = regular_file_present(archive)
+        if exists and status == "pending":
             raise ReconciliationError("preexisting archive collision has no prior provenance")
-        if archive.exists() and status not in ("archive-intent", "archive-created", "archived"):
+        if exists and status not in ("archive-intent", "archive-created", "archived"):
             raise ReconciliationError("archive provenance state is invalid")
+        if not exists and status in ("archive-created", "archived"):
+            raise ReconciliationError("archive missing after durable creation; preserve active.json")
 
     def _load_state(self, run_id):
         if run_id != RUN_ID:
@@ -222,7 +268,7 @@ class Reconciler:
 
     def _read_active(self, run_id):
         path = self.store.root / "active.json"
-        if not path.is_file() or path.is_symlink():
+        if not regular_file_present(path):
             raise ReconciliationError("active.json absent or unsafe; completion unknown")
         raw = guard.private_read(path)
         try:
@@ -235,7 +281,8 @@ class Reconciler:
 
     def _validate_ipv4(self, state):
         proof = self.ipv4_evidence
-        if not isinstance(proof, dict) or proof.get("run_id") != state["run_id"]:
+        if (not isinstance(proof, dict) or proof.get("run_id") != state["run_id"]
+                or type(proof.get("schema")) is not int or proof.get("schema") != 1):
             raise ReconciliationError("independent IPv4 active evidence is missing or unbound")
         if proof.get("boot_id") != state.get("boot_id"):
             raise ReconciliationError("IPv4 evidence boot binding mismatch")
@@ -246,12 +293,21 @@ class Reconciler:
             raise ReconciliationError("IPv4 evidence bytes are missing")
         if guard.digest(bytes(raw)) != proof.get("active_sha256"):
             raise ReconciliationError("IPv4 evidence digest mismatch")
-        if proof.get("source") != "external-private-observation" or not proof.get("observed_monotonic_ns"):
+        if proof.get("source") != "external-private-observation":
             raise ReconciliationError("IPv4 evidence provenance is not a prior private observation")
+        observed, prepared = proof.get("observed_monotonic_ns"), state.get("prepared_monotonic_ns")
+        # prepared_monotonic_ns is the immutable, guaranteed pre-apply boundary.
+        # applied_monotonic_ns is recorded AFTER mutations and is not a safe cutoff.
+        if (not positive_timestamp(observed) or not positive_timestamp(prepared)
+                or not observed <= prepared <= time.monotonic_ns()):
+            raise ReconciliationError("IPv4 observation must precede preparation in the current boot")
+        filename = proof.get("data_file")
+        if not isinstance(filename, str) or not filename or Path(filename).name != filename or "\\" in filename:
+            raise ReconciliationError("IPv4 evidence data file must be an adjacent basename")
         current = self.backend.ipv4_active()
         if guard.digest(current) != proof.get("active_sha256"):
             raise ReconciliationError("active IPv4 differs from prior run evidence")
-        return {key: value for key, value in proof.items() if key != "active_bytes"}
+        return {key: proof[key] for key in IPV4_FIELDS}
 
     def _validate_bundle(self, state):
         directory = self.store.directory(state["run_id"])
@@ -267,7 +323,7 @@ class Reconciler:
                 raise ReconciliationError("bundle unit hash mismatch")
         return names
 
-    def _validate_restoration(self, state, require_systemd=True):
+    def _validate_restoration(self, state, require_systemd=True, removed=()):
         if self.backend.snapshot() != state.get("before"):
             raise ReconciliationError("restoration snapshot differs from bundle before")
         expected = state.get("persistence_sha256", {})
@@ -276,8 +332,10 @@ class Reconciler:
             raise ReconciliationError("persistence differs from bundle")
         self._validate_ipv4(state)
         if require_systemd:
-            observed = self.backend.quiescence_readback(state)
-            if observed.get("timer", {}).get("next_us") != 0:
+            observed = self.backend.quiescence_readback(state, removed=removed)
+            timer = observed.get("timer", {})
+            absent_timer = timer.get("load") == "not-found" and guard.unit_names(state["run_id"])[1] in removed
+            if not absent_timer and timer.get("next_us") != 0:
                 raise ReconciliationError("timer next_us must be zero")
             if observed.get("jobs"):
                 raise ReconciliationError("systemd jobs remain pending")
@@ -286,7 +344,7 @@ class Reconciler:
 
     def _load_evidence(self, run_id):
         path = self.evidence_path(run_id)
-        if not path.is_file():
+        if not regular_file_present(path):
             raise ReconciliationError("reconciliation evidence missing")
         try:
             value = json.loads(guard.private_read(path))
@@ -317,7 +375,8 @@ class Reconciler:
         if active_raw is not None and evidence.get("active_sha256") != guard.digest(active_raw):
             raise ReconciliationError("active.json differs from reconciliation evidence")
         self._validate_bundle(state)
-        self._validate_ipv4(state)
+        if evidence.get("ipv4_evidence") != self._validate_ipv4(state):
+            raise ReconciliationError("IPv4 reference differs from the first reconciliation evidence")
         self._validate_restoration(state, require_systemd=False)
 
     def _validate_units(self, state, evidence):
@@ -377,26 +436,42 @@ class Reconciler:
         self._save_evidence(evidence)
 
     def _write_exclusive(self, path, raw):
-        if path.exists():
+        if regular_file_present(path):
             raise ReconciliationError("archive collision")
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        # Publish only complete, fsynced bytes. A crash while writing must not
+        # leave a partial final archive that could be adopted on retry.
+        fd, temporary_name = tempfile.mkstemp(prefix=".archive-stage-", dir=path.parent)
+        temporary = Path(temporary_name)
         try:
             with os.fdopen(fd, "wb") as stream:
                 stream.write(raw)
                 stream.flush()
                 os.fsync(stream.fileno())
-        except Exception:
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
-            raise
+            os.link(temporary, path, follow_symlinks=False)  # Atomic, no replacement.
+            sync_directory(path.parent)
+        finally:
+            temporary.unlink()
+            sync_directory(path.parent)
+
+    def _archive_readback(self, run_id, evidence, active_raw=None):
+        archive = self.archive_path(run_id)
+        if not regular_file_present(archive):
+            raise ReconciliationError("archive missing; preserve active.json")
+        raw = guard.private_read(archive)
+        record = evidence.get("archive", {})
+        if (guard.digest(raw) != evidence.get("active_sha256")
+                or guard.digest(raw) != record.get("sha256") or len(raw) != record.get("bytes")
+                or (active_raw is not None and raw != active_raw)):
+            raise ReconciliationError("archive readback mismatch; preserve active.json")
+        if json.loads(raw).get("run_id") != run_id:
+            raise ReconciliationError("archive run identity mismatch")
+        return raw
 
     def _archive(self, run_id, active_raw, evidence):
         active, archive = self.store.root / "active.json", self.archive_path(run_id)
         archive_state = evidence.get("archive", {}).get("status", "pending")
         if archive_state == "pending":
-            if archive.exists():
+            if regular_file_present(archive):
                 raise ReconciliationError("preexisting archive collision has no prior provenance")
             evidence["archive"] = {"status": "archive-intent", "sha256": guard.digest(active_raw), "bytes": len(active_raw)}
             self._save_evidence(evidence)
@@ -404,52 +479,62 @@ class Reconciler:
         if evidence["archive"].get("sha256") != guard.digest(active_raw):
             raise ReconciliationError("archive evidence bytes mismatch")
         if evidence.get("archive", {}).get("status") == "archive-intent":
-            if not archive.exists():
-                if not active.exists() or guard.private_read(active) != active_raw:
+            if not regular_file_present(archive):
+                if not regular_file_present(active) or guard.private_read(active) != active_raw:
                     raise ReconciliationError("active.json changed before archive retry")
                 self._write_exclusive(archive, active_raw)
                 self._checkpoint("after-archive-create", evidence)
-            if guard.private_read(archive) != active_raw:
-                raise ReconciliationError("archive readback mismatch")
+            self._archive_readback(run_id, evidence, active_raw)
             evidence["archive"]["status"] = "archive-created"
             self._save_evidence(evidence)
+            self._checkpoint("after-archive-created", evidence)
         if evidence["archive"]["status"] != "archive-created":
             if evidence["archive"]["status"] == "archived":
+                self._archive_readback(run_id, evidence, active_raw)
+                if regular_file_present(active):
+                    raise ReconciliationError("active.json reappeared after archive")
                 return
             raise ReconciliationError("unknown archive evidence state")
-        if active.exists():
+        # This readback is required on EVERY resume, not only on creation.
+        self._archive_readback(run_id, evidence, active_raw)
+        self._before_archive(run_id, evidence)
+        self._archive_readback(run_id, evidence, active_raw)
+        if regular_file_present(active):
             if guard.private_read(active) != active_raw:
                 raise ReconciliationError("active.json changed before removal")
             active.unlink()
+            sync_directory(active.parent)
             self._checkpoint("after-active-unlink", evidence)
-        elif guard.private_read(archive) != active_raw:
-            raise ReconciliationError("archive provenance readback mismatch")
-        if active.exists():
+        self._archive_readback(run_id, evidence, active_raw)
+        if regular_file_present(active):
             raise ReconciliationError("active.json removal not verified")
         evidence["archive"]["status"] = "archived"
         self._save_evidence(evidence)
 
+    def _before_archive(self, run_id, evidence):
+        state = self._load_state(run_id)
+        self._validate_evidence_links(state, evidence)
+        names = self._validate_units(state, evidence)
+        if evidence.get("cleanup", {}).get("status") != "verified":
+            raise ReconciliationError("cleanup not verified before archive")
+        self.backend.cleanup_readback(names)
+
     def _noop(self, run_id, evidence):
         state = self._load_state(run_id)
         self._validate_evidence_links(state, evidence)
-        self._validate_restoration(state, require_systemd=False)
         archive = self.archive_path(run_id)
-        if evidence.get("archive", {}).get("status") != "archived" or not archive.is_file():
+        if evidence.get("archive", {}).get("status") != "archived" or not regular_file_present(archive):
             raise ReconciliationError("completion evidence incomplete")
-        if (self.store.root / "active.json").exists():
+        if regular_file_present(self.store.root / "active.json"):
             raise ReconciliationError("completed reconciliation has residual active.json")
-        if guard.digest(guard.private_read(archive)) != evidence["archive"].get("sha256"):
-            raise ReconciliationError("archived active.json evidence invalid")
-        self._validate_units(state, evidence)
-        names = guard.unit_names(run_id)
-        if (self.store.root / "active.json").exists() or not self.backend.units_absent(names) or self.backend.list_jobs(names):
-            raise ReconciliationError("completed reconciliation has residual state")
+        self._archive_readback(run_id, evidence)
+        self._before_archive(run_id, evidence)
         return {"phase": "complete", "run_id": run_id, "noop": True}
 
     def reconcile(self, run_id):
         with self.store.lock(timeout=self.timeout):
             path = self.evidence_path(run_id)
-            evidence = self._load_evidence(run_id) if path.exists() else None
+            evidence = self._load_evidence(run_id) if regular_file_present(path) else None
             if evidence is not None:
                 evidence = self._load_evidence(run_id)
                 self._archive_provenance_check(run_id, evidence)
@@ -460,16 +545,11 @@ class Reconciler:
             state = self._load_state(run_id)
             self._archive_provenance_check(run_id, evidence)
             active_path = self.store.root / "active.json"
-            active_raw = None if evidence and evidence.get("archive", {}).get("status") in ("archive-created", "archived") and not active_path.exists() else self._read_active(run_id)
+            active_raw = None if evidence and evidence.get("archive", {}).get("status") in ("archive-created", "archived") and not regular_file_present(active_path) else self._read_active(run_id)
             if active_raw is None:
-                archive_path = self.archive_path(run_id)
-                if not archive_path.is_file():
-                    raise ReconciliationError("archived active.json provenance missing")
-                active_raw = guard.private_read(archive_path)
-            if path.exists():
-                evidence = self._load_evidence(run_id)
+                active_raw = self._archive_readback(run_id, evidence)
+            if evidence is not None:
                 self._validate_evidence_links(state, evidence, active_raw)
-                self._validate_restoration(state, require_systemd=True)
             else:
                 observed = self._validate_restoration(state, require_systemd=True)
                 names = self._validate_bundle(state)
@@ -477,6 +557,7 @@ class Reconciler:
                 evidence = {"schema": self.SCHEMA, "run_id": run_id, "phase": "removing", "boot_id": state["boot_id"],
                             "journal_sha256": guard.digest(guard.private_read(journal)), "manifest_sha256": state["manifest_sha256"],
                             "active_sha256": guard.digest(active_raw), "observed": observed,
+                            "ipv4_evidence": self._validate_ipv4(state),
                             "units": {name: {"status": "present", "sha256": state["unit_sha256"][name]} for name in names},
                             "cleanup": {"status": "pending"}, "archive": {"status": "pending"},
                             "created_monotonic_ns": time.monotonic_ns()}
@@ -484,20 +565,29 @@ class Reconciler:
                 self._checkpoint("after-evidence", evidence)
             names = self._validate_units(state, evidence)
             if evidence.get("cleanup", {}).get("status") == "verified":
-                self._validate_restoration(state, require_systemd=False)
-                cleanup = self.backend.cleanup_readback(names)
-                evidence["cleanup"]["readback"] = cleanup
-                self._save_evidence(evidence)
+                self._before_archive(run_id, evidence)
                 self._archive(run_id, active_raw, evidence)
             else:
                 for name in names:
+                    if evidence["units"][name]["status"] == "unlinked":
+                        continue
+                    # Re-read immutable state and operational conditions before
+                    # each destructive step, including after an in-process race.
+                    state = self._load_state(run_id)
+                    self._validate_evidence_links(state, evidence, self._read_active(run_id))
+                    self._validate_units(state, evidence)
+                    removed = tuple(unit for unit in names if evidence["units"][unit]["status"] == "unlinked")
+                    self._validate_restoration(state, removed=removed)
                     self._remove_unit(name, evidence)
                 self.backend.daemon_reload()
                 self._checkpoint("after-daemon-reload", evidence)
                 cleanup = self.backend.cleanup_readback(names)
                 evidence["cleanup"] = {"status": "verified", "readback": cleanup}
                 self._save_evidence(evidence)
+                self._before_archive(run_id, evidence)
                 self._archive(run_id, active_raw, evidence)
+            self._before_archive(run_id, evidence)
+            self._archive_readback(run_id, evidence, active_raw)
             evidence["phase"] = "complete"
             evidence["completed_monotonic_ns"] = time.monotonic_ns()
             self._save_evidence(evidence)
@@ -506,7 +596,7 @@ class Reconciler:
     def status(self, run_id):
         with self.store.lock(timeout=self.timeout):
             state = self.store.read(run_id)
-            evidence = self._load_evidence(run_id) if self.evidence_path(run_id).exists() else None
+            evidence = self._load_evidence(run_id) if regular_file_present(self.evidence_path(run_id)) else None
             return {"run_id": run_id, "phase": state["phase"], "reconciliation": evidence}
 
 
