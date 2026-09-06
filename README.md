@@ -37,6 +37,7 @@ pnpm local:up           # compila e aguarda os serviços ficarem saudáveis
 pnpm local:test-db      # integração com PostgreSQL e worker reais
 pnpm test              # testes unitários
 pnpm typecheck
+pnpm api:spec:check    # valida OpenAPI e sincronização com os schemas da API
 pnpm lint
 pnpm build
 ```
@@ -47,6 +48,9 @@ banco, execute `pnpm local:down`. Instruções de E2E, portas e configuração e
 
 Autenticação fica desativada por padrão e não concede acesso privado nesse
 estado. Configuração, migrações e limites em [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
+
+Contratos, rotas e erros em [docs/API.md](docs/API.md). A especificação gerada
+fica em [docs/openapi.json](docs/openapi.json) e em `/api/openapi.json` na aplicação.
 
 O fluxo de trabalho exige PR com CI verde para integrar na `main` (veja
 [docs/GOVERNANCE.md](docs/GOVERNANCE.md)).

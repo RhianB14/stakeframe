@@ -85,6 +85,8 @@ checkouts sobre o mesmo projeto/volume. Nenhum comando deste fluxo atua na VPS.
 | `pnpm typecheck`        | Verifica os cinco pacotes e os testes                        |
 | `pnpm lint`             | Verifica TypeScript, React e scripts JavaScript              |
 | `pnpm test`             | Testa API e configuração sem banco externo                   |
+| `pnpm api:spec`         | Gera OpenAPI a partir dos schemas das rotas                  |
+| `pnpm api:spec:check`   | Valida OpenAPI e compara com o documento versionado          |
 | `pnpm build`            | Compila pacotes e assets da web                              |
 | `pnpm local:status`     | Mostra o estado dos containers locais                        |
 | `pnpm local:test-db`    | Testa PostgreSQL 18, fila e autenticação usando `.env.local` |

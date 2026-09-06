@@ -1,12 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
+import { z } from 'zod';
+import {
+  apiErrorSchema,
+  googleSignInSchema,
+  ownerSessionSchema,
+  signOutSchema,
+} from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
+import { sendApiError } from './api-errors.js';
+import { ownerSessionSecurity } from './openapi.js';
 
 export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | undefined) {
-  const refuse = (request: FastifyRequest, reply: FastifyReply, status: number, code: string) =>
-    reply.code(status).send({
-      error: { code, message: 'Acesso indisponível ou não autorizado.', requestId: request.id },
-    });
+  const refuse = sendApiError;
   function headersFor(request: FastifyRequest) {
     const headers = fromNodeHeaders(request.headers);
     for (const key of [
@@ -52,29 +58,139 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
     );
     reply.code(response.status);
     response.headers.forEach((value, key) => {
-      if (key !== 'set-cookie') reply.header(key, value);
+      if (!['set-cookie', 'content-length', 'content-type'].includes(key)) reply.header(key, value);
     });
     const cookies = response.headers.getSetCookie();
     if (cookies.length) reply.header('set-cookie', cookies);
-    // Callback errors are intentionally rendered as a generic message by the web.
-    return reply.send(response.body ? await response.text() : null);
+    // Never expose provider/library error messages in the application API.
+    if (response.status >= 400) {
+      const code =
+        response.status === 429
+          ? 'RATE_LIMITED'
+          : response.status === 503
+            ? 'AUTH_UNAVAILABLE'
+            : response.status >= 500
+              ? 'INTERNAL_ERROR'
+              : 'AUTH_REQUEST_FAILED';
+      return refuse(request, reply, response.status, code);
+    }
+    // OAuth callback redirects preserve Location and every Set-Cookie header, with no JSON body.
+    if (response.status >= 300 && response.status < 400) return reply.send();
+    const result: unknown = await response.json();
+    return reply.send(
+      path === '/sign-in/social' ? googleSignInSchema.parse(result) : signOutSchema.parse(result),
+    );
   }
-  app.post('/api/auth/sign-in/google', (request, reply) =>
-    forward(request, reply, '/sign-in/social', {
-      provider: 'google',
-      callbackURL: '/',
-      errorCallbackURL: '/?auth=failed',
-      disableRedirect: true,
-    }),
+  const ignoredBody = z
+    .looseObject({})
+    .nullish()
+    .describe(
+      'Objeto opcional. Campos enviados são ignorados; provider, callback e redirect são definidos exclusivamente pelo servidor.',
+    );
+  const mutationErrors = {
+    400: apiErrorSchema,
+    403: apiErrorSchema,
+    413: apiErrorSchema,
+    415: apiErrorSchema,
+    429: apiErrorSchema,
+    500: apiErrorSchema,
+    default: apiErrorSchema,
+    503: apiErrorSchema,
+  };
+  app.post(
+    '/api/auth/sign-in/google',
+    {
+      schema: {
+        operationId: 'startGoogleSignIn',
+        tags: ['Autenticação'],
+        summary: 'Iniciar login Google do proprietário',
+        security: [],
+        description:
+          'Exige Origin igual à origem configurada e autenticação habilitada. O navegador deve conservar os cookies e navegar para a URL retornada. Nenhum token Google é aceito no corpo.',
+        body: ignoredBody,
+        response: { 200: googleSignInSchema, ...mutationErrors },
+      },
+    },
+    (request, reply) =>
+      forward(request, reply, '/sign-in/social', {
+        provider: 'google',
+        callbackURL: '/',
+        errorCallbackURL: '/?auth=failed',
+        disableRedirect: true,
+      }),
   );
-  app.get('/api/auth/callback/google', (request, reply) =>
-    forward(request, reply, '/callback/google'),
+  app.get(
+    '/api/auth/callback/google',
+    {
+      schema: {
+        operationId: 'completeGoogleSignIn',
+        tags: ['Autenticação'],
+        summary: 'Receber retorno do Google',
+        security: [],
+        description:
+          'Uso exclusivo do fluxo de navegador iniciado pela aplicação. Requer estado, cookie e PKCE válidos; a identidade é verificada antes de criar sessão. Falhas do fluxo redirecionam para mensagem genérica na aplicação.',
+        querystring: z.looseObject({
+          code: z.string().max(8192).optional(),
+          state: z.string().max(512).optional(),
+          error: z.string().max(256).optional(),
+          error_description: z.string().max(2048).optional(),
+        }),
+        response: {
+          302: z
+            .undefined()
+            .describe(
+              'Redirecionamento para a aplicação; Location e cookies definidos pelo fluxo OAuth.',
+            ),
+          400: apiErrorSchema,
+          429: apiErrorSchema,
+          500: apiErrorSchema,
+          default: apiErrorSchema,
+          503: apiErrorSchema,
+        },
+      },
+    },
+    (request, reply) => forward(request, reply, '/callback/google'),
   );
-  app.post('/api/auth/sign-out', (request, reply) => forward(request, reply, '/sign-out', {}));
-  app.get('/api/v1/me', async (request, reply) => {
-    if (!ownerAuth) return refuse(request, reply, 503, 'AUTH_NOT_CONFIGURED');
-    const owner = await ownerAuth.getOwner(headersFor(request));
-    if (!owner) return refuse(request, reply, 401, 'UNAUTHENTICATED');
-    return reply.send(owner);
-  });
+  app.post(
+    '/api/auth/sign-out',
+    {
+      schema: {
+        operationId: 'signOut',
+        tags: ['Autenticação'],
+        summary: 'Encerrar a sessão do navegador',
+        security: [{}, ...ownerSessionSecurity],
+        description:
+          'Exige Origin igual à origem configurada. Revoga a sessão apresentada e remove os cookies; também permite encerrar quando não existe sessão.',
+        body: ignoredBody,
+        response: { 200: signOutSchema, ...mutationErrors },
+      },
+    },
+    (request, reply) => forward(request, reply, '/sign-out', {}),
+  );
+  app.get(
+    '/api/v1/me',
+    {
+      schema: {
+        operationId: 'getOwnerSession',
+        tags: ['Autenticação'],
+        summary: 'Consultar a sessão do proprietário',
+        security: ownerSessionSecurity,
+        description:
+          'Consulta o banco e revalida a identidade autorizada. Retorna somente id, nome e expiração; não inclui e-mail, identificador Google, cookies ou tokens.',
+        response: {
+          200: ownerSessionSchema,
+          401: apiErrorSchema,
+          500: apiErrorSchema,
+          default: apiErrorSchema,
+          503: apiErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!ownerAuth) return refuse(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      const owner = await ownerAuth.getOwner(headersFor(request));
+      if (!owner) return refuse(request, reply, 401, 'UNAUTHENTICATED');
+      return reply.send(owner);
+    },
+  );
 }

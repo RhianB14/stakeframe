@@ -5,6 +5,12 @@ import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import { createOwnerAuth } from '../../apps/api/src/auth.js';
 import { createApp } from '../../apps/api/src/app.js';
 import type { EnabledAuthConfig } from '../../apps/api/src/auth-config.js';
+import {
+  apiErrorSchema,
+  googleSignInSchema,
+  ownerSessionSchema,
+  signOutSchema,
+} from '../../packages/shared/src/index.js';
 
 const config: EnabledAuthConfig = {
   enabled: true,
@@ -67,7 +73,7 @@ async function startLogin(extraHeaders: Record<string, string> = {}, origin = co
     payload: { callbackURL: 'https://untrusted.example.test', provider: 'github' },
   });
   expect(response.statusCode).toBe(200);
-  const url = new URL(response.json<{ url: string }>().url);
+  const url = new URL(googleSignInSchema.parse(response.json()).url);
   expect(url.origin).toBe('https://accounts.google.com');
   expect(url.searchParams.get('redirect_uri')).toBe(`${origin}/api/auth/callback/google`);
   expect(url.searchParams.get('code_challenge_method')).toBe('S256');
@@ -198,6 +204,7 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
   it('admits only the owner, preserves secure cookie attributes and discards provider tokens', async () => {
     const { response, cookie } = await login();
     expect(response.statusCode).toBe(302);
+    expect(response.body).toBe('');
     expect(new URL(response.headers.location!, config.origin).href).toBe(`${config.origin}/`);
     const setCookies = response.headers['set-cookie'];
     const sessionCookie = (typeof setCookies === 'string' ? [setCookies] : (setCookies ?? [])).find(
@@ -207,6 +214,7 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
     expect(sessionCookie).toMatch(/SameSite=Lax/i);
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
+    expect(ownerSessionSchema.parse(me.json())).toEqual(me.json());
     expect(me.json()).toMatchObject({ user: { name: 'Fixture Owner' } });
     expect(me.body).not.toMatch(/token|email|ipAddress|test-only/);
     expect(me.headers['cache-control']).toBe('no-store');
@@ -254,6 +262,10 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
         payload: {},
       });
       expect(response.statusCode).toBe(attempt < 5 ? 200 : 429);
+      if (attempt === 5) {
+        expect(apiErrorSchema.parse(response.json()).error.code).toBe('RATE_LIMITED');
+        expect(Number(response.headers['x-retry-after'])).toBeGreaterThan(0);
+      }
     }
   });
   it('requires the state cookie and refuses callback replay', async () => {
@@ -304,8 +316,27 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
       payload: {},
     });
     expect(logout.statusCode).toBe(200);
+    expect(signOutSchema.parse(logout.json())).toEqual({ success: true });
     expect(await count('session')).toBe(0);
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(401);
+  });
+  it('accepts empty-body sign-in and anonymous sign-out without widening the identity policy', async () => {
+    const start = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sign-in/google',
+      remoteAddress: `192.0.2.${clientNumber}`,
+      headers: { origin: config.origin },
+    });
+    expect(start.statusCode).toBe(200);
+    expect(googleSignInSchema.parse(start.json()).redirect).toBe(false);
+    const logout = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sign-out',
+      headers: { origin: config.origin },
+    });
+    expect(logout.statusCode).toBe(200);
+    expect(signOutSchema.parse(logout.json())).toEqual({ success: true });
+    expect(await count('session')).toBe(0);
   });
   it('rejects an expired session without relying on a cookie cache', async () => {
     const { cookie } = await login();

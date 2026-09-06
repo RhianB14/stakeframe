@@ -1,0 +1,581 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Stakeframe API",
+    "version": "0.0.0",
+    "description": "Base local do M0. Login Google exclusivo do proprietário; nenhuma operação financeira disponível. Erros JSON usam código estável e requestId gerado pelo servidor. Readiness indisponível usa o contrato técnico de healthcheck."
+  },
+  "components": {
+    "securitySchemes": {
+      "localOwnerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "stakeframe.session_token",
+        "description": "Cookie HttpOnly de sessão, usado somente no HTTP de loopback. Não inserir tokens Google aqui."
+      },
+      "secureOwnerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Secure-stakeframe.session_token",
+        "description": "Variante Secure para HTTPS; infraestrutura HTTPS ainda não publicada."
+      }
+    },
+    "schemas": {
+      "SystemStatusInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "enum": ["Stakeframe"] },
+          "stage": { "type": "string", "enum": ["local-setup"] },
+          "database": { "type": "string", "enum": ["available", "unavailable"] },
+          "authentication": { "type": "string", "enum": ["not-configured", "google"] },
+          "productEnabled": { "type": "boolean", "enum": [false] }
+        },
+        "required": ["name", "stage", "database", "authentication", "productEnabled"]
+      },
+      "ApiErrorInput": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "NOT_FOUND",
+                  "INVALID_REQUEST",
+                  "INTERNAL_ERROR",
+                  "AUTH_NOT_CONFIGURED",
+                  "UNAUTHENTICATED",
+                  "ORIGIN_NOT_ALLOWED",
+                  "AUTH_REQUEST_FAILED",
+                  "RATE_LIMITED",
+                  "AUTH_UNAVAILABLE"
+                ]
+              },
+              "message": { "type": "string" },
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": ["code", "message", "requestId"]
+          }
+        },
+        "required": ["error"]
+      },
+      "LivenessInput": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["alive"] } },
+        "required": ["status"]
+      },
+      "ReadinessInput": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["ready"] } },
+        "required": ["status"]
+      },
+      "UnavailabilityInput": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["unavailable"] } },
+        "required": ["status"]
+      },
+      "GoogleSignInInput": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "redirect": { "type": "boolean", "enum": [false] }
+        },
+        "required": ["url", "redirect"]
+      },
+      "SignOutInput": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean", "enum": [true] } },
+        "required": ["success"]
+      },
+      "OwnerSessionInput": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": { "id": { "type": "string" }, "name": { "type": "string" } },
+            "required": ["id", "name"]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["user", "expiresAt"]
+      },
+      "SystemStatus": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "enum": ["Stakeframe"] },
+          "stage": { "type": "string", "enum": ["local-setup"] },
+          "database": { "type": "string", "enum": ["available", "unavailable"] },
+          "authentication": { "type": "string", "enum": ["not-configured", "google"] },
+          "productEnabled": { "type": "boolean", "enum": [false] }
+        },
+        "required": ["name", "stage", "database", "authentication", "productEnabled"],
+        "additionalProperties": false
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "NOT_FOUND",
+                  "INVALID_REQUEST",
+                  "INTERNAL_ERROR",
+                  "AUTH_NOT_CONFIGURED",
+                  "UNAUTHENTICATED",
+                  "ORIGIN_NOT_ALLOWED",
+                  "AUTH_REQUEST_FAILED",
+                  "RATE_LIMITED",
+                  "AUTH_UNAVAILABLE"
+                ]
+              },
+              "message": { "type": "string" },
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": ["code", "message", "requestId"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["error"],
+        "additionalProperties": false
+      },
+      "Liveness": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["alive"] } },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "Readiness": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["ready"] } },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "Unavailability": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["unavailable"] } },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "GoogleSignIn": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "redirect": { "type": "boolean", "enum": [false] }
+        },
+        "required": ["url", "redirect"],
+        "additionalProperties": false
+      },
+      "SignOut": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean", "enum": [true] } },
+        "required": ["success"],
+        "additionalProperties": false
+      },
+      "OwnerSession": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": { "id": { "type": "string" }, "name": { "type": "string" } },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["user", "expiresAt"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "getLiveness",
+        "summary": "Verificar se a API está em execução",
+        "tags": ["Operação"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Liveness" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "summary": "Verificar disponibilidade do banco",
+        "tags": ["Operação"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Readiness" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Unavailability" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/status": {
+      "get": {
+        "operationId": "getSystemStatus",
+        "summary": "Consultar o estado técnico local",
+        "tags": ["Operação"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SystemStatus" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-in/google": {
+      "post": {
+        "operationId": "startGoogleSignIn",
+        "summary": "Iniciar login Google do proprietário",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada e autenticação habilitada. O navegador deve conservar os cookies e navegar para a URL retornada. Nenhum token Google é aceito no corpo.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Objeto opcional. Campos enviados são ignorados; provider, callback e redirect são definidos exclusivamente pelo servidor.",
+                "nullable": true,
+                "type": "object",
+                "properties": {},
+                "additionalProperties": {}
+              }
+            }
+          },
+          "description": "Objeto opcional. Campos enviados são ignorados; provider, callback e redirect são definidos exclusivamente pelo servidor."
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/GoogleSignIn" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/callback/google": {
+      "get": {
+        "operationId": "completeGoogleSignIn",
+        "summary": "Receber retorno do Google",
+        "tags": ["Autenticação"],
+        "description": "Uso exclusivo do fluxo de navegador iniciado pela aplicação. Requer estado, cookie e PKCE válidos; a identidade é verificada antes de criar sessão. Falhas do fluxo redirecionam para mensagem genérica na aplicação.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "maxLength": 8192 },
+            "in": "query",
+            "name": "code",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "maxLength": 512 },
+            "in": "query",
+            "name": "state",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "maxLength": 256 },
+            "in": "query",
+            "name": "error",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "maxLength": 2048 },
+            "in": "query",
+            "name": "error_description",
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "302": {
+            "description": "Redirecionamento para a aplicação; Location e cookies definidos pelo fluxo OAuth."
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-out": {
+      "post": {
+        "operationId": "signOut",
+        "summary": "Encerrar a sessão do navegador",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada. Revoga a sessão apresentada e remove os cookies; também permite encerrar quando não existe sessão.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Objeto opcional. Campos enviados são ignorados; provider, callback e redirect são definidos exclusivamente pelo servidor.",
+                "nullable": true,
+                "type": "object",
+                "properties": {},
+                "additionalProperties": {}
+              }
+            }
+          },
+          "description": "Objeto opcional. Campos enviados são ignorados; provider, callback e redirect são definidos exclusivamente pelo servidor."
+        },
+        "security": [{}, { "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SignOut" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getOwnerSession",
+        "summary": "Consultar a sessão do proprietário",
+        "tags": ["Autenticação"],
+        "description": "Consulta o banco e revalida a identidade autorizada. Retorna somente id, nome e expiração; não inclui e-mail, identificador Google, cookies ou tokens.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/OwnerSession" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],
+  "tags": [
+    { "name": "Operação", "description": "Verificações técnicas públicas, sem dados privados." },
+    {
+      "name": "Autenticação",
+      "description": "Fluxo de navegador Google e sessão própria. Tokens Google não autenticam chamadas da API."
+    }
+  ]
+}

@@ -57,6 +57,8 @@ jobs:
           pnpm lint
       - name: Audit known dependency vulnerabilities
         run: pnpm audit
+      - name: Validate the generated API contract
+        run: pnpm api:spec:check
       - name: Unit tests and build
         run: |
           pnpm test
