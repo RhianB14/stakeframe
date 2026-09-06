@@ -270,6 +270,57 @@ h2 {
 .retry-button span {
   margin-left: 7px;
 }
+.owner-access {
+  margin-top: 22px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #aeb7c7;
+  overflow-wrap: anywhere;
+}
+.owner-access [role='alert'] {
+  color: #ffb6a8;
+  margin-bottom: 14px;
+}
+.owner-greeting {
+  color: #f0f2f6;
+  font-size: 18px;
+  font-weight: 600;
+}
+.google-button {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid #dadce0;
+  border-radius: 7px;
+  color: #202124;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.google-button:hover {
+  background: #eef1f8;
+}
+.google-button:focus-visible {
+  outline: 3px solid #8ca9ff;
+  outline-offset: 4px;
+}
+.google-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.google-symbol {
+  font-size: 21px;
+  color: #4285f4;
+}
+.owner-only {
+  text-align: center;
+  font-size: 11px;
+  margin-top: 12px;
+}
 footer {
   min-height: 74px;
   display: flex;

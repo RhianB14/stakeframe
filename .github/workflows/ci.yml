@@ -55,6 +55,8 @@ jobs:
         run: |
           pnpm typecheck
           pnpm lint
+      - name: Audit known dependency vulnerabilities
+        run: pnpm audit
       - name: Unit tests and build
         run: |
           pnpm test
@@ -63,7 +65,7 @@ jobs:
         run: |
           pnpm local:init
           pnpm local:up
-      - name: PostgreSQL 18 and pg-boss integration
+      - name: PostgreSQL 18, Google auth protocol and pg-boss integration
         run: pnpm local:test-db
       - name: Browser checks on desktop and mobile
         run: |

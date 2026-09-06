@@ -132,3 +132,31 @@ recebem status `Superseded` e apontam a substituta.
 - **Consequências:** esta base não conclui M0/M1, não autoriza deploy e não
   usa o domínio comprado. Google OAuth/Better Auth, Telegram, R2, OmniRoute,
   OpenAPI, migrações, imagens de produção e backup/restore seguem pendentes.
+
+## D011 — Google por identidade fixa e sessão persistida (2026-09-06)
+
+- **Contexto:** o único proprietário precisa de autenticação antes das rotas
+  privadas de produto. A infraestrutura de produção permanece pendente.
+- **Decisão:** Better Auth 1.7.3 com adapter Drizzle da mesma versão e schema
+  próprio. Exigir `sub` fixo e e-mail Google verificado; validar criptograficamente
+  o ID token no callback antes de aceitar o perfil. Expor somente entrada Google,
+  callback, logout e DTO mínimo da sessão. Sem vinculação de contas ou senha.
+- **Sessões:** persistidas, expiração absoluta de 12 horas, sem cache de cookie
+  nem renovação automática; identidade revalidada no banco a cada acesso privado.
+  Tokens do provedor não são persistidos. Rate limit em memória serve somente
+  à instância local; produção terá revisão própria de rede e proxy confiável.
+- **Dependências:** a [release 1.7.3](https://github.com/better-auth/better-auth/releases/tag/v1.7.3)
+  e os fontes instalados foram revisados, incluindo restauração do schema de
+  conta e correção do cache de sessão desativado. Exceções de idade mínima no
+  pnpm limitam-se aos oito pacotes Better Auth na versão exata 1.7.3; não há
+  liberação geral. Vitest 4.1.11 atende ao peer suportado pela biblioteca.
+- **Ferramentas de migração:** Drizzle Kit 0.31.10 fixado; geração e migrador
+  validados. Override restrito `@esbuild-kit/core-utils>esbuild: 0.25.12` elimina
+  a dependência vulnerável ao [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99).
+  `pnpm audit` sem alertas após a correção; dois loaders transitivos depreciados
+  permanecem dependências upstream. Scripts de build permitidos explicitamente
+  apenas para esbuild e Tailwind oxide pelo mecanismo `allowBuilds` do pnpm 11.
+- **Consequências:** migração local aditiva aplicada antes da API; login fica
+  desativado até configuração autorizada. Testes de protocolo usam PostgreSQL
+  real e endpoints Google simulados, sem declarar login real validado. A decisão
+  atualiza a pendência de código OAuth/migrações da D010 e mantém produção fechada.

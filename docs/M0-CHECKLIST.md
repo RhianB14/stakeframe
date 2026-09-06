@@ -211,8 +211,13 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       banco e credenciais geradas fora do Git/contexto de build.
 - [x] Verificações de tipos, lint, unitários, build, integração PostgreSQL real
       e navegador desktop/mobile adicionadas à CI como `application-check`.
-- [ ] Google OAuth/Better Auth, identidade única do proprietário, OpenAPI,
-      schema de produto e componentes shadcn/ui: etapas seguintes.
+- [x] STK-M0-08: código Google OAuth/Better Auth, identidade única por `sub`
+      e e-mail verificado, sessão no PostgreSQL, logout e migração local.
+      [Issue #16](https://github.com/RhianB14/stakeframe/issues/16).
+- [ ] Validar autenticação com credenciais e conta Google reais; depende de
+      autorização específica para configurar credenciais. Consulte
+      [AUTHENTICATION.md](AUTHENTICATION.md).
+- [ ] OpenAPI, schema de produto e componentes shadcn/ui: etapas seguintes.
 - [ ] Validar execução ARM64 na VPS em futura janela autorizada; o manifest
       multiarch das imagens base não substitui essa execução.
 

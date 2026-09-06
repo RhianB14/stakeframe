@@ -2,12 +2,12 @@
 
 ## Pré-requisitos
 
-| Ferramenta | Versão             | Observação                                        |
-| ---------- | ------------------ | ------------------------------------------------- |
-| Node.js    | v24.20.0           | Fixado em `.nvmrc`; CI usa exatamente esta versão |
-| pnpm       | 11.24.0            | Declarado em `packageManager`                     |
-| Git        | 2.x                | Identity configurada para commits                 |
-| Docker     | 29.x + Compose v2+ | Necessário para PostgreSQL e execução local       |
+| Ferramenta | Versão                 | Observação                                         |
+| ---------- | ---------------------- | -------------------------------------------------- |
+| Node.js    | v24.20.0               | Fixado em `.nvmrc`; CI usa exatamente esta versão  |
+| pnpm       | 11.24.0                | Declarado em `packageManager`                      |
+| Git        | 2.x                    | Identity configurada para commits                  |
+| Docker     | 29.x + Compose ≥2.24.0 | PostgreSQL e `env_file` opcional para autenticação |
 
 ## Runtime isolado do projeto (Windows)
 
@@ -51,13 +51,19 @@ pnpm local:up
 
 Abra [http://127.0.0.1:8088](http://127.0.0.1:8088). A primeira execução baixa
 as imagens e compila a aplicação. O comando aguarda os quatro serviços ficarem
-saudáveis; o worker inicializa o schema técnico da fila no PostgreSQL local.
+saudáveis; o serviço temporário `migrate` deve concluir com código 0 antes da
+API. O worker inicializa o schema técnico da fila no PostgreSQL local.
 Somente o job de diagnóstico existe, sem dados financeiros ou integrações.
 
 `local:init` gera uma senha aleatória em `.env.local`, sem imprimir seu valor
 e sem sobrescrever um arquivo existente. Não use `.env.example` como arquivo
 do Compose: ele documenta também integrações futuras. O ambiente local não
 precisa de Google, Telegram, R2 ou OmniRoute para iniciar.
+
+Para autenticação, consulte [AUTHENTICATION.md](AUTHENTICATION.md): o arquivo
+opcional `.env.auth.local` fornece somente a configuração da API. O login
+permanece fechado sem ativação explícita e configuração completa. A migração
+local é aplicada mesmo com autenticação desativada, preservando dados e volume.
 
 As portas padrão são 8088 (web) e 55432 (PostgreSQL), restritas a `127.0.0.1`.
 Se estiverem ocupadas, altere `LOCAL_WEB_PORT`/`LOCAL_DB_PORT` no `.env.local`
@@ -72,18 +78,18 @@ checkouts sobre o mesmo projeto/volume. Nenhum comando deste fluxo atua na VPS.
 
 ## Comandos
 
-| Comando                 | O que faz                                               |
-| ----------------------- | ------------------------------------------------------- |
-| `pnpm format:check`     | Verifica formatação (CI executa este comando)           |
-| `pnpm format`           | Corrige formatação                                      |
-| `pnpm typecheck`        | Verifica os cinco pacotes e os testes                   |
-| `pnpm lint`             | Verifica TypeScript, React e scripts JavaScript         |
-| `pnpm test`             | Testa API e configuração sem banco externo              |
-| `pnpm build`            | Compila pacotes e assets da web                         |
-| `pnpm local:status`     | Mostra o estado dos containers locais                   |
-| `pnpm local:test-db`    | Testa PostgreSQL 18 e fila usando `.env.local`          |
-| `pnpm test:integration` | Exige `TEST_DATABASE_URL` explícito para banco de teste |
-| `pnpm test:e2e`         | Testa a web já iniciada em desktop e mobile             |
+| Comando                 | O que faz                                                    |
+| ----------------------- | ------------------------------------------------------------ |
+| `pnpm format:check`     | Verifica formatação (CI executa este comando)                |
+| `pnpm format`           | Corrige formatação                                           |
+| `pnpm typecheck`        | Verifica os cinco pacotes e os testes                        |
+| `pnpm lint`             | Verifica TypeScript, React e scripts JavaScript              |
+| `pnpm test`             | Testa API e configuração sem banco externo                   |
+| `pnpm build`            | Compila pacotes e assets da web                              |
+| `pnpm local:status`     | Mostra o estado dos containers locais                        |
+| `pnpm local:test-db`    | Testa PostgreSQL 18, fila e autenticação usando `.env.local` |
+| `pnpm test:integration` | Exige `TEST_DATABASE_URL` explícito para banco de teste      |
+| `pnpm test:e2e`         | Testa a web já iniciada em desktop e mobile                  |
 
 ### Testes de navegador
 
@@ -99,6 +105,11 @@ ambos ignorados pelo Git. Para outra porta, defina `E2E_BASE_URL` na sessão.
 Se o download do Chromium estiver indisponível, é possível testar com Chrome
 já instalado definindo `PLAYWRIGHT_CHANNEL=chrome`; registre essa diferença
 na evidência. A CI instala e usa o Chromium fixado pelo Playwright.
+
+Os cenários visuais de login/logout usam respostas de API controladas pelo
+Playwright. A suíte de integração valida o protocolo OAuth com Better Auth e
+PostgreSQL reais, substituindo apenas os endpoints Google. Nenhuma dessas
+suítes substitui a validação posterior com a conta real.
 
 ### Ciclo de edição
 

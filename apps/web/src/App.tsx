@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { systemStatusSchema } from '@stakeframe/shared';
+import { OwnerAccess } from './OwnerAccess.js';
 
 async function loadStatus() {
   const response = await fetch('/api/v1/system/status', { signal: AbortSignal.timeout(5_000) });
@@ -53,7 +54,11 @@ export function App() {
             <p>
               Estamos preparando seu espaço.
               <br />
-              <strong>O acesso privado será habilitado em uma próxima etapa.</strong>
+              <strong>
+                {status.data?.authentication === 'google'
+                  ? 'Entre com sua conta Google autorizada.'
+                  : 'O acesso privado será habilitado em uma próxima etapa.'}
+              </strong>
             </p>
           </div>
           <div className="principles">
@@ -94,6 +99,8 @@ export function App() {
             >
               Tentar novamente <span aria-hidden="true">↗</span>
             </button>
+          ) : status.data?.authentication === 'google' ? (
+            <OwnerAccess />
           ) : (
             <div className="access-note">
               <svg viewBox="0 0 20 20" aria-hidden="true">
