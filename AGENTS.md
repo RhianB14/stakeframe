@@ -2,6 +2,18 @@
 
 Este documento define como os agentes operam no repositório Stakeframe.
 
+## Diretriz temporária do proprietário — 06/09/2026
+
+Rhian determinou: **o Codex assume as implementações por enquanto, até nova
+orientação do proprietário**. Durante esse período, Codex também executa as
+verificações e operações Git/GitHub autorizadas por tarefa. Esta diretriz
+substitui a divisão de execução com Hermes descrita abaixo enquanto estiver
+vigente; não é necessário retransmitir prompts de implementação ao Hermes.
+
+As exigências de autorização de merge, deploy, migração e operações destrutivas
+continuam válidas. A autoria direta do Codex deve constar dos registros, sem
+apresentar a verificação do próprio código como revisão independente do GitHub.
+
 ## Papéis
 
 - **Codex** — planeja, decide tecnicamente, revisa e autoriza. É o orquestrador
