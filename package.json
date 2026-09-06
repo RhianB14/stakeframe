@@ -1,16 +1,37 @@
 {
   "name": "stakeframe",
   "private": true,
+  "type": "module",
   "version": "0.0.0",
   "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=24.20.0 <25"
   },
   "scripts": {
+    "build:types": "tsc -b",
+    "build": "pnpm build:types && pnpm --filter @stakeframe/web build",
+    "typecheck": "pnpm build:types && tsc -p tsconfig.tests.json",
+    "lint": "eslint .",
+    "test": "pnpm build:types && vitest run --config vitest.config.ts",
+    "test:integration": "pnpm build:types && vitest run --config vitest.integration.config.ts",
+    "test:e2e": "playwright test",
+    "local:init": "node scripts/local-env.mjs",
+    "local:up": "docker compose --env-file .env.local -f compose.local.yml up -d --build --wait",
+    "local:down": "docker compose --env-file .env.local -f compose.local.yml down",
+    "local:status": "docker compose --env-file .env.local -f compose.local.yml ps",
+    "local:test-db": "pnpm build:types && node --env-file=.env.local scripts/test-local-db.mjs",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "prettier": "3.9.6"
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.10.13",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "5.0.0"
   }
 }

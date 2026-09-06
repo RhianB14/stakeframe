@@ -1,0 +1,14 @@
+{
+  "name": "@stakeframe/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@stakeframe/db": "workspace:*",
+    "@stakeframe/shared": "workspace:*",
+    "pg-boss": "12.30.0"
+  }
+}

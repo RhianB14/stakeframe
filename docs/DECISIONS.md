@@ -106,3 +106,29 @@ recebem status `Superseded` e apontam a substituta.
   da restauração e o atendimento ao RTO de 4 horas serão demonstrados no teste
   real; esta decisão não presume desempenho relativo a PITR nem declara o RTO
   atendido.
+
+## D010 — Base executável local antes da publicação (2026-09-06)
+
+- **Contexto:** o M0 precisa de uma aplicação executável para validar o
+  caminho web → API → PostgreSQL e o processamento assíncrono; integrações e
+  operação na VPS ainda têm pendências independentes.
+- **Decisão:** implementar a STK-M0-07 com Compose local, credenciais aleatórias
+  fora do Git, endpoints técnicos e fila de diagnóstico. Autenticação ausente
+  é apresentada explicitamente; não existe modo de usuário autenticado falso.
+  API e worker exigem runtime `local`. As portas publicadas são de loopback.
+- **Compatibilidade:** Node 24.20.0 e pnpm 11.24.0 mantidos. TypeScript 6.0.3
+  atende ao intervalo de suporte do typescript-eslint 8.69.0 (`<6.1`); a versão
+  7 não foi adotada por incompatibilidade com essa ferramenta. Dependências
+  diretas usam versões exatas e lockfile. Vite 8, Fastify 5, React 19 e
+  pg-boss 12 foram verificados com os tipos e builds instalados.
+- **Banco:** PostgreSQL 18.4 e Drizzle; pg-boss inicializa o schema técnico
+  local, sem migrações de produto. O volume usa `/var/lib/postgresql`, conforme
+  a [imagem oficial PostgreSQL 18](https://hub.docker.com/_/postgres).
+- **Rede:** publicação local por bridge e comunicação dos serviços por rede
+  interna, seguindo a [separação de redes do Docker](https://docs.docker.com/engine/network/).
+  Caddy usa 8080 e remove a capability embutida do binário durante o build,
+  permitindo `cap_drop: ALL` e usuário sem root; o comportamento da imagem
+  oficial está descrito em [caddy-docker #396](https://github.com/caddyserver/caddy-docker/issues/396).
+- **Consequências:** esta base não conclui M0/M1, não autoriza deploy e não
+  usa o domínio comprado. Google OAuth/Better Auth, Telegram, R2, OmniRoute,
+  OpenAPI, migrações, imagens de produção e backup/restore seguem pendentes.

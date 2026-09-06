@@ -1,0 +1,24 @@
+{
+    admin off
+    auto_https off
+}
+
+:8080 {
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+    }
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+    handle /health/* {
+        reverse_proxy api:3000
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

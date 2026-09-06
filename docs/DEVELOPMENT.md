@@ -2,12 +2,12 @@
 
 ## Pré-requisitos
 
-| Ferramenta | Versão        | Observação                                        |
-| ---------- | ------------- | ------------------------------------------------- |
-| Node.js    | v24.20.0      | Fixado em `.nvmrc`; CI usa exatamente esta versão |
-| pnpm       | 11.24.0       | Declarado em `packageManager`                     |
-| Git        | 2.x           | Identity configurada para commits                 |
-| Docker     | qualquer 29.x | Necessário apenas em etapas futuras               |
+| Ferramenta | Versão             | Observação                                        |
+| ---------- | ------------------ | ------------------------------------------------- |
+| Node.js    | v24.20.0           | Fixado em `.nvmrc`; CI usa exatamente esta versão |
+| pnpm       | 11.24.0            | Declarado em `packageManager`                     |
+| Git        | 2.x                | Identity configurada para commits                 |
+| Docker     | 29.x + Compose v2+ | Necessário para PostgreSQL e execução local       |
 
 ## Runtime isolado do projeto (Windows)
 
@@ -45,23 +45,79 @@ de outros projetos.
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm local:init
+pnpm local:up
 ```
+
+Abra [http://127.0.0.1:8088](http://127.0.0.1:8088). A primeira execução baixa
+as imagens e compila a aplicação. O comando aguarda os quatro serviços ficarem
+saudáveis; o worker inicializa o schema técnico da fila no PostgreSQL local.
+Somente o job de diagnóstico existe, sem dados financeiros ou integrações.
+
+`local:init` gera uma senha aleatória em `.env.local`, sem imprimir seu valor
+e sem sobrescrever um arquivo existente. Não use `.env.example` como arquivo
+do Compose: ele documenta também integrações futuras. O ambiente local não
+precisa de Google, Telegram, R2 ou OmniRoute para iniciar.
+
+As portas padrão são 8088 (web) e 55432 (PostgreSQL), restritas a `127.0.0.1`.
+Se estiverem ocupadas, altere `LOCAL_WEB_PORT`/`LOCAL_DB_PORT` no `.env.local`
+antes de subir. API e worker não publicam portas no host. A senha precisa
+permanecer a mesma enquanto o volume existir; alterar `.env.local` não troca
+a senha de um banco já inicializado. Não remova o volume para corrigir erros.
+
+Use `pnpm local:down` para parar e remover os containers preservando o volume.
+O nome padrão do projeto Compose é `stakeframe-local`; em checkouts simultâneos,
+defina `COMPOSE_PROJECT_NAME` e portas diferentes por sessão. Não suba dois
+checkouts sobre o mesmo projeto/volume. Nenhum comando deste fluxo atua na VPS.
 
 ## Comandos
 
-| Comando             | O que faz                                     |
-| ------------------- | --------------------------------------------- |
-| `pnpm format:check` | Verifica formatação (CI executa este comando) |
-| `pnpm format`       | Corrige formatação                            |
+| Comando                 | O que faz                                               |
+| ----------------------- | ------------------------------------------------------- |
+| `pnpm format:check`     | Verifica formatação (CI executa este comando)           |
+| `pnpm format`           | Corrige formatação                                      |
+| `pnpm typecheck`        | Verifica os cinco pacotes e os testes                   |
+| `pnpm lint`             | Verifica TypeScript, React e scripts JavaScript         |
+| `pnpm test`             | Testa API e configuração sem banco externo              |
+| `pnpm build`            | Compila pacotes e assets da web                         |
+| `pnpm local:status`     | Mostra o estado dos containers locais                   |
+| `pnpm local:test-db`    | Testa PostgreSQL 18 e fila usando `.env.local`          |
+| `pnpm test:integration` | Exige `TEST_DATABASE_URL` explícito para banco de teste |
+| `pnpm test:e2e`         | Testa a web já iniciada em desktop e mobile             |
+
+### Testes de navegador
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+Os E2E verificam status real, falha e recuperação da conexão, indisponibilidade
+do banco, ausência de rotas de produto, erros JavaScript e overflow horizontal.
+Screenshots ficam em `test-results/` e o relatório em `playwright-report/`,
+ambos ignorados pelo Git. Para outra porta, defina `E2E_BASE_URL` na sessão.
+Se o download do Chromium estiver indisponível, é possível testar com Chrome
+já instalado definindo `PLAYWRIGHT_CHANNEL=chrome`; registre essa diferença
+na evidência. A CI instala e usa o Chromium fixado pelo Playwright.
+
+### Ciclo de edição
+
+Após alterar código, `pnpm local:up` reconstrói as imagens e atualiza os
+containers. Para hot reload da web, execute
+`pnpm --filter @stakeframe/web dev --host 127.0.0.1`; o proxy Vite espera uma API
+em `127.0.0.1:3000`. Para iniciá-la fora do Docker, compile com `pnpm build:types`,
+configure `STAKEFRAME_RUNTIME=local` e `DATABASE_URL` na sessão com a conexão
+local e execute `node apps/api/dist/server.js`. Não imprima a conexão nem a
+coloque em argumentos, histórico ou documentação.
 
 ## Fluxo de trabalho
 
-1. Crie uma branch a partir da `main` atualizada: `feat/...`, `fix/...` ou
-   `chore/...`.
+1. Crie uma branch a partir da `main` atualizada; no Codex, use `codex/...`.
 2. Faça alterações com commits convencionais
    (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`...).
-3. Rode `pnpm format:check` antes do push.
-4. Abra a PR para `main`. A CI executa o `format-check`.
+3. Rode formatação, tipos, lint, testes, build e as integrações pertinentes antes do push.
+4. Abra a PR para `main`. A CI executa `format-check`, `application-check` e
+   `network-security-simulation`.
 5. O merge é autorizado pelo Codex conforme [docs/GOVERNANCE.md](GOVERNANCE.md).
 
 Regras:
