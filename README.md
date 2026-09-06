@@ -73,6 +73,10 @@ O [cliente Google de produção](docs/M0-14-VALIDATION.md) está preparado em
 projeto separado, com callback HTTPS e credenciais privadas. O login nesse
 ambiente será validado após a implantação autorizada.
 
+O [bot Telegram](docs/TELEGRAM.md) foi criado com grupos bloqueados e teve
+uma resposta de teste entregue ao proprietário. O processamento contínuo
+e a importação de apostas ainda não estão ativos.
+
 ## Licença
 
 [MIT](LICENSE)
