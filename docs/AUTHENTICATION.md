@@ -107,6 +107,12 @@ a API de subir; investigar com valores sanitizados. Não há rollback destrutivo
 automático. Migrações de produção exigem plano de backup, recuperação e
 autorização próprios.
 
+A STK-M0-12 acrescenta a configuração de produção com origem HTTPS obrigatória,
+segredos por arquivo e migração explícita em perfil separado. O Compose de
+produção não aplica migrações no startup normal. Consulte
+[PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md). O callback Google
+real de produção e a implantação continuam pendentes.
+
 ## Evidência e limites
 
 [M0-08-VALIDATION.md](M0-08-VALIDATION.md) registra testes e limitações.

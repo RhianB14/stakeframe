@@ -16,6 +16,7 @@ export function createApp(options: {
   checkDatabase: () => Promise<void>;
   logger?: boolean;
   ownerAuth?: OwnerAuth;
+  runtime?: 'local' | 'production';
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
@@ -75,7 +76,7 @@ export function createApp(options: {
         schema: {
           operationId: 'getSystemStatus',
           tags: ['Operação'],
-          summary: 'Consultar o estado técnico local',
+          summary: 'Consultar o estado técnico da aplicação',
           security: [],
           response: { 200: systemStatusSchema, 500: apiErrorSchema, default: apiErrorSchema },
         },
@@ -89,7 +90,7 @@ export function createApp(options: {
         }
         return systemStatusSchema.parse({
           name: 'Stakeframe',
-          stage: 'local-setup',
+          stage: options.runtime === 'production' ? 'production-setup' : 'local-setup',
           database,
           authentication: options.ownerAuth ? 'google' : 'not-configured',
           productEnabled: false,

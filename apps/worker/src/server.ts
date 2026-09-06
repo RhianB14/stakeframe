@@ -1,11 +1,10 @@
 import { createServer } from 'node:http';
-import { createDatabase, requireDatabaseUrl } from '@stakeframe/db';
+import { createDatabase, requireDatabaseUrl, readDatabaseConfig } from '@stakeframe/db';
 import { PROBE_QUEUE } from '@stakeframe/shared';
 import { startWorker } from './worker.js';
 
 async function main() {
-  if (process.env.STAKEFRAME_RUNTIME !== 'local') throw new Error('LOCAL_RUNTIME_REQUIRED');
-  const connectionString = requireDatabaseUrl(process.env.DATABASE_URL);
+  const connectionString = requireDatabaseUrl(readDatabaseConfig(process.env));
   const database = createDatabase(connectionString);
   let boss;
   try {
@@ -53,6 +52,6 @@ async function main() {
 }
 
 void main().catch(() => {
-  console.error('WORKER_START_FAILED: verify local configuration');
+  console.error('WORKER_START_FAILED: verify runtime configuration');
   process.exitCode = 1;
 });

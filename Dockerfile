@@ -15,7 +15,7 @@ RUN pnpm --config.hoist-workspace-packages=false --filter @stakeframe/api --prod
  && pnpm --config.hoist-workspace-packages=false --filter @stakeframe/db --prod deploy --legacy /out/migrate \
  && node /verification/check-deployed-versions.mjs /workspace /out/api /out/worker /out/migrate
 
-# These artifacts still require the explicitly local runtime. Publication is separate.
+# Runtime selection is explicit; production enforces its authentication/secret contract.
 FROM node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
@@ -38,4 +38,11 @@ FROM caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca7
 RUN setcap -r /usr/bin/caddy
 COPY --from=build /workspace/apps/web/dist /srv
 COPY infra/Caddyfile.dev /etc/caddy/Caddyfile
+USER 1000:1000
+
+FROM web AS web-production
+USER root
+RUN mkdir -p /data/caddy /config/caddy && chown -R 1000:1000 /data/caddy /config/caddy
+COPY infra/Caddyfile.production /etc/caddy/Caddyfile
+COPY infra/production/tls.conf /etc/caddy/tls.conf
 USER 1000:1000

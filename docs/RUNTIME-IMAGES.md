@@ -1,7 +1,8 @@
 # Imagens de execução
 
-STK-M0-11 prepara imagens menores para a aplicação existente. O runtime continua
-exigindo `STAKEFRAME_RUNTIME=local`; estas imagens não habilitam produção.
+STK-M0-11 prepara imagens menores para a aplicação existente. STK-M0-12 adiciona
+o modo explícito `production`, com autenticação/HTTPS e segredos obrigatórios,
+descrito em [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md).
 
 ## Conteúdo e construção
 
@@ -21,12 +22,13 @@ O empacotamento desativa `hoist-workspace-packages` para não gerar aliases
 de pacotes não utilizados apontando ao workspace de build. O probe recusa
 links externos ou quebrados. Evidências locais em [M0-11-VALIDATION.md](M0-11-VALIDATION.md).
 
-| Target    | Conteúdo próprio                                               | Comando                    |
-| --------- | -------------------------------------------------------------- | -------------------------- |
-| `api`     | API e dependências de execução, incluindo banco e contratos    | `node dist/server.js`      |
-| `worker`  | Worker e dependências de execução, incluindo banco e contratos | `node dist/server.js`      |
-| `migrate` | Pacote de banco, SQL e journal                                 | `node dist/migrate-cli.js` |
-| `web`     | Assets estáticos e configuração Caddy local                    | Comando da imagem Caddy    |
+| Target           | Conteúdo próprio                                               | Comando                    |
+| ---------------- | -------------------------------------------------------------- | -------------------------- |
+| `api`            | API e dependências de execução, incluindo banco e contratos    | `node dist/server.js`      |
+| `worker`         | Worker e dependências de execução, incluindo banco e contratos | `node dist/server.js`      |
+| `migrate`        | Pacote de banco, SQL e journal                                 | `node dist/migrate-cli.js` |
+| `web`            | Assets estáticos e configuração Caddy local                    | Comando da imagem Caddy    |
+| `web-production` | Assets e Caddy HTTPS com certificados persistentes             | Comando da imagem Caddy    |
 
 Os três targets Node usam `/app` e usuário `node`. O Compose mantém filesystem
 somente leitura, capabilities removidas e `no-new-privileges`. O serviço
