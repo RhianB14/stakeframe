@@ -135,7 +135,7 @@ async function main() {
       file.endsWith('.env') ? '' : randomBytes(32).toString('hex') + '\n',
       {
         flag: 'wx',
-        mode: process.platform === 'win32' ? 0o600 : 0o444,
+        mode: file.endsWith('.env') || process.platform === 'win32' ? 0o600 : 0o444,
       },
     );
   stage = 'build';
@@ -395,7 +395,7 @@ try {
   report.failedStage = stage;
   report.failureType = error.code ?? error.name;
   process.exitCode = 1;
-  console.error(`DEPLOYMENT_REHEARSAL_FAILED ${stage}`);
+  console.error(`DEPLOYMENT_REHEARSAL_FAILED ${stage} ${report.failureType}`);
 } finally {
   try {
     await cleanup();
