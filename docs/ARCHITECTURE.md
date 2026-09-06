@@ -92,6 +92,10 @@ recuperação de anexos imutáveis, com manifesto e checksums —
   Docker Compose real, integração PostgreSQL 18/pg-boss/Better Auth e E2E Chromium
   em desktop/mobile.
 - `network-security-simulation`: simulações Python do guard de rede.
+- `recovery-check`: dois clusters PostgreSQL descartáveis, dump custom e roles
+  sem hashes de senha, snapshot Restic criptografado e restauração com conferência
+  de dados, proprietários, permissões e falhas. Sem acesso à instância da aplicação;
+  detalhes em [RECOVERY-DRILL.md](RECOVERY-DRILL.md).
 
 O job de aplicação falha se a integração não puder executar. O comando
 `test:integration` exige `TEST_DATABASE_URL`; não há fallback ou skip por falta

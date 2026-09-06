@@ -1,8 +1,9 @@
 # Recuperação de desastre
 
-> **STATUS: NÃO IMPLEMENTADO E NÃO VALIDADO.** Descreve a estratégia aprovada
-> e a estrutura do procedimento futuro. Nenhum teste de restauração foi
-> executado.
+> **STATUS: VALIDAÇÃO LOCAL PARCIAL.** A STK-M0-10 demonstra dump PostgreSQL
+> criptografado e restauração em cluster novo com dados fictícios. Backups
+> externos da aplicação, agendamento, alertas e recuperação completa de produção
+> continuam pendentes. Evidências e limites em [RECOVERY-DRILL.md](RECOVERY-DRILL.md).
 
 ## Objetivos (do plano mestre)
 
@@ -58,7 +59,7 @@
 - A restauração deve reaplicar as regras de retenção de anexos (não
   reintroduzir imagens expiradas), inclusive nas cópias de recuperação.
 
-## Procedimento de restauração (a implementar e testar)
+## Procedimento de restauração de produção (a implementar e testar)
 
 1. Provisionar/recriar a VPS e preparar o cluster PostgreSQL de destino.
 2. Selecionar o dump PostgreSQL válido mais recente, recriar previamente as
@@ -88,5 +89,6 @@
 - [ ] Alerta de backup atrasado verificado.
 - [ ] Teste mensal de restauração agendado e documentado.
 
-Nenhum item acima foi executado. Este documento não descreve capacidade real —
-descreve compromissos a implementar.
+O ensaio local valida somente a parte PostgreSQL com roles e permissões, usando
+Restic e dados de teste. Ele não conclui nenhum dos itens integrais acima.
+Veja [M0-10-VALIDATION.md](M0-10-VALIDATION.md) para a evidência executada.

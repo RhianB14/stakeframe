@@ -1,0 +1,4 @@
+#!/bin/sh
+# Simulate a dump process failing after producing partial output.
+printf 'PGDMP_PARTIAL_FIXTURE' >/work/bundle/database.dump
+exit 42
