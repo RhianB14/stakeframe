@@ -3,8 +3,9 @@
 Aplicação pessoal para registro de apostas esportivas, controle de banca e
 acompanhamento de resultados.
 
-> **Estado atual: bootstrap.** Nenhuma funcionalidade do produto implementada
-> ainda. O projeto está na fase M0 (setup). Consulte [docs/PLAN.md](docs/PLAN.md)
+> **Estado atual: base local do M0.** Web, API, worker e PostgreSQL executam
+> em Docker Compose. A tela apresenta o estado da conexão; autenticação e
+> funcionalidades de apostas ainda não estão implementadas. Consulte [docs/PLAN.md](docs/PLAN.md)
 > para o plano mestre e [docs/M0-CHECKLIST.md](docs/M0-CHECKLIST.md) para o
 > progresso do setup.
 
@@ -29,19 +30,28 @@ resultados com liquidação manual e auditoria completa.
 Pré-requisitos: Node.js 24 LTS, pnpm 11.x, Docker.
 
 ```bash
-pnpm install            # instalar dependências
-pnpm format:check       # verificação de formatação (única verificação ativa)
-pnpm format             # corrigir formatação
+pnpm install --frozen-lockfile
+pnpm local:init         # gera .env.local privado, sem imprimir a senha
+pnpm local:up           # compila e aguarda os serviços ficarem saudáveis
+pnpm local:test-db      # integração com PostgreSQL e worker reais
+pnpm test              # testes unitários
+pnpm typecheck
+pnpm lint
+pnpm build
 ```
+
+Abra [http://127.0.0.1:8088](http://127.0.0.1:8088). Para encerrar preservando o
+banco, execute `pnpm local:down`. Instruções de E2E, portas e configuração em
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 O fluxo de trabalho exige PR com CI verde para integrar na `main` (veja
 [docs/GOVERNANCE.md](docs/GOVERNANCE.md)).
 
 ## Operação
 
-Ainda não aplicável — infraestrutura será provisionada em etapas posteriores do
-M0, com procedimentos documentados em `docs/DEPLOYMENT.md` quando
-implementados.
+Execução limitada ao computador local. Deploy, HTTPS, integrações externas e
+recuperação de banco continuam pendentes no M0. O Compose local não constitui
+uma configuração de produção; veja [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Licença
 

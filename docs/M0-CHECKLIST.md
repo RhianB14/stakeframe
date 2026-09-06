@@ -1,8 +1,12 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-05** — registro da validação de recuperação administrativa
-([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9; issue #9 no milestone M0,
-referenciando a issue #7, que permanece encerrada).
+Tarefa atual: **STK-M0-07** — base executável local
+([issue #14](https://github.com/RhianB14/stakeframe/issues/14)). A STK-M0-06
+continua pendente na [issue #11](https://github.com/RhianB14/stakeframe/issues/11):
+PR #13 contém a reconciliação proposta, ainda sem execução na VPS.
+
+Histórico: STK-M0-05 registrou a recuperação administrativa
+([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9; issue #9, referenciando a issue #7).
 STK-M0-02 foi concluída pela PR #4, integrada por squash na `main` em
 `666f915ab0c94eeef3f792f5eed88809a049297e`. STK-M0-03 foi concluída pela
 [PR #6](https://github.com/RhianB14/stakeframe/pull/6), integrada por squash
@@ -10,8 +14,9 @@ na `main` em `ea14692f6a15fb33b1189638e674ac5571f5eb86`, com CI verde e a
 issue #5 fechada. Na STK-M0-03-R2, a inspeção OCI
 realizada pelo Codex em 05/09/2026 foi incorporada por retransmissão do
 proprietário, somando-se à coleta guest da R1. O caminho do console foi
-identificado, mas IAM, serial e recuperação administrativa do Ubuntu ainda
-não foram validados. Nenhuma aplicação remota autorizada ou executada.
+identificado naquela etapa; IAM, serial e recuperação administrativa do Ubuntu
+foram posteriormente validados no teste pontual da STK-M0-05. A janela IPv6
+da STK-M0-06 está registrada abaixo; a STK-M0-07 não executa ações remotas.
 O M0 ainda está em andamento e só é considerado concluído quando todos os
 itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
@@ -189,6 +194,27 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] Consultar disponibilidade e preço de `stakeframe.com.br`: ISAVAIL
       retornou `ST 0` em 2026-09-05 e a página oficial informa R$ 40,00 por
       um ano. Nenhuma compra foi realizada; a decisão continua do proprietário.
+- [x] Atualização de 2026-09-06: proprietário informou a compra de
+      `stakeframe.com.br` pela HostGator. DNS e HTTPS continuam sem validação.
+
+### STK-M0-07 — Base local da aplicação
+
+- [x] Monorepo pnpm com TypeScript estrito; `apps/web`, `apps/api`,
+      `apps/worker`, `packages/db` e `packages/shared`.
+- [x] Tela React/Vite/Tailwind/TanStack Query de preparação, responsiva e com
+      consulta real do estado da conexão, sem dados financeiros fictícios.
+- [x] API Fastify com contratos Zod, liveness, readiness dependente do banco,
+      erros sanitizados e execução restrita à configuração local.
+- [x] PostgreSQL 18 via Drizzle e worker pg-boss com job técnico persistente,
+      payload validado e retries limitados. Sem tabelas de domínio.
+- [x] Compose local com quatro serviços, Caddy HTTP em loopback, volume do
+      banco e credenciais geradas fora do Git/contexto de build.
+- [x] Verificações de tipos, lint, unitários, build, integração PostgreSQL real
+      e navegador desktop/mobile adicionadas à CI como `application-check`.
+- [ ] Google OAuth/Better Auth, identidade única do proprietário, OpenAPI,
+      schema de produto e componentes shadcn/ui: etapas seguintes.
+- [ ] Validar execução ARM64 na VPS em futura janela autorizada; o manifest
+      multiarch das imagens base não substitui essa execução.
 
 ### Integrações
 
@@ -214,6 +240,8 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
 - [ ] Docker Compose inicial (app, api, worker, PostgreSQL, Caddy, OmniRoute)
       com volumes e redes internas.
+      Base **local parcial** disponível na STK-M0-07; OmniRoute e configuração
+      de produção ainda não implementados.
 - [ ] HTTPS com Caddy + renovação; DNS do domínio.
 - [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
       teste de restauração demonstrado (RPO 1h / RTO 4h).
@@ -229,5 +257,5 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - Primeira janela proposta somente IPv6 ativo; persistência e publicação de
   aplicação fora do escopo, sujeitas a tarefas/autorização separadas.
 - Ordem das integrações (R2 → OAuth → Telegram → OmniRoute) após o domínio.
-- Critério de quando instalar o Postgres na VPS vs. desenvolver com Docker
-  local primeiro.
+- Desenvolvimento começou com Docker local na STK-M0-07; instalação do
+  PostgreSQL na VPS será tratada junto à preparação de produção.

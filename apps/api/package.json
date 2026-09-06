@@ -1,0 +1,15 @@
+{
+  "name": "@stakeframe/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@stakeframe/db": "workspace:*",
+    "@stakeframe/shared": "workspace:*",
+    "fastify": "5.12.3",
+    "zod": "4.5.4"
+  }
+}

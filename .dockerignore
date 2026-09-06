@@ -1,0 +1,13 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.env*
+*.local
+.cache
+.pnpm-store
+playwright-report
+test-results
+coverage
+**/__pycache__

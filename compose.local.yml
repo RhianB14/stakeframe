@@ -1,0 +1,93 @@
+name: stakeframe-local
+
+services:
+  postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_DB: stakeframe_local
+      POSTGRES_USER: stakeframe_local
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:?Run pnpm local:init first}
+    ports:
+      - '127.0.0.1:${LOCAL_DB_PORT:-55432}:5432'
+    volumes:
+      - database:/var/lib/postgresql
+    networks: [backend, local-access]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U stakeframe_local -d stakeframe_local']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: { context: ., target: api }
+    environment:
+      STAKEFRAME_RUNTIME: local
+      API_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://stakeframe_local:${LOCAL_DB_PASSWORD:?Run pnpm local:init first}@postgres:5432/stakeframe_local
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+
+  worker:
+    build: { context: ., target: worker }
+    environment:
+      STAKEFRAME_RUNTIME: local
+      DATABASE_URL: postgresql://stakeframe_local:${LOCAL_DB_PASSWORD:?Run pnpm local:init first}@postgres:5432/stakeframe_local
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9091/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+
+  web:
+    build: { context: ., target: web }
+    ports:
+      - '127.0.0.1:${LOCAL_WEB_PORT:-8088}:8080'
+    networks: [backend, local-access]
+    depends_on:
+      api: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/data, /config, /tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/health/ready']
+      interval: 5s
+      timeout: 4s
+      retries: 12
+
+networks:
+  local-access:
+  backend:
+    internal: true
+
+volumes:
+  database:
