@@ -4,8 +4,8 @@ Aplicação pessoal para registro de apostas esportivas, controle de banca e
 acompanhamento de resultados.
 
 > **Estado atual: base local do M0.** Web, API, worker e PostgreSQL executam
-> em Docker Compose. O login Google restrito ao proprietário está implementado,
-> aguardando configuração e validação com a conta real. Funcionalidades de apostas
+> em Docker Compose. O login Google restrito ao proprietário está implementado
+> e validado com a conta real no ambiente local. Funcionalidades de apostas
 > ainda não estão implementadas. Consulte [docs/PLAN.md](docs/PLAN.md)
 > para o plano mestre e [docs/M0-CHECKLIST.md](docs/M0-CHECKLIST.md) para o
 > progresso do setup.

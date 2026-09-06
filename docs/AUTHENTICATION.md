@@ -4,8 +4,9 @@
 
 STK-M0-08 implementa Google OAuth com Better Auth e sessões no PostgreSQL.
 A configuração padrão mantém `AUTH_ENABLED=false`: login e `/api/v1/me`
-respondem 503, sem conceder acesso. Nenhuma credencial Google real foi criada
-ou configurada nesta etapa; login real e publicação continuam pendentes.
+respondem 503, sem conceder acesso. Em 2026-09-06, após autorização específica
+do proprietário, o Google Cloud foi configurado e o login real foi ativado e
+validado no ambiente local. Publicação e credenciais de produção continuam pendentes.
 
 ## Política de acesso
 
@@ -35,13 +36,15 @@ ou configurada nesta etapa; login real e publicação continuam pendentes.
 rotas privadas de produto devem exigir a mesma verificação de proprietário;
 não existe autorização global implícita para rotas que ainda serão criadas.
 
-## Ativação local proposta (pendente de autorização)
+## Ativação local
 
 A regra 9 de [AGENTS.md](../AGENTS.md) exige autorização específica para
-alterações de credenciais. Após essa autorização:
+alterações de credenciais. A ativação local abaixo foi autorizada e concluída
+em 2026-09-06; as mesmas etapas servem como referência para outro ambiente,
+com sua própria autorização e configuração:
 
 1. Criar/configurar um client OAuth Google do tipo aplicação web no projeto
-   escolhido pelo proprietário, com consentimento limitado ao uso pessoal e
+   dedicado à aplicação, com consentimento limitado ao uso pessoal e
    conta de teste do proprietário. Solicitar somente `openid`, `email` e `profile`.
 2. Registrar o callback exato
    `http://127.0.0.1:8088/api/auth/callback/google`. Usar sempre esse host/porta,
@@ -64,6 +67,22 @@ Não inserir segredos em argumentos, capturas, relatórios ou logs. O Compose
 requer versão ≥2.24.0 para o [arquivo de ambiente opcional](https://docs.docker.com/compose/how-tos/environment-variables/set-environment-variables/).
 A API ganha acesso
 de saída à internet para o Google, mantendo suas portas sem publicação no host.
+
+A configuração concluída usa um projeto de desenvolvimento, cliente do tipo
+web, um único callback local e somente os três escopos básicos. O consentimento
+permanece em modo de teste, com o proprietário cadastrado como usuário de teste.
+A restrição efetiva depende sempre da conferência de `sub` e e-mail no servidor:
+o Google documenta [exceções para os escopos básicos no modo de teste](https://support.google.com/cloud/answer/15549945?hl=en).
+
+O identificador foi obtido com uma confirmação OpenID Connect temporária em
+loopback, com estado, cookie, nonce, PKCE e verificação criptográfica do ID token,
+exigindo o e-mail previamente definido. Essa confirmação não criou usuário nem
+sessão no banco; o serviço temporário foi encerrado antes de subir a aplicação.
+Nenhuma rota de cadastro temporário foi acrescentada ao runtime do produto.
+
+O arquivo `.env.auth.local` está fora do Git e do contexto Docker, com herança
+de ACL desativada no Windows e acesso somente ao proprietário local e SYSTEM.
+Segredos, `sub`, e-mail e conteúdo de tokens não fazem parte da evidência versionada.
 
 ## Migrações locais
 
@@ -91,5 +110,6 @@ autorização próprios.
 ## Evidência e limites
 
 [M0-08-VALIDATION.md](M0-08-VALIDATION.md) registra testes e limitações.
-A configuração Google Cloud, a conta real, HTTPS e execução ARM64 na VPS
-ainda precisam de validação. Esta entrega não conclui M0 nem autoriza deploy.
+Configuração Google Cloud, login, recarga, logout e recusa por identidade foram
+validados localmente. HTTPS público e execução ARM64 na VPS ainda precisam de
+validação. Esta entrega não conclui M0 nem autoriza deploy.

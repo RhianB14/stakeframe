@@ -158,5 +158,7 @@ recebem status `Superseded` e apontam a substituta.
   apenas para esbuild e Tailwind oxide pelo mecanismo `allowBuilds` do pnpm 11.
 - **Consequências:** migração local aditiva aplicada antes da API; login fica
   desativado até configuração autorizada. Testes de protocolo usam PostgreSQL
-  real e endpoints Google simulados, sem declarar login real validado. A decisão
-  atualiza a pendência de código OAuth/migrações da D010 e mantém produção fechada.
+  real e endpoints Google simulados. A ativação autorizada subsequente validou
+  a conta Google real em ambiente local, com evidências separadas dos testes
+  automatizados em [M0-08-VALIDATION.md](M0-08-VALIDATION.md). A decisão atualiza
+  a pendência de código OAuth/migrações da D010 e mantém produção fechada.

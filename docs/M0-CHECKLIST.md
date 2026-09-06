@@ -214,8 +214,9 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] STK-M0-08: código Google OAuth/Better Auth, identidade única por `sub`
       e e-mail verificado, sessão no PostgreSQL, logout e migração local.
       [Issue #16](https://github.com/RhianB14/stakeframe/issues/16).
-- [ ] Validar autenticação com credenciais e conta Google reais; depende de
-      autorização específica para configurar credenciais. Consulte
+- [x] Validar autenticação local com credenciais e conta Google reais após
+      autorização específica: login, recarga, logout e recusa por identidade.
+      Evidência em [M0-08-VALIDATION.md](M0-08-VALIDATION.md). Consulte
       [AUTHENTICATION.md](AUTHENTICATION.md).
 - [ ] OpenAPI, schema de produto e componentes shadcn/ui: etapas seguintes.
 - [ ] Validar execução ARM64 na VPS em futura janela autorizada; o manifest
@@ -223,8 +224,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
 ### Integrações
 
-- [ ] Google OAuth: criar credenciais restritas à identidade do proprietário
-      (credenciais fora do repo; configurar em segredos de ambiente).
+- [x] Google OAuth local: cliente web em projeto de desenvolvimento, escopos
+      básicos, credenciais fora do repositório e identidade restrita no servidor.
+- [ ] Google OAuth de produção: projeto/configuração separados, callback HTTPS
+      e validação após autorização própria de publicação.
 - [ ] Telegram: criar bot restrito ao chat do proprietário.
 - [ ] Cloudflare R2: criar conta/buckets privados separados (anexos e
       backups) e credenciais de escopo mínimo.

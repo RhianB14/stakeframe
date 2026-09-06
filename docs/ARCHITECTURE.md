@@ -3,8 +3,9 @@
 > **Estado real:** base local do M0 implementada na STK-M0-07. Existem web,
 > API, worker, contratos compartilhados e acesso PostgreSQL, além dos scripts
 > de segurança de rede. A STK-M0-08 acrescenta autenticação Google restrita ao
-> proprietário, desativada até a configuração autorizada. Validação com Google
-> real e funcionalidades do produto permanecem pendentes; o M0 não está concluído.
+> proprietário, ativada e validada localmente após autorização para configurar
+> credenciais. Novos ambientes continuam desativados por padrão. Produção e
+> funcionalidades do produto permanecem pendentes; o M0 não está concluído.
 
 ## Implementação local
 
