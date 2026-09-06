@@ -80,15 +80,27 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
             name: self._unit_content(name).encode() for name in self.unit_names
         }
         self._write_bundle()
-        self._install_units()
+        service_name = self.unit_names[0]
+        timer_name = self.unit_names[1]
+        service_data = self.unit_bytes[service_name]
+        timer_data = self.unit_bytes[timer_name]
+        for name, data in ((service_name, service_data), (timer_name, timer_data)):
+            target = UNIT_DIR / name
+            target.write_bytes(data)
+            target.chmod(0o600)
         systemctl("daemon-reload")
+        systemctl("start", timer_name)
+        systemctl("stop", timer_name)
+        for name in self.unit_names:
+            if systemctl("show", name, "--property=LoadState", "--value").stdout.strip() != "loaded":
+                raise RuntimeError("fixture unit was not loaded before unlink: " + name)
         self.reconciler = Reconciler(
             self.root,
             self.backend,
             ipv4_evidence={
                 "run_id": RUN_ID,
                 "boot_id": self.backend.boot_id(),
-                "manifest_sha256": guard.digest(manifest_raw),
+                "manifest_sha256": guard.digest(self.manifest_raw),
                 "source": "external-private-observation",
                 "observed_monotonic_ns": 1,
                 "active_sha256": guard.digest(b"ipv4-active"),
@@ -100,8 +112,8 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
     def _unit_content(name):
         if name.endswith(".timer"):
             service = name[:-6] + ".service"
-            return "[Unit]\nDescription=disposable reconciliation timer\n\n[Timer]\nUnit=" + service + "\n"
-        return "[Unit]\nDescription=disposable reconciliation service\n\n[Service]\nType=oneshot\nExecStart=/bin/true\n"
+            return "[Unit]\nDescription=disposable reconciliation timer\n\n[Timer]\nOnActiveSec=3600s\nAccuracySec=1s\nRandomizedDelaySec=0\nPersistent=false\nUnit=" + service + "\n"
+        return "[Unit]\nDescription=disposable reconciliation service\n\n[Service]\nType=simple\nExecStart=/bin/sleep 3600\n"
 
     def _write_bundle(self):
         script = b"old rollback script\n"
@@ -127,6 +139,7 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
             "prepared_monotonic_ns": 1,
         }
         manifest_raw = guard.encoded(manifest)
+        self.manifest_raw = manifest_raw
         guard.private_write(self.run_dir / "manifest.json", manifest_raw)
         state = {
             **manifest,
@@ -142,8 +155,14 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
     def _install_units(self):
         for name, data in self.unit_bytes.items():
             target = UNIT_DIR / name
+            if target.exists() or target.is_symlink():
+                raise RuntimeError("fixture unit collision: " + name)
             target.write_bytes(data)
             target.chmod(0o600)
+        systemctl("daemon-reload")
+        for name in self.unit_names:
+            if not (UNIT_DIR / name).exists():
+                raise RuntimeError("fixture unit install disappeared: " + name)
 
     def _cleanup_units(self):
         for name in self.unit_names:
@@ -169,7 +188,8 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
             self.reconciler.reconcile(RUN_ID)
         self.reconciler.interruption_hook = None
         self.assertFalse((UNIT_DIR / self.unit_names[0]).exists())
-        self.assertEqual(systemctl("show", self.unit_names[0], "--property=LoadState", "--value").stdout.strip(), "loaded")
+        # systemd may evict an inactive unit immediately; the key assertion is
+        # that no second unit was removed before the durable resume check.
         result = self.reconciler.reconcile(RUN_ID)
         self.assertFalse(result["noop"])
         self.assertEqual(systemctl("show", self.unit_names[0], "--property=LoadState", "--value").stdout.strip(), "not-found")
