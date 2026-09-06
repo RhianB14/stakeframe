@@ -36,6 +36,7 @@ pnpm local:init         # gera .env.local privado, sem imprimir a senha
 pnpm local:up           # compila e aguarda os serviços ficarem saudáveis
 pnpm local:test-db      # integração com PostgreSQL e worker reais
 pnpm recovery:drill     # ensaio isolado de backup criptografado e restauração
+pnpm images:check       # confere imagens construídas, isolamento e dependências
 pnpm test              # testes unitários
 pnpm typecheck
 pnpm api:spec:check    # valida OpenAPI e sincronização com os schemas da API

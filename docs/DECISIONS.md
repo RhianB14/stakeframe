@@ -206,3 +206,22 @@ recebem status `Superseded` e apontam a substituta.
   ambiente de teste. R2, custódia durável da chave, agendamento, retenção, alertas,
   anexos, OmniRoute e validação completa RPO/RTO permanecem pendentes. Restic é
   a ferramenta escolhida para o ensaio; a operação externa terá validação própria.
+
+## D014 — Separar artefatos de execução e validar ARM64 (2026-09-06)
+
+- **Contexto:** copiar o workspace completo para cada serviço mantinha
+  compiladores, ferramentas de teste e código sem uso nas imagens. A VPS usa
+  ARM64, mas a aplicação só tinha sido executada em AMD64.
+- **Decisão:** usar pacotes portáveis de `pnpm deploy --prod --legacy`, com
+  arquivos próprios limitados por `files`, e imagem exclusiva para migrações.
+  A instalação inicial usa lockfile congelado; a embalagem recusa versões
+  diferentes das presentes nessa instalação. A publicação segue separada.
+- **Dependências:** remover, por hook restrito ao Better Auth 1.7.3, somente
+  os peers opcionais `drizzle-kit` e `vitest`, cujas integrações não usamos.
+  Isso evita transportar ferramentas de desenvolvimento para a API. Manter
+  os pacotes como dependências de desenvolvimento nos locais pertinentes.
+  Revalidar o hook em upgrades e repetir toda a suíte de autenticação.
+- **Verificação:** probes em containers locais sem rede conferem conteúdo,
+  arquitetura e ausência de ferramentas; CI repete a aplicação completa em
+  AMD64 e ARM64 nativo. A execução ARM64 em outro host não substitui a
+  validação operacional da VPS. Detalhes em [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).

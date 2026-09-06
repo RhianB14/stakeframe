@@ -1,8 +1,8 @@
 # Implantação
 
-> **STATUS: NÃO IMPLEMENTADO.** Nenhum procedimento abaixo foi executado ou
-> validado. Este documento descreve o que será construído no M0. Não tratar
-> nada daqui como operação disponível.
+> **STATUS: PRODUÇÃO NÃO IMPLANTADA.** Os artefatos locais estão descritos em
+> [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md). Os procedimentos de publicação,
+> deploy e rollback abaixo ainda não foram executados ou validados.
 
 ## Alvo (planejado)
 
@@ -10,8 +10,8 @@
 - Serviços: aplicação web, API, worker, PostgreSQL 18, Caddy (proxy HTTPS) e
   OmniRoute (IA), em rede interna; apenas Caddy exposto publicamente.
 - Imagens construídas pela CI e referenciadas por versão/digest.
-- Domínio `stakeframe.com.br` (aquisição pendente) + DNS + HTTPS automático
-  via Caddy.
+- Domínio `stakeframe.com.br` (compra informada pelo proprietário em
+  06/09/2026); DNS e HTTPS automático via Caddy ainda pendentes.
 
 ## Procedimento de deploy (a implementar)
 
@@ -30,8 +30,10 @@
 
 ## Requisitos que bloqueiam o primeiro deploy
 
-- [ ] VPS provisionada e acessível (acesso restrito documentado).
-- [ ] Domínio adquirido e DNS configurado.
+- [x] VPS existente inventariada e acesso administrativo testado; revalidar
+      acesso e recuperação independente antes da futura janela.
+- [x] Domínio adquirido, conforme informação do proprietário.
+- [ ] DNS e HTTPS configurados e verificados.
 - [ ] Backup externo funcionando e restauração testada.
 - [ ] Segredos de produção configurados fora do repositório.
 - [ ] Autorização expressa do Codex.

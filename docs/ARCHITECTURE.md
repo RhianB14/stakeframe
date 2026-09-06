@@ -41,9 +41,11 @@ removida no build porque o listener utiliza 8080.
 
 As imagens base estão fixadas por digest e publicam manifests AMD64/ARM64.
 Execução validada inicialmente em Linux AMD64 via Docker Desktop; a existência
-do manifest ARM64 não comprova execução na VPS. Imagens locais de API/worker
-ainda contêm as dependências de desenvolvimento; redução da imagem e política
-de publicação ficam para a preparação do deploy.
+do manifest ARM64 não comprova execução na VPS. A STK-M0-11 separa API, worker
+e migrações em pacotes de execução sem ferramentas de desenvolvimento, com
+verificação de conteúdo e suíte da aplicação em AMD64/ARM64 na CI.
+[RUNTIME-IMAGES.md](RUNTIME-IMAGES.md) descreve os artefatos e limites;
+publicação e execução na VPS permanecem pendentes.
 
 O worker cria automaticamente apenas o schema técnico `pgboss` no banco local.
 Um serviço temporário `migrate` aplica as migrações Drizzle antes de iniciar a
@@ -92,6 +94,9 @@ recuperação de anexos imutáveis, com manifesto e checksums —
   Docker Compose real, integração PostgreSQL 18/pg-boss/Better Auth e E2E Chromium
   em desktop/mobile.
 - `network-security-simulation`: simulações Python do guard de rede.
+- `application-arm64-check`: mesma suíte da aplicação e inspeção das imagens
+  executadas em runner Linux ARM64 nativo. O nome `application-check` continua
+  identificando a execução AMD64; as proteções existentes são preservadas.
 - `recovery-check`: dois clusters PostgreSQL descartáveis, dump custom e roles
   sem hashes de senha, snapshot Restic criptografado e restauração com conferência
   de dados, proprietários, permissões e falhas. Sem acesso à instância da aplicação;

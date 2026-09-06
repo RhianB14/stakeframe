@@ -1,12 +1,12 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-10** — ensaio isolado de backup e restauração
-([issue #20](https://github.com/RhianB14/stakeframe/issues/20)). Base local,
+Tarefa atual: **STK-M0-11** — imagens de execução e verificação ARM64
+([issue #22](https://github.com/RhianB14/stakeframe/issues/22)). Base local,
 autenticação e OpenAPI (STK-M0-07 a STK-M0-09) integrados à `main` pelas
 [PR #15](https://github.com/RhianB14/stakeframe/pull/15),
 [PR #17](https://github.com/RhianB14/stakeframe/pull/17) e
 [PR #19](https://github.com/RhianB14/stakeframe/pull/19), com CI aprovada após
-cada integração. O ensaio de recuperação está na
+cada integração. O ensaio de recuperação foi integrado pela
 [PR #21](https://github.com/RhianB14/stakeframe/pull/21).
 
 O código da reconciliação foi integrado pela
@@ -234,6 +234,11 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       e validação de sincronização na CI. [API.md](API.md) e
       [M0-09-VALIDATION.md](M0-09-VALIDATION.md).
 - [ ] Schema de produto e componentes shadcn/ui: etapas seguintes.
+- [x] STK-M0-11: imagens separadas de API, worker e migrações, limitadas aos
+      arquivos e dependências de execução, com verificação de conteúdo.
+      [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).
+- [x] Configurar a suíte da aplicação e inspeção das imagens em runner ARM64
+      nativo na CI (STK-M0-11); resultados por head registrados na PR.
 - [ ] Validar execução ARM64 na VPS em futura janela autorizada; o manifest
       multiarch das imagens base não substitui essa execução.
 
