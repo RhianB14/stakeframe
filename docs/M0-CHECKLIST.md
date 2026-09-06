@@ -2,9 +2,20 @@
 
 Tarefa atual: **STK-M0-10** — ensaio isolado de backup e restauração
 ([issue #20](https://github.com/RhianB14/stakeframe/issues/20)). Base local,
-autenticação e OpenAPI (STK-M0-07 a STK-M0-09) implementados em PRs ainda abertas. A STK-M0-06
+autenticação e OpenAPI (STK-M0-07 a STK-M0-09) integrados à `main` pelas
+[PR #15](https://github.com/RhianB14/stakeframe/pull/15),
+[PR #17](https://github.com/RhianB14/stakeframe/pull/17) e
+[PR #19](https://github.com/RhianB14/stakeframe/pull/19), com CI aprovada após
+cada integração. O ensaio de recuperação está na
+[PR #21](https://github.com/RhianB14/stakeframe/pull/21).
+
+O código da reconciliação foi integrado pela
+[PR #13](https://github.com/RhianB14/stakeframe/pull/13), com os comentários
+de revisão resolvidos e CI aprovada na `main`. A execução da STK-M0-06
 continua pendente na [issue #11](https://github.com/RhianB14/stakeframe/issues/11):
-PR #13 contém a reconciliação proposta, ainda sem execução na VPS.
+é necessário localizar e validar a procedência da evidência IPv4 anterior
+antes de autorizar a operação na VPS. As integrações das PRs não autorizam
+deploy, migração de produção ou nova janela de rede.
 
 Histórico: STK-M0-05 registrou a recuperação administrativa
 ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9; issue #9, referenciando a issue #7).
