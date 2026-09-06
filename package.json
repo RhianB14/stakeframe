@@ -15,6 +15,8 @@
     "test": "pnpm build:types && vitest run --config vitest.config.ts",
     "test:integration": "pnpm build:types && vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
+    "api:spec": "pnpm build:types && node scripts/openapi.mjs --write",
+    "api:spec:check": "pnpm build:types && node scripts/openapi.mjs --check",
     "local:init": "node scripts/local-env.mjs",
     "local:up": "docker compose --env-file .env.local -f compose.local.yml up -d --build --wait",
     "local:down": "docker compose --env-file .env.local -f compose.local.yml down",
@@ -24,11 +26,13 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "13.0.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
     "@types/node": "24.10.13",
     "eslint": "10.10.0",
     "globals": "17.12.0",
+    "openapi-types": "12.1.3",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "typescript-eslint": "8.69.0",

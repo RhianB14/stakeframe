@@ -162,3 +162,22 @@ recebem status `Superseded` e apontam a substituta.
   a conta Google real em ambiente local, com evidências separadas dos testes
   automatizados em [M0-08-VALIDATION.md](M0-08-VALIDATION.md). A decisão atualiza
   a pendência de código OAuth/migrações da D010 e mantém produção fechada.
+
+## D012 — Contratos executáveis e OpenAPI gerado (2026-09-06)
+
+- **Contexto:** os DTOs existentes precisam ser aplicados pela API e publicados
+  em uma especificação verificável antes das funcionalidades de produto.
+- **Decisão:** usar Zod 4 na validação e serialização Fastify 5, com
+  `fastify-type-provider-zod` 7.0.0 e `@fastify/swagger` 9.8.1. Gerar OpenAPI
+  3.0.3, suportado pelo parser de validação 13.0.0, das mesmas rotas. A CI
+  compara o documento versionado com a geração determinística e resolve somente
+  referências internas. O exportador não depende de banco ou credenciais.
+- **Autenticação:** o adaptador converte respostas JSON da biblioteca em objetos
+  validados; erros públicos recebem código estável e UUID, preservando status e
+  cabeçalhos de controle. Redirects OAuth preservam Location/cookies sem corpo
+  JSON. Corpos ausentes continuam aceitos; a obrigatoriedade na especificação
+  é derivada do schema Zod, corrigindo a suposição padrão do gerador Fastify.
+- **Consequências:** uma resposta incompatível falha com 500 sanitizado e campos
+  extras são removidos. Healthcheck indisponível e redirecionamentos mantêm seus
+  contratos específicos. A D010 fica atualizada quanto à pendência OpenAPI;
+  schema de produto, produção e integrações remanescentes continuam pendentes.

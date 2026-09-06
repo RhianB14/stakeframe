@@ -7,12 +7,15 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "better-auth": "1.7.3",
     "@better-auth/drizzle-adapter": "1.7.3",
-    "drizzle-orm": "0.45.2",
+    "@fastify/swagger": "9.8.1",
     "@stakeframe/db": "workspace:*",
     "@stakeframe/shared": "workspace:*",
+    "better-auth": "1.7.3",
+    "drizzle-orm": "0.45.2",
     "fastify": "5.12.3",
+    "fastify-type-provider-zod": "7.0.0",
+    "openapi-types": "12.1.3",
     "zod": "4.5.4"
   }
 }

@@ -17,7 +17,13 @@
 - `apps/worker`: pg-boss, fila técnica `system-probe`, payload UUID validado,
   resultado persistido e até duas tentativas adicionais. Nenhum job de produto.
 - `packages/db`: pool PostgreSQL e Drizzle. Não há tabelas ou migrações de domínio.
-- `packages/shared`: contratos de status, erro e diagnóstico da fila.
+- `packages/shared`: contratos de healthcheck, status, erro, autenticação,
+  sessão e diagnóstico da fila.
+
+A STK-M0-09 usa os schemas Zod na validação de entrada e na serialização de
+respostas. `@fastify/swagger` e `fastify-type-provider-zod` geram OpenAPI 3.0.3
+das mesmas rotas, sem consultar banco ou configuração privada. A especificação
+versionada é comparada na CI. Contratos e comandos em [API.md](API.md).
 
 A autenticação usa Better Auth, adapter Drizzle e tabelas no schema `auth`.
 `/api/v1/me` exige sessão válida e identidade autorizada; login Google, callback
@@ -81,7 +87,8 @@ recuperação de anexos imutáveis, com manifesto e checksums —
   ([.github/workflows/ci.yml](../.github/workflows/ci.yml)), Node.js v24.20.0
   fixado em [.nvmrc](../.nvmrc).
 
-- `application-check`: tipos, lint, auditoria de dependências, unitários, build,
+- `application-check`: tipos, lint, auditoria de dependências, validação e
+  sincronização OpenAPI, unitários, build,
   Docker Compose real, integração PostgreSQL 18/pg-boss/Better Auth e E2E Chromium
   em desktop/mobile.
 - `network-security-simulation`: simulações Python do guard de rede.

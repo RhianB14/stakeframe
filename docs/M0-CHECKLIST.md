@@ -1,7 +1,8 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-07** — base executável local
-([issue #14](https://github.com/RhianB14/stakeframe/issues/14)). A STK-M0-06
+Tarefa atual: **STK-M0-09** — contratos executáveis e documentação OpenAPI
+([issue #18](https://github.com/RhianB14/stakeframe/issues/18)). Base local
+STK-M0-07 e autenticação STK-M0-08 implementadas em PRs ainda abertas. A STK-M0-06
 continua pendente na [issue #11](https://github.com/RhianB14/stakeframe/issues/11):
 PR #13 contém a reconciliação proposta, ainda sem execução na VPS.
 
@@ -218,7 +219,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       autorização específica: login, recarga, logout e recusa por identidade.
       Evidência em [M0-08-VALIDATION.md](M0-08-VALIDATION.md). Consulte
       [AUTHENTICATION.md](AUTHENTICATION.md).
-- [ ] OpenAPI, schema de produto e componentes shadcn/ui: etapas seguintes.
+- [x] STK-M0-09: OpenAPI gerado dos schemas de entrada/resposta, erros estáveis
+      e validação de sincronização na CI. [API.md](API.md) e
+      [M0-09-VALIDATION.md](M0-09-VALIDATION.md).
+- [ ] Schema de produto e componentes shadcn/ui: etapas seguintes.
 - [ ] Validar execução ARM64 na VPS em futura janela autorizada; o manifest
       multiarch das imagens base não substitui essa execução.
 
