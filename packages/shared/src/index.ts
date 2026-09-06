@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const systemStatusSchema = z
   .object({
     name: z.literal('Stakeframe'),
-    stage: z.literal('local-setup'),
+    stage: z.enum(['local-setup', 'production-setup']),
     database: z.enum(['available', 'unavailable']),
     authentication: z.enum(['not-configured', 'google']),
     productEnabled: z.literal(false),

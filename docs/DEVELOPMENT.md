@@ -4,6 +4,11 @@ As imagens da aplicação e do migrador contêm pacotes de execução separados.
 Depois de `pnpm local:up`, execute `pnpm images:check` para conferir conteúdo,
 arquitetura e dependências. Detalhes em [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).
 
+`pnpm deployment:rehearse` verifica a configuração de produção em projeto
+descartável, com credenciais fictícias e HTTPS confiado somente pelo teste.
+Requer Compose ≥2.24.4 para a substituição explícita de portas; não usa a VPS.
+Procedimento em [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md).
+
 ## Pré-requisitos
 
 | Ferramenta | Versão                 | Observação                                         |

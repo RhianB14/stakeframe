@@ -12,7 +12,7 @@
 - `apps/web`: React, Vite, Tailwind e TanStack Query; tela de preparação que
   consulta o estado real do banco pela API. Sem login simulado, apostas ou saldos.
 - `apps/api`: Fastify, contratos Zod, `/health/live`, `/health/ready` e
-  `/api/v1/system/status`. Exige `STAKEFRAME_RUNTIME=local`; endpoints de produto
+  `/api/v1/system/status`. Exige runtime explícito `local` ou `production`; endpoints de produto
   inexistentes retornam 404. Erros têm código e UUID gerado pelo servidor.
 - `apps/worker`: pg-boss, fila técnica `system-probe`, payload UUID validado,
   resultado persistido e até duas tentativas adicionais. Nenhum job de produto.
@@ -46,6 +46,13 @@ e migrações em pacotes de execução sem ferramentas de desenvolvimento, com
 verificação de conteúdo e suíte da aplicação em AMD64/ARM64 na CI.
 [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md) descreve os artefatos e limites;
 publicação e execução na VPS permanecem pendentes.
+
+A STK-M0-12 prepara `compose.production.yml`: autenticação Google obrigatória,
+origem HTTPS, segredos por arquivo, papel PostgreSQL sem superusuário, apenas
+Caddy exposto e migração por perfil explícito. O target `web-production` guarda
+certificados em volume. O ensaio local usa credenciais fictícias e CA interna
+confiada somente pelo cliente do teste. Configuração e limites em
+[PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md).
 
 O worker cria automaticamente apenas o schema técnico `pgboss` no banco local.
 Um serviço temporário `migrate` aplica as migrações Drizzle antes de iniciar a

@@ -77,6 +77,8 @@ jobs:
           pnpm local:up
       - name: Verify standalone runtime images without development dependencies
         run: pnpm images:check
+      - name: Rehearse production configuration with private PostgreSQL and trusted HTTPS
+        run: pnpm deployment:rehearse
       - name: PostgreSQL 18, Google auth protocol and pg-boss integration
         run: pnpm local:test-db
       - name: Browser checks on desktop and mobile

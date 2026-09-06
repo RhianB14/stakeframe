@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { authSchema } from './auth-schema.js';
 export { authSchema } from './auth-schema.js';
+export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
 
 export function createDatabase(connectionString: string) {
   const pool = new pg.Pool({

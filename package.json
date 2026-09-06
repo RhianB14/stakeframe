@@ -18,6 +18,8 @@
     "api:spec": "pnpm build:types && node scripts/openapi.mjs --write",
     "api:spec:check": "pnpm build:types && node scripts/openapi.mjs --check",
     "images:check": "node scripts/check-runtime-images.mjs",
+    "deployment:check": "node scripts/deployment-check.mjs",
+    "deployment:rehearse": "node scripts/deployment-rehearsal.mjs",
     "recovery:test-safety": "node --test scripts/recovery/safety.test.mjs",
     "recovery:drill": "pnpm recovery:test-safety && node scripts/recovery-drill.mjs",
     "local:init": "node scripts/local-env.mjs",

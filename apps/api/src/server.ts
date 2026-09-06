@@ -10,6 +10,7 @@ async function main() {
   const app = createApp({
     checkDatabase: database.check,
     logger: true,
+    runtime: config.runtime,
     ...(ownerAuth ? { ownerAuth } : {}),
   });
   app.addHook('onClose', database.close);
@@ -30,6 +31,6 @@ async function main() {
 }
 
 void main().catch(() => {
-  console.error('API_START_FAILED: verify local configuration');
+  console.error('API_START_FAILED: verify runtime configuration');
   process.exitCode = 1;
 });

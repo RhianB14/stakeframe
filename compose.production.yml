@@ -1,0 +1,157 @@
+name: stakeframe-production
+
+x-node: &node
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 512m
+  cpus: 0.75
+  labels:
+    io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+x-runtime: &runtime
+  NODE_ENV: production
+  STAKEFRAME_RUNTIME: production
+  DB_PASSWORD_FILE: /run/secrets/db_password
+
+services:
+  postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stakeframe
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [postgres_password, db_password]
+    volumes:
+      - database:/var/lib/postgresql
+      - ./infra/production/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    networks: [backend]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1
+    shm_size: 128m
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d stakeframe']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *node
+    image: ${MIGRATE_IMAGE:?Immutable migrate image required}
+    restart: 'no'
+    profiles: [migration]
+    environment:
+      <<: *runtime
+      MIGRATION_CONFIRM: ${MIGRATION_CONFIRM:-}
+    secrets: [db_password]
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *node
+    image: ${API_IMAGE:?Immutable API image required}
+    environment:
+      <<: *runtime
+      API_HOST: 0.0.0.0
+      AUTH_ENABLED: 'true'
+      APP_ORIGIN: https://${APP_DOMAIN:?Application domain required}
+      BETTER_AUTH_SECRET_FILE: /run/secrets/auth_secret
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Production OAuth client required}
+      GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      AUTHORIZED_GOOGLE_EMAIL: ${AUTHORIZED_GOOGLE_EMAIL:?Owner identity required}
+      AUTHORIZED_GOOGLE_SUB: ${AUTHORIZED_GOOGLE_SUB:?Owner identity required}
+    secrets: [db_password, auth_secret, google_client_secret]
+    networks: [backend, auth-egress]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 18
+
+  worker:
+    <<: *node
+    image: ${WORKER_IMAGE:?Immutable worker image required}
+    environment: *runtime
+    secrets: [db_password]
+    networks: [backend]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9091/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 18
+
+  web:
+    <<: *node
+    image: ${WEB_IMAGE:?Immutable HTTPS web image required}
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Application domain required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME contact required}
+    ports: ['80:8080', '443:8443']
+    volumes: [caddy-data:/data, caddy-config:/config]
+    networks: [backend, frontend]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:9080/health/live']
+      interval: 5s
+      timeout: 4s
+      retries: 18
+
+networks:
+  backend:
+    internal: true
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+  frontend:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+  auth-egress:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+volumes:
+  database:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+  caddy-data:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+  caddy-config:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+secrets:
+  postgres_password:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/postgres_password
+  db_password:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/db_password
+  auth_secret:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/auth_secret
+  google_client_secret:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/google_client_secret

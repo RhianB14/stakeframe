@@ -225,3 +225,22 @@ recebem status `Superseded` e apontam a substituta.
   arquitetura e ausência de ferramentas; CI repete a aplicação completa em
   AMD64 e ARM64 nativo. A execução ARM64 em outro host não substitui a
   validação operacional da VPS. Detalhes em [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).
+
+## D015 — Ensaiar a configuração de produção antes da VPS (2026-09-06)
+
+- **Contexto:** imagens ARM64 validadas ainda dependiam do modo local, sem
+  contrato de produção, segredos por arquivo ou persistência de certificados.
+- **Decisão:** runtime `production` explícito, autenticação Google obrigatória,
+  HTTPS com origem única, segredos por arquivo e papel de aplicação sem
+  superusuário. Compose aponta imagens por digest e expõe somente Caddy.
+- **Migração:** perfil separado e confirmação explícita, após autorização e
+  backup verificado no ambiente real. O flag confirma intenção; não substitui
+  autorização nem comprova backup. Não há reversão destrutiva automática.
+- **Verificação:** ensaio descartável com o Compose de produção, alterando
+  apenas portas para loopback e ACME para CA interna. Credenciais fictícias,
+  cliente com confiança TLS restrita ao teste, papéis/migrações, recusa de
+  acesso, cookies e persistência após reinício. CI em AMD64 e ARM64 nativo.
+- **Limites:** nenhuma implantação, migração ou mudança de credencial/rede na
+  VPS. Publicação dos digests, DNS/ACME, OAuth real de produção, R2 e recuperação
+  operacional continuam em tarefas próprias. A autoria/verificação direta do
+  Codex é registrada; não há alegação de revisão independente no GitHub.

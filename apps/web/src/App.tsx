@@ -15,6 +15,7 @@ export function App() {
     refetchInterval: 15_000,
   });
   const online = !status.isError && status.data?.database === 'available';
+  const production = status.data?.stage === 'production-setup';
   const connectionLabel = status.isPending
     ? 'Verificando conexão'
     : status.isError
@@ -34,7 +35,7 @@ export function App() {
           </span>
         </a>
         <span className="local-label">
-          <span className="tiny-dot" /> Ambiente local
+          <span className="tiny-dot" /> {production ? 'Acesso privado' : 'Ambiente local'}
         </span>
       </header>
       <main>
@@ -80,7 +81,9 @@ export function App() {
           </div>
           <h2 id="setup-title">A base está tomando forma.</h2>
           <p className="card-description">
-            Este ambiente é exclusivo para desenvolvimento. Nenhuma aposta ou saldo foi cadastrado.
+            {production
+              ? 'Seu acesso está preparado. As funcionalidades estão em construção.'
+              : 'Este ambiente é exclusivo para desenvolvimento. Nenhuma aposta ou saldo foi cadastrado.'}
           </p>
           <div className="connection" role="status">
             <span className={`connection-dot ${online ? 'online' : ''}`} />
@@ -119,7 +122,8 @@ export function App() {
       <footer>
         <span>Feito para acompanhar, com calma.</span>
         <span>
-          Stakeframe <span className="footer-divider">/</span> Desenvolvimento
+          Stakeframe <span className="footer-divider">/</span>{' '}
+          {production ? 'Seu espaço' : 'Desenvolvimento'}
         </span>
       </footer>
     </div>

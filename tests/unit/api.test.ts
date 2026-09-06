@@ -69,11 +69,11 @@ describe('API local', () => {
 describe('configuration', () => {
   const DATABASE_URL = 'postgresql://localhost/stakeframe_test';
   it.each([undefined, 'production', 'staging'])(
-    'refuses a runtime other than explicit local (%s)',
+    'refuses a missing or incomplete runtime (%s)',
     (runtime) => {
       expect(() =>
         readConfig({ DATABASE_URL, ...(runtime ? { STAKEFRAME_RUNTIME: runtime } : {}) }),
-      ).toThrow('STAKEFRAME_RUNTIME=local');
+      ).toThrow('INVALID_RUNTIME_CONFIGURATION');
     },
   );
   it.each(['0', '65536', 'abc'])('refuses invalid API ports (%s)', (API_PORT) => {
@@ -81,6 +81,7 @@ describe('configuration', () => {
   });
   it('binds the API to loopback by default', () => {
     expect(readConfig({ DATABASE_URL, STAKEFRAME_RUNTIME: 'local' })).toEqual({
+      runtime: 'local',
       host: '127.0.0.1',
       port: 3000,
       databaseUrl: DATABASE_URL,
