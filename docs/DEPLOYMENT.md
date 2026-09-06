@@ -22,8 +22,10 @@
    [deployment.env.example](../infra/production/deployment.env.example),
    incluindo os digests exatos. Guardar a configuração anterior.
 3. Provisionar segredos externos conforme [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md),
-   com acesso mínimo. Configurar o callback Google de produção exatamente em
-   `https://stakeframe.com.br/api/auth/callback/google`.
+   com acesso mínimo. O cliente Google e o callback de produção
+   `https://stakeframe.com.br/api/auth/callback/google` foram preparados na
+   [STK-M0-14](M0-14-VALIDATION.md); a instalação do segredo na VPS e o login
+   real continuam pendentes.
 4. Executar `node scripts/deployment-check.mjs /caminho/privado/deployment.env`.
    Conferir DNS, firewall, acesso administrativo independente, espaço livre,
    backups e recuperação. O checker não comprova esses gates externos.
