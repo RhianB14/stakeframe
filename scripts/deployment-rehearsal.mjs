@@ -132,7 +132,9 @@ async function main() {
   for (const file of knownFiles)
     await writeFile(
       join(directory, file),
-      file.endsWith('.env') ? '' : randomBytes(32).toString('hex') + '\n',
+      file.endsWith('.env')
+        ? ''
+        : randomBytes(32).toString('hex') + (file === 'db_password' ? '\r\n' : '\n'),
       {
         flag: 'wx',
         mode: file.endsWith('.env') || process.platform === 'win32' ? 0o600 : 0o444,

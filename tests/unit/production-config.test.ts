@@ -10,7 +10,7 @@ import {
 } from '../../packages/db/src/runtime-config.js';
 
 const directory = mkdtempSync(join(tmpdir(), 'stk-config-test-'));
-const files = ['db', 'auth', 'google', 'multiline', 'oversized'];
+const files = ['db', 'auth', 'google', 'crlf', 'multiline', 'oversized'];
 for (const name of files)
   writeFileSync(
     join(directory, name),
@@ -18,7 +18,7 @@ for (const name of files)
       ? 'first\nsecond'
       : name === 'oversized'
         ? 'a'.repeat(4097)
-        : 'a'.repeat(64) + '\n',
+        : 'a'.repeat(64) + (name === 'crlf' ? '\r\n' : '\n'),
     { mode: 0o600, flag: 'wx' },
   );
 afterAll(() => {
@@ -98,5 +98,6 @@ describe('production configuration boundaries', () => {
       'SECRET_FILE_INVALID',
     );
     expect(readSecret({ SECRET_FILE: join(directory, 'db') }, 'SECRET')).toBe('a'.repeat(64));
+    expect(readSecret({ SECRET_FILE: join(directory, 'crlf') }, 'SECRET')).toBe('a'.repeat(64));
   });
 });
