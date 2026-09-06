@@ -29,6 +29,13 @@ class GuardError(RuntimeError):
     pass
 
 
+class UnitNotLoaded(GuardError):
+    """systemd reports the unit as not loaded (e.g. garbage-collected while
+    quiescent). This is a definite state, not a transient fault: callers may
+    treat it as "no pending elapse / never started" only where a fresh
+    readback already established quiescence."""
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -689,7 +696,9 @@ class LinuxAdapter:
                                 env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C", "SYSTEMD_PAGER": "cat", "SYSTEMD_COLORS": "0"})
         if result.returncode not in ok:
             # No raw firewall/systemd output leaks to the terminal or CI log.
-            raise GuardError(Path(argv[0]).name + " failed with exit " + str(result.returncode))
+            error = GuardError(Path(argv[0]).name + " failed with exit " + str(result.returncode))
+            error.detail = result.stderr or ""  # Classification identity only; never printed or journalled verbatim.
+            raise error
         return result.stdout
 
     def validate_host(self):
@@ -760,15 +769,58 @@ class LinuxAdapter:
             raise GuardError("systemd unit state unreadable")
         return result
 
+    _UNIT_NOT_LOADED_MARKERS = ("is not loaded", "nosuchunit", "no such unit")
+
+    def _unit_not_loaded(self, error):
+        # Classification identity only: D-Bus stderr is never printed or
+        # journalled verbatim; definite refusal shapes are matched
+        # case-insensitively and everything else stays a hard refusal.
+        if not isinstance(error, GuardError):
+            return False
+        detail = (getattr(error, "detail", "") or "").lower()
+        return any(marker in detail for marker in self._UNIT_NOT_LOADED_MARKERS)
+
     def _usec(self, unit, interface, prop, infinity=False):
-        raw = self._call([self.BUSCTL, "--system", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                          "org.freedesktop.systemd1.Manager", "GetUnit", "s", unit])
+        try:
+            raw = self._call([self.BUSCTL, "--system", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                              "org.freedesktop.systemd1.Manager", "GetUnit", "s", unit])
+        except GuardError as error:
+            if not self._unit_not_loaded(error):
+                raise
+            # GetUnit refuses units systemd garbage-collected while quiescent:
+            # systemctl show re-loads the unit as an ephemeral client and its
+            # exit drops the pin, so the next GetUnit is refused by identity,
+            # not by transient fault. Callers resolve via fresh readbacks.
+            raise UnitNotLoaded(unit + " refused by D-Bus: not loaded") from error
         parts = shlex.split(raw)
         if len(parts) != 2 or parts[0] != "o" or not parts[1].startswith("/org/freedesktop/systemd1/unit/"):
             raise GuardError("invalid D-Bus unit object")
         raw = self._call([self.BUSCTL, "--system", "get-property", "org.freedesktop.systemd1", parts[1],
                           "org.freedesktop.systemd1." + interface, prop])
         return parse_dbus_usec(raw, allow_infinity=infinity)
+
+    def _monotonic_readback(self, unit, interface, prop, infinity=False):
+        """Raw D-Bus microsecond, or systemctl-show resolution for a unit the
+        D-Bus manager refuses as not loaded. Returns (value, via_dbus) and
+        never fabricates unknown state: any other D-Bus failure propagates."""
+        try:
+            return self._usec(unit, interface, prop, infinity=infinity), True
+        except UnitNotLoaded as error:
+            info = self._show(unit)
+            quiescent = (info.get("LoadState") == "not-found"
+                         or (info.get("LoadState") == "loaded" and info.get("ActiveState") == "inactive"
+                             and info.get("SubState") == "dead" and parse_unit_job(info) == 0))
+            if not quiescent:
+                raise GuardError(unit + " neither quiescent on readback nor readable via D-Bus: " + str(error)) from error
+            shown = info.get(prop, "")
+            if shown not in ("", "0"):
+                # A quiescent unit must show no pending elapse / never-started;
+                # anything else (e.g. a service that ran and was collected)
+                # cannot be quantified without D-Bus and is never faked here.
+                raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
+            # 0 is the same sentinel parse_dbus_usec uses for infinity; callers
+            # hold the operation lock, so the readback shape is authoritative.
+            return 0, False
 
     def units_absent(self, run_id):
         return all(not (self.UNIT_DIR / name).exists() and self._show(name)["LoadState"] == "not-found" for name in unit_names(run_id))
@@ -778,8 +830,8 @@ class LinuxAdapter:
         service, timer = self._show(service_name), self._show(timer_name)
         if service["LoadState"] != "loaded" or timer["LoadState"] != "loaded":
             raise GuardError("rollback units not loaded")
-        start = self._usec(service_name, "Service", "ExecMainStartTimestampMonotonic")
-        next_us = self._usec(timer_name, "Timer", "NextElapseUSecMonotonic", infinity=True)
+        start, _ = self._monotonic_readback(service_name, "Service", "ExecMainStartTimestampMonotonic")
+        next_us, _ = self._monotonic_readback(timer_name, "Timer", "NextElapseUSecMonotonic", infinity=True)
         jobs = []
         for row in self._call([self.SYSTEMCTL, "list-jobs", "--no-legend", "--plain", "--no-pager"]).splitlines():
             fields = row.split()
@@ -836,8 +888,14 @@ class LinuxAdapter:
                 return False
         if timer["LoadState"] == "not-found":
             return True
-        return (timer["LoadState"] == "loaded" and timer["ActiveState"] == "inactive" and timer["SubState"] == "dead"
-                and parse_unit_job(timer) == 0 and self._usec(name, "Timer", "NextElapseUSecMonotonic", infinity=True) == 0)
+        if not (timer["LoadState"] == "loaded" and timer["ActiveState"] == "inactive" and timer["SubState"] == "dead"
+                and parse_unit_job(timer) == 0):
+            return False
+        # Re-read the elapse to rule out an elapse still pending behind the
+        # quiescent shape; a collected timer is refused as not loaded and
+        # settles through _monotonic_readback instead of failing the verify.
+        value, _ = self._monotonic_readback(name, "Timer", "NextElapseUSecMonotonic", infinity=True)
+        return value == 0
 
     def stop_timer(self, state):
         _, name = unit_names(state["run_id"])
