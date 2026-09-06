@@ -23,6 +23,8 @@
     "recovery:test-safety": "node --test scripts/recovery/safety.test.mjs",
     "recovery:drill": "pnpm recovery:test-safety && node scripts/recovery-drill.mjs",
     "recovery:r2": "node scripts/recovery-drill.mjs --r2",
+    "telegram:test": "node --test scripts/telegram/owner.test.mjs",
+    "telegram:setup": "node scripts/telegram/setup.mjs",
     "local:init": "node scripts/local-env.mjs",
     "local:up": "docker compose --env-file .env.local -f compose.local.yml up -d --build --wait",
     "local:down": "docker compose --env-file .env.local -f compose.local.yml down",

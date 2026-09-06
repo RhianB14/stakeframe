@@ -1,7 +1,9 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-14** — preparação separada do Google OAuth de produção
-([issue #28](https://github.com/RhianB14/stakeframe/issues/28)). STK-M0-12 e
+Tarefa atual: **STK-M0-15** — preparação do bot Telegram e associação privada
+([issue #30](https://github.com/RhianB14/stakeframe/issues/30)). STK-M0-14 foi
+integrada pela [PR #29](https://github.com/RhianB14/stakeframe/pull/29), com
+CI aprovada na `main` `a907626`. STK-M0-12 e
 STK-M0-13 foram integradas pelas
 [PR #25](https://github.com/RhianB14/stakeframe/pull/25) e
 [PR #27](https://github.com/RhianB14/stakeframe/pull/27), com CI aprovada na
@@ -257,7 +259,11 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       após autorização específica. [M0-14-VALIDATION.md](M0-14-VALIDATION.md).
 - [ ] Validar login Google real de produção após implantação autorizada;
       configuração do cliente não comprova o fluxo em HTTPS público.
-- [ ] Telegram: criar bot restrito ao chat do proprietário.
+- [x] STK-M0-15: bot Telegram criado, grupos bloqueados, token privado,
+      associação do chat/usuário por desafio e resposta de teste ao proprietário.
+      [TELEGRAM.md](TELEGRAM.md) e [M0-15-VALIDATION.md](M0-15-VALIDATION.md).
+- [ ] Consumidor Telegram contínuo com recusa de outras identidades antes
+      de baixar anexos, persistir mensagens ou enfileirar processamento.
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
       30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.
