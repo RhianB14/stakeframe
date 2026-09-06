@@ -36,7 +36,6 @@ leitura IPv4 ativa atual feita pelo backend (`iptables -t filter -S`). Nenhum
 campo ou byte do journal/manifest antigo é acrescentado ou alterado. Sem uma
 referência anterior independente e confiável, a operação é recusada.
 
-
 - run existente em `rollback_incomplete`, identidade do journal/manifest,
   `active.json` apontando exatamente para o run e boot id inalterado;
 - snapshot IPv6 atual igual ao `before`, hashes da persistência iguais ao bundle,
