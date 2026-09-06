@@ -204,6 +204,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(entered.wait(1), "worker must register start BEFORE waiting for the operation lock")
         self.worker = thread
 
+    def test_confirmation_succeeds_with_never_started_service_after_systemd_readback(self):
+        state = self.apply()
+        result = self.confirm(state)
+        self.assertEqual(result["phase"], "confirmed")
+        self.assertEqual(result["confirmation_observations"]["after_stop"]["service"]["start_us"], 0)
+
+    def test_confirmation_rejects_service_that_has_started(self):
+        state = self.apply()
+        self.backend.service.update(active="inactive", sub="dead", start_us=self.backend.monotonic_ns() // 1000)
+        with self.assertRaisesRegex(guard.GuardError, "confirmation refused"):
+            self.confirm(state)
+        self.assertEqual(self.controller.store.read(self.run_id)["phase"], "rolled_back")
+
     def test_confirm_requires_valid_post_change_evidence(self):
         state = self.apply()
         result = self.confirm(state)
@@ -768,7 +781,7 @@ class AdapterTests(unittest.TestCase):
             calls.append(argv)
             if argv[0] == guard.LinuxAdapter.BUSCTL:
                 error = guard.GuardError("busctl failed with exit 1")
-                error.detail = "Unit " + timer + " is not loaded."
+                error.detail = "Call failed: Unit " + timer + " not loaded."
                 raise error
             if argv[1] == "show":
                 return "LoadState=loaded\nActiveState=inactive\nSubState=dead\nNextElapseUSecMonotonic=0\nJob=\n"
@@ -788,7 +801,8 @@ class AdapterTests(unittest.TestCase):
             calls.append(argv)
             if argv[0] == guard.LinuxAdapter.BUSCTL:
                 error = guard.GuardError("busctl failed with exit 1")
-                error.detail = "Unit stk6-rollback-0123456789abcdefabcd.service is not loaded."
+                unit = argv[-1] if argv[2] == "call" else ""
+                error.detail = "Call failed: Unit " + unit + " not loaded."
                 raise error
             if argv[1] == "show":
                 if argv[2].endswith(".timer"):
@@ -806,6 +820,83 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(observed["jobs"], [])
         self.assertTrue(issubclass(guard.UnitNotLoaded, guard.GuardError))
 
+    def test_observe_preserves_prior_service_timestamp_when_dbus_returns_zero(self):
+        service = guard.unit_names("0123456789abcdefabcd")[0]
+        timer = guard.unit_names("0123456789abcdefabcd")[1]
+
+        def runner(argv):
+            if argv[0] == guard.LinuxAdapter.BUSCTL:
+                if argv[2] == "call":
+                    return 'o "/org/freedesktop/systemd1/unit/test"\n'
+                if argv[-1] == "ExecMainStartTimestampMonotonic":
+                    return "t 0\n"
+                if argv[-1] == "NextElapseUSecMonotonic":
+                    return "t 18446744073709551615\n"
+            if argv[1] == "show":
+                if argv[2] == service:
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\n"
+                            "ExecMainStatus=0\nExecMainStartTimestampMonotonic=7150000\nJob=\n")
+                if argv[2] == timer:
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\n"
+                            "NextElapseUSecMonotonic=infinity\nJob=\n")
+            if argv[1] == "list-jobs":
+                return ""
+            raise AssertionError(argv)
+
+        adapter = guard.LinuxAdapter(runner=runner)
+        observed = adapter.observe({"run_id": "0123456789abcdefabcd"})
+        self.assertEqual(observed["service"]["start_us"], 7150000)
+        self.assertEqual(observed["timer"]["next_us"], 0)
+
+    def test_observe_persists_positive_timestamp_for_following_observation(self):
+        service = guard.unit_names("0123456789abcdefabcd")[0]
+        timer = guard.unit_names("0123456789abcdefabcd")[1]
+        current = {"start": "7150000"}
+
+        def runner(argv):
+            if argv[0] == guard.LinuxAdapter.BUSCTL:
+                if argv[2] == "call":
+                    return 'o "/org/freedesktop/systemd1/unit/test"\n'
+                if argv[-1] == "ExecMainStartTimestampMonotonic":
+                    return "t 0\n"
+                if argv[-1] == "NextElapseUSecMonotonic":
+                    return "t 18446744073709551615\n"
+            if argv[1] == "show":
+                if argv[2] == service:
+                    timestamp = current["start"]
+                    current["start"] = "0"
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\n"
+                            "ExecMainStatus=0\nExecMainStartTimestampMonotonic=" + timestamp + "\nJob=\n")
+                if argv[2] == timer:
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\n"
+                            "NextElapseUSecMonotonic=infinity\nJob=\n")
+            if argv[1] == "list-jobs":
+                return ""
+            raise AssertionError(argv)
+
+        adapter = guard.LinuxAdapter(runner=runner)
+        first = adapter.observe({"run_id": "0123456789abcdefabcd"})
+        second = adapter.observe({"run_id": "0123456789abcdefabcd", "systemd_observation": first})
+        self.assertEqual(first["service"]["start_us"], 7150000)
+        self.assertEqual(second["service"]["start_us"], 7150000)
+
+    def test_dbus_success_zero_with_prior_is_retained_directly(self):
+        service = guard.unit_names("0123456789abcdefabcd")[0]
+
+        def runner(argv):
+            if argv[0] == guard.LinuxAdapter.BUSCTL:
+                if argv[2] == "call":
+                    return 'o "/org/freedesktop/systemd1/unit/test"\n'
+                if argv[-1] == "ExecMainStartTimestampMonotonic":
+                    return "t 0\n"
+            raise AssertionError(argv)
+
+        adapter = guard.LinuxAdapter(runner=runner)
+        self.assertEqual(adapter._monotonic_readback(service, "Service", "ExecMainStartTimestampMonotonic", prior=7150000),
+                         (7150000, False))
+        self.assertEqual(adapter._monotonic_readback(service, "Service", "ExecMainStartTimestampMonotonic", prior=0),
+                         (0, True))
+
     def test_collected_unit_preserves_prior_execution_timestamp(self):
         # The first show observed a real execution. A later show after
         # GetUnit refused must not erase that evidence with a synthetic zero.
@@ -820,7 +911,7 @@ class AdapterTests(unittest.TestCase):
             if argv[0] == guard.LinuxAdapter.BUSCTL:
                 if argv[2] == "call" and argv[-1] == service:
                     error = guard.GuardError("busctl failed with exit 1")
-                    error.detail = "Unit " + service + " is not loaded."
+                    error.detail = "Call failed: Unit " + service + " not loaded."
                     raise error
                 if argv[2] == "call":
                     return 'o "/org/freedesktop/systemd1/unit/timer"\n'
@@ -851,7 +942,7 @@ class AdapterTests(unittest.TestCase):
         def runner(argv):
             if argv[0] == guard.LinuxAdapter.BUSCTL:
                 error = guard.GuardError("busctl failed with exit 1")
-                error.detail = "Unit " + service + " is not loaded."
+                error.detail = "Call failed: Unit " + service + " not loaded."
                 raise error
             if argv[1] == "show":
                 if argv[2] == service:
@@ -888,7 +979,7 @@ class AdapterTests(unittest.TestCase):
                         return ""
                     if argv[0] == guard.LinuxAdapter.BUSCTL:
                         error = guard.GuardError("busctl failed with exit 1")
-                        error.detail = "Unit " + timer + " is not loaded."
+                        error.detail = "Call failed: Unit " + timer + " not loaded."
                         raise error
                     raise AssertionError(argv)
 
@@ -936,7 +1027,7 @@ class AdapterTests(unittest.TestCase):
                     calls.append(argv)
                     if argv[0] == guard.LinuxAdapter.BUSCTL:
                         error = guard.GuardError("busctl failed with exit 1")
-                        error.detail = "Unit stk6-rollback-0123456789abcdefabcd.timer is not loaded."
+                        error.detail = "Call failed: Unit stk6-rollback-0123456789abcdefabcd.timer not loaded."
                         raise error
                     if argv[1] == "show":
                         if shape == "rearmed":
@@ -958,17 +1049,26 @@ class AdapterTests(unittest.TestCase):
 
     def test_unit_not_loaded_classification_by_error_identity(self):
         adapter = guard.LinuxAdapter(runner=lambda argv: "")
+        unit = "stk6-rollback-0123456789abcdefabcd.timer"
         marked = guard.GuardError("busctl failed with exit 1")
-        marked.detail = "Unit x.timer is not loaded."
-        self.assertTrue(adapter._unit_not_loaded(marked))
-        marked.detail = "Call to GetUnit failed: org.freedesktop.systemd1.NoSuchUnit"
-        self.assertTrue(adapter._unit_not_loaded(marked))
+        marked.detail = "Call failed: Unit " + unit + " not loaded."
+        self.assertTrue(adapter._unit_not_loaded(marked, unit))
+        marked.detail = "Call failed: Unit " + unit + " not loaded.\n"
+        self.assertTrue(adapter._unit_not_loaded(marked, unit))
+        marked.detail = "Call failed: Unit other.timer not loaded."
+        self.assertFalse(adapter._unit_not_loaded(marked, unit))
+        marked.detail = "Call failed: Unit " + unit + " is not loaded."
+        self.assertFalse(adapter._unit_not_loaded(marked, unit))
+        marked.detail = "Call failed: org.freedesktop.systemd1.NoSuchUnit for Unit " + unit
+        self.assertTrue(adapter._unit_not_loaded(marked, unit))
+        marked.detail = "Call failed: org.freedesktop.systemd1.NoSuchUnit for Unit other.timer"
+        self.assertFalse(adapter._unit_not_loaded(marked, unit))
         other = guard.GuardError("busctl failed with exit 1")
         other.detail = "Connection reset by peer"
-        self.assertFalse(adapter._unit_not_loaded(other))
+        self.assertFalse(adapter._unit_not_loaded(other, unit))
         bare = guard.GuardError("busctl failed with exit 1")
-        self.assertFalse(adapter._unit_not_loaded(bare), "exit code alone is not classification evidence")
-        self.assertFalse(adapter._unit_not_loaded(OSError("unexpected type")))
+        self.assertFalse(adapter._unit_not_loaded(bare, unit), "exit code alone is not classification evidence")
+        self.assertFalse(adapter._unit_not_loaded(OSError("unexpected type"), unit))
 
     def test_absent_timer_can_be_verified_without_loading_service(self):
         self.assertTrue(hasattr(guard.LinuxAdapter, "timer_stopped"), "absent-timer readback is missing")
@@ -1013,7 +1113,11 @@ class AdapterTests(unittest.TestCase):
         self.assertTrue(any("busctl" in str(call[0]) for call in calls))
         with self.assertRaises(guard.GuardError):
             guard.parse_dbus_usec("t 1h 2min")
+        self.assertEqual(guard.parse_dbus_usec("t 0"), 0)
         self.assertEqual(guard.parse_dbus_usec("t 18446744073709551615", allow_infinity=True), 0)
+        self.assertEqual(guard.parse_dbus_usec("t 0", allow_infinity=True), 0)
+        with self.assertRaises(guard.GuardError):
+            guard.parse_dbus_usec("t 18446744073709551615")
 
     def test_adapter_scopes_mutations_and_parses_kernel_readback(self):
         self.assertTrue(hasattr(guard, "LinuxAdapter"), "Linux adapter is missing")

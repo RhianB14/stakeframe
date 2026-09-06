@@ -411,13 +411,17 @@ git diff --check
 ```
 
 Foi feita também uma validação separada com **systemd real em container
-descartável**, sem iptables/firewall: Debian Bookworm com `systemd 252`, timer
-`OnActiveSec=600s` iniciado e parado. O readback real foi
-`ActiveState=active/SubState=waiting/NextElapseUSecMonotonic=18min 34.318398s`
-armado e `ActiveState=inactive/SubState=dead/NextElapseUSecMonotonic=infinity`
-após `stop`; jobs ficaram vazios. O container foi removido ao final. Isso
-valida a formatação observada e o sentinel `infinity`, não substitui validação
-no Ubuntu ARM64 da VPS nem autoriza nova janela.
+Ubuntu 24.04 descartável**, sem iptables/ip6tables e sem firewall real. O
+ambiente usou Docker Engine `29.7.2`, backend Linux sobre host Windows 11
+x86_64, `systemd 255.4-1ubuntu8.17` e arquitetura `x86_64`. O container foi
+iniciado com `--privileged`, `--cgroupns=host` e `/sys/fs/cgroup` montado; nele
+foram criadas somente unidades temporárias em `/run/systemd/system` e executados
+`daemon-reload`, `start`, `stop`, `systemctl show` e `systemctl list-jobs`.
+O readback real foi `ActiveState=active/SubState=waiting/NextElapseUSecMonotonic=15min 4.560508s`
+armado, com `Job=`, e `ActiveState=inactive/SubState=dead/NextElapseUSecMonotonic=infinity`
+após `stop`, com `Job=`. O container foi removido ao final. Isso valida o
+adaptador contra a formatação systemd 255 e o sentinel `infinity`, mas não
+substitui validação ARM64 na VPS nem autoriza nova janela.
 
 A CI mantém `format-check` e acrescenta `network-security-simulation` no runner
 hospedado Ubuntu, com Python do runner e sem dependências Python externas.
@@ -445,7 +449,10 @@ associada ao head e na CI; não confundir checks simulados com probes da VPS.
 - [ ] Segunda conexão SSH e probes reais **depois** da alteração.
 - [ ] Confirmação real sem corrida, rollback não iniciado e estado final conferido.
 
-Simulações locais validam lógica, não compatibilidade real de kernel/systemd,
-exposição de portas ou recuperação da VPS. CI verde não autoriza merge.
-Nenhuma alteração de banco, deploy, release, migração, compra ou infraestrutura
-foi realizada na R2. A PR permanece draft para revisão do Codex.
+Os testes simulados validam a lógica do controlador, incluindo confirmação normal
+com service nunca iniciada e rejeição de qualquer timestamp positivo. Não
+confundir essa camada com a validação do adaptador contra systemd real.
+A validação real não cobre firewall, exposição de portas ou recuperação da VPS;
+CI verde não autoriza merge. Nenhuma alteração de banco, deploy, release, migração,
+compra ou infraestrutura foi realizada nesta rodada. A PR permanece pendente de
+revisão do Codex.

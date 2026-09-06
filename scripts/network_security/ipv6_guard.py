@@ -245,11 +245,35 @@ class Controller:
 
     def _service_clean(self, state, observed):
         service = observed["service"]
-        return (service == {"active": "inactive", "sub": "dead", "result": "success", "status": 0, "start_us": 0}
-                and not observed["jobs"] and not (self.store.directory(state["run_id"]) / "rollback-started.json").exists())
+        if service["start_us"] > 0:
+            return False
+        if state.get("systemd_observation", {}).get("service", {}).get("start_us", 0) > 0:
+            return False
+        # Persisted positive evidence is never treated as a never-started service.
+        return (service["active"] == "inactive" and service["sub"] == "dead"
+                and service["result"] == "success" and service["status"] == 0
+                and service["start_us"] == 0
+                and not observed["jobs"]
+                and not (self.store.directory(state["run_id"]) / "rollback-started.json").exists())
+
+    def _observe(self, state):
+        authoritative = self.store.read(state["run_id"])
+        previous = authoritative.get("systemd_observation", {})
+        observed = self.backend.observe({**authoritative, "systemd_observation": previous})
+        retained = copy.deepcopy(observed)
+        previous_service = previous.get("service", {})
+        current_start = observed["service"]["start_us"]
+        previous_start = previous_service.get("start_us", 0)
+        if current_start < previous_start:
+            retained["service"]["start_us"] = previous_start
+        authoritative["systemd_observation"] = retained
+        self.store.save(authoritative)
+        state.clear()
+        state.update(authoritative)
+        return retained
 
     def _armed(self, state):
-        observed = self.backend.observe(state)
+        observed = self._observe(state)
         timer = observed["timer"]
         if (timer["active"] != "active" or timer["sub"] != "waiting"
                 or timer["next_us"] * 1000 <= self.backend.monotonic_ns() + 30_000_000_000
@@ -413,7 +437,7 @@ class Controller:
             if active.exists() and json.loads(private_read(active))["run_id"] != run_id:
                 raise GuardError("newer run owns the active firewall; refuse stale rollback")
             if receipt and state["phase"] == "confirmed":
-                service = self.backend.observe(state)["service"]
+                service = self._observe(state)["service"]
                 point = state["confirmed_monotonic_ns"]
                 # Kernel service-start timestamp closes the gap before Python
                 # can write its receipt. Unknown/zero/earlier => rollback.
@@ -430,7 +454,7 @@ class Controller:
         return bool(observed["jobs"]) or observed["service"]["active"] in ("active", "activating", "deactivating", "reloading")
 
     def _disarmed_clean(self, state):
-        observed = self.backend.observe(state)
+        observed = self._observe(state)
         if observed["timer"] != {"active": "inactive", "sub": "dead", "next_us": 0} or not self._service_clean(state, observed):
             raise GuardError("timer/service/job/start receipt invalid after synchronous timer stop")
         return observed
@@ -442,7 +466,7 @@ class Controller:
             # Brief read lock only; release before waiting. Also avoids Windows
             # readers denying atomic replacement of journal.json in simulations.
             with self.store.lock(timeout=max(0, deadline - time.monotonic())):
-                observed = self.backend.observe(state)
+                observed = self._observe(state)
                 service = observed["service"]
                 latest = self.store.read(state["run_id"])
                 if not self._in_flight(observed):
@@ -497,7 +521,7 @@ class Controller:
                 except Exception as save_error:
                     recovery_error = save_error
                 try:
-                    waiting = self._in_flight(self.backend.observe(state))
+                    waiting = self._in_flight(self._observe(state))
                 except Exception:
                     # Shared lock still makes direct recovery safe if systemd
                     # observation itself fails. A concurrent rollback waits.
@@ -564,7 +588,7 @@ class Controller:
                 timer = state.get("units", {}).get(unit_names(run_id)[1], {})
                 try:
                     waiting = bool(timer.get("acquired") and timer.get("installed")
-                                   and self._in_flight(self.backend.observe(state)))
+                                   and self._in_flight(self._observe(state)))
                 except Exception:
                     # Unknown service state cannot suppress safe locked recovery.
                     waiting = False
@@ -806,23 +830,31 @@ class LinuxAdapter:
             raise GuardError("systemd unit state unreadable")
         return result
 
-    _UNIT_NOT_LOADED_MARKERS = ("is not loaded", "nosuchunit", "no such unit")
+    _UNIT_NOT_LOADED_RE = re.compile(
+        r"(?im)^\s*(?:call failed:\s*)?unit\s+(?P<unit>[^\s]+)\s+not loaded\.\s*$"
+    )
 
-    def _unit_not_loaded(self, error):
-        # Classification identity only: D-Bus stderr is never printed or
-        # journalled verbatim; definite refusal shapes are matched
-        # case-insensitively and everything else stays a hard refusal.
+    def _unit_not_loaded(self, error, unit=None):
+        # Classification identity only: accept systemd's exact not-loaded
+        # response for the unit that was requested. Exit status and unrelated
+        # D-Bus errors are never enough; stderr is never printed or journalled.
         if not isinstance(error, GuardError):
             return False
-        detail = (getattr(error, "detail", "") or "").lower()
-        return any(marker in detail for marker in self._UNIT_NOT_LOADED_MARKERS)
+        detail = getattr(error, "detail", "") or ""
+        match = self._UNIT_NOT_LOADED_RE.search(detail)
+        if match and unit is not None and match.group("unit") == unit:
+            return True
+        if unit is None:
+            return False
+        # NoSuchUnit is accepted only when it names the requested unit.
+        return bool(re.search(r"(?im)nosuchunit.*unit\s+" + re.escape(unit) + r"\b", detail))
 
-    def _usec(self, unit, interface, prop, infinity=False):
+    def _usec(self, unit, interface, prop, infinity=False, prior=None):
         try:
             raw = self._call([self.BUSCTL, "--system", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
                               "org.freedesktop.systemd1.Manager", "GetUnit", "s", unit])
         except GuardError as error:
-            if not self._unit_not_loaded(error):
+            if not self._unit_not_loaded(error, unit):
                 raise
             # GetUnit refuses units systemd garbage-collected while quiescent:
             # systemctl show re-loads the unit as an ephemeral client and its
@@ -834,7 +866,15 @@ class LinuxAdapter:
             raise GuardError("invalid D-Bus unit object")
         raw = self._call([self.BUSCTL, "--system", "get-property", "org.freedesktop.systemd1", parts[1],
                           "org.freedesktop.systemd1." + interface, prop])
-        return parse_dbus_usec(raw, allow_infinity=infinity)
+        value = parse_dbus_usec(raw, allow_infinity=infinity)
+        if prior not in (None, "", "0") and value == 0 and prop == "ExecMainStartTimestampMonotonic":
+            try:
+                previous = int(prior)
+            except (TypeError, ValueError):
+                raise GuardError(unit + " prior " + prop + " is invalid")
+            if previous > 0:
+                return previous, False
+        return value, True
 
     def _monotonic_readback(self, unit, interface, prop, infinity=False, prior=None):
         """Read a monotonic property without erasing an earlier observation.
@@ -845,7 +885,7 @@ class LinuxAdapter:
         a service did not run. Other D-Bus failures remain hard refusals.
         """
         try:
-            return self._usec(unit, interface, prop, infinity=infinity), True
+            return self._usec(unit, interface, prop, infinity=infinity, prior=prior)
         except UnitNotLoaded as error:
             info = self._show(unit)
             quiescent = (info.get("LoadState") == "not-found"
@@ -869,6 +909,10 @@ class LinuxAdapter:
                     raise GuardError(unit + " prior " + prop + " is invalid") from error
                 if prior_value > 0:
                     return prior_value, False
+            if prop == "ExecMainStartTimestampMonotonic" and info.get("LoadState") == "loaded":
+                if prop in info:
+                    return 0, False
+                raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
             # A zero/absent service timestamp after a reload cannot prove that
             # the service never ran: systemd may have discarded the evidence.
             raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
@@ -881,10 +925,19 @@ class LinuxAdapter:
         service, timer = self._show(service_name), self._show(timer_name)
         if service["LoadState"] != "loaded" or timer["LoadState"] != "loaded":
             raise GuardError("rollback units not loaded")
+        retained = state.get("systemd_observation", {})
+        previous_service = retained.get("service", {})
+        previous_timer = retained.get("timer", {})
+        service_prior = service.get("ExecMainStartTimestampMonotonic")
+        if service_prior in (None, "", "0") and previous_service.get("start_us", 0) > 0:
+            service_prior = str(previous_service["start_us"])
+        timer_prior = timer.get("NextElapseUSecMonotonic")
+        if timer_prior in (None, "") and previous_timer.get("next_us", 0) > 0:
+            timer_prior = str(previous_timer["next_us"])
         start, _ = self._monotonic_readback(service_name, "Service", "ExecMainStartTimestampMonotonic",
-                                            prior=service.get("ExecMainStartTimestampMonotonic"))
+                                            prior=service_prior)
         next_us, _ = self._monotonic_readback(timer_name, "Timer", "NextElapseUSecMonotonic", infinity=True,
-                                              prior=timer.get("NextElapseUSecMonotonic"))
+                                              prior=timer_prior)
         jobs = []
         for row in self._call([self.SYSTEMCTL, "list-jobs", "--no-legend", "--plain", "--no-pager"]).splitlines():
             fields = row.split()

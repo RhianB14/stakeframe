@@ -173,10 +173,25 @@ Para `NextElapseUSecMonotonic`, o `systemctl show` humano aceita
 pendência, e campo ausente/inválido recusa. A recusa de `GetUnit` por unidade
 não carregada é um estado definido, não falha transitória: unidades quiescentes
 podem ser descarregadas pelo gerenciador. A recusa é classificada por identidade
-e resolvida por readback quiescente imediato, preservando qualquer timestamp de
-execução positivo observado anteriormente; zero após recarga, sozinho, nunca
-prova que uma service não iniciou. Falha D-Bus desconhecida segue recusa dura e
-nenhum estado é convertido em sucesso.
+(`Call failed: Unit <unidade> not loaded.` ou o erro D-Bus `NoSuchUnit` vinculado
+à unidade consultada), nunca por exit code isolado. Ela é resolvida por readback
+quiescente imediato, preservando qualquer timestamp de execução positivo
+observado anteriormente; zero após recarga, sozinho, nunca prova que uma service
+não iniciou. Falha D-Bus desconhecida segue recusa dura e nenhum estado é
+convertido em sucesso.
+Uma observação com timestamp positivo é retida no journal privado antes de qualquer
+leitura posterior. Se uma leitura seguinte retornar zero, o guard mantém o maior
+valor já observado e bloqueia confirmação/limpeza como `service` que nunca iniciou;
+a execução pode continuar em rollback, mas não é reclassificada como histórico
+inexistente. Esse registro é evidência de observação do guard, não substitui o
+journald nem prova que uma unidade sem observação anterior nunca executou.
+A confirmação normal usa o registro persistido da observação: uma service
+quiescente nunca iniciada pode confirmar após o stop síncrono quando o readback
+consistente mostra `inactive/dead`, status zero, timestamp zero, nenhum job e
+nenhum recibo de rollback. Se a service iniciar antes, durante ou depois do
+marcador de confirmação, a confirmação é recusada e o fluxo segue rollback;
+nenhum timestamp positivo é convertido em "nunca iniciou".
+
 A aplicação repete essa validação após a última mutação e gravação do estado
 aplicado. Se o rollback iniciou ou foi enfileirado, libera o lock para o worker,
 aguarda sua conclusão e retorna falha de aplicação. A espera relê o delta ativo
@@ -211,6 +226,40 @@ lock ocupado ou service em andamento como autorização para limpar recursos
 manualmente por nome/prefixo ou restaurar rulesets completos. Consultar o runbook,
 inspecionar evidências e repetir a mesma entrada de rollback quando for seguro;
 nunca usar `systemctl stop` na service de rollback em execução.
+
+## Documentação da validação R3
+
+A correção R3 foi exercitada com duas camadas distintas:
+
+- **Simulação:** `python -m unittest scripts.network_security.test_ipv6_guard` usa
+  `FakeLinux`, runner injetado e bloqueios de subprocesso; não acessa firewall,
+  systemd, SSH ou rede reais. O conjunto cobre confirmação normal, service nunca
+  iniciada, service que iniciou, corridas de parada/início/gravação, rollback,
+  falha D-Bus desconhecida, mensagem real `Call failed: Unit … not loaded.`,
+  `infinity`, prazos, ausência/invalidez e timestamp positivo seguido de zero
+  com D-Bus com sucesso ou recusado.
+- **systemd real:** ambiente Ubuntu 24.04 descartável com systemd 255,
+  sem iptables/ip6tables e sem firewall real, com unidades temporárias armadas e
+  paradas e readback de estado, jobs e `NextElapseUSecMonotonic`. A validação
+  comprovou a mensagem real `Unit … not loaded.` no adaptador somente quando
+  vinculada à unidade consultada; o container foi removido ao final.
+
+O estado operacional antigo não é alterado por esses testes: a reconciliação não
+foi executada, `rollback_incomplete` permanece pendente, `active.json` e o journal
+original permanecem preservados, e o encerramento serial/Cloud Shell não comprova
+descarte da chave temporária.
+
+### Validação R3 em ambiente Ubuntu 24.04 descartável
+
+Ambiente registrado: Docker Engine `29.7.2`, host Windows 11 x86_64 com backend
+Linux; container Ubuntu 24.04, `systemd 255.4-1ubuntu8.17`, x86_64. O container
+foi iniciado com `--rm --privileged --cgroupns=host` e `/sys/fs/cgroup` montado.
+Criaram-se somente unidades temporárias em `/run/systemd/system`; foram executados
+`daemon-reload`, `start`, `stop`, `systemctl show` e `systemctl list-jobs`. O
+readback armado foi `active/waiting`, prazo positivo
+`15min 4.560508s`, `Job=`; depois do stop foi `inactive/dead`,
+`NextElapseUSecMonotonic=infinity`, `Job=`. Nenhum firewall foi instalado ou
+consultado. O container foi removido ao final.
 
 ### Persistência e reboot
 

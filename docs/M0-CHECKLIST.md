@@ -166,11 +166,12 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] Observação reproduzida: `GetUnit` retornou `unit not loaded` para unidade
       inativa durante a verificação; horários systemd verificados na evidência
       privada: início `07:50:09 UTC`, parada `07:58:46 UTC`.
-- [x] Correção validada em simulação e em systemd real descartável, sem
-      firewall: `NextElapseUSecMonotonic=infinity` é interpretado como ausência
-      de próximo disparo; prazo futuro, campo ausente ou saída inválida não
-      confirmam timer parado; timestamp positivo anterior não é apagado por
-      zero após recarga.
+- [x] Correção validada em simulação e em systemd real descartável Ubuntu 24.04,
+      systemd 255, sem firewall: mensagem real `Unit … not loaded.` classificada
+      somente para a unidade consultada; `infinity` é ausência de próximo
+      disparo; prazo futuro, campo ausente ou saída inválida não confirmam
+      timer parado; timestamp positivo anterior não é apagado por zero, inclusive
+      quando o D-Bus responde com sucesso.
 - [ ] Reconciliação do run antigo — **não executada**: unidades em
       `/run/systemd/system` e `active.json` permanecem; proposta revisada com
       lock compartilhado, validação de identidade/hashes, colisões, retomada
