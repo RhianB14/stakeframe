@@ -93,5 +93,6 @@ A integração systemd real deve ser executada somente em container descartável
 com PID 1 systemd, firewall/persistência fictícios, comandos reais de firewall
 bloqueados e unidades mantidas carregadas após unlink. `integration_reconciliation.py`
 é o fixture local correspondente; a execução do fixture requer opt-in explícito
-`STK_DISPOSABLE_SYSTEMD=1`. Nenhuma execução em VPS é válida como teste desta
-branch.
+`STK_DISPOSABLE_SYSTEMD=1`. Nesta máquina Windows, o fixture foi deliberadamente
+ignorado; o container disponível não possui systemd instalado. Nenhuma execução
+em VPS é válida como teste desta branch.
