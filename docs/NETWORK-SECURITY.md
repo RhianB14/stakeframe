@@ -281,6 +281,80 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
   Recusar colisões sem parar/adotar unidades externas; registrar aquisição e
   validar o `FragmentPath` carregado antes de parar o timer próprio.
 
+### Registro da primeira janela (STK-M0-06, 06/09/2026)
+
+Resultado real da primeira execução autorizada (base `4a09c4f…`, persistência
+`unchanged-active-only`): apply concluído com delta DROP em INPUT/FORWARD e
+timer armado; uma falha de verificação interrompeu a confirmação e o caminho
+de recuperação restaurou o firewall, mantendo o encerramento interno incompleto.
+
+- Causa observada na execução: `GetUnit` retornou `unit not loaded` para uma
+  unidade inativa durante a verificação do rollback. Essa é a observação
+  reproduzida e registrada; a explicação causal sobre GC/recarregamento é uma
+  hipótese operacional ainda não demonstrada em systemd real neste ambiente.
+- Horários systemd verificados na evidência privada: início do timer às
+  `07:50:09 UTC` e parada às `07:58:46 UTC`.
+- Correção (nesta revisão): classificar a recusa por identidade
+  (`UnitNotLoaded`) e resolver o timer parado por readback quiescente —
+  `NextElapseUSecMonotonic=infinity` significa ausência de próximo disparo;
+  prazo positivo, campo ausente ou saída inválida não confirmam parada. Um
+  timestamp de execução positivo já observado é preservado; zero após recarga
+  não prova que a service nunca iniciou. Falha D-Bus desconhecida continua
+  recusa dura. A confirmação retém referências ao timer e à service numa
+  conexão D-Bus contínua, adquirida antes de validar o timer armado e mantida
+  durante a parada, o marcador e as leituras finais. Perda da conexão recusa
+  confirmação. Jobs/estados seguem revalidados sob o lock.
+- Resultado de segurança inalterado: firewall restaurado e verificado por
+  evidência externa independente — políticas ACCEPT, chain própria removida,
+  IPv4 idêntico, persistência 6/6, unidades `inactive/dead` com
+  `NextElapse=infinity`. A confirmação não ocorreu e o journal do run
+  permanece `rollback_incomplete`: a verificação interna do stop do timer
+  falhou pela recusa acima; as ações de rollback foram aplicadas.
+- Reconciliação factual permanece pendente: as unidades do run continuam em
+  `/run/systemd/system` e `active.json` continua presente; nenhum desses
+  artefatos foi alterado nesta correção.
+- **Reconciliação proposta — não executar nesta etapa:** usar o mesmo
+  `operation.lock` compartilhado (com timeout; nunca um lock por run), reler e
+  validar de forma somente leitura a identidade de `active.json` (`run_id`,
+  chain, manifest e estado do journal), boot, script/manifest/unidades e
+  hashes dos dois unit files antes de qualquer remoção. Exigir snapshot IPv6
+  igual ao `before`, persistência inalterada, nenhuma service em execução e
+  nenhum job das unidades. O alvo desta proposta é somente o run antigo em
+  `rollback_incomplete` com restauração externamente comprovada; não aceitar
+  qualquer fase terminal. Recusar apontador inválido/de outro run, colisão,
+  divergência de bytes/hash ou ausência inesperada; não adotar recursos por nome. Para cada
+  remoção, registrar intenção durável antes, remover somente os dois unit files
+  cujo `FragmentPath` e hash correspondam ao bundle original, executar
+  `daemon-reload`, reler ausência/estado `not-found` e preservar bytes do
+  `active.json` até a limpeza estar verificada. Em seguida, gravar evidência
+  durável da limpeza e somente então renomear o apontador para um artefato
+  arquivado privado; colisão no destino ou falha parcial deixa o apontador
+  original intacto e exige retry idempotente. O comando `status` apenas lê o
+  registro/journal e não substitui essas verificações operacionais; a proposta
+  também não inclui firewall, persistência, reboot ou novo apply.
+- Estados de retomada da proposta, sempre sob o mesmo lock e sem reescrever
+  o journal original:
+  - **Remoção parcial:** preservar marcador separado com identidade, hashes,
+    bytes originais e intenção por arquivo. Um arquivo já ausente só pode ser
+    tratado como etapa concluída se sua intenção válida e seu readback estiverem
+    registrados; arquivos restantes exigem nova validação antes da remoção.
+  - **Limpeza completa, apontador ainda ativo:** validar novamente a limpeza e
+    a evidência durável, conferir bytes do apontador e ausência de colisão no
+    destino; só então arquivar. Uma falha anterior preserva o apontador ativo.
+  - **Apontador já arquivado:** validar marcador durável, identidade, bytes e
+    hashes do arquivo arquivado, ausência dos unit files/jobs e restauração
+    operacional. Somente essa conclusão comprovada permite um no-op.
+  - **Apontador ausente sem evidência correspondente, outro run ou colisão:**
+    abortar e preservar registros. Nunca inferir sucesso de ausência isolada.
+    O algoritmo executável ainda precisa de revisão própria e autorização; esta
+    definição de estados não executa nem aprova reconciliação.
+- Encerramento do guest concluído: conta padrão restaurada à forma
+  pré-janela (campo sem hash, `lastchg` de provisionamento), root inalterado.
+  O repasse operacional confirma que o console serial/Cloud Shell foi
+  encerrado: logout concluído, conexões listadas vazias e Cloud Shell fechado;
+  não afirmar descarte da chave temporária, que permanece não comprovado
+  (adendo em [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9).
+
 ## 6. Recuperação OCI/Ubuntu — caminho identificado, não pronta
 
 **Inspeção do Codex retransmitida:** instância → **OS Management → Console
@@ -357,6 +431,28 @@ pnpm format:check
 git diff --check
 ```
 
+Foi feita também uma validação separada com **systemd real em container
+Ubuntu 24.04 descartável**, sem iptables/ip6tables e sem firewall real. O
+ambiente usou Docker Engine `29.7.2`, backend Linux sobre host Windows 11
+x86_64, `systemd 255.4-1ubuntu8.17` e arquitetura `x86_64`. O container foi
+iniciado com `--privileged`, `--cgroupns=host` e `/sys/fs/cgroup` montado; nele
+foram criadas somente unidades temporárias em `/run/systemd/system` e executados
+`daemon-reload`, `start`, `stop`, `systemctl show` e `systemctl list-jobs`.
+O readback real foi `ActiveState=active/SubState=waiting/NextElapseUSecMonotonic=15min 4.560508s`
+armado, com `Job=`, e `ActiveState=inactive/SubState=dead/NextElapseUSecMonotonic=infinity`
+após `stop`, com `Job=`. O container foi removido ao final. Isso valida o
+adaptador contra a formatação systemd 255 e o sentinel `infinity`, mas não
+substitui validação ARM64 na VPS nem autoriza nova janela.
+
+No complemento autorizado ao Codex, o controlador e o adaptador foram também
+exercitados juntos com systemd `255.4-1ubuntu8.17`, Ubuntu 24.04 x86_64 e cgroup
+namespace privado. A suíte opt-in `scripts/network_security/integration_systemd.py`
+passou 5 cenários: confirmação normal, rollback manual, início do worker durante
+parada/marcador e perda da conexão de referência. Firewall, persistência e probes
+de rede permaneceram simulados. A reprodução e os limites estão no
+[README do guard](../scripts/network_security/README.md). Não confundir esses
+resultados com execução na VPS ou com aprovação de nova janela.
+
 A CI mantém `format-check` e acrescenta `network-security-simulation` no runner
 hospedado Ubuntu, com Python do runner e sem dependências Python externas.
 Os testes usam substitutos de kernel/systemd/persistência; não executar adaptador
@@ -383,7 +479,10 @@ associada ao head e na CI; não confundir checks simulados com probes da VPS.
 - [ ] Segunda conexão SSH e probes reais **depois** da alteração.
 - [ ] Confirmação real sem corrida, rollback não iniciado e estado final conferido.
 
-Simulações locais validam lógica, não compatibilidade real de kernel/systemd,
-exposição de portas ou recuperação da VPS. CI verde não autoriza merge.
-Nenhuma alteração de banco, deploy, release, migração, compra ou infraestrutura
-foi realizada na R2. A PR permanece draft para revisão do Codex.
+Os testes simulados validam a lógica do controlador, incluindo confirmação normal
+com service nunca iniciada e rejeição de qualquer timestamp positivo. Não
+confundir essa camada com a validação do adaptador contra systemd real.
+A validação real não cobre firewall, exposição de portas ou recuperação da VPS;
+CI verde não autoriza merge. Nenhuma alteração de banco, deploy, release, migração,
+compra ou infraestrutura foi realizada nesta rodada. A PR permanece pendente de
+revisão do Codex.

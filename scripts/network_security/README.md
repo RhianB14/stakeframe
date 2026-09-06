@@ -168,6 +168,42 @@ habilitado para boot.
 
 O adaptador consulta estados/resultado/status/start timestamp e jobs pendentes;
 usa D-Bus para ler microsegundos monotônicos sem interpretar durações humanas.
+Para `NextElapseUSecMonotonic`, o `systemctl show` humano aceita
+`infinity` como ausência de próximo disparo; prazo positivo continua sendo
+pendência, e campo ausente/inválido recusa. A recusa de `GetUnit` por unidade
+não carregada é um estado definido, não falha transitória: unidades quiescentes
+podem ser descarregadas pelo gerenciador. A recusa é classificada por identidade
+(`Call failed: Unit <unidade> not loaded.` ou o erro D-Bus `NoSuchUnit` vinculado
+à unidade consultada), nunca por exit code isolado. Ela é resolvida por readback
+quiescente imediato, preservando qualquer timestamp de execução positivo
+observado anteriormente; zero após recarga, sozinho, nunca prova que uma service
+não iniciou. Falha D-Bus desconhecida segue recusa dura e nenhum estado é
+convertido em sucesso.
+Uma observação com timestamp positivo é retida no journal privado antes de qualquer
+leitura posterior. Se uma leitura seguinte retornar zero, o guard mantém o maior
+valor já observado e bloqueia confirmação/limpeza como `service` que nunca iniciou;
+a execução pode continuar em rollback, mas não é reclassificada como histórico
+inexistente. Esse registro é evidência de observação do guard, não substitui o
+journald nem prova que uma unidade sem observação anterior nunca executou.
+A confirmação mantém referências `RefUnit` ao timer e à service em **uma mesma
+conexão D-Bus** (`libsystemd.so.0`, carregada apenas no caminho Linux autorizado).
+A aquisição precede a verificação do timer armado; essa verificação continua
+obrigatória, pois `RefUnit` pode carregar uma unidade. O timer ativo já referencia
+a service. As referências permanecem durante a parada, as leituras, a gravação da
+confirmação e eventual espera do rollback, impedindo a coleta nesse intervalo.
+O cliente confere a conexão e o proprietário único do serviço D-Bus antes/depois
+das observações; perda da conexão impede confirmação. Fechar o cliente, inclusive
+por encerramento do processo, libera as referências sem parar qualquer service.
+
+Somente com essa continuidade, campos `inactive/dead`, resultado/status zero,
+timestamp zero, nenhum job e nenhum recibo podem comprovar a service nunca
+iniciada após a parada do timer. Um zero obtido depois de descarregamento continua
+desconhecido e é recusado. Evidência positiva é preservada em ambos os caminhos
+D-Bus e também quando aparece pela primeira vez no segundo `show`.
+Início da service até as leituras finais invalida a confirmação e segue rollback.
+O tratamento existente de ativação estritamente posterior à confirmação exige
+recibo e timestamp posteriores ao marcador; não é inferido de zero ou ausência.
+
 A aplicação repete essa validação após a última mutação e gravação do estado
 aplicado. Se o rollback iniciou ou foi enfileirado, libera o lock para o worker,
 aguarda sua conclusão e retorna falha de aplicação. A espera relê o delta ativo
@@ -202,6 +238,79 @@ lock ocupado ou service em andamento como autorização para limpar recursos
 manualmente por nome/prefixo ou restaurar rulesets completos. Consultar o runbook,
 inspecionar evidências e repetir a mesma entrada de rollback quando for seguro;
 nunca usar `systemctl stop` na service de rollback em execução.
+
+## Documentação da validação R3
+
+A correção R3 foi exercitada com duas camadas distintas:
+
+- **Simulação:** `python -m unittest scripts.network_security.test_ipv6_guard` usa
+  `FakeLinux`, runner injetado e bloqueios de subprocesso; não acessa firewall,
+  systemd, SSH ou rede reais. O conjunto cobre confirmação normal, service nunca
+  iniciada, service que iniciou, corridas de parada/início/gravação, rollback,
+  falha D-Bus desconhecida, mensagem real `Call failed: Unit … not loaded.`,
+  `infinity`, prazos, ausência/invalidez e timestamp positivo seguido de zero
+  com D-Bus com sucesso ou recusado.
+- **systemd real:** ambiente Ubuntu 24.04 descartável com systemd 255,
+  sem iptables/ip6tables e sem firewall real, com unidades temporárias armadas e
+  paradas e readback de estado, jobs e `NextElapseUSecMonotonic`. A validação
+  comprovou a mensagem real `Unit … not loaded.` no adaptador somente quando
+  vinculada à unidade consultada; o container foi removido ao final.
+
+O estado operacional antigo não é alterado por esses testes: a reconciliação não
+foi executada, `rollback_incomplete` permanece pendente, `active.json` e o journal
+original permanecem preservados, e o encerramento serial/Cloud Shell não comprova
+descarte da chave temporária.
+
+### Validação R3 em ambiente Ubuntu 24.04 descartável
+
+Ambiente registrado: Docker Engine `29.7.2`, host Windows 11 x86_64 com backend
+Linux; container Ubuntu 24.04, `systemd 255.4-1ubuntu8.17`, x86_64. O container
+foi iniciado com `--rm --privileged --cgroupns=host` e `/sys/fs/cgroup` montado.
+Criaram-se somente unidades temporárias em `/run/systemd/system`; foram executados
+`daemon-reload`, `start`, `stop`, `systemctl show` e `systemctl list-jobs`. O
+readback armado foi `active/waiting`, prazo positivo
+`15min 4.560508s`, `Job=`; depois do stop foi `inactive/dead`,
+`NextElapseUSecMonotonic=infinity`, `Job=`. Nenhum firewall foi instalado ou
+consultado. O container foi removido ao final.
+
+### Complemento executado pelo Codex — controlador com systemd real
+
+O proprietário autorizou o Codex a concluir as pendências da R3. A suíte
+[`integration_systemd.py`](integration_systemd.py) executou **5 cenários** com
+Ubuntu 24.04, systemd `255.4-1ubuntu8.17`, x86_64 e cgroup namespace **privado**:
+confirmação normal e liberação das referências; rollback manual com timer
+coletado; worker real iniciado durante a parada; worker real concorrendo com o
+marcador; perda da conexão de referência com recusa e recuperação.
+
+O controlador, lock, journal, adaptador systemd e processos são reais. Firewall
+e persistência são substituídos por dados fictícios; o worker executa o mesmo
+controlador com esse adaptador de teste. Nenhum iptables/ip6tables é executado.
+Atestações de rede são explicitamente simuladas. **Isso não valida firewall,
+conectividade, ARM64 ou recuperação da VPS.** A suíte comum tem 73 testes sem
+subprocessos. A suíte real é opt-in e não entra no discover da CI simulada.
+
+Reprodução somente em Docker descartável; substituir `<checkout-absoluto>` pelo
+checkout a validar e usar um nome de container livre. O mount do código é somente
+leitura; não montar `/sys/fs/cgroup` do host nem compartilhar seu namespace.
+
+```bash
+docker run -d --name stk-guard-integration --privileged --cgroupns private \
+  --tmpfs /run --tmpfs /run/lock \
+  --mount type=bind,source=<checkout-absoluto>,target=/review,readonly \
+  ubuntu:24.04 sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv dbus python3 && exec /sbin/init'
+# Aguardar a instalação e comprovar systemd em PID 1 antes da suíte.
+docker exec stk-guard-integration cat /proc/1/comm
+docker exec stk-guard-integration systemctl --version
+docker network disconnect bridge stk-guard-integration
+docker exec -e STK_DISPOSABLE_SYSTEMD=1 stk-guard-integration \
+  python3 -B /review/scripts/network_security/integration_systemd.py --disposable
+# Encerrar somente o container descartável criado para este teste.
+docker rm -f stk-guard-integration
+```
+
+O comando exige opt-in explícito, Docker e systemd em PID 1. Cada cenário cria
+nomes exclusivos e verifica hashes antes de retirar seus unit files. Os recursos
+descartáveis são encerrados ao final; nenhuma mudança na VPS faz parte do teste.
 
 ### Persistência e reboot
 

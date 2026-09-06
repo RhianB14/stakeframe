@@ -158,6 +158,32 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       firewall exige console independente estabelecido e mantido durante a
       janela (ACCESS-RECOVERY §5 e §9). M0 permanece em andamento.
 
+### STK-M0-06 — Janela IPv6 executada e correção do guard
+
+- [x] Primeira janela registrada: apply do delta IPv6, confirmação recusada,
+      rollback automático com fase `rollback_incomplete`; firewall restaurado
+      e verificado externamente, sem novo apply nesta correção.
+- [x] Observação reproduzida: `GetUnit` retornou `unit not loaded` para unidade
+      inativa durante a verificação; horários systemd verificados na evidência
+      privada: início `07:50:09 UTC`, parada `07:58:46 UTC`.
+- [x] Correção validada em simulação e em systemd real descartável Ubuntu 24.04,
+      systemd 255, sem firewall: mensagem real `Unit … not loaded.` classificada
+      somente para a unidade consultada; `infinity` é ausência de próximo
+      disparo; prazo futuro, campo ausente ou saída inválida não confirmam
+      timer parado; timestamp positivo anterior não é apagado por zero, inclusive
+      quando o D-Bus responde com sucesso.
+- [x] Complemento do Codex: 73 testes simulados e 5 cenários do controlador com
+      systemd real em container descartável; referência D-Bus contínua durante
+      confirmação, worker concorrente e perda de conexão verificados com
+      firewall simulado. Não comprova uma janela real na VPS.
+- [ ] Reconciliação do run antigo — **não executada**: unidades em
+      `/run/systemd/system` e `active.json` permanecem; proposta revisada com
+      lock compartilhado, validação de identidade/hashes, colisões, retomada
+      idempotente e liberação do apontador somente após evidência durável.
+- [x] Acesso serial/Cloud Shell encerrado conforme repasse: logout concluído,
+      conexões vazias e Cloud Shell fechado; descarte da chave temporária segue
+      não comprovado.
+
 ### Domínio
 
 - [x] Consultar disponibilidade e preço de `stakeframe.com.br`: ISAVAIL
