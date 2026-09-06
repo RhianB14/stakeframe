@@ -82,7 +82,19 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
         self._write_bundle()
         self._install_units()
         systemctl("daemon-reload")
-        self.reconciler = Reconciler(self.root, self.backend, timeout=10)
+        self.reconciler = Reconciler(
+            self.root,
+            self.backend,
+            ipv4_evidence={
+                "run_id": RUN_ID,
+                "boot_id": self.backend.boot_id(),
+                "manifest_sha256": guard.digest(manifest_raw),
+                "source": "external-private-observation",
+                "observed_monotonic_ns": 1,
+                "active_sha256": guard.digest(b"ipv4-active"),
+                "active_bytes": b"ipv4-active",
+            },
+        )
 
     @staticmethod
     def _unit_content(name):
@@ -113,12 +125,6 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
             "tag": "stk6:" + RUN_ID + ":disposable",
             "window_seconds": 600,
             "prepared_monotonic_ns": 1,
-            "ipv4_active_evidence": {
-                "run_id": RUN_ID,
-                "file": "ipv4.active",
-                "sha256": guard.digest(self.backend.simulated_ipv4),
-                "active_sha256": guard.digest(self.backend.simulated_ipv4),
-            },
         }
         manifest_raw = guard.encoded(manifest)
         guard.private_write(self.run_dir / "manifest.json", manifest_raw)
@@ -128,7 +134,7 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
             "phase": "rollback_incomplete",
             "actions": [],
             "rollback_actions": [],
-            "units": {},
+            "units": {name: {"acquired": True, "installed": True} for name in self.unit_names},
         }
         guard.private_write(self.run_dir / "journal.json", guard.encoded(state))
         guard.private_write(self.root / "active.json", guard.encoded({"run_id": RUN_ID}))

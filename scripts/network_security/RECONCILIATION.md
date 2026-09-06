@@ -17,9 +17,26 @@ python -m unittest scripts.network_security.integration_reconciliation -q
 `--execute-reviewed-linux` e o diretório fixo `/var/lib/stk-ipv6`. Em ambos, o
 mesmo `operation.lock` global é adquirido com timeout.
 
-## Pré-condições e verificações
+- A execução real requer fornecer `--ipv4-evidence` com um documento privado
+  criado antes da reconciliação, sem editar o bundle antigo.
 
-Antes de remover qualquer arquivo, o procedimento valida:
+```text
+python -m scripts.network_security.reconciliation reconcile \
+  --state-dir /var/lib/stk-ipv6 \
+  --run-id f15efb347860c80f9271 \
+  --ipv4-evidence /var/lib/stk-ipv6/external/ipv4-f15efb347860c80f9271.json \
+  --execute-reviewed-linux
+```
+
+O documento privado deve conter `schema=1`, `source=external-private-observation`,
+`run_id`, `boot_id`, `manifest_sha256`, `observed_monotonic_ns`, `active_sha256` e
+`data_file`. O arquivo apontado por `data_file` contém os bytes observados antes,
+é privado e adjacente ao documento. O reconciliador valida propriedade/permissões,
+hash dos bytes, vínculo ao boot e ao manifest original e compara o hash com a
+leitura IPv4 ativa atual feita pelo backend (`iptables -t filter -S`). Nenhum
+campo ou byte do journal/manifest antigo é acrescentado ou alterado. Sem uma
+referência anterior independente e confiável, a operação é recusada.
+
 
 - run existente em `rollback_incomplete`, identidade do journal/manifest,
   `active.json` apontando exatamente para o run e boot id inalterado;
@@ -74,20 +91,28 @@ files) permanece a fonte de autoridade. `reconciliation.py` é um novo
 procedimento de limpeza; não é instalado no bundle, não altera `script_sha256`,
 não altera hashes antigos e não faz apply, rollback, release ou deploy.
 
-## Validação
+```text
+STK_DISPOSABLE_SYSTEMD=1 python3 -m unittest scripts.network_security.integration_reconciliation -v
+```
 
-- `integration_reconciliation.py` é o fixture local correspondente; a execução
+O comando deve ser executado dentro de container descartável Linux com root,
+`systemd` como PID 1, `/run/systemd/system` isolado, firewall fictício e
+persistência fictícia. O teste instala units válidas com `OnActiveSec`, faz
+`daemon-reload`, interrompe após o primeiro unlink, confirma que a unit continua
+`loaded`, retoma, confirma `not-found` após novo reload e verifica repetição
+idempotente. O backend não chama iptables/ip6tables.
+
+- `integration_reconciliation.py` é o fixture local correspondente; sua execução
   unitária com o backend descartável bloqueia firewall real e cobre a
   permanência carregada após unlink até `daemon-reload`, conclusão, retomada e
   repetição. Um container systemd real deve executar o mesmo contrato com
   `STK_DISPOSABLE_SYSTEMD=1`.
 - `test_reconciliation.py` usa backend em memória e cobre sucesso, repetição,
   concorrência no lock global, remoção parcial, unit mantido carregado após
-  `unlink`, falha de `daemon-reload`, interrupções após `unlink`, após
-  `daemon-reload`, após criar archive e após remover `active.json`, colisão de
-  archive, identidade incorreta, script/backup/unit alterado, `FragmentPath`
-  incorreto, boot diferente, snapshot/IPv4/persistência divergentes, estados
-  systemd desconhecidos, execução/job pendente e `status` sem mutação.
+  `unlink`, falha de `daemon-reload`, interrupções após evidência, `unlink`,
+  `daemon-reload`, criação do archive e remoção de `active.json`, revalidação
+  após service/timer/job mudar, archive idêntico sem procedência, evidência
+  IPv4 ausente, deadline positivo e método IPv4 real do backend.
 
 A integração systemd real deve ser executada somente em container descartável
 com PID 1 systemd, firewall/persistência fictícios, comandos reais de firewall
