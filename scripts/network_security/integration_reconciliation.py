@@ -82,15 +82,19 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
         self._write_bundle()
         service_name = self.unit_names[0]
         timer_name = self.unit_names[1]
+        keeper_name = "stk6-reconciliation-keeper.service"
         service_data = self.unit_bytes[service_name]
         timer_data = self.unit_bytes[timer_name]
-        for name, data in ((service_name, service_data), (timer_name, timer_data)):
+        keeper_data = ("[Unit]\nRequires=" + service_name + "\nAfter=" + service_name + "\n\n[Service]\nType=simple\nExecStart=/bin/sleep 3600\n").encode()
+        for name, data in ((service_name, service_data), (timer_name, timer_data), (keeper_name, keeper_data)):
             target = UNIT_DIR / name
             target.write_bytes(data)
             target.chmod(0o600)
         systemctl("daemon-reload")
         systemctl("start", timer_name)
         systemctl("stop", timer_name)
+        systemctl("start", "stk6-reconciliation-keeper.service")
+        systemctl("stop", service_name)
         for name in self.unit_names:
             if systemctl("show", name, "--property=LoadState", "--value").stdout.strip() != "loaded":
                 raise RuntimeError("fixture unit was not loaded before unlink: " + name)
@@ -165,7 +169,8 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
                 raise RuntimeError("fixture unit install disappeared: " + name)
 
     def _cleanup_units(self):
-        for name in self.unit_names:
+        systemctl("stop", "stk6-reconciliation-keeper.service", check=False)
+        for name in self.unit_names + ("stk6-reconciliation-keeper.service",):
             target = UNIT_DIR / name
             if target.is_file() and not target.is_symlink():
                 target.unlink()
@@ -188,8 +193,8 @@ class ReconciliationSystemdIntegration(unittest.TestCase):
             self.reconciler.reconcile(RUN_ID)
         self.reconciler.interruption_hook = None
         self.assertFalse((UNIT_DIR / self.unit_names[0]).exists())
-        # systemd may evict an inactive unit immediately; the key assertion is
-        # that no second unit was removed before the durable resume check.
+        # The keeper dependency keeps the service loaded after unlink until
+        # daemon-reload, while the timer is independently valid and stopped.
         result = self.reconciler.reconcile(RUN_ID)
         self.assertFalse(result["noop"])
         self.assertEqual(systemctl("show", self.unit_names[0], "--property=LoadState", "--value").stdout.strip(), "not-found")
