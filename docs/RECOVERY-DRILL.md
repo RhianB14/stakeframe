@@ -7,6 +7,7 @@ da aplicação, `.env.local` ou `.env.auth.local`.
 
 Este é um ensaio técnico do M0. Não ativa backups da aplicação nem conecta R2.
 O plano de recuperação completo permanece em [RECOVERY.md](RECOVERY.md).
+O modo externo explícito da STK-M0-13 é descrito separadamente em [R2.md](R2.md).
 
 ## Execução
 

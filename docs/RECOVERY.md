@@ -1,7 +1,8 @@
 # Recuperação de desastre
 
-> **STATUS: VALIDAÇÃO LOCAL PARCIAL.** A STK-M0-10 demonstra dump PostgreSQL
-> criptografado e restauração em cluster novo com dados fictícios. Backups
+> **STATUS: VALIDAÇÃO PARCIAL COM DADOS FICTÍCIOS.** STK-M0-10 demonstra dump
+> criptografado local; STK-M0-13 demonstra envio ao R2 e restauração em cluster novo.
+> Evidências externas em [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Backups
 > externos da aplicação, agendamento, alertas e recuperação completa de produção
 > continuam pendentes. Evidências e limites em [RECOVERY-DRILL.md](RECOVERY-DRILL.md).
 
@@ -92,3 +93,5 @@
 O ensaio local valida somente a parte PostgreSQL com roles e permissões, usando
 Restic e dados de teste. Ele não conclui nenhum dos itens integrais acima.
 Veja [M0-10-VALIDATION.md](M0-10-VALIDATION.md) para a evidência executada.
+O [ensaio R2](R2.md) acrescenta armazenamento externo real e chave preservada
+fora da VPS, ainda com dados fictícios e sem ativar a operação de produção.

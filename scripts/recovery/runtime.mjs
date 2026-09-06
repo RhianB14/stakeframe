@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readdir, realpath, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadR2Configuration, r2Repository, retainR2RecoveryKey } from './r2.mjs';
 
 export const root = fileURLToPath(new URL('../../', import.meta.url));
 const runPattern = /^stk-recovery-[a-f0-9]{32}$/;
@@ -102,7 +103,8 @@ export async function execute(binary, args, options = {}) {
   });
 }
 
-export async function createDrill() {
+export async function createDrill({ r2PrivateDirectory } = {}) {
+  const r2 = r2PrivateDirectory ? await loadR2Configuration(r2PrivateDirectory, root) : undefined;
   if (process.env.DOCKER_HOST) assertLocalEndpoint(process.env.DOCKER_HOST);
   const context = (await execute('docker', ['context', 'show'])).stdout.trim();
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(context)) throw new Error('RECOVERY_CONTEXT_REFUSED');
@@ -120,6 +122,7 @@ export async function createDrill() {
   assertLocalEndpoint(endpoint);
   const project = `stk-recovery-${randomUUID().replaceAll('-', '')}`;
   const runDirectory = join(root, '.cache', 'recovery-drill', project);
+  let r2Archive;
   await mkdir(runDirectory, { recursive: true, mode: 0o700 });
   try {
     assertWithinWorkspace(await realpath(root), await realpath(runDirectory));
@@ -144,6 +147,7 @@ export async function createDrill() {
     }
     // Explicit empty env file prevents Compose from loading any developer .env file.
     await writeFile(join(runDirectory, 'empty.env'), '', { flag: 'wx', mode: 0o600 });
+    if (r2) r2Archive = await retainR2RecoveryKey(r2, project, runDirectory);
   } catch (error) {
     await removeRunDirectory(runDirectory, project);
     throw error;
@@ -160,6 +164,7 @@ export async function createDrill() {
         project,
         '-f',
         join(root, 'compose.recovery.yml'),
+        ...(r2 ? ['-f', join(root, 'compose.recovery-r2.yml')] : []),
         '--profile',
         'tools',
         ...args,
@@ -170,6 +175,13 @@ export async function createDrill() {
         env: {
           RECOVERY_RUN_ID: project,
           RECOVERY_SECRET_DIR: runDirectory.replaceAll('\\', '/'),
+          ...(r2
+            ? {
+                RECOVERY_R2_ENDPOINT: r2.endpoint,
+                RECOVERY_R2_REPOSITORY: r2Repository(r2.endpoint, project),
+                RECOVERY_R2_SECRET_DIR: r2.directory.replaceAll('\\', '/'),
+              }
+            : {}),
           ...options.env,
         },
       },
@@ -204,6 +216,7 @@ export async function createDrill() {
   return {
     project,
     runDirectory,
+    r2Archive,
     compose,
     command,
     ownedResources,

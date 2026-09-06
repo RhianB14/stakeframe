@@ -244,3 +244,21 @@ recebem status `Superseded` e apontam a substituta.
   VPS. Publicação dos digests, DNS/ACME, OAuth real de produção, R2 e recuperação
   operacional continuam em tarefas próprias. A autoria/verificação direta do
   Codex é registrada; não há alegação de revisão independente no GitHub.
+
+## D016 — Validar R2 com credencial restrita e dados fictícios (2026-09-06)
+
+- **Contexto:** o ensaio local já demonstra dump e restauração, mas não testa
+  a conexão, a criptografia transmitida ou o acesso restrito no armazenamento externo.
+- **Decisão:** buckets privados separados de anexos e backups; token de conta
+  temporário com operações de objetos somente no bucket de backups, autorizado
+  especificamente pelo proprietário. O ensaio usa o backend S3 nativo do Restic,
+  endpoint HTTPS canônico e prefixo único; somente a ferramenta tem saída externa.
+- **Custódia:** salvar a chave do repositório em diretório privado fora do Git
+  antes do primeiro envio. Preservar snapshot fictício e chave após limpar os
+  clusters locais, permitindo inspeção posterior. Nenhuma credencial vai para CI.
+- **Verificação:** ler todos os packs remotos, exigir recusa no bucket de anexos,
+  parar a origem antes de restaurar e comparar dados, proprietários e ACLs.
+  Comandos de corrupção ficam restritos ao repositório local descartável.
+- **Limites:** este ensaio não ativa backups reais, retenção, agendamento ou
+  alertas, nem comprova RPO/RTO ou custódia da chave de produção. O token de
+  preparação expira em 2026-10-06. Procedimento em [R2.md](R2.md).

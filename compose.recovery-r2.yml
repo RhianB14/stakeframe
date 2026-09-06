@@ -1,0 +1,23 @@
+# Only the explicit recovery --r2 command loads this overlay.
+# The database clusters remain private. Only the disposable tools can reach R2.
+services:
+  tools:
+    environment:
+      STAKEFRAME_RUNTIME: recovery-r2-test
+      RECOVERY_RUN_ID: ${RECOVERY_RUN_ID:?Use pnpm recovery:r2}
+      RECOVERY_R2_ENDPOINT: ${RECOVERY_R2_ENDPOINT:?Validated R2 endpoint required}
+      RESTIC_REPOSITORY: ${RECOVERY_R2_REPOSITORY:?Unique test prefix required}
+      AWS_DEFAULT_REGION: auto
+    secrets: [r2_access_key_id, r2_secret_access_key]
+    networks: [storage-egress]
+
+networks:
+  storage-egress:
+    labels:
+      io.stakeframe.recovery-run: ${RECOVERY_RUN_ID:?Use pnpm recovery:r2}
+
+secrets:
+  r2_access_key_id:
+    file: ${RECOVERY_R2_SECRET_DIR:?Private R2 credential directory required}/access_key_id
+  r2_secret_access_key:
+    file: ${RECOVERY_R2_SECRET_DIR:?Private R2 credential directory required}/secret_access_key

@@ -66,6 +66,8 @@ uma configuração de produção; veja [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 O [ensaio de recuperação](docs/RECOVERY-DRILL.md) valida PostgreSQL com dados
 descartáveis; backups externos e recuperação completa ainda não estão ativos.
+O [ensaio R2](docs/R2.md) usa credencial autorizada e dados fictícios para
+verificar armazenamento externo; sua execução é separada da CI e da produção.
 
 ## Licença
 
