@@ -69,6 +69,10 @@ descartáveis; backups externos e recuperação completa ainda não estão ativo
 O [ensaio R2](docs/R2.md) usa credencial autorizada e dados fictícios para
 verificar armazenamento externo; sua execução é separada da CI e da produção.
 
+O [cliente Google de produção](docs/M0-14-VALIDATION.md) está preparado em
+projeto separado, com callback HTTPS e credenciais privadas. O login nesse
+ambiente será validado após a implantação autorizada.
+
 ## Licença
 
 [MIT](LICENSE)

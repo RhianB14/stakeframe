@@ -6,7 +6,9 @@ STK-M0-08 implementa Google OAuth com Better Auth e sessões no PostgreSQL.
 A configuração padrão mantém `AUTH_ENABLED=false`: login e `/api/v1/me`
 respondem 503, sem conceder acesso. Em 2026-09-06, após autorização específica
 do proprietário, o Google Cloud foi configurado e o login real foi ativado e
-validado no ambiente local. Publicação e credenciais de produção continuam pendentes.
+validado no ambiente local. A STK-M0-14 preparou projeto e cliente separados
+para produção, com credenciais privadas; implantação e login real de produção
+continuam pendentes. [M0-14-VALIDATION.md](M0-14-VALIDATION.md).
 
 ## Política de acesso
 
@@ -111,7 +113,8 @@ A STK-M0-12 acrescenta a configuração de produção com origem HTTPS obrigató
 segredos por arquivo e migração explícita em perfil separado. O Compose de
 produção não aplica migrações no startup normal. Consulte
 [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md). O callback Google
-real de produção e a implantação continuam pendentes.
+de produção foi cadastrado na STK-M0-14; a implantação e o login real nesse
+callback continuam pendentes.
 
 ## Evidência e limites
 

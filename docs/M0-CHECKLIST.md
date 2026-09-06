@@ -1,7 +1,11 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-12** — configuração de produção e ensaio HTTPS isolado
-([issue #24](https://github.com/RhianB14/stakeframe/issues/24)). STK-M0-11 foi
+Tarefa atual: **STK-M0-14** — preparação separada do Google OAuth de produção
+([issue #28](https://github.com/RhianB14/stakeframe/issues/28)). STK-M0-12 e
+STK-M0-13 foram integradas pelas
+[PR #25](https://github.com/RhianB14/stakeframe/pull/25) e
+[PR #27](https://github.com/RhianB14/stakeframe/pull/27), com CI aprovada na
+`main` após cada integração. STK-M0-11 foi
 integrada pela [PR #23](https://github.com/RhianB14/stakeframe/pull/23), com
 CI aprovada em AMD64 e ARM64 nativo na `main` `183bd9b`. Base local,
 autenticação e OpenAPI (STK-M0-07 a STK-M0-09) integrados à `main` pelas
@@ -248,8 +252,11 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
 - [x] Google OAuth local: cliente web em projeto de desenvolvimento, escopos
       básicos, credenciais fora do repositório e identidade restrita no servidor.
-- [ ] Google OAuth de produção: projeto/configuração separados, callback HTTPS
-      e validação após autorização própria de publicação.
+- [x] STK-M0-14: projeto e cliente web de produção separados, callback HTTPS
+      cadastrado, três escopos básicos e credenciais privadas fora do Git,
+      após autorização específica. [M0-14-VALIDATION.md](M0-14-VALIDATION.md).
+- [ ] Validar login Google real de produção após implantação autorizada;
+      configuração do cliente não comprova o fluxo em HTTPS público.
 - [ ] Telegram: criar bot restrito ao chat do proprietário.
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
