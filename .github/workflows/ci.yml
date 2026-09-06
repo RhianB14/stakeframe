@@ -34,8 +34,16 @@ jobs:
         run: pnpm format:check
 
   application-check:
-    name: application-check
-    runs-on: ubuntu-latest
+    name: ${{ matrix.check }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            check: application-check
+          - runner: ubuntu-24.04-arm
+            check: application-arm64-check
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -67,6 +75,8 @@ jobs:
         run: |
           pnpm local:init
           pnpm local:up
+      - name: Verify standalone runtime images without development dependencies
+        run: pnpm images:check
       - name: PostgreSQL 18, Google auth protocol and pg-boss integration
         run: pnpm local:test-db
       - name: Browser checks on desktop and mobile

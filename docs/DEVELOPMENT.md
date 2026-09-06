@@ -1,5 +1,9 @@
 # Guia de desenvolvimento
 
+As imagens da aplicação e do migrador contêm pacotes de execução separados.
+Depois de `pnpm local:up`, execute `pnpm images:check` para conferir conteúdo,
+arquitetura e dependências. Detalhes em [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).
+
 ## Pré-requisitos
 
 | Ferramenta | Versão                 | Observação                                         |

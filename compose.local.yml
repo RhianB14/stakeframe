@@ -48,8 +48,7 @@ services:
       retries: 12
 
   migrate:
-    build: { context: ., target: api }
-    command: [node, packages/db/dist/migrate-cli.js]
+    build: { context: ., target: migrate }
     environment:
       STAKEFRAME_RUNTIME: local
       DATABASE_URL: postgresql://stakeframe_local:${LOCAL_DB_PASSWORD:?Run pnpm local:init first}@postgres:5432/stakeframe_local
