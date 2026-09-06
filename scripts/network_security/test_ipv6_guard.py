@@ -2,6 +2,7 @@
 import importlib.util
 import os
 import copy
+import contextlib
 import json
 import tempfile
 import threading
@@ -93,6 +94,10 @@ class FakeLinux:
         if self.on_observe:
             self.on_observe()
         return {"timer": dict(self.timer), "service": dict(self.service), "jobs": list(self.jobs)}
+
+    @contextlib.contextmanager
+    def retain_units(self, state):
+        yield
 
     def timer_stopped(self, state):
         return self.timer == {"active": "inactive", "sub": "dead", "next_us": 0}
@@ -215,6 +220,37 @@ class WorkflowTests(unittest.TestCase):
         self.backend.service.update(active="inactive", sub="dead", start_us=self.backend.monotonic_ns() // 1000)
         with self.assertRaisesRegex(guard.GuardError, "confirmation refused"):
             self.confirm(state)
+        self.assertEqual(self.controller.store.read(self.run_id)["phase"], "rolled_back")
+
+    def test_observed_start_survives_a_new_controller_and_zero_readback(self):
+        state = self.apply()
+        self.backend.service["start_us"] = self.backend.monotonic_ns() // 1000
+        with self.controller.store.lock():
+            observed = self.controller._observe(state)
+        self.backend.service["start_us"] = 0
+        self.controller = guard.Controller(self.root, self.backend)
+        with self.assertRaisesRegex(guard.GuardError, "confirmation refused"):
+            self.confirm(state)
+        final = self.controller.store.read(self.run_id)
+        self.assertEqual(final["systemd_observation"]["service"]["start_us"], observed["service"]["start_us"])
+        self.assertEqual(final["phase"], "rolled_back")
+
+    def test_observation_does_not_erase_pending_error_fields(self):
+        state = self.apply()
+        state["application_error"] = "simulated original failure"
+        with self.controller.store.lock():
+            self.controller._observe(state)
+        self.assertEqual(state["application_error"], "simulated original failure")
+
+    def test_reference_acquisition_failure_never_applies_drop(self):
+        @contextlib.contextmanager
+        def failed_reference(state):
+            raise guard.GuardError("reference unavailable")
+            yield
+        self.backend.retain_units = failed_reference
+        with self.assertRaisesRegex(guard.GuardError, "application failed"):
+            self.apply()
+        self.assertFalse(any(event[0] == "policy" for event in self.backend.events))
         self.assertEqual(self.controller.store.read(self.run_id)["phase"], "rolled_back")
 
     def test_confirm_requires_valid_post_change_evidence(self):
@@ -955,6 +991,57 @@ class AdapterTests(unittest.TestCase):
         adapter = guard.LinuxAdapter(runner=runner)
         with self.assertRaisesRegex(guard.GuardError, "unquantifiable"):
             adapter.observe({"run_id": "0123456789abcdefabcd"})
+
+    def test_collected_service_zero_is_unknown_even_with_all_quiescent_fields(self):
+        unit = guard.unit_names("0123456789abcdefabcd")[0]
+
+        def runner(argv):
+            if argv[0] == guard.LinuxAdapter.BUSCTL:
+                error = guard.GuardError("busctl failed with exit 1")
+                error.detail = "Call failed: Unit " + unit + " not loaded."
+                raise error
+            return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\n"
+                    "ExecMainStatus=0\nExecMainStartTimestampMonotonic=0\nJob=\n")
+
+        adapter = guard.LinuxAdapter(runner=runner)
+        with self.assertRaisesRegex(guard.GuardError, "unquantifiable"):
+            adapter._monotonic_readback(unit, "Service", "ExecMainStartTimestampMonotonic", prior=0)
+
+    def test_fallback_preserves_start_first_seen_in_second_show(self):
+        unit = guard.unit_names("0123456789abcdefabcd")[0]
+        for shown in ("7150000", "invalid", "-1"):
+            with self.subTest(shown=shown):
+                def runner(argv):
+                    if argv[0] == guard.LinuxAdapter.BUSCTL:
+                        error = guard.GuardError("busctl failed with exit 1")
+                        error.detail = "Call failed: Unit " + unit + " not loaded."
+                        raise error
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nJob=\n"
+                            "ExecMainStartTimestampMonotonic=" + shown + "\n")
+                adapter = guard.LinuxAdapter(runner=runner)
+                if shown == "7150000":
+                    self.assertEqual(adapter._monotonic_readback(unit, "Service", "ExecMainStartTimestampMonotonic", prior=0),
+                                     (7150000, False))
+                else:
+                    with self.assertRaises(guard.GuardError):
+                        adapter._monotonic_readback(unit, "Service", "ExecMainStartTimestampMonotonic", prior=0)
+
+    def test_unloaded_error_rejects_unit_prefixes_and_extra_diagnostics(self):
+        unit = "stk6-rollback-0123456789abcdefabcd.timer"
+        adapter = guard.LinuxAdapter(runner=lambda argv: "")
+        for detail in ("Call failed: Unit " + unit + ".other not loaded.",
+                       "Call failed: org.freedesktop.systemd1.NoSuchUnit for Unit " + unit + ".other",
+                       "Connection reset by peer\nCall failed: Unit " + unit + " not loaded."):
+            error = guard.GuardError("busctl failed with exit 1")
+            error.detail = detail
+            self.assertFalse(adapter._unit_not_loaded(error, unit))
+
+    def test_offline_reference_session_never_loads_native_library(self):
+        adapter = guard.LinuxAdapter(runner=lambda argv: "")
+        with patch.object(guard.SystemdReferences, "__enter__", side_effect=AssertionError("native bus forbidden")):
+            with self.assertRaisesRegex(guard.GuardError, "reviewed Linux/root"):
+                with adapter.retain_units({"run_id": "0123456789abcdefabcd"}):
+                    self.fail("offline reference session was accepted")
 
     def test_systemd_next_elapse_parser_accepts_infinity_only_as_no_deadline(self):
         self.assertEqual(guard.parse_systemd_next_elapse("infinity"), 0)

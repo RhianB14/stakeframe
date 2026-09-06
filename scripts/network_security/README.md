@@ -185,12 +185,24 @@ valor já observado e bloqueia confirmação/limpeza como `service` que nunca in
 a execução pode continuar em rollback, mas não é reclassificada como histórico
 inexistente. Esse registro é evidência de observação do guard, não substitui o
 journald nem prova que uma unidade sem observação anterior nunca executou.
-A confirmação normal usa o registro persistido da observação: uma service
-quiescente nunca iniciada pode confirmar após o stop síncrono quando o readback
-consistente mostra `inactive/dead`, status zero, timestamp zero, nenhum job e
-nenhum recibo de rollback. Se a service iniciar antes, durante ou depois do
-marcador de confirmação, a confirmação é recusada e o fluxo segue rollback;
-nenhum timestamp positivo é convertido em "nunca iniciou".
+A confirmação mantém referências `RefUnit` ao timer e à service em **uma mesma
+conexão D-Bus** (`libsystemd.so.0`, carregada apenas no caminho Linux autorizado).
+A aquisição precede a verificação do timer armado; essa verificação continua
+obrigatória, pois `RefUnit` pode carregar uma unidade. O timer ativo já referencia
+a service. As referências permanecem durante a parada, as leituras, a gravação da
+confirmação e eventual espera do rollback, impedindo a coleta nesse intervalo.
+O cliente confere a conexão e o proprietário único do serviço D-Bus antes/depois
+das observações; perda da conexão impede confirmação. Fechar o cliente, inclusive
+por encerramento do processo, libera as referências sem parar qualquer service.
+
+Somente com essa continuidade, campos `inactive/dead`, resultado/status zero,
+timestamp zero, nenhum job e nenhum recibo podem comprovar a service nunca
+iniciada após a parada do timer. Um zero obtido depois de descarregamento continua
+desconhecido e é recusado. Evidência positiva é preservada em ambos os caminhos
+D-Bus e também quando aparece pela primeira vez no segundo `show`.
+Início da service até as leituras finais invalida a confirmação e segue rollback.
+O tratamento existente de ativação estritamente posterior à confirmação exige
+recibo e timestamp posteriores ao marcador; não é inferido de zero ou ausência.
 
 A aplicação repete essa validação após a última mutação e gravação do estado
 aplicado. Se o rollback iniciou ou foi enfileirado, libera o lock para o worker,
@@ -260,6 +272,45 @@ readback armado foi `active/waiting`, prazo positivo
 `15min 4.560508s`, `Job=`; depois do stop foi `inactive/dead`,
 `NextElapseUSecMonotonic=infinity`, `Job=`. Nenhum firewall foi instalado ou
 consultado. O container foi removido ao final.
+
+### Complemento executado pelo Codex — controlador com systemd real
+
+O proprietário autorizou o Codex a concluir as pendências da R3. A suíte
+[`integration_systemd.py`](integration_systemd.py) executou **5 cenários** com
+Ubuntu 24.04, systemd `255.4-1ubuntu8.17`, x86_64 e cgroup namespace **privado**:
+confirmação normal e liberação das referências; rollback manual com timer
+coletado; worker real iniciado durante a parada; worker real concorrendo com o
+marcador; perda da conexão de referência com recusa e recuperação.
+
+O controlador, lock, journal, adaptador systemd e processos são reais. Firewall
+e persistência são substituídos por dados fictícios; o worker executa o mesmo
+controlador com esse adaptador de teste. Nenhum iptables/ip6tables é executado.
+Atestações de rede são explicitamente simuladas. **Isso não valida firewall,
+conectividade, ARM64 ou recuperação da VPS.** A suíte comum tem 73 testes sem
+subprocessos. A suíte real é opt-in e não entra no discover da CI simulada.
+
+Reprodução somente em Docker descartável; substituir `<checkout-absoluto>` pelo
+checkout a validar e usar um nome de container livre. O mount do código é somente
+leitura; não montar `/sys/fs/cgroup` do host nem compartilhar seu namespace.
+
+```bash
+docker run -d --name stk-guard-integration --privileged --cgroupns private \
+  --tmpfs /run --tmpfs /run/lock \
+  --mount type=bind,source=<checkout-absoluto>,target=/review,readonly \
+  ubuntu:24.04 sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv dbus python3 && exec /sbin/init'
+# Aguardar a instalação e comprovar systemd em PID 1 antes da suíte.
+docker exec stk-guard-integration cat /proc/1/comm
+docker exec stk-guard-integration systemctl --version
+docker network disconnect bridge stk-guard-integration
+docker exec -e STK_DISPOSABLE_SYSTEMD=1 stk-guard-integration \
+  python3 -B /review/scripts/network_security/integration_systemd.py --disposable
+# Encerrar somente o container descartável criado para este teste.
+docker rm -f stk-guard-integration
+```
+
+O comando exige opt-in explícito, Docker e systemd em PID 1. Cada cenário cria
+nomes exclusivos e verifica hashes antes de retirar seus unit files. Os recursos
+descartáveis são encerrados ao final; nenhuma mudança na VPS faz parte do teste.
 
 ### Persistência e reboot
 

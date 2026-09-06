@@ -31,10 +31,7 @@ class GuardError(RuntimeError):
 
 
 class UnitNotLoaded(GuardError):
-    """systemd reports the unit as not loaded (e.g. garbage-collected while
-    quiescent). This is a definite state, not a transient fault: callers may
-    treat it as "no pending elapse / never started" only where a fresh
-    readback already established quiescence."""
+    """A unit is not loaded. This does NOT establish its execution history."""
 
 
 def digest(data):
@@ -268,8 +265,9 @@ class Controller:
             retained["service"]["start_us"] = previous_start
         authoritative["systemd_observation"] = retained
         self.store.save(authoritative)
-        state.clear()
-        state.update(authoritative)
+        # Persist only the observation into the latest journal. Do not erase
+        # pending caller fields (e.g. application_error) from its local state.
+        state["systemd_observation"] = copy.deepcopy(retained)
         return retained
 
     def _armed(self, state):
@@ -486,6 +484,10 @@ class Controller:
             time.sleep(0.02)
 
     def confirm(self, run_id, evidence, sha256, wait_seconds=30):
+        with contextlib.ExitStack() as references:
+            return self._confirm(run_id, evidence, sha256, wait_seconds, references)
+
+    def _confirm(self, run_id, evidence, sha256, wait_seconds, references):
         waiting = False
         failure = None
         recovery_error = None
@@ -500,6 +502,11 @@ class Controller:
                         or not state["applied_monotonic_ns"] < proof.get("second_session_opened_monotonic_ns", 0) <= proof["observed_monotonic_ns"]):
                     raise GuardError("a NEW independent SSH connection after application is required")
                 self._verify_applied(state)
+                # Acquire BEFORE the armed readback and retain THROUGH stop,
+                # the durable marker, final readbacks and any worker wait.
+                # RefUnit may load a unit; _armed must still prove an active
+                # timer (which already references its service) before stop.
+                references.enter_context(self.backend.retain_units(state))
                 before = self._armed(state)
                 self.backend.stop_timer(state)  # Synchronous. NEVER the service.
                 after = self._disarmed_clean(state)
@@ -541,6 +548,10 @@ class Controller:
         raise GuardError("confirmation refused; active rollback verified; never stopped rollback service") from failure
 
     def apply(self, run_id, evidence, sha256):
+        with contextlib.ExitStack() as references:
+            return self._apply(run_id, evidence, sha256, references)
+
+    def _apply(self, run_id, evidence, sha256, references):
         waiting = False
         failure = recovery_error = None
         with self.store.lock():
@@ -562,6 +573,7 @@ class Controller:
             try:
                 self.store.save(state)
                 self.backend.arm(state, self.store.directory(run_id), lambda name, event: self._unit_event(state, name, event))
+                references.enter_context(self.backend.retain_units(state))
                 self._armed(state)
                 self._action(state, "create", state["chain"])
                 for rule in input_rules(state["tag"]):
@@ -696,6 +708,15 @@ def parse_dbus_usec(text, allow_infinity=False):
     return value
 
 
+def service_start_value(value):
+    if not isinstance(value, (str, int)) or isinstance(value, bool) or not re.fullmatch(r"[0-9]+", str(value)):
+        raise GuardError("ExecMainStartTimestampMonotonic missing or invalid")
+    parsed = int(value)
+    if parsed >= 2 ** 64 - 1:
+        raise GuardError("ExecMainStartTimestampMonotonic out of range")
+    return parsed
+
+
 def parse_filter(text):
     snapshot = {"policies": {}, "chains": {}}
     for line in text.splitlines():
@@ -720,6 +741,94 @@ def parse_filter(text):
     return snapshot
 
 
+class SystemdReferences:
+    """Keep RefUnit references on ONE IPC connection, released on close/crash.
+
+    libsystemd is part of the reviewed Ubuntu target. It is loaded lazily so
+    offline tests/plan on Windows never open a bus or load a native library.
+    No shell, service start/stop, reset, reload or configuration write occurs.
+    """
+    def __init__(self, names):
+        self.names = names
+        self.bus = None
+
+    def __enter__(self):
+        import ctypes
+        self.c = ctypes
+        self.lib = ctypes.CDLL("libsystemd.so.0")
+        pointer = ctypes.c_void_p
+        string = ctypes.c_char_p
+        signatures = {
+            "sd_bus_new": ([ctypes.POINTER(pointer)], ctypes.c_int),
+            "sd_bus_set_address": ([pointer, string], ctypes.c_int),
+            "sd_bus_set_bus_client": ([pointer, ctypes.c_int], ctypes.c_int),
+            "sd_bus_start": ([pointer], ctypes.c_int),
+            "sd_bus_set_method_call_timeout": ([pointer, ctypes.c_uint64], ctypes.c_int),
+            "sd_bus_call_method": ([pointer, string, string, string, string, pointer, ctypes.POINTER(pointer), string], ctypes.c_int),
+            "sd_bus_message_read": ([pointer, string], ctypes.c_int),
+            "sd_bus_message_unref": ([pointer], pointer),
+            "sd_bus_flush_close_unref": ([pointer], pointer),
+        }
+        for name, (args, result) in signatures.items():
+            function = getattr(self.lib, name)
+            function.argtypes, function.restype = args, result
+        self.bus = pointer()
+        try:
+            self._check(self.lib.sd_bus_new(ctypes.byref(self.bus)), "allocate system bus")
+            # Match _call's sanitized environment: an inherited
+            # DBUS_SYSTEM_BUS_ADDRESS must not pin a different manager.
+            self._check(self.lib.sd_bus_set_address(self.bus, b"unix:path=/run/dbus/system_bus_socket"), "set system bus address")
+            self._check(self.lib.sd_bus_set_bus_client(self.bus, 1), "set bus client")
+            self._check(self.lib.sd_bus_start(self.bus), "open system bus")
+            self._check(self.lib.sd_bus_set_method_call_timeout(self.bus, 30_000_000), "set bus timeout")
+            self.owner = self._request("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                                       "GetNameOwner", "org.freedesktop.systemd1", read_string=True)
+            # Pin the timer first. Its dependency keeps the service loaded while
+            # the armed timer is running; confirmation separately verifies that
+            # armed state after acquisition, never trusting a newly loaded zero.
+            for name in reversed(self.names):
+                self._request(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", "RefUnit", name)
+            self.check()
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    @staticmethod
+    def _check(code, action):
+        if code < 0:
+            raise GuardError("systemd reference failed: " + action + " (errno " + str(-code) + ")")
+
+    def _request(self, destination, path, interface, member, argument=None, read_string=False):
+        reply = self.c.c_void_p()
+        types = b"" if argument is None else b"s"
+        arguments = [] if argument is None else [self.c.c_char_p(argument.encode())]
+        try:
+            result = self.lib.sd_bus_call_method(self.bus, destination.encode(), path.encode(), interface.encode(),
+                                                 member.encode(), None, self.c.byref(reply), types, *arguments)
+            self._check(result, member)
+            if read_string:
+                value = self.c.c_char_p()
+                result = self.lib.sd_bus_message_read(reply, b"s", self.c.byref(value))
+                if result <= 0 or not value.value:
+                    raise GuardError("systemd bus owner unreadable")
+                return value.value.decode()
+        finally:
+            self.lib.sd_bus_message_unref(reply)
+
+    def check(self):
+        if not self.bus:
+            raise GuardError("systemd reference connection is closed")
+        # Use the SAME connection and unique owner: a reconnect or manager
+        # replacement cannot silently turn a lost reference into success.
+        self._request(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.DBus.Peer", "Ping")
+
+    def __exit__(self, *unused):
+        if self.bus:
+            self.lib.sd_bus_flush_close_unref(self.bus)
+            self.bus = None
+
+
 class LinuxAdapter:
     """Only this adapter can reach Linux. Injected runner is used by tests.
 
@@ -733,10 +842,29 @@ class LinuxAdapter:
     PERSISTENT_FILES = ("/etc/iptables/rules.v4", "/etc/iptables/rules.v6", "/etc/default/netfilter-persistent",
                         "/usr/share/netfilter-persistent/plugins.d/15-ip4tables", "/usr/share/netfilter-persistent/plugins.d/25-ip6tables")
 
-    def __init__(self, runner=None, execute_reviewed=False, file_reader=None):
+    def __init__(self, runner=None, execute_reviewed=False, file_reader=None, reference_factory=None):
         self.runner = runner
         self.execute_reviewed = execute_reviewed
         self.file_reader = file_reader or self._system_read
+        self.reference_factory = reference_factory
+        self.references = None
+        self.referenced_run = None
+
+    @contextlib.contextmanager
+    def retain_units(self, state):
+        if self.references is not None:
+            raise GuardError("nested systemd reference session")
+        factory = self.reference_factory
+        if factory is None:
+            if self.runner is not None or not self.execute_reviewed or sys.platform != "linux" or os.geteuid() != 0:
+                raise GuardError("systemd references require reviewed Linux/root execution or an injected test factory")
+            factory = SystemdReferences
+        with factory(unit_names(state["run_id"])) as references:
+            self.references, self.referenced_run = references, state["run_id"]
+            try:
+                yield
+            finally:
+                self.references, self.referenced_run = None, None
 
     @staticmethod
     def _system_read(name):
@@ -830,10 +958,6 @@ class LinuxAdapter:
             raise GuardError("systemd unit state unreadable")
         return result
 
-    _UNIT_NOT_LOADED_RE = re.compile(
-        r"(?im)^\s*(?:call failed:\s*)?unit\s+(?P<unit>[^\s]+)\s+not loaded\.\s*$"
-    )
-
     def _unit_not_loaded(self, error, unit=None):
         # Classification identity only: accept systemd's exact not-loaded
         # response for the unit that was requested. Exit status and unrelated
@@ -841,13 +965,14 @@ class LinuxAdapter:
         if not isinstance(error, GuardError):
             return False
         detail = getattr(error, "detail", "") or ""
-        match = self._UNIT_NOT_LOADED_RE.search(detail)
-        if match and unit is not None and match.group("unit") == unit:
-            return True
         if unit is None:
             return False
-        # NoSuchUnit is accepted only when it names the requested unit.
-        return bool(re.search(r"(?im)nosuchunit.*unit\s+" + re.escape(unit) + r"\b", detail))
+        # Whole message + exact unit: no substring/prefix matches or extra
+        # diagnostic lines that could hide an unrelated transport error.
+        messages = ("Call failed: Unit " + unit + " not loaded.",
+                    "Unit " + unit + " not loaded.",
+                    "Call failed: org.freedesktop.systemd1.NoSuchUnit for Unit " + unit)
+        return detail.strip() in messages
 
     def _usec(self, unit, interface, prop, infinity=False, prior=None):
         try:
@@ -856,10 +981,8 @@ class LinuxAdapter:
         except GuardError as error:
             if not self._unit_not_loaded(error, unit):
                 raise
-            # GetUnit refuses units systemd garbage-collected while quiescent:
-            # systemctl show re-loads the unit as an ephemeral client and its
-            # exit drops the pin, so the next GetUnit is refused by identity,
-            # not by transient fault. Callers resolve via fresh readbacks.
+            # An unloaded unit can have lost its execution history. Only the
+            # timer's current stopped state is resolvable by a fresh readback.
             raise UnitNotLoaded(unit + " refused by D-Bus: not loaded") from error
         parts = shlex.split(raw)
         if len(parts) != 2 or parts[0] != "o" or not parts[1].startswith("/org/freedesktop/systemd1/unit/"):
@@ -867,12 +990,9 @@ class LinuxAdapter:
         raw = self._call([self.BUSCTL, "--system", "get-property", "org.freedesktop.systemd1", parts[1],
                           "org.freedesktop.systemd1." + interface, prop])
         value = parse_dbus_usec(raw, allow_infinity=infinity)
-        if prior not in (None, "", "0") and value == 0 and prop == "ExecMainStartTimestampMonotonic":
-            try:
-                previous = int(prior)
-            except (TypeError, ValueError):
-                raise GuardError(unit + " prior " + prop + " is invalid")
-            if previous > 0:
+        if prior is not None and prop == "ExecMainStartTimestampMonotonic":
+            previous = service_start_value(prior)
+            if previous > value:
                 return previous, False
         return value, True
 
@@ -902,17 +1022,12 @@ class LinuxAdapter:
                 # absolute monotonic timestamp returned by D-Bus. It proves
                 # that a deadline remains, but cannot quantify observe().
                 raise GuardError(unit + " pending " + prop + " unquantifiable without D-Bus") from error
-            if prior is not None and prior != "":
-                try:
-                    prior_value = int(prior)
-                except (TypeError, ValueError):
-                    raise GuardError(unit + " prior " + prop + " is invalid") from error
-                if prior_value > 0:
-                    return prior_value, False
-            if prop == "ExecMainStartTimestampMonotonic" and info.get("LoadState") == "loaded":
-                if prop in info:
-                    return 0, False
-                raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
+            if prop == "ExecMainStartTimestampMonotonic":
+                # Even the SECOND show may contain the first evidence of a
+                # start. Never discard that value (or accept malformed data).
+                values = [service_start_value(value) for value in (prior, shown) if value is not None]
+                if values and max(values) > 0:
+                    return max(values), False
             # A zero/absent service timestamp after a reload cannot prove that
             # the service never ran: systemd may have discarded the evidence.
             raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
@@ -921,6 +1036,10 @@ class LinuxAdapter:
         return all(not (self.UNIT_DIR / name).exists() and self._show(name)["LoadState"] == "not-found" for name in unit_names(run_id))
 
     def observe(self, state):
+        if self.references is not None:
+            if self.referenced_run != state["run_id"]:
+                raise GuardError("systemd reference belongs to another run")
+            self.references.check()
         service_name, timer_name = unit_names(state["run_id"])
         service, timer = self._show(service_name), self._show(timer_name)
         if service["LoadState"] != "loaded" or timer["LoadState"] != "loaded":
@@ -951,6 +1070,10 @@ class LinuxAdapter:
             job = parse_unit_job(properties)
             if job:
                 jobs.append([str(job), name])
+        if self.references is not None:
+            self.references.check()
+        elif start == 0 and (timer["ActiveState"], timer["SubState"]) != ("active", "waiting"):
+            raise GuardError("zero service history after timer stop requires a continuous systemd reference")
         return {"timer": {"active": timer["ActiveState"], "sub": timer["SubState"], "next_us": next_us},
                 "service": {"active": service["ActiveState"], "sub": service["SubState"], "result": service["Result"],
                             "status": int(service["ExecMainStatus"]), "start_us": start}, "jobs": jobs}

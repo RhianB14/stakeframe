@@ -172,6 +172,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       disparo; prazo futuro, campo ausente ou saída inválida não confirmam
       timer parado; timestamp positivo anterior não é apagado por zero, inclusive
       quando o D-Bus responde com sucesso.
+- [x] Complemento do Codex: 73 testes simulados e 5 cenários do controlador com
+      systemd real em container descartável; referência D-Bus contínua durante
+      confirmação, worker concorrente e perda de conexão verificados com
+      firewall simulado. Não comprova uma janela real na VPS.
 - [ ] Reconciliação do run antigo — **não executada**: unidades em
       `/run/systemd/system` e `active.json` permanecem; proposta revisada com
       lock compartilhado, validação de identidade/hashes, colisões, retomada
@@ -179,6 +183,8 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] Acesso serial/Cloud Shell encerrado conforme repasse: logout concluído,
       conexões vazias e Cloud Shell fechado; descarte da chave temporária segue
       não comprovado.
+
+### Domínio
 
 - [x] Consultar disponibilidade e preço de `stakeframe.com.br`: ISAVAIL
       retornou `ST 0` em 2026-09-05 e a página oficial informa R$ 40,00 por

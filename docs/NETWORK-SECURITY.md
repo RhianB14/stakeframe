@@ -285,8 +285,8 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
 
 Resultado real da primeira execução autorizada (base `4a09c4f…`, persistência
 `unchanged-active-only`): apply concluído com delta DROP em INPUT/FORWARD e
-timer armado; uma falha de verificação **determinística** interrompeu a
-confirmação e o rollback automático fechou a janela.
+timer armado; uma falha de verificação interrompeu a confirmação e o caminho
+de recuperação restaurou o firewall, mantendo o encerramento interno incompleto.
 
 - Causa observada na execução: `GetUnit` retornou `unit not loaded` para uma
   unidade inativa durante a verificação do rollback. Essa é a observação
@@ -300,8 +300,10 @@ confirmação e o rollback automático fechou a janela.
   prazo positivo, campo ausente ou saída inválida não confirmam parada. Um
   timestamp de execução positivo já observado é preservado; zero após recarga
   não prova que a service nunca iniciou. Falha D-Bus desconhecida continua
-  recusa dura; nada é convertido em sucesso, e jobs/estados seguem revalidados
-  sob o lock.
+  recusa dura. A confirmação retém referências ao timer e à service numa
+  conexão D-Bus contínua, adquirida antes de validar o timer armado e mantida
+  durante a parada, o marcador e as leituras finais. Perda da conexão recusa
+  confirmação. Jobs/estados seguem revalidados sob o lock.
 - Resultado de segurança inalterado: firewall restaurado e verificado por
   evidência externa independente — políticas ACCEPT, chain própria removida,
   IPv4 idêntico, persistência 6/6, unidades `inactive/dead` com
@@ -315,9 +317,12 @@ confirmação e o rollback automático fechou a janela.
   `operation.lock` compartilhado (com timeout; nunca um lock por run), reler e
   validar de forma somente leitura a identidade de `active.json` (`run_id`,
   chain, manifest e estado do journal), boot, script/manifest/unidades e
-  hashes dos dois unit files antes de qualquer remoção. Recusar `active.json`
-  ausente, inválido, apontando outro run, colisão de nome, divergência de
-  bytes/hash ou fase não terminal; não adotar recursos por nome. Para cada
+  hashes dos dois unit files antes de qualquer remoção. Exigir snapshot IPv6
+  igual ao `before`, persistência inalterada, nenhuma service em execução e
+  nenhum job das unidades. O alvo desta proposta é somente o run antigo em
+  `rollback_incomplete` com restauração externamente comprovada; não aceitar
+  qualquer fase terminal. Recusar apontador inválido/de outro run, colisão,
+  divergência de bytes/hash ou ausência inesperada; não adotar recursos por nome. Para cada
   remoção, registrar intenção durável antes, remover somente os dois unit files
   cujo `FragmentPath` e hash correspondam ao bundle original, executar
   `daemon-reload`, reler ausência/estado `not-found` e preservar bytes do
@@ -327,6 +332,22 @@ confirmação e o rollback automático fechou a janela.
   original intacto e exige retry idempotente. O comando `status` apenas lê o
   registro/journal e não substitui essas verificações operacionais; a proposta
   também não inclui firewall, persistência, reboot ou novo apply.
+- Estados de retomada da proposta, sempre sob o mesmo lock e sem reescrever
+  o journal original:
+  - **Remoção parcial:** preservar marcador separado com identidade, hashes,
+    bytes originais e intenção por arquivo. Um arquivo já ausente só pode ser
+    tratado como etapa concluída se sua intenção válida e seu readback estiverem
+    registrados; arquivos restantes exigem nova validação antes da remoção.
+  - **Limpeza completa, apontador ainda ativo:** validar novamente a limpeza e
+    a evidência durável, conferir bytes do apontador e ausência de colisão no
+    destino; só então arquivar. Uma falha anterior preserva o apontador ativo.
+  - **Apontador já arquivado:** validar marcador durável, identidade, bytes e
+    hashes do arquivo arquivado, ausência dos unit files/jobs e restauração
+    operacional. Somente essa conclusão comprovada permite um no-op.
+  - **Apontador ausente sem evidência correspondente, outro run ou colisão:**
+    abortar e preservar registros. Nunca inferir sucesso de ausência isolada.
+    O algoritmo executável ainda precisa de revisão própria e autorização; esta
+    definição de estados não executa nem aprova reconciliação.
 - Encerramento do guest concluído: conta padrão restaurada à forma
   pré-janela (campo sem hash, `lastchg` de provisionamento), root inalterado.
   O repasse operacional confirma que o console serial/Cloud Shell foi
@@ -422,6 +443,15 @@ armado, com `Job=`, e `ActiveState=inactive/SubState=dead/NextElapseUSecMonotoni
 após `stop`, com `Job=`. O container foi removido ao final. Isso valida o
 adaptador contra a formatação systemd 255 e o sentinel `infinity`, mas não
 substitui validação ARM64 na VPS nem autoriza nova janela.
+
+No complemento autorizado ao Codex, o controlador e o adaptador foram também
+exercitados juntos com systemd `255.4-1ubuntu8.17`, Ubuntu 24.04 x86_64 e cgroup
+namespace privado. A suíte opt-in `scripts/network_security/integration_systemd.py`
+passou 5 cenários: confirmação normal, rollback manual, início do worker durante
+parada/marcador e perda da conexão de referência. Firewall, persistência e probes
+de rede permaneceram simulados. A reprodução e os limites estão no
+[README do guard](../scripts/network_security/README.md). Não confundir esses
+resultados com execução na VPS ou com aprovação de nova janela.
 
 A CI mantém `format-check` e acrescenta `network-security-simulation` no runner
 hospedado Ubuntu, com Python do runner e sem dependências Python externas.
