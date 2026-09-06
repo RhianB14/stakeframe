@@ -19,6 +19,7 @@ import platform
 import shlex
 import subprocess
 import sys
+from decimal import Decimal
 
 PERSISTENCE_MODE = "unchanged-active-only"
 PREFLIGHT_CHECKS = ("external_bundle_copy", "server_bundle_copy", "private_full_snapshot", "provider_recovery", "oci_codex_relay_reviewed", "original_ssh", "independent_ssh", "ipv6_matrix_approved", "persistence_readback")
@@ -623,6 +624,42 @@ def parse_unit_job(properties):
     return int(value.split()[0])
 
 
+def parse_systemd_next_elapse(value):
+    """Parse systemd's human rendering of NextElapseUSecMonotonic.
+
+    ``systemctl show`` formats uint64 ``*USec`` properties as a duration;
+    uint64 max is rendered as ``infinity``. The guard needs the stopped
+    sentinel (zero) versus the absolute positive monotonic deadline.
+    """
+    if value is None:
+        raise GuardError("NextElapseUSecMonotonic property is missing")
+    value = value.strip()
+    if value == "infinity":
+        return 0
+    if value in ("", "0"):
+        if value == "0":
+            return 0
+        raise GuardError("NextElapseUSecMonotonic property is missing")
+    if re.fullmatch(r"[0-9]+", value):
+        return int(value)
+    units = {"us": 1, "µs": 1, "ms": 1_000, "s": 1_000_000,
+             "min": 60_000_000, "h": 3_600_000_000, "d": 86_400_000_000,
+             "w": 604_800_000_000}
+    total = Decimal(0)
+    token = re.compile(r"([0-9]+(?:\.[0-9]+)?)(us|µs|ms|min|s|h|d|w)")
+    parts = value.split()
+    if not parts:
+        raise GuardError("invalid NextElapseUSecMonotonic property")
+    for part in parts:
+        match = token.fullmatch(part)
+        if not match:
+            raise GuardError("invalid NextElapseUSecMonotonic property")
+        total += Decimal(match[1]) * units[match[2]]
+    if total <= 0 or total != total.to_integral_value():
+        raise GuardError("invalid NextElapseUSecMonotonic property")
+    return int(total)
+
+
 def parse_dbus_usec(text, allow_infinity=False):
     match = re.fullmatch(r"t ([0-9]+)\s*", text)
     if not match:
@@ -799,10 +836,14 @@ class LinuxAdapter:
                           "org.freedesktop.systemd1." + interface, prop])
         return parse_dbus_usec(raw, allow_infinity=infinity)
 
-    def _monotonic_readback(self, unit, interface, prop, infinity=False):
-        """Raw D-Bus microsecond, or systemctl-show resolution for a unit the
-        D-Bus manager refuses as not loaded. Returns (value, via_dbus) and
-        never fabricates unknown state: any other D-Bus failure propagates."""
+    def _monotonic_readback(self, unit, interface, prop, infinity=False, prior=None):
+        """Read a monotonic property without erasing an earlier observation.
+
+        A GetUnit refusal permits a fresh ``systemctl show`` readback only for a
+        quiescent unit. A non-zero value already observed is retained when the
+        fresh show loses execution history; a fresh zero is never evidence that
+        a service did not run. Other D-Bus failures remain hard refusals.
+        """
         try:
             return self._usec(unit, interface, prop, infinity=infinity), True
         except UnitNotLoaded as error:
@@ -812,15 +853,25 @@ class LinuxAdapter:
                              and info.get("SubState") == "dead" and parse_unit_job(info) == 0))
             if not quiescent:
                 raise GuardError(unit + " neither quiescent on readback nor readable via D-Bus: " + str(error)) from error
-            shown = info.get(prop, "")
-            if shown not in ("", "0"):
-                # A quiescent unit must show no pending elapse / never-started;
-                # anything else (e.g. a service that ran and was collected)
-                # cannot be quantified without D-Bus and is never faked here.
-                raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
-            # 0 is the same sentinel parse_dbus_usec uses for infinity; callers
-            # hold the operation lock, so the readback shape is authoritative.
-            return 0, False
+            shown = info.get(prop)
+            if infinity and prop == "NextElapseUSecMonotonic":
+                parsed = parse_systemd_next_elapse(shown)
+                if parsed == 0:
+                    return 0, False
+                # systemctl show exposes a human duration here, not the
+                # absolute monotonic timestamp returned by D-Bus. It proves
+                # that a deadline remains, but cannot quantify observe().
+                raise GuardError(unit + " pending " + prop + " unquantifiable without D-Bus") from error
+            if prior is not None and prior != "":
+                try:
+                    prior_value = int(prior)
+                except (TypeError, ValueError):
+                    raise GuardError(unit + " prior " + prop + " is invalid") from error
+                if prior_value > 0:
+                    return prior_value, False
+            # A zero/absent service timestamp after a reload cannot prove that
+            # the service never ran: systemd may have discarded the evidence.
+            raise GuardError(unit + " quiescent but " + prop + " unquantifiable without D-Bus") from error
 
     def units_absent(self, run_id):
         return all(not (self.UNIT_DIR / name).exists() and self._show(name)["LoadState"] == "not-found" for name in unit_names(run_id))
@@ -830,8 +881,10 @@ class LinuxAdapter:
         service, timer = self._show(service_name), self._show(timer_name)
         if service["LoadState"] != "loaded" or timer["LoadState"] != "loaded":
             raise GuardError("rollback units not loaded")
-        start, _ = self._monotonic_readback(service_name, "Service", "ExecMainStartTimestampMonotonic")
-        next_us, _ = self._monotonic_readback(timer_name, "Timer", "NextElapseUSecMonotonic", infinity=True)
+        start, _ = self._monotonic_readback(service_name, "Service", "ExecMainStartTimestampMonotonic",
+                                            prior=service.get("ExecMainStartTimestampMonotonic"))
+        next_us, _ = self._monotonic_readback(timer_name, "Timer", "NextElapseUSecMonotonic", infinity=True,
+                                              prior=timer.get("NextElapseUSecMonotonic"))
         jobs = []
         for row in self._call([self.SYSTEMCTL, "list-jobs", "--no-legend", "--plain", "--no-pager"]).splitlines():
             fields = row.split()
@@ -891,10 +944,17 @@ class LinuxAdapter:
         if not (timer["LoadState"] == "loaded" and timer["ActiveState"] == "inactive" and timer["SubState"] == "dead"
                 and parse_unit_job(timer) == 0):
             return False
-        # Re-read the elapse to rule out an elapse still pending behind the
-        # quiescent shape; a collected timer is refused as not loaded and
-        # settles through _monotonic_readback instead of failing the verify.
-        value, _ = self._monotonic_readback(name, "Timer", "NextElapseUSecMonotonic", infinity=True)
+        # A positive formatted deadline proves that the timer is not stopped;
+        # infinity/zero are the only no-deadline sentinels.
+        shown = timer.get("NextElapseUSecMonotonic")
+        if shown is not None:
+            parsed = parse_systemd_next_elapse(shown)
+            if parsed > 0:
+                return False
+        elif timer["LoadState"] == "loaded":
+            raise GuardError("NextElapseUSecMonotonic property is missing")
+        value, _ = self._monotonic_readback(name, "Timer", "NextElapseUSecMonotonic", infinity=True,
+                                             prior=shown)
         return value == 0
 
     def stop_timer(self, state):

@@ -274,10 +274,12 @@ verificado: campo de senha da conta padrão restaurado à forma pré-janela
 (**sem hash** — `!`), `lastchg` de volta ao valor de provisionamento (20695)
 e min/max/warn idênticos à linha de base; **root inalterado** (`*`,
 envelhecimento próprio); SSH + sudo permaneceram operantes
-(`sudo -n id -u` = 0) e `passwordauthentication no` mantido;
-`serial-getty@ttyAMA0` ativo ao final, com console serial autenticado deixado
-aberto para encerramento pelo Codex. Mutações: `usermod -p` (restauração do
-campo) e `chage -d` (metadado), ambas rc=0 com verificação pré→pós integrada.
+(`sudo -n id -u` = 0) e `passwordauthentication no` mantido.
+O repasse operacional posterior confirma o encerramento coordenado do acesso
+serial/Cloud Shell: logout concluído, lista de conexões vazia e Cloud Shell
+encerrado. Não afirmar descarte da chave temporária, que permanece não
+comprovado. Mutações: `usermod -p` (restauração do campo) e `chage -d`
+(metadado), ambas rc=0 com verificação pré→pós integrada.
 Firewall, persistência e demais serviços não foram tocados neste encerramento;
 o estado do run de firewall e sua reconciliação pendente estão em
 [NETWORK-SECURITY.md](NETWORK-SECURITY.md) §5.

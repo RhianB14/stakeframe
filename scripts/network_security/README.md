@@ -168,12 +168,15 @@ habilitado para boot.
 
 O adaptador consulta estados/resultado/status/start timestamp e jobs pendentes;
 usa D-Bus para ler microsegundos monotônicos sem interpretar durações humanas.
-Recusa de `GetUnit` por unidade não carregada é um estado definido, não falha
-transitória: unidades quiescentes são descarregadas pelo gerenciador e o `show`
-anterior só as recarrega como cliente efêmero. A recusa é classificada por
-identidade e resolvida por readback quiescente imediato (inativa/dead, sem job
-e sem valor não nulo exposto no show); falha D-Bus desconhecida segue recusa
-dura e nenhum estado é convertido em sucesso.
+Para `NextElapseUSecMonotonic`, o `systemctl show` humano aceita
+`infinity` como ausência de próximo disparo; prazo positivo continua sendo
+pendência, e campo ausente/inválido recusa. A recusa de `GetUnit` por unidade
+não carregada é um estado definido, não falha transitória: unidades quiescentes
+podem ser descarregadas pelo gerenciador. A recusa é classificada por identidade
+e resolvida por readback quiescente imediato, preservando qualquer timestamp de
+execução positivo observado anteriormente; zero após recarga, sozinho, nunca
+prova que uma service não iniciou. Falha D-Bus desconhecida segue recusa dura e
+nenhum estado é convertido em sucesso.
 A aplicação repete essa validação após a última mutação e gravação do estado
 aplicado. Se o rollback iniciou ou foi enfileirado, libera o lock para o worker,
 aguarda sua conclusão e retorna falha de aplicação. A espera relê o delta ativo

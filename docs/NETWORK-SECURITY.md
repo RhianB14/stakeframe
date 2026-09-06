@@ -288,17 +288,18 @@ Resultado real da primeira execução autorizada (base `4a09c4f…`, persistênc
 timer armado; uma falha de verificação **determinística** interrompeu a
 confirmação e o rollback automático fechou a janela.
 
-- Causa raiz: unidades quiescentes (timer/service inativas/dead) são
-  descarregadas pelo gerenciador do systemd; o `systemctl show` anterior
-  recarrega a unidade como cliente efêmero e, ao sair, solta o pin — o
-  `busctl GetUnit` seguinte é recusado por identidade ("is not loaded"), não
-  por falha transitória. O guard tratava qualquer falha como erro genérico,
-  classificando estado conhecido como desconhecido.
+- Causa observada na execução: `GetUnit` retornou `unit not loaded` para uma
+  unidade inativa durante a verificação do rollback. Essa é a observação
+  reproduzida e registrada; a explicação causal sobre GC/recarregamento é uma
+  hipótese operacional ainda não demonstrada em systemd real neste ambiente.
+- Horários systemd verificados na evidência privada: início do timer às
+  `07:50:09 UTC` e parada às `07:58:46 UTC`.
 - Correção (nesta revisão): classificar a recusa por identidade
-  (`UnitNotLoaded`) e resolver o valor por readback quiescente imediato do
-  `systemctl show` — zero somente com forma inativa/dead, sem job e sem valor
-  não nulo exposto (uma service que rodou e foi coletada mantém timestamp e
-  segue recusa, nunca "nunca iniciou"). Falha D-Bus desconhecida continua
+  (`UnitNotLoaded`) e resolver o timer parado por readback quiescente —
+  `NextElapseUSecMonotonic=infinity` significa ausência de próximo disparo;
+  prazo positivo, campo ausente ou saída inválida não confirmam parada. Um
+  timestamp de execução positivo já observado é preservado; zero após recarga
+  não prova que a service nunca iniciou. Falha D-Bus desconhecida continua
   recusa dura; nada é convertido em sucesso, e jobs/estados seguem revalidados
   sob o lock.
 - Resultado de segurança inalterado: firewall restaurado e verificado por
@@ -307,13 +308,30 @@ confirmação e o rollback automático fechou a janela.
   `NextElapse=infinity`. A confirmação não ocorreu e o journal do run
   permanece `rollback_incomplete`: a verificação interna do stop do timer
   falhou pela recusa acima; as ações de rollback foram aplicadas.
-- Reconciliação pendente: as unidades do run permanecem em
-  `/run/systemd/system` e `active.json` segue presente no estado do guard;
-  reconciliação idempotente foi proposta em tarefa separada e **não
-  executada** (o script corrigido tem hash diferente do preparado no run).
+- Reconciliação factual permanece pendente: as unidades do run continuam em
+  `/run/systemd/system` e `active.json` continua presente; nenhum desses
+  artefatos foi alterado nesta correção.
+- **Reconciliação proposta — não executar nesta etapa:** usar o mesmo
+  `operation.lock` compartilhado (com timeout; nunca um lock por run), reler e
+  validar de forma somente leitura a identidade de `active.json` (`run_id`,
+  chain, manifest e estado do journal), boot, script/manifest/unidades e
+  hashes dos dois unit files antes de qualquer remoção. Recusar `active.json`
+  ausente, inválido, apontando outro run, colisão de nome, divergência de
+  bytes/hash ou fase não terminal; não adotar recursos por nome. Para cada
+  remoção, registrar intenção durável antes, remover somente os dois unit files
+  cujo `FragmentPath` e hash correspondam ao bundle original, executar
+  `daemon-reload`, reler ausência/estado `not-found` e preservar bytes do
+  `active.json` até a limpeza estar verificada. Em seguida, gravar evidência
+  durável da limpeza e somente então renomear o apontador para um artefato
+  arquivado privado; colisão no destino ou falha parcial deixa o apontador
+  original intacto e exige retry idempotente. O comando `status` apenas lê o
+  registro/journal e não substitui essas verificações operacionais; a proposta
+  também não inclui firewall, persistência, reboot ou novo apply.
 - Encerramento do guest concluído: conta padrão restaurada à forma
-  pré-janela (campo sem hash, `lastchg` de provisionamento), root inalterado,
-  console serial mantido autenticado para encerramento pelo Codex
+  pré-janela (campo sem hash, `lastchg` de provisionamento), root inalterado.
+  O repasse operacional confirma que o console serial/Cloud Shell foi
+  encerrado: logout concluído, conexões listadas vazias e Cloud Shell fechado;
+  não afirmar descarte da chave temporária, que permanece não comprovado
   (adendo em [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9).
 
 ## 6. Recuperação OCI/Ubuntu — caminho identificado, não pronta
@@ -391,6 +409,15 @@ python -B -m unittest discover -s scripts/network_security -p 'test_*.py' -v
 pnpm format:check
 git diff --check
 ```
+
+Foi feita também uma validação separada com **systemd real em container
+descartável**, sem iptables/firewall: Debian Bookworm com `systemd 252`, timer
+`OnActiveSec=600s` iniciado e parado. O readback real foi
+`ActiveState=active/SubState=waiting/NextElapseUSecMonotonic=18min 34.318398s`
+armado e `ActiveState=inactive/SubState=dead/NextElapseUSecMonotonic=infinity`
+após `stop`; jobs ficaram vazios. O container foi removido ao final. Isso
+valida a formatação observada e o sentinel `infinity`, não substitui validação
+no Ubuntu ARM64 da VPS nem autoriza nova janela.
 
 A CI mantém `format-check` e acrescenta `network-security-simulation` no runner
 hospedado Ubuntu, com Python do runner e sem dependências Python externas.

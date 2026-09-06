@@ -792,40 +792,121 @@ class AdapterTests(unittest.TestCase):
                 raise error
             if argv[1] == "show":
                 if argv[2].endswith(".timer"):
-                    return "LoadState=loaded\nActiveState=inactive\nSubState=dead\nNextElapseUSecMonotonic=0\nJob=\n"
+                    return "LoadState=loaded\nActiveState=inactive\nSubState=dead\nNextElapseUSecMonotonic=infinity\nJob=\n"
                 return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\n"
-                        "ExecMainStatus=0\nExecMainStartTimestampMonotonic=0\nJob=\n")
+                        "ExecMainStatus=0\nExecMainStartTimestampMonotonic=7150000\nJob=\n")
             if argv[1] == "list-jobs":
                 return ""
             raise AssertionError(argv)
 
         adapter = guard.LinuxAdapter(runner=runner)
         observed = adapter.observe({"run_id": "0123456789abcdefabcd"})
-        self.assertEqual(observed["service"]["start_us"], 0)
+        self.assertEqual(observed["service"]["start_us"], 7150000)
         self.assertEqual(observed["timer"]["next_us"], 0)
         self.assertEqual(observed["jobs"], [])
         self.assertTrue(issubclass(guard.UnitNotLoaded, guard.GuardError))
 
-    def test_collected_unit_that_ran_is_never_reported_as_never_started(self):
-        # A quiescent service keeps ExecMainStartTimestampMonotonic after
-        # running; without D-Bus that value cannot be quantified, so the
-        # observation must refuse instead of fabricating "never started".
+    def test_collected_unit_preserves_prior_execution_timestamp(self):
+        # The first show observed a real execution. A later show after
+        # GetUnit refused must not erase that evidence with a synthetic zero.
         calls = []
+        service_shows = 0
+        service = guard.unit_names("0123456789abcdefabcd")[0]
+        timer = guard.unit_names("0123456789abcdefabcd")[1]
 
         def runner(argv):
+            nonlocal service_shows
             calls.append(argv)
             if argv[0] == guard.LinuxAdapter.BUSCTL:
+                if argv[2] == "call" and argv[-1] == service:
+                    error = guard.GuardError("busctl failed with exit 1")
+                    error.detail = "Unit " + service + " is not loaded."
+                    raise error
+                if argv[2] == "call":
+                    return 'o "/org/freedesktop/systemd1/unit/timer"\n'
+                if argv[2] == "get-property":
+                    return "t 0\n"
+                raise AssertionError(argv)
+            if argv[1] == "show":
+                unit = argv[2]
+                if unit == service:
+                    service_shows += 1
+                    timestamp = "7150000" if service_shows == 1 else "0"
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\n"
+                            "ExecMainStatus=0\nExecMainStartTimestampMonotonic=" + timestamp + "\nJob=\n")
+                if unit == timer:
+                    return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\n"
+                            "NextElapseUSecMonotonic=infinity\nJob=\n")
+            if argv[1] == "list-jobs":
+                return ""
+            raise AssertionError(argv)
+
+        adapter = guard.LinuxAdapter(runner=runner)
+        observed = adapter.observe({"run_id": "0123456789abcdefabcd"})
+        self.assertEqual(observed["service"]["start_us"], 7150000)
+
+    def test_zero_after_reload_without_prior_timestamp_is_unknown(self):
+        service = guard.unit_names("0123456789abcdefabcd")[0]
+
+        def runner(argv):
+            if argv[0] == guard.LinuxAdapter.BUSCTL:
                 error = guard.GuardError("busctl failed with exit 1")
-                error.detail = "Unit stk6-rollback-0123456789abcdefabcd.service is not loaded."
+                error.detail = "Unit " + service + " is not loaded."
                 raise error
             if argv[1] == "show":
-                return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\n"
-                        "ExecMainStatus=0\nExecMainStartTimestampMonotonic=7150000\nJob=\n")
+                if argv[2] == service:
+                    return "LoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nJob=\n"
+                return "LoadState=loaded\nActiveState=inactive\nSubState=dead\nNextElapseUSecMonotonic=infinity\nJob=\n"
+            if argv[1] == "list-jobs":
+                return ""
             raise AssertionError(argv)
 
         adapter = guard.LinuxAdapter(runner=runner)
         with self.assertRaisesRegex(guard.GuardError, "unquantifiable"):
             adapter.observe({"run_id": "0123456789abcdefabcd"})
+
+    def test_systemd_next_elapse_parser_accepts_infinity_only_as_no_deadline(self):
+        self.assertEqual(guard.parse_systemd_next_elapse("infinity"), 0)
+        self.assertEqual(guard.parse_systemd_next_elapse("0"), 0)
+        self.assertEqual(guard.parse_systemd_next_elapse("14min 22.693512s"), 862693512)
+        self.assertGreater(guard.parse_systemd_next_elapse("1h 2min"), 0)
+        for value in ("", "garbage"):
+            with self.subTest(value=value), self.assertRaisesRegex(guard.GuardError, "NextElapse"):
+                guard.parse_systemd_next_elapse(value)
+
+    def test_timer_stopped_rejects_missing_or_invalid_next_elapse(self):
+        timer = guard.unit_names("0123456789abcdefabcd")[1]
+        for value in (None, "garbage"):
+            with self.subTest(value=value):
+                def runner(argv, value=value):
+                    if argv[1] == "show":
+                        properties = "LoadState=loaded\nActiveState=inactive\nSubState=dead\nJob=\n"
+                        if value is not None:
+                            properties += "NextElapseUSecMonotonic=" + value + "\n"
+                        return properties
+                    if argv[1] == "list-jobs":
+                        return ""
+                    if argv[0] == guard.LinuxAdapter.BUSCTL:
+                        error = guard.GuardError("busctl failed with exit 1")
+                        error.detail = "Unit " + timer + " is not loaded."
+                        raise error
+                    raise AssertionError(argv)
+
+                adapter = guard.LinuxAdapter(runner=runner)
+                with self.assertRaisesRegex(guard.GuardError, "NextElapse"):
+                    adapter.timer_stopped({"run_id": "0123456789abcdefabcd"})
+
+    def test_timer_stopped_rejects_future_next_elapse(self):
+        def runner(argv):
+            if argv[1] == "show":
+                return ("LoadState=loaded\nActiveState=inactive\nSubState=dead\n"
+                        "NextElapseUSecMonotonic=1h 2min\nJob=\n")
+            if argv[1] == "list-jobs":
+                return ""
+            raise AssertionError(argv)
+
+        adapter = guard.LinuxAdapter(runner=runner)
+        self.assertFalse(adapter.timer_stopped({"run_id": "0123456789abcdefabcd"}))
 
     def test_unknown_dbus_failure_stays_a_hard_refusal(self):
         calls = []
@@ -858,9 +939,9 @@ class AdapterTests(unittest.TestCase):
                         error.detail = "Unit stk6-rollback-0123456789abcdefabcd.timer is not loaded."
                         raise error
                     if argv[1] == "show":
-                        if len(calls) > 2 and shape == "rearmed":
+                        if shape == "rearmed":
                             return "LoadState=loaded\nActiveState=active\nSubState=waiting\nNextElapseUSecMonotonic=9000000000\nJob=\n"
-                        value = "0" if len(calls) <= 2 else "9000000000"
+                        value = "infinity" if len(calls) <= 2 else "9000000000"
                         return "LoadState=loaded\nActiveState=inactive\nSubState=dead\nNextElapseUSecMonotonic=" + value + "\nJob=\n"
                     if argv[1] == "list-jobs":
                         return ""
@@ -869,8 +950,11 @@ class AdapterTests(unittest.TestCase):
                 adapter = guard.LinuxAdapter(runner=runner)
                 timer = guard.unit_names("0123456789abcdefabcd")[1]
                 state = {"run_id": "0123456789abcdefabcd", "units": {timer: {"acquired": True, "installed": True}}}
-                with self.assertRaisesRegex(guard.GuardError, message):
-                    adapter.timer_stopped(state)
+                if shape == "pending":
+                    with self.assertRaisesRegex(guard.GuardError, "pending"):
+                        adapter.timer_stopped(state)
+                else:
+                    self.assertFalse(adapter.timer_stopped(state))
 
     def test_unit_not_loaded_classification_by_error_identity(self):
         adapter = guard.LinuxAdapter(runner=lambda argv: "")
