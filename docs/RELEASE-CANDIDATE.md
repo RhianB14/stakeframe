@@ -40,6 +40,10 @@ Referências técnicas: [exportador OCI](https://docs.docker.com/build/exporters
 
 ## Publicação posterior
 
+O primeiro conjunto ARM64 recebeu autorização específica do proprietário em
+07/09/2026. O procedimento e seu escopo estão em [PUBLICATION.md](PUBLICATION.md);
+a autorização está vinculada aos cinco digests registrados, não a futuros builds.
+
 Os destinos propostos são `ghcr.io/rhianb14/stakeframe-<target>`. Publicar esses
 pacotes e conceder `packages: write` exige autorização específica. A geração
 de candidato não faz login no registry, push de imagem, release GitHub ou tag

@@ -10,8 +10,13 @@ após cada integração. M5 foi integrado pela [PR #43](https://github.com/Rhian
 e a preparação de validação M6 pela [PR #45](https://github.com/RhianB14/stakeframe/pull/45),
 com CI aprovada na `main` após cada integração. STK-M0-18 foi integrada pela
 [PR #47](https://github.com/RhianB14/stakeframe/pull/47), com cinco checks aprovados
-na `main` `576c831` e issue #46 encerrada. Prossegue em STK-M0-19
-([issue #48](https://github.com/RhianB14/stakeframe/issues/48)), por determinação
+na `main` `576c831` e issue #46 encerrada. STK-M0-19 foi integrada pela
+[PR #49](https://github.com/RhianB14/stakeframe/pull/49), com CI aprovada na
+`main` `1382348` e dez arquivos OCI verificados em runners AMD64/ARM64.
+Prossegue em STK-M0-20 ([issue #50](https://github.com/RhianB14/stakeframe/issues/50)),
+com publicação dos cinco índices ARM64 públicos e `packages: write`
+expressamente autorizados pelo proprietário; [PUBLICATION.md](PUBLICATION.md).
+O avanço ocorre por determinação
 do proprietário (D019), preservando piloto, ativação operacional e release
 como pendências. STK-M0-16 foi
 integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
