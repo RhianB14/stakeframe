@@ -8,6 +8,7 @@ overrides:
 allowBuilds:
   esbuild: true
   '@tailwindcss/oxide': true
+  workerd: true
 
 minimumReleaseAgeExclude:
   - '@better-auth/core@1.7.3'

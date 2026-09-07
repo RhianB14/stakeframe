@@ -72,6 +72,8 @@ jobs:
           pnpm telegram:test
           pnpm ai:test
           pnpm validation:test-corpus
+          pnpm operations:test
+          pnpm monitor:check
           pnpm test
           pnpm build
       - name: Start the local stack with disposable credentials
@@ -82,6 +84,8 @@ jobs:
         run: pnpm images:check
       - name: Rehearse production configuration with private PostgreSQL and trusted HTTPS
         run: pnpm deployment:rehearse
+      - name: Verify encrypted backups, expiry and isolated recovery with fictional data
+        run: pnpm operations:rehearse
       - name: PostgreSQL 18, Google auth protocol and pg-boss integration
         run: pnpm local:test-db
       - name: Reconcile and measure 10000 fictional bets

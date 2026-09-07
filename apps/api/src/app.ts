@@ -16,6 +16,7 @@ import type { FinanceService, ImportService, EventService, ReportService } from 
 import { registerReportRoutes } from './report-routes.js';
 import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
+import { registerOperationsRoutes, type OperationsService } from './operations.js';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
@@ -26,6 +27,7 @@ export function createApp(options: {
   imports?: ImportService;
   events?: EventService;
   reports?: ReportService;
+  operations?: OperationsService;
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
@@ -111,6 +113,7 @@ export function createApp(options: {
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerReportRoutes(app, options.ownerAuth, options.reports);
+    registerOperationsRoutes(app, options.operations);
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));

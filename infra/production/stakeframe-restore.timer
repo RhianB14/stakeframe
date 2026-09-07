@@ -1,0 +1,11 @@
+[Unit]
+Description=Monthly Stakeframe restore verification
+
+[Timer]
+OnCalendar=*-*-01 03:26:00 UTC
+Persistent=true
+RandomizedDelaySec=30
+Unit=stakeframe-restore.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+# Only a corpus evaluated and explicitly approved by the owner may be activated.
+services:
+  worker:
+    environment:
+      AUTOMATIC_IMPORT_ENABLED: 'true'
+      AUTOMATIC_IMPORT_POLICIES_FILE: /run/policies/automatic-import.json
+    volumes:
+      - type: bind
+        source: ${AUTOMATIC_IMPORT_POLICIES_FILE:?Approved private policy file required}
+        target: /run/policies/automatic-import.json
+        read_only: true
+        bind:
+          create_host_path: false

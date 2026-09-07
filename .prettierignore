@@ -1,5 +1,6 @@
 dist
 .cache
+.wrangler
 node_modules
 coverage
 pnpm-lock.yaml

@@ -1,0 +1,64 @@
+# Apply with compose.production.yml only after the production activation is authorized.
+services:
+  api:
+    environment:
+      R2_ATTACHMENTS_ENABLED: 'true'
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?R2 account required}
+      R2_ATTACHMENTS_BUCKET: ${R2_ATTACHMENTS_BUCKET:?Private attachments bucket required}
+      R2_ATTACHMENTS_ACCESS_KEY_ID_FILE: /run/secrets/r2_reader_access_key
+      R2_ATTACHMENTS_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_reader_secret_key
+      THESPORTSDB_ENABLED: 'true'
+    secrets: [r2_reader_access_key, r2_reader_secret_key]
+
+  worker:
+    environment:
+      AI_ENABLED: 'true'
+      AI_PROVIDER: openrouter
+      OPENROUTER_MODEL: google/gemini-3.8-flash
+      OPENROUTER_ALLOW_FALLBACKS: 'false'
+      OPENROUTER_MAX_OUTPUT_TOKENS: '2048'
+      OPENROUTER_REASONING_EFFORT: low
+      OPENROUTER_TIMEOUT_MS: '60000'
+      OPENROUTER_API_KEY_FILE: /run/secrets/openrouter_api_key
+      TELEGRAM_ENABLED: 'true'
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_OWNER_USER_ID_FILE: /run/secrets/telegram_owner_user_id
+      TELEGRAM_OWNER_CHAT_ID_FILE: /run/secrets/telegram_owner_chat_id
+      R2_ATTACHMENTS_ENABLED: 'true'
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?R2 account required}
+      R2_ATTACHMENTS_BUCKET: ${R2_ATTACHMENTS_BUCKET:?Private attachments bucket required}
+      R2_ATTACHMENTS_ACCESS_KEY_ID_FILE: /run/secrets/r2_writer_access_key
+      R2_ATTACHMENTS_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_writer_secret_key
+      THESPORTSDB_ENABLED: 'true'
+      AUTOMATIC_IMPORT_ENABLED: 'false'
+    secrets:
+      - openrouter_api_key
+      - telegram_bot_token
+      - telegram_owner_user_id
+      - telegram_owner_chat_id
+      - r2_writer_access_key
+      - r2_writer_secret_key
+    networks: [provider-egress]
+
+networks:
+  provider-egress:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+secrets:
+  openrouter_api_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/openrouter_api_key
+  telegram_bot_token:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/telegram_bot_token
+  telegram_owner_user_id:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/telegram_owner_user_id
+  telegram_owner_chat_id:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/telegram_owner_chat_id
+  r2_reader_access_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_reader_access_key
+  r2_reader_secret_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_reader_secret_key
+  r2_writer_access_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_writer_access_key
+  r2_writer_secret_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_writer_secret_key

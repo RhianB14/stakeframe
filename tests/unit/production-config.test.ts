@@ -3,6 +3,10 @@ import { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readConfig } from '../../apps/api/src/config.js';
+import { readAiConfig } from '../../apps/worker/src/openrouter.js';
+import { readTelegramConfig } from '../../apps/worker/src/telegram.js';
+import { createR2Storage } from '../../packages/db/src/attachments.js';
+import { OPENROUTER_MODEL } from '../../packages/shared/src/index.js';
 import {
   readRuntime,
   readSecret,
@@ -10,15 +14,33 @@ import {
 } from '../../packages/db/src/runtime-config.js';
 
 const directory = mkdtempSync(join(tmpdir(), 'stk-config-test-'));
-const files = ['db', 'auth', 'google', 'crlf', 'multiline', 'oversized'];
+const files = [
+  'db',
+  'auth',
+  'google',
+  'crlf',
+  'multiline',
+  'oversized',
+  'ai',
+  'token',
+  'owner',
+  'access',
+];
+const providerSecrets: Record<string, string> = {
+  ai: `sk-or-v1-${'a'.repeat(64)}`,
+  token: `123456:${'a'.repeat(40)}`,
+  owner: '123456',
+  access: 'a'.repeat(32),
+};
 for (const name of files)
   writeFileSync(
     join(directory, name),
-    name === 'multiline'
-      ? 'first\nsecond'
-      : name === 'oversized'
-        ? 'a'.repeat(4097)
-        : 'a'.repeat(64) + (name === 'crlf' ? '\r\n' : '\n'),
+    providerSecrets[name] ??
+      (name === 'multiline'
+        ? 'first\nsecond'
+        : name === 'oversized'
+          ? 'a'.repeat(4097)
+          : 'a'.repeat(64) + (name === 'crlf' ? '\r\n' : '\n')),
     { mode: 0o600, flag: 'wx' },
   );
 afterAll(() => {
@@ -39,6 +61,47 @@ const environment = {
 };
 
 describe('production configuration boundaries', () => {
+  it('loads provider credentials exclusively from mounted files without a network request', () => {
+    const ai = {
+      ...environment,
+      AI_ENABLED: 'true',
+      AI_PROVIDER: 'openrouter',
+      OPENROUTER_MODEL,
+      OPENROUTER_ALLOW_FALLBACKS: 'false',
+      OPENROUTER_API_KEY_FILE: join(directory, 'ai'),
+    };
+    const telegram = {
+      ...environment,
+      TELEGRAM_ENABLED: 'true',
+      TELEGRAM_BOT_TOKEN_FILE: join(directory, 'token'),
+      TELEGRAM_OWNER_USER_ID_FILE: join(directory, 'owner'),
+      TELEGRAM_OWNER_CHAT_ID_FILE: join(directory, 'owner'),
+    };
+    const storage = {
+      ...environment,
+      R2_ATTACHMENTS_ENABLED: 'true',
+      R2_ACCOUNT_ID: 'a'.repeat(32),
+      R2_ATTACHMENTS_BUCKET: 'fictional-attachments',
+      R2_ATTACHMENTS_ACCESS_KEY_ID_FILE: join(directory, 'access'),
+      R2_ATTACHMENTS_SECRET_ACCESS_KEY_FILE: join(directory, 'db'),
+    };
+    expect(readAiConfig(ai)?.apiKey).toBe(providerSecrets.ai);
+    expect(readTelegramConfig(telegram)?.userId).toBe(providerSecrets.owner);
+    expect(createR2Storage(storage)).toBeDefined();
+    for (const [env, read, secret] of [
+      [ai, readAiConfig, 'OPENROUTER_API_KEY'],
+      [telegram, readTelegramConfig, 'TELEGRAM_BOT_TOKEN'],
+      [storage, createR2Storage, 'R2_ATTACHMENTS_SECRET_ACCESS_KEY'],
+    ] as const) {
+      expect(() => read({ ...env, [secret]: 'private' })).toThrow('AMBIGUOUS_SECRET_CONFIGURATION');
+      expect(() => read({ ...env, [`${secret}_FILE`]: undefined, [secret]: 'private' })).toThrow(
+        'SECRET_FILE_REQUIRED',
+      );
+    }
+    expect(() => createR2Storage({ ...storage, R2_ATTACHMENTS_ENABLED: 'yes' })).toThrow(
+      'INVALID_ATTACHMENT_STORAGE_CONFIG',
+    );
+  });
   it('uses the private PostgreSQL service and a non-administrative application role', () => {
     const config = readConfig(environment);
     expect(config.runtime).toBe('production');

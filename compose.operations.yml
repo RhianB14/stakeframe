@@ -1,0 +1,82 @@
+# Encrypted backups and retention are activated only in an authorized deployment.
+services:
+  api:
+    environment:
+      MONITORING_ENABLED: 'true'
+      MONITOR_TOKEN_FILE: /run/secrets/monitor_token
+    secrets: [monitor_token]
+  worker:
+    environment:
+      MONITORING_ENABLED: 'true'
+  operations:
+    image: ${OPERATIONS_IMAGE:?Immutable operations image required}
+    profiles: [operations]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /work:size=4g,uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 5g
+    cpus: 0.75
+    environment:
+      NODE_ENV: production
+      STAKEFRAME_RUNTIME: production
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      BACKUP_CONFIRM: ${BACKUP_CONFIRM:?Backup and retention activation required}
+      RESTIC_PASSWORD_FILE: /run/secrets/recovery_key
+      R2_BACKUP_ACCOUNT_ID: ${R2_BACKUP_ACCOUNT_ID:?Backup R2 account required}
+      R2_BACKUP_BUCKET: ${R2_BACKUP_BUCKET:?Private backups bucket required}
+      R2_BACKUP_ACCESS_KEY_ID_FILE: /run/secrets/r2_backup_access_key
+      R2_BACKUP_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_backup_secret_key
+      R2_ATTACHMENTS_ENABLED: 'true'
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?Attachments R2 account required}
+      R2_ATTACHMENTS_BUCKET: ${R2_ATTACHMENTS_BUCKET:?Private attachments bucket required}
+      R2_ATTACHMENTS_ACCESS_KEY_ID_FILE: /run/secrets/r2_reader_access_key
+      R2_ATTACHMENTS_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_reader_secret_key
+    secrets:
+      - db_password
+      - recovery_key
+      - r2_backup_access_key
+      - r2_backup_secret_key
+      - r2_reader_access_key
+      - r2_reader_secret_key
+    networks: [backend, backup-egress]
+    volumes: [operations-status:/status]
+    depends_on:
+      postgres: { condition: service_healthy }
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9092/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  backup-egress:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+volumes:
+  operations-status:
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+secrets:
+  monitor_token:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/monitor_token
+  recovery_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/recovery_key
+  r2_backup_access_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_backup_access_key
+  r2_backup_secret_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_backup_secret_key

@@ -1,0 +1,13 @@
+{
+  "name": "@stakeframe/ops",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "src/**/*.mjs"
+  ],
+  "dependencies": {
+    "@stakeframe/db": "workspace:*",
+    "@stakeframe/shared": "workspace:*"
+  }
+}

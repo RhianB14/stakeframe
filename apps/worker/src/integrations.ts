@@ -4,6 +4,7 @@ import {
   createInboxStore,
   createR2Storage,
   createAutomaticImportService,
+  assertRecoveryReviewed,
   type Database,
   type PoolClient,
   type ObjectStorage,
@@ -75,12 +76,14 @@ export async function startIntegrations(
   boss: PgBoss,
   env: NodeJS.ProcessEnv,
   fetchImpl: typeof fetch = fetch,
+  requireBudget?: () => Promise<void>,
 ) {
   const ai = readAiConfig(env);
   const layouts = readAutomaticLayouts(env);
   const automatic = createAutomaticImportService(database, layouts);
   const telegram = readTelegramConfig(env);
   if (!ai && !telegram) return { stop: async () => {}, check: () => {} };
+  await assertRecoveryReviewed(database);
   await prepareExtractionQueue(boss);
   const store = integrationStore(database, boss, createR2Storage(env));
   const controller = new AbortController();
@@ -108,6 +111,7 @@ export async function startIntegrations(
         const claim = await store.claim(id);
         if (!claim) return { state: 'unchanged' };
         try {
+          if (requireBudget) await requireBudget();
           const result = await extractTicket({
             apiKey: ai.apiKey,
             image: claim.image,

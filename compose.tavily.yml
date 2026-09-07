@@ -1,0 +1,14 @@
+# Optional paid search. API advertises availability; only worker receives the credential.
+services:
+  api:
+    environment:
+      TAVILY_ENABLED: 'true'
+  worker:
+    environment:
+      TAVILY_ENABLED: 'true'
+      TAVILY_API_KEY_FILE: /run/secrets/tavily_api_key
+    secrets: [tavily_api_key]
+
+secrets:
+  tavily_api_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/tavily_api_key

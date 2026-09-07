@@ -357,3 +357,19 @@ recebem status `Superseded` e apontam a substituta.
   APIs permanecem desativadas até preparar configuração e autorização operacional.
 - **Calendário:** agenda paginada por seleção, com contagem distinta de bilhetes
   e sem multiplicação financeira de múltiplas. [EVENTS.md](EVENTS.md).
+
+## D022 — Pacote de recuperação com expiração seletiva (2026-09-07)
+
+- **Decisão técnica:** preservar o backup lógico completo de D009 em um pacote
+  Restic que separa imagens e metadados do dump PostgreSQL. Anexos expirados são
+  removidos também dos snapshots históricos, preservando os registros financeiros.
+  A API e a recuperação mensal usam chaves R2 de leitura com escopos próprios.
+- **Recuperação:** restaurar somente em cluster novo, conferir manifestos,
+  contagens, saldos, exposição e privilégios, revogar sessões e colocar o worker
+  em quarentena até conferência explícita de dados e backlog.
+- **Operação:** ciclos de 30 minutos, RPO medido pelo cutoff, retenção de 48 horas
+  e 30 dias, ensaio mensal isolado e monitor externo com estado persistente.
+  Orçamento OpenRouter desconhecido ou fora da política bloqueia novas extrações.
+- **Limites:** implementação e ensaios fictícios não autorizam ativação, escrita
+  ou poda de backups de produção, credenciais, timers ou mensagens externas.
+  Evidências em [M0-18-VALIDATION.md](M0-18-VALIDATION.md).

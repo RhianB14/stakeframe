@@ -16,6 +16,7 @@ import {
   EXTRACTION_QUEUE,
 } from '../../apps/worker/src/integrations.js';
 import { OPENROUTER_MODEL } from '../../packages/shared/src/index.js';
+import { IntegrationError } from '../../apps/worker/src/http.js';
 
 const sourceUrl = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
 const admin = createDatabase(sourceUrl, { statementTimeoutMs: 30_000 });
@@ -53,6 +54,31 @@ afterAll(async () => {
 });
 
 describe('durable extraction inbox', () => {
+  it('requires recovery review before starting any paid extraction consumer', async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await database.pool.query(
+      "insert into integration.cursor(name,next_offset) values('recovery-quarantine',1)",
+    );
+    try {
+      await expect(
+        startIntegrations(
+          database,
+          boss,
+          {
+            AI_ENABLED: 'true',
+            AI_PROVIDER: 'openrouter',
+            OPENROUTER_MODEL,
+            OPENROUTER_ALLOW_FALLBACKS: 'false',
+            OPENROUTER_API_KEY: `sk-or-v1-${'a'.repeat(64)}`,
+          },
+          fetchImpl,
+        ),
+      ).rejects.toThrow('INTEGRATIONS_RECOVERY_REVIEW_REQUIRED');
+      expect(fetchImpl).not.toHaveBeenCalled();
+    } finally {
+      await database.pool.query("delete from integration.cursor where name='recovery-quarantine'");
+    }
+  });
   it('commits image and queue job together; replay does not download again', async () => {
     const store = integrationStore(database, boss);
     const download = vi.fn().mockResolvedValue(image);
@@ -194,6 +220,7 @@ describe('durable extraction inbox', () => {
         choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(candidate) } }],
       }),
     );
+    const requireBudget = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     const runtime = await startIntegrations(
       database,
       boss,
@@ -205,6 +232,7 @@ describe('durable extraction inbox', () => {
         OPENROUTER_API_KEY: `sk-or-v1-${'0'.repeat(64)}`,
       },
       fetchImpl,
+      requireBudget,
     );
     try {
       const id = await integrationStore(database, boss).accept(input(), async () => image);
@@ -221,6 +249,21 @@ describe('durable extraction inbox', () => {
       ).rows[0]?.extraction;
       expect(saved.extraction).toEqual(candidate);
       expect(saved.requiresReview).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      requireBudget.mockRejectedValueOnce(new IntegrationError('AI_BUDGET_UNAVAILABLE'));
+      const blocked = await integrationStore(database, boss).accept(input(), async () => image);
+      await expect
+        .poll(
+          async () =>
+            (
+              await database.pool.query('select error_code from integration.inbox where id=$1', [
+                blocked,
+              ])
+            ).rows[0]?.error_code,
+          { timeout: 15_000 },
+        )
+        .toBe('AI_BUDGET_UNAVAILABLE');
+      expect(requireBudget).toHaveBeenCalledTimes(2);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     } finally {
       await runtime.stop();
