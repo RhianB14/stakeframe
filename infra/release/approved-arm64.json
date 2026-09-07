@@ -14,10 +14,30 @@
     "expiresAt": "2026-09-08T18:46:51Z"
   },
   "images": [
-    {"target":"api","repository":"ghcr.io/rhianb14/stakeframe-api","digest":"sha256:da62896345ae27a75083d3ce032c42e3e131c4ddb308a6377baef7da099d2116"},
-    {"target":"worker","repository":"ghcr.io/rhianb14/stakeframe-worker","digest":"sha256:cbe6b61a5c5d5fba80ce00700614cdb67af9a9f98d34e77698ebdfc1512f07a2"},
-    {"target":"migrate","repository":"ghcr.io/rhianb14/stakeframe-migrate","digest":"sha256:ebc70080180a9fe585b7a96e2fd431c094d4b8426492f5e547c55bbee7dac60d"},
-    {"target":"web-production","repository":"ghcr.io/rhianb14/stakeframe-web-production","digest":"sha256:066ee861c447538ffe852290a8fc98edeeb61e3e82990f1dde6f48bb4f3bc0a7"},
-    {"target":"operations","repository":"ghcr.io/rhianb14/stakeframe-operations","digest":"sha256:8f9e5f34e74e59bdc95063def2e813ed65dab002cab3037df00075ec8abc6526"}
+    {
+      "target": "api",
+      "repository": "ghcr.io/rhianb14/stakeframe-api",
+      "digest": "sha256:da62896345ae27a75083d3ce032c42e3e131c4ddb308a6377baef7da099d2116"
+    },
+    {
+      "target": "worker",
+      "repository": "ghcr.io/rhianb14/stakeframe-worker",
+      "digest": "sha256:cbe6b61a5c5d5fba80ce00700614cdb67af9a9f98d34e77698ebdfc1512f07a2"
+    },
+    {
+      "target": "migrate",
+      "repository": "ghcr.io/rhianb14/stakeframe-migrate",
+      "digest": "sha256:ebc70080180a9fe585b7a96e2fd431c094d4b8426492f5e547c55bbee7dac60d"
+    },
+    {
+      "target": "web-production",
+      "repository": "ghcr.io/rhianb14/stakeframe-web-production",
+      "digest": "sha256:066ee861c447538ffe852290a8fc98edeeb61e3e82990f1dde6f48bb4f3bc0a7"
+    },
+    {
+      "target": "operations",
+      "repository": "ghcr.io/rhianb14/stakeframe-operations",
+      "digest": "sha256:8f9e5f34e74e59bdc95063def2e813ed65dab002cab3037df00075ec8abc6526"
+    }
   ]
 }
