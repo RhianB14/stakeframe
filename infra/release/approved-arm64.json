@@ -9,7 +9,7 @@
   "artifact": {
     "id": 10026975110,
     "name": "candidate-ac2bd24988482457708321d275f022cee29f4d17-arm64",
-    "bytes": 553766032,
+    "bytes": 553766544,
     "sha256": "1365388ab87238f0c280867e909cfa5d28a3da713175ea1adae25ba2b968135b",
     "expiresAt": "2026-09-08T14:51:20Z"
   },
