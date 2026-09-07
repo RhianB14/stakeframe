@@ -44,7 +44,7 @@ Guia, senha e relatórios detalhados ficam fora do repositório público.
 - Cotas e recursos comparados em [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
 - Credencial existente preservada em pasta privada para o ensaio, sem criar
   chave, modificar permissões ou ativar faturamento. O projeto permanece free.
-- Ferramenta limitada e seis testes offline em [AI-PROBE.md](AI-PROBE.md).
+- Ferramenta limitada e dez testes offline em [AI-PROBE.md](AI-PROBE.md).
 - Catálogo autenticado da API confirmou `generateContent` para os três modelos.
 - `gemini-3.1-flash-lite`: prova real aprovada em `2026-09-07T00:44:58.674Z`,
   latência de 6.531 ms; 8/8 campos do exemplo conferidos, incluindo data ausente
@@ -59,9 +59,38 @@ Guia, senha e relatórios detalhados ficam fora do repositório público.
   resposta de extração e uma aprovada), além de leitura autenticada do catálogo.
   Não houve repetição automática, chamada a provedor pago nem teste com imagem real.
 
+## Ensaio privado adicional solicitado pelo proprietário
+
+O proprietário pediu DeepSeek V4 Flash Vision Exp e forneceu uma imagem para
+comparação. A imagem, transcrição, valores financeiros, nome do arquivo e
+gabarito permanecem fora do repositório público, em diretório com ACL privada.
+
+- Conta Go autenticada: assinatura ativa, saldo extra desativado e cota mensal
+  disponível. Foi usada uma chave existente, sem mudar credenciais, opções
+  da conta ou faturamento. O cliente identifica corretamente o ensaio e envia
+  o cabeçalho de sessão exigido pelo Go. Somente endpoint da assinatura.
+- Gemini 3.1 Flash-Lite: uma chamada concluída em 3.000 ms; 1.526 tokens de
+  entrada, 324 de saída, 102 de raciocínio e 1.952 totais.
+- DeepSeek pelo Go: quatro chamadas deliberadas. A primeira foi recusada pelo
+  verificador como resposta incompleta, sem preservar o motivo detalhado; a
+  segunda atingiu 45 segundos; a terceira foi interrompida pelo limite de
+  128 KiB, inadequado para o overhead SSE. Essas duas últimas interrupções são
+  limites do cliente, não comprovação de erro de leitura do modelo.
+- A quarta terminou em `2026-09-07T01:05:08.688Z`, com HTTP 200, streaming
+  encerrado e `finish_reason=stop`: 91.019 ms, 798 tokens de entrada, 3.159
+  de saída (incluindo 2.873 de raciocínio), 3.957 totais. Mesmo solicitando
+  raciocínio desativado/baixo, a resposta informou raciocínio; sua desativação
+  efetiva nessa rota não foi demonstrada.
+- As duas extrações concluídas são iguais nos 22 campos escalares do schema.
+  Conferência visual do Codex: seleções/contexto, valores, bônus e cashout
+  representados; data absoluta e liquidação não foram inventadas. A amostra
+  única não é benchmark de precisão nem estimativa confiável de latência.
+- Não houve novas requisições após a execução concluída. O helper público
+  continua restrito à imagem fictícia; o script privado não foi publicado.
+
 ## Verificações locais
 
-- Seis testes offline aprovados, incluindo 429/503, recusa de imagem/modelo
+- Dez testes offline aprovados, incluindo 429/503, recusa de imagem/modelo
   diferentes, erros sem segredo e reprovação de campos incorretos.
 - Reexecução do ensaio já concluído recusada com `AI_ALREADY_ATTEMPTED`, antes
   de outra chamada. Lint, formatação dos arquivos suportados e `git diff --check`
@@ -71,7 +100,8 @@ Guia, senha e relatórios detalhados ficam fora do repositório público.
 
 ## Limites
 
-Sem migração, deploy ou segredos instalados na VPS. Sem chamadas ao Go, compras,
-imagens reais enviadas ao Google, registro de apostas ou alterações de schema.
-Precisão nos bilhetes privados e integração contínua Gemini/Telegram/R2 ainda
-pendem de etapas próprias. M0 permanece em andamento.
+Sem migração, deploy ou segredos instalados na VPS. Sem compras, registro de
+apostas ou alterações de schema. O ensaio privado acima foi explicitamente
+solicitado; não autoriza envio de outras imagens. Precisão em amostra
+representativa e integração contínua Gemini/Telegram/R2 ainda pendem de
+etapas próprias. M0 permanece em andamento.

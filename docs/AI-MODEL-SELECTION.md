@@ -70,16 +70,19 @@ projeto e nível: [documentação de cotas](https://ai.google.dev/gemini-api/doc
   sujeitos à confirmação de suporte no endpoint Go e de adequação do plano
   ao uso de um aplicativo de bilhetes. A documentação Go descreve o plano
   para OpenCode e agentes de programação com solicitações semelhantes.
-  Ter uma chave não comprova essas duas condições. Não houve teste autenticado
-  nem consumo da assinatura nesta comparação.
+  Ter uma chave não comprova essas duas condições. Os modelos Kimi ainda não
+  foram testados; o ensaio Go abaixo se limita ao DeepSeek solicitado depois.
   [Go](https://opencode.ai/docs/go/),
   [Kimi K2.6](https://platform.kimi.ai/docs/guide/kimi-k2-6-quickstart),
   [Kimi K3](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart).
 
-O catálogo público Go também lista `deepseek-v4-flash-vision-exp`, mas seu
-caráter experimental não o torna a primeira escolha para dados financeiros.
-Não confundir o suporte do modelo original com a compatibilidade efetiva
-do intermediário, nem contagens estimadas de programação com bilhetes por dia.
+O proprietário solicitou depois o teste de `deepseek-v4-flash-vision-exp` pelo
+Go. A extração privada concluída conferiu os mesmos 22 campos que o Gemini,
+mas levou 91.019 ms, contra 3.000 ms no Gemini. É uma única imagem e houve
+ajustes no verificador, inclusive no limite de transporte SSE; não interpretar
+isso como uma medida geral de precisão ou falha do modelo. A candidatura
+permanece experimental e não altera o provedor inicial. Não converter as
+estimativas de requisições de programação do plano em bilhetes por dia.
 
 ## Validação antes da escolha final
 
@@ -109,8 +112,14 @@ incertezas à revisão, conforme a própria
 
 O nível gratuito do Google informa uso de conteúdo para melhorar seus
 produtos. Isso precisa fazer parte da escolha antes de enviar bilhetes reais;
-nenhuma imagem privada foi enviada nesta comparação.
+após a comparação inicial, o proprietário forneceu uma imagem e solicitou
+o teste. Essa imagem foi enviada ao Go e ao Gemini no ensaio privado descrito
+no registro, sem publicar arquivo, transcrição ou valores no GitHub.
 [Condições do nível gratuito](https://ai.google.dev/gemini-api/docs/pricing).
+
+A pesquisa ampliada de APIs solicitada pelo proprietário está em
+[AI-API-CANDIDATES.md](AI-API-CANDIDATES.md). As recomendações de novos testes
+não representam acesso confirmado à conta nem autorização de cobrança.
 
 ## Efeito na infraestrutura
 

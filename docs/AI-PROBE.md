@@ -1,4 +1,4 @@
-# Ensaio da API Gemini
+# Ensaios das APIs de imagem
 
 Esta ferramenta do M0 faz uma única chamada real por execução, usando somente
 o [bilhete fictício fixo](../tests/fixtures/ai/synthetic-ticket.png). Ela não
@@ -39,6 +39,34 @@ sem redirecionamentos, uma imagem PNG conferida por SHA-256, uma resposta JSON,
 até 2.048 tokens de saída e prazo de 45 segundos. Não há upload de arquivos
 arbitrários, ferramentas de busca, fallback ou retentativa automática.
 
+### Candidato OpenCode Go
+
+Também é aceito `deepseek-v4-flash-vision-exp`, exclusivamente pelo endpoint
+`https://opencode.ai/zen/go/v1/chat/completions`. Para esse modelo, `api_key`
+contém uma chave existente do Go e `metadata.json` registra:
+
+```json
+{
+  "provider": "opencode-go",
+  "subscriptionActive": true,
+  "useBalance": false,
+  "verifiedAt": "<data ISO da verificação pelo operador>"
+}
+```
+
+O operador confere assinatura, cota e saldo extra desativado no console; o
+registro local não garante que essas condições continuarão iguais. O pedido
+identifica este verificador de forma explícita e inclui `x-opencode-session`.
+Solicita JSON por `response_format`, com schema no prompt e validação local;
+isso não equivale a schema imposto pelo servidor. Os limites continuam em
+45 segundos, 2.048 tokens e 128 KiB de resposta sem streaming. Esse helper
+Go foi validado offline, ainda não em chamada real com a imagem sintética.
+
+O teste privado solicitado pelo proprietário usou outro script, fora do Git,
+restrito à imagem expressamente fornecida. Sua execução bem-sucedida no Go
+usou streaming, até 4.096 tokens, 120 segundos e 2 MiB para os fragmentos SSE.
+Não afrouxar a restrição da imagem pública deste helper para repetir esse teste.
+
 Um arquivo `<modelo>.intent.json` é criado exclusivamente antes da chamada.
 Nova execução com o mesmo modelo e diretório é recusada, inclusive se a conexão
 teve resultado ambíguo. Investigar a causa e preservar o registro antes de
@@ -72,4 +100,6 @@ o runtime planejado e não são consumidas por esse ensaio.
 
 Fontes: [API generateContent](https://ai.google.dev/api/generate-content),
 [imagens](https://ai.google.dev/gemini-api/docs/image-understanding) e
-[saída estruturada](https://ai.google.dev/gemini-api/docs/structured-output).
+[saída estruturada](https://ai.google.dev/gemini-api/docs/structured-output),
+[OpenCode Go](https://opencode.ai/docs/go/) e
+[JSON DeepSeek](https://api-docs.deepseek.com/guides/json_mode/).
