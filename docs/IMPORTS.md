@@ -14,8 +14,12 @@ origem antes de analisar o corpo. O navegador guarda um envio pendente em
 IndexedDB antes do POST e reutiliza imagem, legenda e chave após interrupção
 ou recarga da página. O armazenamento é vinculado ao proprietário e limpo
 após confirmação ou logout.
-Envios de abas distintas têm espaços separados, evitando sobrescrever a
-recuperação de uma solicitação simultânea.
+Envios de abas distintas têm espaços separados, protegidos por Web Locks.
+Uma aba duplicada negocia outro espaço se o identificador herdado estiver
+ocupado; a recarga recupera o espaço original após o navegador liberar o lock.
+Navegadores sem Web Locks recusam o upload antes de enviá-lo. O teste de
+regressão mantém dois envios incertos, recarrega ambas as abas e verifica
+que cada uma recupera sua própria imagem, legenda e chave.
 
 Uma chave de upload identifica uma solicitação; conteúdo diferente com a mesma
 chave é recusado. Entradas diferentes podem compartilhar os bytes do mesmo

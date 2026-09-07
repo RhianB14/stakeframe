@@ -384,6 +384,60 @@ test('upload recovers its original image, caption and key from durable browser s
   await expect(page.getByLabel('Imagem do comprovante')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Verificar envio' })).toHaveCount(0);
 });
+test('tabs with copied session storage recover their own uncertain uploads independently', async ({
+  page,
+  context,
+}) => {
+  await enabledProduct(page);
+  await importRoutes(page);
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Enviar para revisão' })).toBeEnabled();
+  const inheritedSlot = await page.evaluate(() => sessionStorage.getItem('stakeframe.upload-slot'));
+  expect(inheritedSlot).toBeTruthy();
+  const duplicate = await context.newPage();
+  await enabledProduct(duplicate);
+  await importRoutes(duplicate);
+  await duplicate.goto('/#imports');
+  // Match the copied sessionStorage of a duplicated tab/opener before the form claims ownership.
+  await duplicate.evaluate(
+    (slot) => sessionStorage.setItem('stakeframe.upload-slot', slot!),
+    inheritedSlot,
+  );
+  await duplicate.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await expect(duplicate.getByRole('button', { name: 'Enviar para revisão' })).toBeEnabled();
+  expect(await duplicate.evaluate(() => sessionStorage.getItem('stakeframe.upload-slot'))).not.toBe(
+    inheritedSlot,
+  );
+  const attempts: { key: string | undefined; body: unknown }[][] = [[], []];
+  for (const [index, tab] of [page, duplicate].entries()) {
+    await tab.route('**/api/v1/imports', async (route) => {
+      attempts[index]!.push({
+        key: route.request().headers()['idempotency-key'],
+        body: route.request().postDataJSON(),
+      });
+      if (attempts[index]!.length === 1) await route.abort('failed');
+      else await route.fulfill({ json: { id: importId } });
+    });
+    await tab.getByLabel('Imagem do comprovante').setInputFiles(imageFile);
+    await tab.getByLabel('Legenda (opcional)').fill(`Analista ${index + 1}\nBet365`);
+    await tab.getByRole('button', { name: 'Enviar para revisão' }).click();
+    await expect(tab.getByRole('button', { name: 'Verificar envio' })).toBeVisible();
+  }
+  expect(attempts[0]![0]!.key).not.toBe(attempts[1]![0]!.key);
+  for (const [index, tab] of [page, duplicate].entries()) {
+    await tab.reload();
+    await tab.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+    await tab.getByRole('button', { name: 'Verificar envio' }).click();
+    await expect(
+      tab.getByRole('heading', { name: 'Revisar importação', exact: true }),
+    ).toBeVisible();
+    expect(attempts[index]).toHaveLength(2);
+    expect(attempts[index]![0]).toEqual(attempts[index]![1]);
+    expect(attempts[index]![1]!.body).toMatchObject({ caption: `Analista ${index + 1}\nBet365` });
+  }
+  await duplicate.close();
+});
 test('duplicate review links a selected existing bet without posting another stake', async ({
   page,
 }) => {
