@@ -262,3 +262,49 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** este ensaio não ativa backups reais, retenção, agendamento ou
   alertas, nem comprova RPO/RTO ou custódia da chave de produção. O token de
   preparação expira em 2026-10-06. Procedimento em [R2.md](R2.md).
+
+## D017 — Consumir Gemini diretamente e preservar o OmniRoute local (2026-09-06)
+
+> A escolha de provedor/modelo foi substituída por D018. O histórico do ensaio
+> e a preservação do OmniRoute abaixo continuam válidos.
+
+- **Contexto:** o proprietário já tem API Gemini gratuita e envia menos de 30
+  bilhetes por dia normalmente, com picos de 45–60. Instalar outro serviço de
+  roteamento não é necessário para esse provedor. A comparação e as cotas
+  efetivas foram apresentadas, e o proprietário aprovou continuar com Gemini.
+- **Decisão:** API direta pelo worker da VPS; principal inicial
+  `gemini-3.1-flash-lite`, que passou na prova fictícia. O candidato original
+  `gemini-3.5-flash-lite` e o candidato à segunda leitura `gemini-3.8-flash`
+  retornaram HTTP 503 e permanecem sujeitos a revalidação. Respeitar cotas do projeto, fila e retentativas
+  limitadas. Falhas preservam o trabalho para revisão/reprocessamento, sem
+  recorrer automaticamente a cobrança ou outros planos.
+- **Limite de evidência:** a prova de imagem fictícia valida o protocolo e os
+  campos daquele exemplo. A escolha por precisão exige amostra privada das
+  casas usadas. Não atribuir acesso genérico de produto à assinatura Go ou Pro.
+- **Preservação:** backup Restic local do OmniRoute, com SQLite consistente,
+  configuração, código e alterações locais; restauração de arquivos e material
+  de decifragem verificada sem iniciar a cópia. A limpeza das duas pastas
+  temporárias privadas foi bloqueada pela revisão automática e ficou pendente.
+- **Operação:** sem instalação OmniRoute na VPS ou transferência de suas
+  sessões. Segredo Gemini fora do Git; nível gratuito com suas condições de
+  uso de conteúdo. Não há implantação ou processamento de bilhetes reais nesta
+  decisão. [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
+
+## D018 — Gemini 3.8 Flash via OpenRouter com orçamento mensal (2026-09-06)
+
+- **Contexto:** o proprietário disponibilizou saldo OpenRouter, autorizou criar
+  a chave e testar Gemini 3.8 Flash; depois aprovou o modelo para o projeto
+  e pediu adequar a chave, após a proposta de orçamento de USD 5 mensais.
+- **Decisão:** modelo exato `google/gemini-3.8-flash`, consumido pelo futuro
+  worker da VPS. Chave dedicada `Stakeframe - Gemini 3.8 Flash`, limite remoto
+  de USD 5 mensais com renovação no dia 1 em UTC, sem ativar recarga de saldo.
+- **Configuração:** segredo em arquivo privado, schema JSON, até 2.048 tokens
+  de saída, raciocínio baixo e timeout de 60 segundos. Sem troca automática
+  de modelo/provedor ou repetição de resultados ambíguos. Falhas de saldo/cota
+  preservam trabalho para revisão e posterior reprocessamento.
+- **Evidência:** uma imagem privada semanticamente conferida em 22 campos,
+  5.141 ms e USD 0,0023247675. Não é benchmark representativo. Configuração
+  pública e evidências agregadas em [OPENROUTER.md](OPENROUTER.md).
+- **Limites:** chave fora do Git, ainda não instalada na VPS; configuração
+  preparada não implementa o importador contínuo nem autoriza deploy. O backup
+  do OmniRoute permanece preservado, sem exigir sua instalação na VPS.

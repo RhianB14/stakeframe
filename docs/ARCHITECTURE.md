@@ -74,7 +74,9 @@ Monorepo TypeScript estrito com pnpm workspaces:
 | `packages/shared` | Contratos compartilhados, tipos, utilitários de domínio  |
 
 Infraestrutura de execução (VPS Oracle Always Free): Docker Compose com
-aplicação, API, worker, PostgreSQL, Caddy (HTTPS) e OmniRoute (IA). Backups
+aplicação, API, worker, PostgreSQL e Caddy (HTTPS). Gemini 3.8 Flash via OpenRouter,
+chamada pelo worker com credencial privada, fila e limites por modelo;
+decisão e etapas de validação em [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md). Backups
 externos criptografados no Cloudflare R2 (dumps lógicos do banco e cópias de
 recuperação de anexos imutáveis, com manifesto e checksums —
 [docs/RECOVERY.md](RECOVERY.md)).

@@ -52,7 +52,7 @@
 | PostgreSQL                      | Dump lógico completo (`pg_dump -Fc`), criptografado |
 | Anexos                          | Objetos imutáveis + cópia no bucket de backups      |
 | Manifesto de anexos             | Lista + checksums por ciclo de backup               |
-| Configuração do OmniRoute       | Backup do volume de configuração                    |
+| Configuração e credencial de IA | Modelo versionado e custódia privada fora da VPS    |
 | Compose e configuração de infra | Versionados no repositório                          |
 
 - Retenção: cópias frequentes por 48 horas; diárias por 30 dias.
@@ -71,7 +71,8 @@
 4. Conferir proprietários e permissões após a restauração.
 5. Restaurar anexos a partir das cópias de recuperação e conferir contra o
    manifesto (checksums) e a política de retenção.
-6. Restaurar configuração do OmniRoute.
+6. Recuperar configuração e credencial privada OpenRouter, revalidando
+   acesso e limites sem repetir importações já processadas.
 7. Subir o compose com as imagens por digest.
 8. Verificação de integridade (conciliação de saldos, contagens, smoke tests).
 9. Registro do teste (data, duração, RTO medido, problemas).

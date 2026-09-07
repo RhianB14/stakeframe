@@ -7,8 +7,9 @@
 ## Alvo (planejado)
 
 - Hospedagem na VPS Oracle Always Free, com Docker Compose.
-- Serviços: aplicação web, API, worker, PostgreSQL 18, Caddy (proxy HTTPS) e
-  OmniRoute (IA), em rede interna; apenas Caddy exposto publicamente.
+- Serviços: aplicação web, API, worker, PostgreSQL 18 e Caddy (proxy HTTPS),
+  em rede interna; apenas Caddy exposto publicamente. O worker usará a API
+  Gemini 3.8 Flash via OpenRouter, conforme [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
 - Imagens construídas pela CI e referenciadas por versão/digest.
 - Domínio `stakeframe.com.br` (compra informada pelo proprietário em
   06/09/2026); DNS e HTTPS automático via Caddy ainda pendentes.
@@ -80,5 +81,6 @@ Registrar commit, digests, horário, resultados e autorização no relatório.
 
 O ensaio local comprova somente o cenário descrito em
 [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md). A primeira execução
-na VPS será tratada como piloto, com autorização e registro próprios. OmniRoute,
-Telegram e R2 ainda não fazem parte deste Compose.
+na VPS será tratada como piloto, com autorização e registro próprios. A integração
+contínua com OpenRouter, Telegram e R2 ainda não faz parte deste Compose. A instalação
+do OmniRoute na VPS foi dispensada pela decisão D017.

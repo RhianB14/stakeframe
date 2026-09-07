@@ -1,7 +1,9 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-15** — preparação do bot Telegram e associação privada
-([issue #30](https://github.com/RhianB14/stakeframe/issues/30)). STK-M0-14 foi
+Tarefa atual: **STK-M0-16** — seleção de IA, OpenRouter e backup do OmniRoute
+([issue #32](https://github.com/RhianB14/stakeframe/issues/32)). STK-M0-15 foi
+integrada pela [PR #31](https://github.com/RhianB14/stakeframe/pull/31), com
+CI aprovada na `main` `71928cc`. STK-M0-14 foi
 integrada pela [PR #29](https://github.com/RhianB14/stakeframe/pull/29), com
 CI aprovada na `main` `a907626`. STK-M0-12 e
 STK-M0-13 foram integradas pelas
@@ -270,17 +272,24 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [ ] Credencial de anexos e credenciais definitivas da operação R2 na VPS;
       não reutilizar automaticamente o token temporário de ensaio.
 
-### OmniRoute na VPS
+### IA direta com Gemini
 
-- [ ] Planejar instância Docker independente do computador pessoal; inventariar
-      provedores disponíveis, limites e custos; validar suporte a imagens e
-      saída estruturada antes de depender deles.
-  - [x] Referência local consultada: OmniRoute `3.8.50`; manifesto oficial da
-        imagem `3.8.50` reportou `linux/amd64` e `linux/arm64`.
-  - [x] Arquitetura observada da VPS: `aarch64`/ARM64; compatibilidade de
-        plataforma base da imagem confirmada no manifesto.
-  - [ ] Perfil, consumo, limites, healthcheck, provedores e custo de produção
-        ainda não validados.
+- [x] Provedor e modelos selecionados pelo proprietário após comparação;
+      cotas gratuitas observadas na conta. OmniRoute dispensado na VPS.
+      [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md), decisão D017 substituída por D018.
+- [x] Gemini 3.8 Flash via OpenRouter escolhido após ensaio privado: chave
+      dedicada com USD 5 mensais, configuração privada preparada e teste
+      conferido. [OPENROUTER.md](OPENROUTER.md). Integração contínua ainda pendente.
+- [x] Backup criptografado do OmniRoute local e restauração de arquivos/banco
+      verificados, preservando a instalação existente. Limpeza das cópias
+      temporárias privadas bloqueada pela revisão automática; não concluída.
+- [x] Prova real limitada de imagem fictícia e saída estruturada pelo
+      `gemini-3.1-flash-lite`, com 8/8 campos conferidos. 3.5 Flash-Lite e
+      3.8 Flash retornaram 503; não validados. [M0-16-VALIDATION.md](M0-16-VALIDATION.md).
+- [ ] Medir precisão com bilhetes privados das três casas; validar campos,
+      omissões e casos que exigem revisão do proprietário.
+- [ ] Integração contínua no worker, fila persistente, cotas e reprocessamento
+      sem chamadas automáticas pagas; validar operação na VPS sem o PC.
 
 ### Infraestrutura e operação
 
@@ -289,9 +298,9 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       descartável com persistência após reinício. Isso não conclui o deploy.
       [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md) e
       [M0-12-VALIDATION.md](M0-12-VALIDATION.md).
-- [ ] Docker Compose inicial (app, api, worker, PostgreSQL, Caddy, OmniRoute)
+- [ ] Docker Compose inicial (app, api, worker, PostgreSQL, Caddy)
       com volumes e redes internas.
-      Base local disponível na STK-M0-07; configuração de produção sem OmniRoute
+      Base local disponível na STK-M0-07; configuração de produção
       preparada na STK-M0-12. Execução na VPS ainda pendente.
 - [ ] HTTPS com Caddy + renovação; DNS do domínio.
 - [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
@@ -317,6 +326,6 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
   STK-M0-02 é complementado por NETWORK-SECURITY §3.
 - Primeira janela proposta somente IPv6 ativo; persistência e publicação de
   aplicação fora do escopo, sujeitas a tarefas/autorização separadas.
-- Ordem das integrações (R2 → OAuth → Telegram → OmniRoute) após o domínio.
+- Ordem das integrações (R2 → OAuth → Telegram → Gemini direto) após o domínio.
 - Desenvolvimento começou com Docker local na STK-M0-07; instalação do
   PostgreSQL na VPS será tratada junto à preparação de produção.
