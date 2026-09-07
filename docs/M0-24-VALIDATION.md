@@ -26,16 +26,20 @@ Digests instalados no arquivo privado `/etc/stakeframe/deployment.env`:
 - Os logs de operações registraram `OPS_SCHEDULER_READY` e
   `OPS_BACKUP_VERIFIED`.
 - HTTP local respondeu `308`, confirmando o redirecionamento para HTTPS.
-- O Caddy iniciou corretamente com a sintaxe TLS corrigida e tentou emitir o
-  certificado para `stakeframe.com.br`.
+- Após a correção DNS, o Caddy obteve com sucesso o certificado ACME para
+  `stakeframe.com.br` (ordem Let's Encrypt concluída).
+- A validação pública com o IP da VPS respondeu `200` na página inicial,
+  `{"status":"alive"}` em `/health/live`, `{"status":"ready"}` em
+  `/health/ready` e `401` na rota protegida de operações, como esperado para
+  acesso anônimo.
 
 ## Limitação externa
 
-A validação ACME pública falhou por timeout porque o domínio resolveu para
-`162.240.81.81`, enquanto a VPS do piloto é `129.146.113.111`. Nenhuma
-alteração DNS foi feita nesta execução. Depois de corrigir o registro A/AAAA,
-é necessário repetir a validação HTTPS pública, OAuth e o acesso anônimo às
-rotas protegidas.
+O registro A da zona HostGator foi alterado de `162.240.81.81` para
+`129.146.113.111`. As consultas DNS over HTTPS do Cloudflare e do Google já
+retornam o novo endereço; alguns resolvedores locais podem manter o valor
+anterior até o vencimento do TTL. O certificado HTTPS e os probes públicos
+foram revalidados após a propagação.
 
 O piloto não altera a autorização para produção contínua, retenção externa de
 backups, ativação do Telegram ou instalação de credenciais R2.
