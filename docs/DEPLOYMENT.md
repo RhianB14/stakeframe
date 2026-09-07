@@ -17,8 +17,8 @@
 ## Preparação do artefato
 
 1. Selecionar um commit da `main` com CI aprovada em AMD64/ARM64. Construir e
-   publicar os targets `api`, `worker`, `migrate` e `web-production` em tarefa
-   própria; registrar os quatro digests e a proveniência do build.
+   publicar os targets `api`, `worker`, `migrate`, `web-production` e `operations`
+   em tarefa própria; registrar os cinco digests e a proveniência do build.
 2. Preparar o arquivo de configuração privado a partir de
    [deployment.env.example](../infra/production/deployment.env.example),
    incluindo os digests exatos. Guardar a configuração anterior.
@@ -27,7 +27,7 @@
    `https://stakeframe.com.br/api/auth/callback/google` foram preparados na
    [STK-M0-14](M0-14-VALIDATION.md); a instalação do segredo na VPS e o login
    real continuam pendentes.
-4. Executar `node scripts/deployment-check.mjs /caminho/privado/deployment.env`.
+4. Executar `node scripts/deployment-check.mjs /caminho/privado/deployment.env --integrations --operations`.
    Conferir DNS, firewall, acesso administrativo independente, espaço livre,
    backups e recuperação. O checker não comprova esses gates externos.
 5. Registrar autorização explícita do Codex com commit, digests, ambiente,
@@ -36,7 +36,10 @@
 ## Operação futura, somente após autorização
 
 Executar no checkout revisado da VPS, com arquivo de configuração privado.
-Os comandos abaixo são o procedimento preparado; não foram executados na VPS.
+Os comandos abaixo são o procedimento preparado para a base; não foram executados
+na VPS. Para o piloto completo, acrescentar os overlays e o perfil descritos em
+[OPERATIONS.md](OPERATIONS.md), inicializar o backup e ativar operações somente
+dentro da autorização que inclua retenção, integrações e agendamento.
 
 ```bash
 docker compose --env-file /etc/stakeframe/deployment.env -f compose.production.yml pull
@@ -82,5 +85,6 @@ Registrar commit, digests, horário, resultados e autorização no relatório.
 O ensaio local comprova somente o cenário descrito em
 [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md). A primeira execução
 na VPS será tratada como piloto, com autorização e registro próprios. A integração
-contínua com OpenRouter, Telegram e R2 ainda não faz parte deste Compose. A instalação
+contínua com OpenRouter, Telegram e R2 está preparada no overlay de integrações,
+com backup, retenção e monitor em [OPERATIONS.md](OPERATIONS.md). A instalação
 do OmniRoute na VPS foi dispensada pela decisão D017.

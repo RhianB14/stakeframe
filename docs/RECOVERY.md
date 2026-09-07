@@ -2,9 +2,10 @@
 
 > **STATUS: VALIDAÇÃO PARCIAL COM DADOS FICTÍCIOS.** STK-M0-10 demonstra dump
 > criptografado local; STK-M0-13 demonstra envio ao R2 e restauração em cluster novo.
-> Evidências externas em [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Backups
-> externos da aplicação, agendamento, alertas e recuperação completa de produção
-> continuam pendentes. Evidências e limites em [RECOVERY-DRILL.md](RECOVERY-DRILL.md).
+> Evidências externas em [M0-13-VALIDATION.md](M0-13-VALIDATION.md). STK-M0-18
+> implementa backup completo da aplicação, retenção histórica, agendamento,
+> quarentena de recuperação e monitor; procedimentos em [OPERATIONS.md](OPERATIONS.md).
+> A ativação e validação com dados de produção continuam pendentes.
 
 ## Objetivos (do plano mestre)
 
@@ -60,7 +61,12 @@
 - A restauração deve reaplicar as regras de retenção de anexos (não
   reintroduzir imagens expiradas), inclusive nas cópias de recuperação.
 
-## Procedimento de restauração de produção (a implementar e testar)
+## Procedimento de restauração de produção (ativação pendente)
+
+A implementação ensaiada está em [OPERATIONS.md](OPERATIONS.md). Ela separa
+as imagens do dump para permitir exclusão seletiva nas cópias históricas,
+restaura apenas em cluster novo e mantém integrações em quarentena até revisão.
+Os passos abaixo continuam sendo os critérios operacionais de aceite.
 
 1. Provisionar/recriar a VPS e preparar o cluster PostgreSQL de destino.
 2. Selecionar o dump PostgreSQL válido mais recente, recriar previamente as

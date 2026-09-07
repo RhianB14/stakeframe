@@ -5,6 +5,11 @@ obrigatória. A configuração é ensaiada em Docker local com identidades
 fictícias. Produção na VPS continua sem implantação; os gates operacionais
 em [DEPLOYMENT.md](DEPLOYMENT.md) permanecem obrigatórios.
 
+STK-M0-18 acrescenta overlays para integrações, backup/monitoramento, Tavily
+opcional e importação automática condicionada ao corpus. A lista de segredos,
+redes, confirmação de retenção e o ensaio mensal estão em
+[OPERATIONS.md](OPERATIONS.md). O contrato básico abaixo continua válido.
+
 ## Contrato do runtime
 
 `STAKEFRAME_RUNTIME=local` mantém o desenvolvimento existente. O modo
@@ -44,8 +49,8 @@ credenciais/permissões durante uma revisão de configuração.
 
 `compose.production.yml` não constrói imagens. O arquivo privado derivado de
 [deployment.env.example](../infra/production/deployment.env.example) aponta
-os quatro artefatos revisados por digest: API, worker, migrador e
-`web-production`. O checker recusa tags mutáveis. A publicação dessas imagens
+os artefatos revisados por digest: API, worker, migrador, `web-production` e,
+com o overlay operacional, `operations`. O checker recusa tags mutáveis. A publicação dessas imagens
 e a escolha de digests reais são etapas posteriores.
 
 Somente o web publica TCP 80/443, encaminhados às portas sem privilégio
@@ -109,6 +114,7 @@ sanitizado fica em `.cache/deployment-reports`; imagens e cache podem permanecer
 ## Limites
 
 O ensaio não prova DNS, ACME público, rede/armazenamento da VPS, restauração de
-produção, R2 ou OAuth real de produção. Não cumpre RPO/RTO. O schema permanece
-apenas de autenticação e operação; as funcionalidades de produto continuam
-fora do M0. [DEPLOYMENT.md](DEPLOYMENT.md) define a futura operação.
+produção, R2 ou OAuth real de produção. Não cumpre RPO/RTO. As funcionalidades
+M1–M5 e a preparação de M6 já estão implementadas; o ensaio HTTPS verifica as
+fronteiras de implantação e não substitui o piloto financeiro real.
+[DEPLOYMENT.md](DEPLOYMENT.md) define a futura operação.

@@ -22,6 +22,8 @@ export type { PoolClient } from 'pg';
 export { createFinanceService, FinanceError, type FinanceService } from './finance-service.js';
 export { createReportService, type ReportService } from './reports.js';
 export { layoutDigest } from './automatic-policy.js';
+export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
+export { assertRecoveryReviewed } from './recovery-guard.js';
 export { createAutomaticImportService } from './automatic-import.js';
 export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
 

@@ -10,11 +10,13 @@ import {
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { createOwnerAuth } from './auth.js';
+import { createOperationsService } from './operations.js';
 
 async function main() {
   const config = readConfig(process.env);
   const database = createDatabase(config.databaseUrl);
   const ownerAuth = config.auth.enabled ? createOwnerAuth(config.auth, database) : undefined;
+  const operations = createOperationsService(database, process.env);
   const app = createApp({
     checkDatabase: database.check,
     logger: true,
@@ -23,6 +25,7 @@ async function main() {
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
     reports: createReportService(database),
+    ...(operations ? { operations } : {}),
     ...(ownerAuth ? { ownerAuth } : {}),
   });
   app.addHook('onClose', database.close);

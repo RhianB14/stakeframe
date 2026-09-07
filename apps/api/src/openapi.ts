@@ -43,7 +43,10 @@ export function registerApiContracts(app: FastifyInstance) {
           name: 'Importações',
           description: 'Comprovantes privados, extração e revisão antes do lançamento financeiro.',
         },
-        { name: 'Operação', description: 'Verificações técnicas públicas, sem dados privados.' },
+        {
+          name: 'Operação',
+          description: 'Verificações públicas e monitor operacional com credencial própria.',
+        },
         {
           name: 'Autenticação',
           description:
@@ -52,6 +55,12 @@ export function registerApiContracts(app: FastifyInstance) {
       ],
       components: {
         securitySchemes: {
+          operationsMonitor: {
+            type: 'http',
+            scheme: 'bearer',
+            description:
+              'Segredo dedicado somente à leitura de sinais operacionais. Não acessa apostas ou comandos.',
+          },
           localOwnerSession: {
             type: 'apiKey',
             in: 'cookie',

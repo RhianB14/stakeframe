@@ -9,6 +9,7 @@ import {
 import { MAX_IMAGE_BYTES } from '@stakeframe/shared';
 import { readSecret, readRuntime } from './runtime-config.js';
 import type { Database } from './index.js';
+import { attachmentExpiredSql } from './attachment-policy.js';
 
 let decoderTail = Promise.resolve();
 let waitingDecoders = 0;
@@ -48,7 +49,9 @@ export type ObjectStorage = {
   delete(key: string, signal?: AbortSignal): Promise<void>;
 };
 export function createR2Storage(env: NodeJS.ProcessEnv): ObjectStorage | undefined {
-  if (env.R2_ATTACHMENTS_ENABLED !== 'true') return undefined;
+  if (env.R2_ATTACHMENTS_ENABLED === undefined || env.R2_ATTACHMENTS_ENABLED === 'false')
+    return undefined;
+  if (env.R2_ATTACHMENTS_ENABLED !== 'true') throw new Error('INVALID_ATTACHMENT_STORAGE_CONFIG');
   readRuntime(env);
   const account = env.R2_ACCOUNT_ID;
   const bucket = env.R2_ATTACHMENTS_BUCKET;
@@ -190,17 +193,7 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
           where ($1::boolean or not a.remote_attempted)
             and (not a.remote_attempted or a.updated_at<now()-interval '2 minutes')
             and (a.state='deleting' or (a.state in ('local','remote')
-            and exists(select 1 from integration.inbox i where i.attachment_id=a.id)
-            and not exists(
-              select 1 from integration.inbox i left join finance.bet b on b.id=i.imported_bet_id
-              where i.attachment_id=a.id and (
-                i.state not in ('discarded','imported') or i.updated_at>now()-interval '30 days'
-                or (i.state='imported' and (b.id is null or b.state='open'
-                  or exists(select 1 from finance.settlement s where s.bet_id=b.id and greatest(s.created_at,s.settled_at)>now()-interval '30 days')
-                  or exists(select 1 from finance.audit audit where audit.entity_id=b.id::text and audit.created_at>now()-interval '30 days')
-                ))
-              )
-            ))) order by a.updated_at limit 1 for update of a`,
+            and (${attachmentExpiredSql}))) order by a.updated_at limit 1 for update of a`,
             [Boolean(storage)],
           )
         ).rows[0];

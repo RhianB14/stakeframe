@@ -20,6 +20,9 @@
     "images:check": "node scripts/check-runtime-images.mjs",
     "deployment:check": "node scripts/deployment-check.mjs",
     "deployment:rehearse": "node scripts/deployment-rehearsal.mjs",
+    "operations:test": "pnpm build:types && node --test tests/operations/*.test.mjs",
+    "operations:rehearse": "node scripts/operations-rehearsal.mjs",
+    "monitor:check": "wrangler deploy --dry-run --outdir .cache/monitor-build --config infra/monitor/wrangler.jsonc",
     "recovery:test-safety": "node --test scripts/recovery/safety.test.mjs",
     "recovery:drill": "pnpm recovery:test-safety && node scripts/recovery-drill.mjs",
     "recovery:r2": "node scripts/recovery-drill.mjs --r2",
@@ -49,6 +52,7 @@
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "typescript-eslint": "8.69.0",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "wrangler": "4.129.0"
   }
 }

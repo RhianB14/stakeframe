@@ -1,23 +1,40 @@
 import { createServer } from 'node:http';
-import { createDatabase, requireDatabaseUrl, readDatabaseConfig } from '@stakeframe/db';
+import {
+  createDatabase,
+  requireDatabaseUrl,
+  readDatabaseConfig,
+  assertRecoveryReviewed,
+} from '@stakeframe/db';
 import { PROBE_QUEUE } from '@stakeframe/shared';
 import { startWorker } from './worker.js';
 import { startIntegrations } from './integrations.js';
 import { startMonthlyUnits } from './monthly-unit.js';
 import { startAttachments } from './attachments.js';
 import { startEventSearch } from './event-providers.js';
+import { createBudgetProbe } from './budget.js';
 
 async function main() {
   const connectionString = requireDatabaseUrl(readDatabaseConfig(process.env));
   const database = createDatabase(connectionString);
+  if (![undefined, 'true', 'false'].includes(process.env.MONITORING_ENABLED))
+    throw new Error('MONITORING_CONFIGURATION_INVALID');
+  const budget =
+    process.env.MONITORING_ENABLED === 'true' ? createBudgetProbe(process.env) : undefined;
   let boss;
   let integrations = { stop: async () => {}, check: () => {} };
   let monthlyUnits = { stop: async () => {}, check: () => {} };
   let attachments = { stop: async () => {}, check: () => {} };
   let events = { stop: async () => {}, check: () => {} };
   try {
+    await assertRecoveryReviewed(database);
     boss = await startWorker(connectionString);
-    integrations = await startIntegrations(database, boss, process.env);
+    integrations = await startIntegrations(
+      database,
+      boss,
+      process.env,
+      fetch,
+      budget?.requireBudget,
+    );
     monthlyUnits = await startMonthlyUnits(database);
     attachments = startAttachments(database, process.env);
     events = startEventSearch(database, process.env);
@@ -30,9 +47,16 @@ async function main() {
     await database.close();
     throw new Error('WORKER_START_FAILED');
   }
-  const server = createServer((_request, response) => {
+  const server = createServer((request, response) => {
     void (async () => {
       try {
+        if (request.method === 'GET' && request.url === '/budget') {
+          const status = budget ? await budget.read() : 'disabled';
+          response
+            .writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+            .end(JSON.stringify({ status }));
+          return;
+        }
         await database.check();
         integrations.check();
         monthlyUnits.check();

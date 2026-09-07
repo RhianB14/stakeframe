@@ -1,0 +1,18 @@
+{
+  "name": "stakeframe-monitor",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-07",
+  "workers_dev": true,
+  "vars": {
+    "APP_ORIGIN": "https://stakeframe.com.br",
+    "MONITOR_ENABLED": "false",
+  },
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "durable_objects": {
+    "bindings": [{ "name": "STAKEFRAME_MONITOR", "class_name": "StakeframeMonitor" }],
+  },
+  "exports": {
+    "StakeframeMonitor": { "type": "durable-object", "storage": "sqlite" },
+  },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

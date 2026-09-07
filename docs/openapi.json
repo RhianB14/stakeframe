@@ -7,6 +7,11 @@
   },
   "components": {
     "securitySchemes": {
+      "operationsMonitor": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Segredo dedicado somente à leitura de sinais operacionais. Não acessa apostas ou comandos."
+      },
       "localOwnerSession": {
         "type": "apiKey",
         "in": "cookie",
@@ -2541,6 +2546,63 @@
           }
         },
         "required": ["sports"]
+      },
+      "OperationsHealthInput": {
+        "type": "object",
+        "properties": {
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "status": { "type": "string", "enum": ["ready", "attention"] },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "worker": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "backup": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "restoreTest": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "retention": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "disk": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "importQueue": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "attachments": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "aiQuota": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "aiBudget": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "eventQueue": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "recovery": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] }
+            },
+            "required": [
+              "database",
+              "worker",
+              "backup",
+              "restoreTest",
+              "retention",
+              "disk",
+              "importQueue",
+              "attachments",
+              "aiQuota",
+              "aiBudget",
+              "eventQueue",
+              "recovery"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["checkedAt", "status", "checks"],
+        "additionalProperties": false
       },
       "SystemStatusInput": {
         "type": "object",
@@ -5210,6 +5272,63 @@
         "required": ["sports"],
         "additionalProperties": false
       },
+      "OperationsHealth": {
+        "type": "object",
+        "properties": {
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "status": { "type": "string", "enum": ["ready", "attention"] },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "worker": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "backup": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "restoreTest": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "retention": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "disk": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "importQueue": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "attachments": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "aiQuota": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "aiBudget": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "eventQueue": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "recovery": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] }
+            },
+            "required": [
+              "database",
+              "worker",
+              "backup",
+              "restoreTest",
+              "retention",
+              "disk",
+              "importQueue",
+              "attachments",
+              "aiQuota",
+              "aiBudget",
+              "eventQueue",
+              "recovery"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["checkedAt", "status", "checks"],
+        "additionalProperties": false
+      },
       "SystemStatus": {
         "type": "object",
         "properties": {
@@ -7641,6 +7760,46 @@
           }
         }
       }
+    },
+    "/api/v1/operations/health": {
+      "get": {
+        "operationId": "getOperationsHealth",
+        "summary": "Consultar sinais operacionais privados, sem dados de apostas",
+        "tags": ["Operação"],
+        "security": [{ "operationsMonitor": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/OperationsHealth" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],
@@ -7652,7 +7811,10 @@
       "name": "Importações",
       "description": "Comprovantes privados, extração e revisão antes do lançamento financeiro."
     },
-    { "name": "Operação", "description": "Verificações técnicas públicas, sem dados privados." },
+    {
+      "name": "Operação",
+      "description": "Verificações públicas e monitor operacional com credencial própria."
+    },
     {
       "name": "Autenticação",
       "description": "Fluxo de navegador Google e sessão própria. Tokens Google não autenticam chamadas da API."

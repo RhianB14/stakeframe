@@ -6,6 +6,7 @@ import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { execute, root, assertLocalEndpoint, assertWithinWorkspace } from './recovery/runtime.mjs';
 import { assertDeploymentConfig } from './deployment/config.mjs';
+import { assertRestoreConfig } from './deployment/restore-config.mjs';
 
 const project = `stk-deploy-${randomUUID().replaceAll('-', '')}`;
 const directory = join(root, '.cache', 'deployment-rehearsal', project);
@@ -14,6 +15,20 @@ const knownFiles = [
   'db_password',
   'auth_secret',
   'google_client_secret',
+  'openrouter_api_key',
+  'telegram_bot_token',
+  'telegram_owner_user_id',
+  'telegram_owner_chat_id',
+  'r2_reader_access_key',
+  'r2_reader_secret_key',
+  'r2_writer_access_key',
+  'r2_writer_secret_key',
+  'tavily_api_key',
+  'automatic-import.json',
+  'recovery_key',
+  'r2_backup_access_key',
+  'r2_backup_secret_key',
+  'monitor_token',
   'empty.env',
   'deployment.env',
 ];
@@ -160,10 +175,17 @@ async function main() {
     GOOGLE_CLIENT_ID: 'rehearsal-client',
     AUTHORIZED_GOOGLE_EMAIL: 'owner@example.test',
     AUTHORIZED_GOOGLE_SUB: '111111111111111111111',
+    R2_ACCOUNT_ID: 'a'.repeat(32),
+    R2_ATTACHMENTS_BUCKET: 'fictional-attachments',
+    R2_BACKUP_ACCOUNT_ID: 'a'.repeat(32),
+    R2_BACKUP_BUCKET: 'fictional-backups',
+    BACKUP_CONFIRM: 'production-with-retention',
+    OPERATIONS_IMAGE: images.api,
+    AUTOMATIC_IMPORT_POLICIES_FILE: join(directory, 'automatic-import.json').replaceAll('\\', '/'),
   };
   const publishedShape = { ...environment };
   // Syntax fixture only; these are not published digests and are never pulled.
-  for (const name of ['API', 'WORKER', 'MIGRATE', 'WEB'])
+  for (const name of ['API', 'WORKER', 'MIGRATE', 'WEB', 'OPERATIONS'])
     publishedShape[`${name}_IMAGE`] =
       `example.invalid/stakeframe-${name.toLowerCase()}@${environment[`${name}_IMAGE`]}`;
   const checkFile = join(directory, 'deployment.env');
@@ -173,7 +195,146 @@ async function main() {
       .map(([name, value]) => `${name}=${value}`)
       .join('\n') + '\n',
   );
+  stage = 'configuration-base';
   await execute(process.execPath, ['scripts/deployment-check.mjs', checkFile]);
+  // Rendering only: these fake provider secrets are never used for network requests.
+  for (const flags of [
+    ['--integrations'],
+    ['--integrations', '--tavily'],
+    ['--integrations', '--tavily', '--automatic'],
+    ['--integrations', '--operations'],
+    ['--integrations', '--tavily', '--automatic', '--operations'],
+  ]) {
+    stage = `configuration${flags.join('')}`;
+    await execute(process.execPath, ['scripts/deployment-check.mjs', checkFile, ...flags]);
+  }
+  stage = 'configuration-restore';
+  const restoreProject = `stk-restore-${randomUUID().replaceAll('-', '')}`;
+  const restoreShape = JSON.parse(
+    (
+      await docker(
+        [
+          'compose',
+          '--env-file',
+          checkFile,
+          '-f',
+          join(root, 'compose.restore.yml'),
+          'config',
+          '--format',
+          'json',
+        ],
+        {
+          env: {
+            RESTORE_RUN: restoreProject,
+            RESTORE_TEMP_DIRECTORY: directory.replaceAll('\\', '/'),
+          },
+        },
+      )
+    ).stdout,
+  );
+  assertRestoreConfig(restoreShape, restoreProject);
+  for (const mutate of [
+    (value) => {
+      value.services.restore.environment.BACKUP_READ_ONLY = 'false';
+    },
+    (value) => {
+      value.networks['restore-private'].external = true;
+    },
+    (value) => {
+      value.services['restore-postgres'].ports = [{ target: 5432 }];
+    },
+    (value) => {
+      value.volumes['restore-database'].external = true;
+    },
+    (value) => {
+      value.services.restore.volumes.push({
+        type: 'bind',
+        source: '/var/run/docker.sock',
+        target: '/var/run/docker.sock',
+      });
+    },
+  ]) {
+    const invalid = structuredClone(restoreShape);
+    mutate(invalid);
+    assert.throws(() => assertRestoreConfig(invalid, restoreProject));
+  }
+  checked('integration-operations-and-isolated-restore-configuration');
+  const integrated = JSON.parse(
+    (
+      await docker([
+        'compose',
+        '--env-file',
+        checkFile,
+        '-f',
+        join(root, 'compose.production.yml'),
+        '-f',
+        join(root, 'compose.integrations.yml'),
+        '--profile',
+        'migration',
+        'config',
+        '--format',
+        'json',
+      ])
+    ).stdout,
+  );
+  assertDeploymentConfig(integrated, { integrations: true });
+  const automatic = JSON.parse(
+    (
+      await docker([
+        'compose',
+        '--env-file',
+        checkFile,
+        '-f',
+        join(root, 'compose.production.yml'),
+        '-f',
+        join(root, 'compose.integrations.yml'),
+        '-f',
+        join(root, 'compose.automatic-import.yml'),
+        '--profile',
+        'migration',
+        'config',
+        '--format',
+        'json',
+      ])
+    ).stdout,
+  );
+  assertDeploymentConfig(automatic, { integrations: true, automatic: true });
+  automatic.services.worker.volumes[0].bind ??= {};
+  automatic.services.worker.volumes[0].bind.create_host_path = true;
+  assert.throws(() => assertDeploymentConfig(automatic, { integrations: true, automatic: true }));
+  for (const mutate of [
+    (value) => {
+      value.services.worker.environment.OPENROUTER_ALLOW_FALLBACKS = 'true';
+    },
+    (value) => {
+      value.services.worker.environment.OPENROUTER_API_KEY = 'private';
+    },
+    (value) => {
+      value.services.api.secrets.push({
+        source: 'openrouter_api_key',
+        target: 'openrouter_api_key',
+      });
+    },
+    (value) => {
+      value.services.api.environment.R2_ATTACHMENTS_ACCESS_KEY_ID_FILE =
+        '/run/secrets/r2_writer_access_key';
+    },
+    (value) => {
+      delete value.services.worker.networks['provider-egress'];
+    },
+    (value) => {
+      value.services.worker.environment.AUTOMATIC_IMPORT_ENABLED = 'true';
+    },
+    (value) => {
+      value.services.worker.environment.TAVILY_ENABLED = 'true';
+    },
+  ]) {
+    const unsafe = structuredClone(integrated);
+    mutate(unsafe);
+    assert.throws(() => assertDeploymentConfig(unsafe, { integrations: true }));
+  }
+  assert.throws(() => assertDeploymentConfig(integrated));
+  checked('provider-overlays-and-secret-consumer-isolation');
   // A dangling secret path is rejected without reading or printing secret values.
   await writeFile(
     checkFile,

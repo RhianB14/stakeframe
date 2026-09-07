@@ -6,6 +6,7 @@ export default [
   {
     ignores: [
       '**/.cache/**',
+      '**/.wrangler/**',
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',

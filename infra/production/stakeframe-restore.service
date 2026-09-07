@@ -1,0 +1,28 @@
+[Unit]
+Description=Verify Stakeframe recovery in a new isolated PostgreSQL cluster
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/stakeframe
+ExecStart=/opt/stakeframe-tools/node/bin/node /opt/stakeframe/scripts/restore-rehearsal.mjs /etc/stakeframe/deployment.env
+Environment=RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery
+Environment=DOCKER_CONFIG=/etc/stakeframe/docker
+TimeoutStartSec=4h
+RuntimeDirectory=stakeframe-restore
+RuntimeDirectoryMode=0700
+StateDirectory=stakeframe/restore-reports
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/stakeframe-restore /var/lib/stakeframe/restore-reports /var/lib/stakeframe/operations-status
+RestrictAddressFamilies=AF_UNIX
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,81 @@
+# Monthly rehearsal target only. Never attaches to production's database/network.
+services:
+  restore-postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_DB: stakeframe
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [postgres_password, db_password]
+    networks: [restore-private]
+    volumes:
+      - restore-database:/var/lib/postgresql
+      - ./infra/production/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    mem_limit: 1g
+    cpus: 0.75
+    security_opt: [no-new-privileges:true]
+    labels:
+      io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d stakeframe']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  restore:
+    image: ${OPERATIONS_IMAGE:?Immutable reviewed operations image required}
+    command: [src/server.mjs, restore]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /work:size=1g,uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    pids_limit: 128
+    cpus: 0.75
+    networks: [restore-private, restore-egress]
+    environment:
+      NODE_ENV: production
+      STAKEFRAME_RUNTIME: production
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      RESTIC_PASSWORD_FILE: /run/secrets/recovery_key
+      BACKUP_READ_ONLY: 'true'
+      RESTORE_CONFIRM: new-isolated-cluster
+      R2_BACKUP_ACCOUNT_ID: ${R2_BACKUP_ACCOUNT_ID:?Backup R2 account required}
+      R2_BACKUP_BUCKET: ${R2_BACKUP_BUCKET:?Private backups bucket required}
+      R2_BACKUP_ACCESS_KEY_ID_FILE: /run/secrets/r2_backup_restore_access_key
+      R2_BACKUP_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_backup_restore_secret_key
+    secrets: [db_password, recovery_key, r2_backup_restore_access_key, r2_backup_restore_secret_key]
+    volumes: [restore-status:/status]
+    labels:
+      io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
+    depends_on:
+      restore-postgres: { condition: service_healthy }
+
+networks:
+  restore-private:
+    internal: true
+    labels:
+      io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
+  restore-egress:
+    labels:
+      io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
+volumes:
+  restore-database:
+    labels:
+      io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
+  restore-status:
+    labels:
+      io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
+secrets:
+  postgres_password:
+    file: ${RESTORE_TEMP_DIRECTORY:?Private temporary directory required}/postgres_password
+  db_password:
+    file: ${RESTORE_TEMP_DIRECTORY:?Private temporary directory required}/db_password
+  recovery_key:
+    file: ${SECRET_DIRECTORY:?Private production secrets required}/recovery_key
+  r2_backup_restore_access_key:
+    file: ${SECRET_DIRECTORY:?Private production secrets required}/r2_backup_restore_access_key
+  r2_backup_restore_secret_key:
+    file: ${SECRET_DIRECTORY:?Private production secrets required}/r2_backup_restore_secret_key

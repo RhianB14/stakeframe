@@ -1,0 +1,93 @@
+# Private, disposable clusters. Used only by scripts/operations-rehearsal.mjs.
+x-postgres: &postgres
+  image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+  environment:
+    POSTGRES_DB: stakeframe
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+  networks: [private]
+  security_opt: [no-new-privileges:true]
+  labels:
+    io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+  healthcheck:
+    test: [CMD-SHELL, 'pg_isready -U postgres -d stakeframe']
+    interval: 2s
+    timeout: 2s
+    retries: 30
+
+services:
+  postgres:
+    <<: *postgres
+    secrets: [postgres_password, db_password]
+    volumes:
+      - source:/var/lib/postgresql
+      - ./infra/production/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+  restore-postgres:
+    <<: *postgres
+    secrets:
+      - postgres_password
+      - source: target_db_password
+        target: db_password
+    volumes:
+      - target:/var/lib/postgresql
+      - ./infra/production/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+  tools:
+    image: ${OPERATIONS_IMAGE:?Built operations image required}
+    read_only: true
+    tmpfs:
+      [
+        /tmp,
+        '/work:size=512m,uid=1000,gid=1000,mode=0700',
+        '/var/lib/stakeframe/restore-reports:size=1m,uid=1000,gid=1000,mode=0700',
+      ]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    pids_limit: 128
+    cpus: 1
+    networks: [private]
+    environment:
+      NODE_ENV: production
+      STAKEFRAME_RUNTIME: production
+      OPS_REHEARSAL: 'true'
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      RESTIC_PASSWORD_FILE: /run/secrets/recovery_key
+      RESTIC_REPOSITORY: /repository
+    secrets: [db_password, target_db_password, recovery_key, postgres_password]
+    volumes:
+      - repository:/repository
+      - status:/status
+      - status:/var/lib/stakeframe/operations-status
+      - ./tests/operations/drill.mjs:/app/drill.mjs:ro
+      - ./scripts:/runner/scripts:ro
+    labels:
+      io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+
+networks:
+  private:
+    internal: true
+    labels:
+      io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+volumes:
+  source:
+    labels:
+      io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+  target:
+    labels:
+      io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+  repository:
+    labels:
+      io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+  status:
+    labels:
+      io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
+secrets:
+  postgres_password:
+    file: ${OPERATIONS_SECRET_DIRECTORY:?Private rehearsal required}/postgres_password
+  db_password:
+    file: ${OPERATIONS_SECRET_DIRECTORY:?Private rehearsal required}/db_password
+  target_db_password:
+    file: ${OPERATIONS_SECRET_DIRECTORY:?Private rehearsal required}/target_db_password
+  recovery_key:
+    file: ${OPERATIONS_SECRET_DIRECTORY:?Private rehearsal required}/recovery_key
