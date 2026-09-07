@@ -32,6 +32,9 @@ Digests instalados no arquivo privado `/etc/stakeframe/deployment.env`:
   `{"status":"alive"}` em `/health/live`, `{"status":"ready"}` em
   `/health/ready` e `401` na rota protegida de operações, como esperado para
   acesso anônimo.
+- O status público confirmou `database: available`, `authentication: google`
+  e `productEnabled: true`; `/api/v1/me` respondeu `401 UNAUTHENTICATED` sem
+  cookie de sessão.
 - O início do OAuth respondeu `200`, criou o cookie de estado seguro e gerou
   uma URL no host `accounts.google.com` com callback HTTPS para o domínio.
   Um callback sem estado foi recusado com redirecionamento controlado para
