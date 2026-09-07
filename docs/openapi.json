@@ -32,6 +32,26 @@
                 "exclusiveMinimum": true,
                 "maximum": 2147483646
               },
+              "type": { "type": "string", "enum": ["bet.unit.resolve"] },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+            },
+            "required": ["expectedVersion", "type", "id", "reason"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
               "type": { "type": "string", "enum": ["event.update"] },
               "selectionId": {
                 "type": "string",
@@ -1782,6 +1802,731 @@
         },
         "required": ["providers"]
       },
+      "PerformanceReportInput": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "to": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "bookmakerId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "tipsterId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  { "type": "string", "enum": ["none"] }
+                ]
+              },
+              "sport": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "kind": { "default": "all", "type": "string", "enum": ["all", "real", "freebet"] },
+              "state": { "type": "string", "enum": ["open", "settled"] },
+              "includeEstimated": {
+                "default": "false",
+                "type": "string",
+                "enum": ["true", "false"]
+              }
+            },
+            "required": ["from", "to"]
+          },
+          "dateBasis": { "type": "string", "enum": ["last_event_sao_paulo"] },
+          "granularity": { "type": "string", "enum": ["day", "month"] },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "freebetStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "realPrincipalClosed": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              },
+              "realReturns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "freebetReturns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "realProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "freebetProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "profitUnits": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+              },
+              "knownProfitUnits": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+              },
+              "missingUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "roiReal": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              },
+              "hitRateReal": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              },
+              "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "hitEligibleReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+            },
+            "required": [
+              "bets",
+              "settledBets",
+              "openBets",
+              "realStake",
+              "freebetStake",
+              "realPrincipalClosed",
+              "realReturns",
+              "freebetReturns",
+              "realProfit",
+              "freebetProfit",
+              "profit",
+              "profitUnits",
+              "knownProfitUnits",
+              "missingUnitBets",
+              "exposure",
+              "roiReal",
+              "hitRateReal",
+              "hitWinsReal",
+              "hitEligibleReal"
+            ]
+          },
+          "previous": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "to": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "metrics": {
+                "type": "object",
+                "properties": {
+                  "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "freebetStake": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "realPrincipalClosed": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "realReturns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "freebetReturns": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "realProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "freebetProfit": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "profitUnits": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                  },
+                  "knownProfitUnits": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                  },
+                  "missingUnitBets": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "roiReal": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "hitRateReal": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "hitEligibleReal": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "bets",
+                  "settledBets",
+                  "openBets",
+                  "realStake",
+                  "freebetStake",
+                  "realPrincipalClosed",
+                  "realReturns",
+                  "freebetReturns",
+                  "realProfit",
+                  "freebetProfit",
+                  "profit",
+                  "profitUnits",
+                  "knownProfitUnits",
+                  "missingUnitBets",
+                  "exposure",
+                  "roiReal",
+                  "hitRateReal",
+                  "hitWinsReal",
+                  "hitEligibleReal"
+                ]
+              }
+            },
+            "required": ["from", "to", "metrics"]
+          },
+          "exclusions": {
+            "type": "object",
+            "properties": {
+              "unknownDateBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "estimatedDateBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+            },
+            "required": ["unknownDateBets", "estimatedDateBets"]
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ]
+                }
+              },
+              "required": ["date", "metrics"]
+            }
+          },
+          "byBookmaker": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ]
+                }
+              },
+              "required": ["key", "label", "metrics"]
+            }
+          },
+          "byTipster": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ]
+                }
+              },
+              "required": ["key", "label", "metrics"]
+            }
+          },
+          "bySport": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ]
+                }
+              },
+              "required": ["key", "label", "metrics"]
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "version",
+          "filters",
+          "dateBasis",
+          "granularity",
+          "metrics",
+          "previous",
+          "exclusions",
+          "timeline",
+          "byBookmaker",
+          "byTipster",
+          "bySport"
+        ]
+      },
+      "PerformanceBetPageInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "reference": { "type": "string" },
+                "eventSummary": { "type": "string" },
+                "eventDate": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "dateStatus": { "type": "string", "enum": ["confirmed", "estimated"] },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "bookmaker": { "type": "string" },
+                "tipsterId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "tipster": { "type": "string" },
+                "sportKey": { "type": "string" },
+                "sport": { "type": "string" },
+                "state": { "type": "string", "enum": ["open", "settled"] },
+                "freebet": { "type": "boolean" },
+                "stake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "remaining": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "returns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "profitUnits": {
+                  "nullable": true,
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                },
+                "placedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "id",
+                "reference",
+                "eventSummary",
+                "eventDate",
+                "dateStatus",
+                "bookmakerId",
+                "bookmaker",
+                "tipsterId",
+                "tipster",
+                "sportKey",
+                "sport",
+                "state",
+                "freebet",
+                "stake",
+                "remaining",
+                "returns",
+                "profit",
+                "profitUnits",
+                "placedAt"
+              ]
+            }
+          },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "page": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "pageSize": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+        },
+        "required": ["items", "total", "page", "pageSize"]
+      },
+      "ReportOptionsInput": {
+        "type": "object",
+        "properties": {
+          "sports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "key": { "type": "string" }, "label": { "type": "string" } },
+              "required": ["key", "label"]
+            }
+          }
+        },
+        "required": ["sports"]
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -1885,6 +2630,26 @@
       },
       "FinanceCommand": {
         "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "type": { "type": "string", "enum": ["bet.unit.resolve"] },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+            },
+            "required": ["expectedVersion", "type", "id", "reason"],
+            "additionalProperties": false
+          },
           {
             "type": "object",
             "properties": {
@@ -3670,6 +4435,749 @@
           }
         },
         "required": ["providers"],
+        "additionalProperties": false
+      },
+      "PerformanceReport": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "to": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "bookmakerId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "tipsterId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  { "type": "string", "enum": ["none"] }
+                ]
+              },
+              "sport": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "kind": { "default": "all", "type": "string", "enum": ["all", "real", "freebet"] },
+              "state": { "type": "string", "enum": ["open", "settled"] },
+              "includeEstimated": {
+                "default": "false",
+                "type": "string",
+                "enum": ["true", "false"]
+              }
+            },
+            "required": ["from", "to", "kind", "includeEstimated"],
+            "additionalProperties": false
+          },
+          "dateBasis": { "type": "string", "enum": ["last_event_sao_paulo"] },
+          "granularity": { "type": "string", "enum": ["day", "month"] },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "freebetStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "realPrincipalClosed": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              },
+              "realReturns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "freebetReturns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "realProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "freebetProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "profitUnits": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+              },
+              "knownProfitUnits": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+              },
+              "missingUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "roiReal": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              },
+              "hitRateReal": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              },
+              "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "hitEligibleReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+            },
+            "required": [
+              "bets",
+              "settledBets",
+              "openBets",
+              "realStake",
+              "freebetStake",
+              "realPrincipalClosed",
+              "realReturns",
+              "freebetReturns",
+              "realProfit",
+              "freebetProfit",
+              "profit",
+              "profitUnits",
+              "knownProfitUnits",
+              "missingUnitBets",
+              "exposure",
+              "roiReal",
+              "hitRateReal",
+              "hitWinsReal",
+              "hitEligibleReal"
+            ],
+            "additionalProperties": false
+          },
+          "previous": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "to": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "metrics": {
+                "type": "object",
+                "properties": {
+                  "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "freebetStake": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "realPrincipalClosed": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "realReturns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "freebetReturns": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "realProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "freebetProfit": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "profitUnits": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                  },
+                  "knownProfitUnits": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                  },
+                  "missingUnitBets": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                  "roiReal": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "hitRateReal": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                  },
+                  "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "hitEligibleReal": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "bets",
+                  "settledBets",
+                  "openBets",
+                  "realStake",
+                  "freebetStake",
+                  "realPrincipalClosed",
+                  "realReturns",
+                  "freebetReturns",
+                  "realProfit",
+                  "freebetProfit",
+                  "profit",
+                  "profitUnits",
+                  "knownProfitUnits",
+                  "missingUnitBets",
+                  "exposure",
+                  "roiReal",
+                  "hitRateReal",
+                  "hitWinsReal",
+                  "hitEligibleReal"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": ["from", "to", "metrics"],
+            "additionalProperties": false
+          },
+          "exclusions": {
+            "type": "object",
+            "properties": {
+              "unknownDateBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "estimatedDateBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+            },
+            "required": ["unknownDateBets", "estimatedDateBets"],
+            "additionalProperties": false
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["date", "metrics"],
+              "additionalProperties": false
+            }
+          },
+          "byBookmaker": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["key", "label", "metrics"],
+              "additionalProperties": false
+            }
+          },
+          "byTipster": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["key", "label", "metrics"],
+              "additionalProperties": false
+            }
+          },
+          "bySport": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "realStake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "freebetStake": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realPrincipalClosed": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetReturns": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "realProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "freebetProfit": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "profitUnits": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "knownProfitUnits": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                    },
+                    "missingUnitBets": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "exposure": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                    "roiReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitRateReal": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+                    },
+                    "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "hitEligibleReal": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "bets",
+                    "settledBets",
+                    "openBets",
+                    "realStake",
+                    "freebetStake",
+                    "realPrincipalClosed",
+                    "realReturns",
+                    "freebetReturns",
+                    "realProfit",
+                    "freebetProfit",
+                    "profit",
+                    "profitUnits",
+                    "knownProfitUnits",
+                    "missingUnitBets",
+                    "exposure",
+                    "roiReal",
+                    "hitRateReal",
+                    "hitWinsReal",
+                    "hitEligibleReal"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["key", "label", "metrics"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "version",
+          "filters",
+          "dateBasis",
+          "granularity",
+          "metrics",
+          "previous",
+          "exclusions",
+          "timeline",
+          "byBookmaker",
+          "byTipster",
+          "bySport"
+        ],
+        "additionalProperties": false
+      },
+      "PerformanceBetPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "reference": { "type": "string" },
+                "eventSummary": { "type": "string" },
+                "eventDate": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "dateStatus": { "type": "string", "enum": ["confirmed", "estimated"] },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "bookmaker": { "type": "string" },
+                "tipsterId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "tipster": { "type": "string" },
+                "sportKey": { "type": "string" },
+                "sport": { "type": "string" },
+                "state": { "type": "string", "enum": ["open", "settled"] },
+                "freebet": { "type": "boolean" },
+                "stake": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "remaining": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "returns": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "profitUnits": {
+                  "nullable": true,
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                },
+                "placedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "id",
+                "reference",
+                "eventSummary",
+                "eventDate",
+                "dateStatus",
+                "bookmakerId",
+                "bookmaker",
+                "tipsterId",
+                "tipster",
+                "sportKey",
+                "sport",
+                "state",
+                "freebet",
+                "stake",
+                "remaining",
+                "returns",
+                "profit",
+                "profitUnits",
+                "placedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "page": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "pageSize": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+        },
+        "required": ["items", "total", "page", "pageSize"],
+        "additionalProperties": false
+      },
+      "ReportOptions": {
+        "type": "object",
+        "properties": {
+          "sports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "key": { "type": "string" }, "label": { "type": "string" } },
+              "required": ["key", "label"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["sports"],
         "additionalProperties": false
       },
       "SystemStatus": {
@@ -5618,12 +7126,498 @@
           }
         }
       }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "operationId": "getPerformanceReport",
+        "summary": "Analisar resultados por data do último evento",
+        "tags": ["Análises"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "bookmakerId",
+            "required": false
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                { "type": "string", "enum": ["none"] }
+              ]
+            },
+            "in": "query",
+            "name": "tipsterId",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "in": "query",
+            "name": "sport",
+            "required": false
+          },
+          {
+            "schema": { "default": "all", "type": "string", "enum": ["all", "real", "freebet"] },
+            "in": "query",
+            "name": "kind",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "enum": ["open", "settled"] },
+            "in": "query",
+            "name": "state",
+            "required": false
+          },
+          {
+            "schema": { "default": "false", "type": "string", "enum": ["true", "false"] },
+            "in": "query",
+            "name": "includeEstimated",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/PerformanceReport" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/bets": {
+      "get": {
+        "operationId": "getPerformanceBets",
+        "summary": "Detalhar as apostas incluídas nos indicadores",
+        "tags": ["Análises"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "bookmakerId",
+            "required": false
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                { "type": "string", "enum": ["none"] }
+              ]
+            },
+            "in": "query",
+            "name": "tipsterId",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "in": "query",
+            "name": "sport",
+            "required": false
+          },
+          {
+            "schema": { "default": "all", "type": "string", "enum": ["all", "real", "freebet"] },
+            "in": "query",
+            "name": "kind",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "enum": ["open", "settled"] },
+            "in": "query",
+            "name": "state",
+            "required": false
+          },
+          {
+            "schema": { "default": "false", "type": "string", "enum": ["true", "false"] },
+            "in": "query",
+            "name": "includeEstimated",
+            "required": false
+          },
+          {
+            "schema": { "default": 1, "type": "integer", "minimum": 1, "maximum": 100000 },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": { "default": 25, "type": "integer", "minimum": 1, "maximum": 100 },
+            "in": "query",
+            "name": "pageSize",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PerformanceBetPage" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/options": {
+      "get": {
+        "operationId": "getReportOptions",
+        "summary": "Consultar esportes disponíveis nas análises",
+        "tags": ["Análises"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportOptions" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/csv": {
+      "get": {
+        "operationId": "exportFilteredBets",
+        "summary": "Exportar todas as apostas do filtro em CSV",
+        "tags": ["Análises"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "bookmakerId",
+            "required": false
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                { "type": "string", "enum": ["none"] }
+              ]
+            },
+            "in": "query",
+            "name": "tipsterId",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "in": "query",
+            "name": "sport",
+            "required": false
+          },
+          {
+            "schema": { "default": "all", "type": "string", "enum": ["all", "real", "freebet"] },
+            "in": "query",
+            "name": "kind",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "enum": ["open", "settled"] },
+            "in": "query",
+            "name": "state",
+            "required": false
+          },
+          {
+            "schema": { "default": "false", "type": "string", "enum": ["true", "false"] },
+            "in": "query",
+            "name": "includeEstimated",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Arquivo privado completo; exportação interrompida em caso de falha.",
+            "content": { "text/csv": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/json": {
+      "get": {
+        "operationId": "exportStructuredHistory",
+        "summary": "Exportar histórico estruturado privado em JSON",
+        "tags": ["Análises"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Arquivo privado completo; exportação interrompida em caso de falha.",
+            "content": {
+              "application/json": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],
   "tags": [
     { "name": "Financeiro", "description": "Banca, cadastros e histórico auditável." },
     { "name": "Apostas", "description": "Apostas manuais e liquidações." },
+    { "name": "Análises", "description": "Resultados por evento e exportações privadas." },
     {
       "name": "Importações",
       "description": "Comprovantes privados, extração e revisão antes do lançamento financeiro."

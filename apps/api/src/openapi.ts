@@ -38,6 +38,7 @@ export function registerApiContracts(app: FastifyInstance) {
       tags: [
         { name: 'Financeiro', description: 'Banca, cadastros e histórico auditável.' },
         { name: 'Apostas', description: 'Apostas manuais e liquidações.' },
+        { name: 'Análises', description: 'Resultados por evento e exportações privadas.' },
         {
           name: 'Importações',
           description: 'Comprovantes privados, extração e revisão antes do lançamento financeiro.',
@@ -70,6 +71,18 @@ export function registerApiContracts(app: FastifyInstance) {
     transform: jsonSchemaTransform,
     transformObject: (input) => {
       const document = jsonSchemaTransformObject(input) as OpenAPIV3.Document;
+      for (const kind of ['csv', 'json']) {
+        const operation = document.paths[`/api/v1/exports/${kind}`]?.get;
+        if (operation)
+          operation.responses['200'] = {
+            description: 'Arquivo privado completo; exportação interrompida em caso de falha.',
+            content: {
+              [kind === 'csv' ? 'text/csv' : 'application/json']: {
+                schema: { type: 'string', format: 'binary' },
+              },
+            },
+          };
+      }
       const image = document.paths['/api/v1/imports/{id}/image']?.get;
       if (image)
         image.responses['200'] = {

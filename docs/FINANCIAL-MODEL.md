@@ -100,6 +100,8 @@ real; os cenários visuais não representam movimentações financeiras reais.
 
 Migração aditiva `0002_financial_core.sql`, precedida de `0000` e `0001`, cria
 o schema financeiro. Aplicação automática é restrita ao Compose local. Produção
-exige backup e autorização específica. Importação assistida, resolução de
-pendências históricas, busca/calendário, análises e exportações seguem nas etapas
-seguintes. Release `v1.0.0` continua sujeita ao piloto e a §5.5 do plano.
+exige backup e autorização específica. Importação assistida, busca/calendário,
+análises e exportações locais estão descritos em [IMPORTS.md](IMPORTS.md),
+[EVENTS.md](EVENTS.md) e [REPORTS.md](REPORTS.md). A associação explícita de
+unidade histórica ausente usa `bet.unit.resolve`; mantém o valor congelado
+e a trilha de auditoria. Release `v1.0.0` continua sujeita ao piloto e a §5.5 do plano.

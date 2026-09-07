@@ -356,6 +356,26 @@ export function BetDetails({
       <p className="muted">
         Apostada em {dateLabel(bet.placedAt)} · Cadastrada em {dateLabel(bet.createdAt)}
       </p>
+      {!bet.unitAmount || Number(bet.unitAmount) <= 0 ? (
+        <div className="notice warning">
+          <p>
+            Esta aposta ainda não tem unidade histórica. Cadastre a unidade do mês de realização em
+            Configurações e depois associe o valor conferido.
+          </p>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              open({
+                kind: 'correction',
+                title: 'Associar unidade histórica',
+                build: (reason) => ({ type: 'bet.unit.resolve', id: bet.id, reason }),
+              })
+            }
+          >
+            Associar unidade histórica
+          </Button>
+        </div>
+      ) : null}
       {bet.reference ? <p>Referência: {bet.reference}</p> : null}
       <BetAttachments id={id} version={workspace.version} open={open} />
       {bet.selections.map((selection, index) => (

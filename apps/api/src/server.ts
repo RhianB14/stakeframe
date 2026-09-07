@@ -4,6 +4,7 @@ import {
   createImportService,
   createR2Storage,
   createEventService,
+  createReportService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -21,6 +22,7 @@ async function main() {
     finance: createFinanceService(database),
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
+    reports: createReportService(database),
     ...(ownerAuth ? { ownerAuth } : {}),
   });
   app.addHook('onClose', database.close);

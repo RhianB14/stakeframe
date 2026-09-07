@@ -33,6 +33,11 @@ evidência, calendário e consultas TheSportsDB/Tavily. A tabela
 chamadas HTTP ficam fora de transações e não modificam datas automaticamente.
 Fontes desligadas por padrão; detalhes em [EVENTS.md](EVENTS.md).
 
+A STK-M5-01 acrescenta análises por data do último evento, resumo mensal,
+dimensões e exportações CSV/JSON com sessão. O PostgreSQL agrega uma linha
+por aposta em snapshots consistentes, preservando decimais; gráficos são
+carregados apenas na tela de análises. Critérios e limites em [REPORTS.md](REPORTS.md).
+
 A STK-M0-09 usa os schemas Zod na validação de entrada e na serialização de
 respostas. `@fastify/swagger` e `fastify-type-provider-zod` geram OpenAPI 3.0.3
 das mesmas rotas, sem consultar banco ou configuração privada. A especificação

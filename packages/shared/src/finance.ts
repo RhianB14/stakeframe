@@ -63,6 +63,7 @@ export const betInputSchema = z.strictObject({
 export type BetInput = z.infer<typeof betInputSchema>;
 export const financeCommandSchema = z
   .discriminatedUnion('type', [
+    command.extend({ type: z.literal('bet.unit.resolve'), id: z.uuid(), reason: note }),
     command.extend({
       type: z.literal('event.update'),
       selectionId: z.uuid(),
