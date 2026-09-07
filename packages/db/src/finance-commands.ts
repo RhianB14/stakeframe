@@ -3,6 +3,7 @@ import { cents, money, saoPauloDate, type FinanceCommand } from '@stakeframe/sha
 import type { PoolClient } from 'pg';
 import { findDuplicates } from './import-review.js';
 import { enqueueExtraction } from './inbox.js';
+import { updateEvent } from './events.js';
 import {
   FinanceError,
   accountByKind,
@@ -27,6 +28,7 @@ export async function applyFinanceCommand(
   now: Date,
 ): Promise<{ id: string; before: unknown }> {
   const type = command.type;
+  if (type === 'event.update') return updateEvent(client, command);
   if (type === 'import.confirm' || type === 'import.discard' || type === 'import.retry') {
     const row = (
       await client.query<{

@@ -58,7 +58,7 @@ fictícias: a validação falha e o worker não inicia.
 
 Os Composes padrão mantêm integrações desativadas e worker sem saída externa.
 Para ativação futura, preparar montagem dos arquivos privados, saída HTTPS,
-migrações até `0003_import_attachments` e o ambiente explícito antes de iniciar o worker.
+migrações até `0004_event_calendar` e o ambiente explícito antes de iniciar o worker.
 O runtime local aguarda o migrador; produção segue seu runbook de migração prévia.
 Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
 provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.
@@ -70,3 +70,7 @@ o teste de reaplicação verifica que o journal não cresce indevidamente.
 
 Referências: [Telegram Bot API](https://core.telegram.org/bots/api#getupdates),
 [OpenRouter Structured Outputs](https://openrouter.ai/docs/guides/features/structured-outputs).
+
+As consultas de programação TheSportsDB/Tavily também estão implementadas,
+desativadas por padrão e com cota/cache persistentes. A fila de consultas não
+atualiza datas automaticamente. Configuração e recuperação em [EVENTS.md](EVENTS.md).

@@ -378,6 +378,15 @@ export function BetDetails({
                 : 'Data do evento pendente'}
             {selection.dateStatus === 'estimated' ? ' · estimada' : ''}
           </p>
+          {selection.id ? (
+            <Button
+              variant="ghost"
+              size="small"
+              onClick={() => open({ kind: 'event', id: selection.id! })}
+            >
+              Conferir data e fontes
+            </Button>
+          ) : null}
         </div>
       ))}
       <div className="button-row detail-actions">

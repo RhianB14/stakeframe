@@ -37,6 +37,8 @@ export const apiErrorCodeSchema = z.enum([
   'INBOX_BUSY',
   'INBOX_CAPACITY_REACHED',
   'ATTACHMENT_UNAVAILABLE',
+  'EVENT_PROVIDER_DISABLED',
+  'EVENT_QUEUE_FULL',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z
@@ -65,3 +67,4 @@ export const ownerSessionSchema = z
   })
   .meta({ id: 'OwnerSession' });
 export type OwnerSession = z.infer<typeof ownerSessionSchema>;
+export * from './events.js';

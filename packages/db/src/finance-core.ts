@@ -190,34 +190,82 @@ export async function saveSelections(
   betId: string,
   selections: SelectionInput[],
 ) {
+  const previous = (
+    await client.query<{
+      id: string;
+      event: string;
+      sport: string | null;
+      event_date: string | null;
+      event_at: Date | null;
+      date_status: string;
+    }>('select *,event_date::text as event_date from finance.selection where bet_id=$1', [betId])
+  ).rows;
+  const retained = selections.flatMap((selection) => (selection.id ? [selection.id] : []));
+  if (
+    new Set(retained).size !== retained.length ||
+    retained.some((id) => !previous.some((row) => row.id === id))
+  )
+    throw new FinanceError('STATE_CONFLICT');
   for (const selection of selections) {
-    if (
-      (!selection.eventDate && !selection.eventAt && selection.dateStatus !== 'pending') ||
-      ((selection.eventDate || selection.eventAt) && selection.dateStatus === 'pending') ||
-      (selection.eventAt &&
-        selection.eventDate &&
-        saoPauloDate(new Date(selection.eventAt)) !== selection.eventDate)
-    )
-      throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+    validateEventDate(selection);
   }
-  await client.query('delete from finance.selection where bet_id=$1', [betId]);
-  for (const [position, selection] of selections.entries())
-    await client.query(
-      'insert into finance.selection(bet_id,position,event,sport,market,selection,odds,event_date,event_at,date_status) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [
-        betId,
-        position,
-        selection.event,
-        selection.sport,
-        selection.market,
-        selection.selection,
-        selection.odds,
-        selection.eventDate ??
-          (selection.eventAt ? saoPauloDate(new Date(selection.eventAt)) : null),
-        selection.eventAt,
-        selection.dateStatus,
-      ],
-    );
+  await client.query('delete from finance.selection where bet_id=$1 and not(id=any($2::uuid[]))', [
+    betId,
+    retained,
+  ]);
+  // Avoid transient unique-position collisions when reordering existing selections.
+  await client.query('update finance.selection set position=-position-1 where bet_id=$1', [betId]);
+  for (const [position, selection] of selections.entries()) {
+    const date =
+      selection.eventDate ?? (selection.eventAt ? saoPauloDate(new Date(selection.eventAt)) : null);
+    const values = [
+      betId,
+      position,
+      selection.event,
+      selection.sport,
+      selection.market,
+      selection.selection,
+      selection.odds,
+      date,
+      selection.eventAt,
+      selection.dateStatus,
+    ];
+    if (selection.id) {
+      const old = previous.find((row) => row.id === selection.id)!;
+      const sameSchedule =
+        old.event === selection.event &&
+        old.sport === selection.sport &&
+        old.event_date === date &&
+        old.date_status === selection.dateStatus &&
+        (old.event_at?.toISOString() ?? null) ===
+          (selection.eventAt ? new Date(selection.eventAt).toISOString() : null);
+      await client.query(
+        `update finance.selection set position=$2,event=$3,sport=$4,market=$5,
+        selection=$6,odds=$7,event_date=$8,event_at=$9,date_status=$10,
+        date_source=case when $12 then date_source else 'manual' end,
+        date_evidence=case when $12 then date_evidence else null end,
+        schedule_status=case when $12 then schedule_status else 'scheduled' end
+        where bet_id=$1 and id=$11`,
+        [...values, selection.id, sameSchedule],
+      );
+    } else
+      await client.query(
+        'insert into finance.selection(bet_id,position,event,sport,market,selection,odds,event_date,event_at,date_status) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        values,
+      );
+  }
+}
+export function validateEventDate(value: {
+  eventDate: string | null;
+  eventAt: string | null;
+  dateStatus: string;
+}) {
+  if (
+    (!value.eventDate && !value.eventAt && value.dateStatus !== 'pending') ||
+    ((value.eventDate || value.eventAt) && value.dateStatus === 'pending') ||
+    (value.eventAt && value.eventDate && saoPauloDate(new Date(value.eventAt)) !== value.eventDate)
+  )
+    throw new FinanceError('INVALID_FINANCIAL_OPERATION');
 }
 export async function getBetRow(client: PoolClient, id: string) {
   const row = (await client.query<BetRow>('select * from finance.bet where id=$1 for update', [id]))

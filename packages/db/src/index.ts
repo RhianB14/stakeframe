@@ -6,6 +6,13 @@ export { authSchema } from './auth-schema.js';
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
 export { createImportService, type ImportService } from './import-review.js';
 export {
+  createEventService,
+  readEventSearchConfig,
+  EVENT_LIMITS,
+  type EventService,
+  type EventSearchConfig,
+} from './events.js';
+export {
   createAttachmentStore,
   createR2Storage,
   validateImage,

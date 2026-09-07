@@ -7,7 +7,8 @@ acompanhamento de resultados.
 > PostgreSQL executam em Docker Compose. O acesso privado permite cadastrar
 > banca, apostas, liquidações, freebets, cashouts e estornos auditáveis.
 > Upload privado, revisão de importações e anexos estão implementados localmente.
-> Eventos e análises seguem em implementação. O setup
+> Calendário, correções de datas e adaptadores de busca estão implementados.
+> Análises seguem em implementação. O setup
 > operacional do M0 e o piloto de produção continuam pendentes.
 > Consulte [o plano](docs/PLAN.md), [o modelo financeiro](docs/FINANCIAL-MODEL.md)
 > e [o progresso do setup](docs/M0-CHECKLIST.md).
@@ -30,6 +31,7 @@ resultados com liquidação manual e auditoria completa.
   configuração e limites em [INTEGRATION-RUNTIME.md](docs/INTEGRATION-RUNTIME.md).
 - Upload, revisão, duplicidade e retenção de comprovantes em
   [IMPORTS.md](docs/IMPORTS.md).
+- Agenda, fusos, datas parciais e buscas com revisão em [EVENTS.md](docs/EVENTS.md).
 
 ## Desenvolvimento
 

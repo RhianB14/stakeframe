@@ -38,6 +38,7 @@ export const outcomeSchema = z.enum([
 ]);
 
 export const selectionInputSchema = z.strictObject({
+  id: z.uuid().optional(),
   event: z.string().trim().min(1).max(300),
   sport: label.nullable(),
   market: z.string().trim().min(1).max(300),
@@ -62,6 +63,16 @@ export const betInputSchema = z.strictObject({
 export type BetInput = z.infer<typeof betInputSchema>;
 export const financeCommandSchema = z
   .discriminatedUnion('type', [
+    command.extend({
+      type: z.literal('event.update'),
+      selectionId: z.uuid(),
+      eventDate: z.iso.date().nullable(),
+      eventAt: instant.nullable(),
+      dateStatus: z.enum(['confirmed', 'estimated', 'pending']),
+      scheduleStatus: z.enum(['scheduled', 'postponed', 'cancelled']),
+      candidateId: z.uuid().nullable(),
+      reason: note,
+    }),
     command.extend({
       type: z.literal('import.confirm'),
       importId: z.uuid(),

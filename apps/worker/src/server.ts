@@ -5,6 +5,7 @@ import { startWorker } from './worker.js';
 import { startIntegrations } from './integrations.js';
 import { startMonthlyUnits } from './monthly-unit.js';
 import { startAttachments } from './attachments.js';
+import { startEventSearch } from './event-providers.js';
 
 async function main() {
   const connectionString = requireDatabaseUrl(readDatabaseConfig(process.env));
@@ -13,15 +14,18 @@ async function main() {
   let integrations = { stop: async () => {}, check: () => {} };
   let monthlyUnits = { stop: async () => {}, check: () => {} };
   let attachments = { stop: async () => {}, check: () => {} };
+  let events = { stop: async () => {}, check: () => {} };
   try {
     boss = await startWorker(connectionString);
     integrations = await startIntegrations(database, boss, process.env);
     monthlyUnits = await startMonthlyUnits(database);
     attachments = startAttachments(database, process.env);
+    events = startEventSearch(database, process.env);
   } catch {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
+    await events.stop();
     await boss?.stop({ graceful: false });
     await database.close();
     throw new Error('WORKER_START_FAILED');
@@ -33,6 +37,7 @@ async function main() {
         integrations.check();
         monthlyUnits.check();
         attachments.check();
+        events.check();
         if (!(await boss.getQueue(PROBE_QUEUE))) throw new Error('QUEUE_MISSING');
         response.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ready"}');
       } catch {
@@ -49,6 +54,7 @@ async function main() {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
+    await events.stop();
     await boss.stop({ graceful: false });
     await database.close();
     throw new Error('WORKER_START_FAILED');
@@ -62,6 +68,7 @@ async function main() {
       .stop()
       .then(() => monthlyUnits.stop())
       .then(() => attachments.stop())
+      .then(() => events.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(database.close)
       .catch(() => {

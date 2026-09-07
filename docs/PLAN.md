@@ -319,6 +319,8 @@ fora da primeira versão.
 
 ### 3.7. Datas, horários e calendário
 
+Implementação local e limites das fontes: [EVENTS.md](EVENTS.md), STK-M4-01.
+
 Separar data de realização da aposta, início do evento, liquidação e criação
 do registro.
 

@@ -94,6 +94,16 @@ registro. `INVALID_INBOX_IMAGE`, `INBOX_BUSY`, `INBOX_CAPACITY_REACHED` e
 `ATTACHMENT_UNAVAILABLE` distinguem arquivo inválido, admissão ocupada,
 capacidade temporária e imagem ausente. [IMPORTS.md](IMPORTS.md).
 
+Eventos usam `GET /api/v1/calendar`, `GET /api/v1/events/:id`,
+`GET /api/v1/event-search/status`, `GET/POST /api/v1/event-search` e
+`GET /api/v1/event-search/:id`, sempre com sessão. O calendário exige intervalo
+de até 366 dias; a visão `pending` ignora o intervalo para mostrar todas as
+pendências. `event.update` usa o comando versionado, com data parcial/instante,
+certeza, programação, candidato opcional e motivo. A busca aceita seleção,
+fonte, data aproximada e `refresh` opcional; exige `Idempotency-Key`.
+`EVENT_PROVIDER_DISABLED` e `EVENT_QUEUE_FULL` preservam o cadastro manual.
+Regras de fuso, cache e cotas em [EVENTS.md](EVENTS.md).
+
 ```bash
 pnpm api:spec        # compila a API e atualiza docs/openapi.json
 pnpm api:spec:check  # valida OpenAPI e falha se o documento versionado divergir
