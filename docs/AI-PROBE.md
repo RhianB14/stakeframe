@@ -95,8 +95,9 @@ A CI executa somente esses testes em AMD64 e ARM64, sem chave real.
 Passar nessa imagem comprova o protocolo e aquele exemplo, não a precisão em
 bilhetes reais, disponibilidade contínua, custos futuros ou integração do worker.
 São necessários exemplos privados das três casas antes de escolher os critérios
-de registro automático. As variáveis Gemini em `.env.example` ainda descrevem
-o runtime planejado e não são consumidas por esse ensaio.
+de registro automático. As variáveis OpenRouter em `.env.example` descrevem
+o runtime escolhido depois dos ensaios e não são consumidas por este helper.
+O ensaio privado e a chave do provedor escolhido estão em [OPENROUTER.md](OPENROUTER.md).
 
 Fontes: [API generateContent](https://ai.google.dev/api/generate-content),
 [imagens](https://ai.google.dev/gemini-api/docs/image-understanding) e

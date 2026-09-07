@@ -90,6 +90,13 @@ gabarito permanecem fora do repositório público, em diretório com ACL privada
 
 ## Verificações locais
 
+Após os ensaios acima, o proprietário autorizou criar uma chave OpenRouter,
+testar Gemini 3.8 Flash e adotá-lo no projeto. Uma chamada privada teve os
+22 campos semanticamente conferidos em 5.141 ms, por USD 0,0023247675. A chave
+foi ajustada para USD 5 mensais; configuração e credencial continuam fora do
+Git e da VPS. Esse resultado substitui a escolha de provedor da etapa inicial,
+conforme D018 e [OPENROUTER.md](OPENROUTER.md).
+
 - Dez testes offline aprovados, incluindo 429/503, recusa de imagem/modelo
   diferentes, erros sem segredo e reprovação de campos incorretos.
 - Reexecução do ensaio já concluído recusada com `AI_ALREADY_ATTEMPTED`, antes

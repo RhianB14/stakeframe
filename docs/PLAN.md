@@ -180,18 +180,17 @@ Credenciais administrativas do setup ficam separadas das permissões rotineiras.
 PostgreSQL permanece sem exposição pública direta. Acesso administrativo
 por conexão restrita.
 
-A IA usa diretamente a API Gemini, por decisão aprovada pelo proprietário em
-06/09/2026. O principal inicial é `gemini-3.1-flash-lite`, validado no ensaio
-fictício; `gemini-3.5-flash-lite` permanece candidato e `gemini-3.8-flash` é
-candidato à segunda leitura. Ambos retornaram indisponibilidade no ensaio e
-exigem revalidação. Modelos e cotas estão em [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
+A IA usa `google/gemini-3.8-flash` via OpenRouter, por decisão aprovada pelo
+proprietário em 06/09/2026 após ensaio com uma imagem privada (D018).
+A chave dedicada tem limite de USD 5 por mês. Modelos, comparação histórica
+e evidências estão em [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
 O worker deve funcionar independentemente do computador pessoal, com credencial
-privada, limites por modelo e fila persistente. O nível gratuito foi escolhido;
-não há troca automática para cobrança ou outro provedor. Em falta de cota ou
+privada, limites por modelo e fila persistente. O consumo usa o saldo OpenRouter
+do proprietário; não há recarga automática ou troca de modelo autorizada. Em falta de cota ou
 incerteza, preservar o trabalho para revisão/reprocessamento.
 
-O setup valida autenticação, imagens e saída estruturada; a precisão em bilhetes
-reais depende da amostra privada e não é comprovada por uma imagem fictícia.
+O setup valida autenticação, imagens e saída estruturada; a precisão geral
+depende de amostra representativa e não é comprovada pelo único bilhete testado.
 OmniRoute permanece opcional: sua instalação local foi preservada em backup,
 sem exigir implantação ou transferência de sessões para a VPS. Não presumir
 que uma assinatura permita qualquer modelo ou modalidade de API.

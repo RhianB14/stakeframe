@@ -265,6 +265,9 @@ recebem status `Superseded` e apontam a substituta.
 
 ## D017 — Consumir Gemini diretamente e preservar o OmniRoute local (2026-09-06)
 
+> A escolha de provedor/modelo foi substituída por D018. O histórico do ensaio
+> e a preservação do OmniRoute abaixo continuam válidos.
+
 - **Contexto:** o proprietário já tem API Gemini gratuita e envia menos de 30
   bilhetes por dia normalmente, com picos de 45–60. Instalar outro serviço de
   roteamento não é necessário para esse provedor. A comparação e as cotas
@@ -286,3 +289,22 @@ recebem status `Superseded` e apontam a substituta.
   sessões. Segredo Gemini fora do Git; nível gratuito com suas condições de
   uso de conteúdo. Não há implantação ou processamento de bilhetes reais nesta
   decisão. [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
+
+## D018 — Gemini 3.8 Flash via OpenRouter com orçamento mensal (2026-09-06)
+
+- **Contexto:** o proprietário disponibilizou saldo OpenRouter, autorizou criar
+  a chave e testar Gemini 3.8 Flash; depois aprovou o modelo para o projeto
+  e pediu adequar a chave, após a proposta de orçamento de USD 5 mensais.
+- **Decisão:** modelo exato `google/gemini-3.8-flash`, consumido pelo futuro
+  worker da VPS. Chave dedicada `Stakeframe - Gemini 3.8 Flash`, limite remoto
+  de USD 5 mensais com renovação no dia 1 em UTC, sem ativar recarga de saldo.
+- **Configuração:** segredo em arquivo privado, schema JSON, até 2.048 tokens
+  de saída, raciocínio baixo e timeout de 60 segundos. Sem troca automática
+  de modelo/provedor ou repetição de resultados ambíguos. Falhas de saldo/cota
+  preservam trabalho para revisão e posterior reprocessamento.
+- **Evidência:** uma imagem privada semanticamente conferida em 22 campos,
+  5.141 ms e USD 0,0023247675. Não é benchmark representativo. Configuração
+  pública e evidências agregadas em [OPENROUTER.md](OPENROUTER.md).
+- **Limites:** chave fora do Git, ainda não instalada na VPS; configuração
+  preparada não implementa o importador contínuo nem autoriza deploy. O backup
+  do OmniRoute permanece preservado, sem exigir sua instalação na VPS.

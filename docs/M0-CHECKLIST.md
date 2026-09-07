@@ -1,6 +1,6 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-16** — Gemini direto, teste de imagem e backup do OmniRoute
+Tarefa atual: **STK-M0-16** — seleção de IA, OpenRouter e backup do OmniRoute
 ([issue #32](https://github.com/RhianB14/stakeframe/issues/32)). STK-M0-15 foi
 integrada pela [PR #31](https://github.com/RhianB14/stakeframe/pull/31), com
 CI aprovada na `main` `71928cc`. STK-M0-14 foi
@@ -276,7 +276,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
 - [x] Provedor e modelos selecionados pelo proprietário após comparação;
       cotas gratuitas observadas na conta. OmniRoute dispensado na VPS.
-      [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md), decisão D017.
+      [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md), decisão D017 substituída por D018.
+- [x] Gemini 3.8 Flash via OpenRouter escolhido após ensaio privado: chave
+      dedicada com USD 5 mensais, configuração privada preparada e teste
+      conferido. [OPENROUTER.md](OPENROUTER.md). Integração contínua ainda pendente.
 - [x] Backup criptografado do OmniRoute local e restauração de arquivos/banco
       verificados, preservando a instalação existente. Limpeza das cópias
       temporárias privadas bloqueada pela revisão automática; não concluída.

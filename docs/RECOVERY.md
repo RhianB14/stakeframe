@@ -71,7 +71,7 @@
 4. Conferir proprietários e permissões após a restauração.
 5. Restaurar anexos a partir das cópias de recuperação e conferir contra o
    manifesto (checksums) e a política de retenção.
-6. Recuperar configuração e credencial privada da API Gemini, revalidando
+6. Recuperar configuração e credencial privada OpenRouter, revalidando
    acesso e limites sem repetir importações já processadas.
 7. Subir o compose com as imagens por digest.
 8. Verificação de integridade (conciliação de saldos, contagens, smoke tests).

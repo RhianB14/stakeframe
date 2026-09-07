@@ -1,23 +1,32 @@
 # Seleção de IA para leitura dos bilhetes
 
 > Decisão aprovada pelo proprietário em 06/09/2026, após comparação por Codex.
-> Ainda não há benchmark com bilhetes reais nem integração implantada.
-> Gemini direto substitui a instalação obrigatória do OmniRoute na VPS (D017).
+> Escolha vigente: Gemini 3.8 Flash via OpenRouter (D018), após ensaio privado.
+> Há uma imagem real conferida; não há benchmark representativo nem integração implantada.
 
 ## Recomendação
 
-Usar diretamente a API Gemini. A comparação inicial priorizou
+Usar `google/gemini-3.8-flash` pela API OpenRouter. O proprietário aprovou
+essa escolha após uma chamada com imagem privada: 5.141 ms, custo informado
+de USD 0,0023247675 e os 22 campos semanticamente conferidos. Duas diferenças
+de símbolo ordinal em relação ao Gemini 3.1 não mudaram o significado.
+A chave dedicada foi ajustada para USD 5 por mês, com renovação no dia 1 UTC.
+É um limite de consumo de créditos, não uma assinatura nem recarga automática.
+Configuração e credencial ficam em arquivo privado fora do Git. Procedimento
+em [OPENROUTER.md](OPENROUTER.md).
+
+A comparação inicial com a API Google direta priorizou
 `gemini-3.5-flash-lite`, mas a prova real retornou indisponibilidade para ele
 e para `gemini-3.8-flash`. O `gemini-3.1-flash-lite` respondeu e acertou os oito
-campos do exemplo fictício: é o principal inicial para a próxima avaliação.
+campos do exemplo fictício: permanece como referência comparativa.
 Os outros dois permanecem candidatos a revalidar, respectivamente para extração
 e segunda leitura. A escolha por precisão depende das imagens das três casas
 usadas pelo proprietário; esse teste simples não mede qualidade em produção.
 
 O proprietário informou menos de 30 bilhetes em dias normais e picos de 45–60,
 enviados ao longo do dia. Uma fila simples, limites por modelo e validação dos
-campos podem atender esse perfil sem um serviço intermediário de roteamento.
-API direta também funciona com o computador pessoal desligado.
+campos podem atender esse perfil pelo worker da VPS com OpenRouter, sem
+depender de um roteador no computador pessoal.
 
 ## Cotas observadas na conta
 
@@ -123,7 +132,7 @@ não representam acesso confirmado à conta nem autorização de cobrança.
 
 ## Efeito na infraestrutura
 
-O plano foi atualizado para Gemini direto no worker da VPS, mantendo
+O plano foi atualizado para Gemini 3.8 Flash via OpenRouter no worker da VPS, mantendo
 configuração de modelo e credencial fora do código de processamento.
 O backup do OmniRoute local preserva a opção de usá-lo depois. Não é necessário
 instalá-lo na VPS apenas para consumir uma API Gemini, e a comparação atual

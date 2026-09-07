@@ -1,5 +1,9 @@
 # Candidatos de API para extração de bilhetes
 
+> Pesquisa histórica. Após este levantamento, o proprietário escolheu Gemini
+> 3.8 Flash via OpenRouter, testado com sucesso e orçamento de USD 5 mensais.
+> Decisão vigente em [OPENROUTER.md](OPENROUTER.md), D018.
+
 Pesquisa em 06/09/2026, horário de São Paulo, após solicitação do proprietário.
 Recomendação: manter Gemini 3.1 Flash-Lite como referência já testada e obter
 acesso à API OpenAI para comparar GPT-5.6 Terra e Luna. Uma chave de projeto
