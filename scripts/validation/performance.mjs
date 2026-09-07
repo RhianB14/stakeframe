@@ -38,7 +38,12 @@ async function measure(label, repetitions, budgetMs, action) {
   const result = {
     label,
     samples: samples.length,
-    medianMs: samples[Math.floor(samples.length / 2)],
+    medianMs:
+      Math.round(
+        ((samples[Math.floor((samples.length - 1) / 2)] + samples[Math.floor(samples.length / 2)]) /
+          2) *
+          100,
+      ) / 100,
     p95Ms,
     budgetMs,
     passed: p95Ms <= budgetMs,

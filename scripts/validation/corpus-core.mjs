@@ -76,7 +76,7 @@ export function evaluateCorpus(value) {
     uniqueImages,
     multiples: positive.filter((item) => item.expected.selections.length > 1).length,
     promotional: positive.filter((item) => item.expected.freebet === true).length,
-    missingFields: input.cases.filter((item) =>
+    missingFields: positive.filter((item) =>
       [
         item.expected.placedAtText,
         item.expected.potentialReturn,
@@ -116,7 +116,9 @@ export function evaluateCorpus(value) {
     coveragePassed,
     eligibleForOwnerReview: errors === 0 && coveragePassed,
     latency: {
-      medianMs: latency[Math.floor(latency.length / 2)],
+      medianMs:
+        (latency[Math.floor((latency.length - 1) / 2)] + latency[Math.floor(latency.length / 2)]) /
+        2,
       p95Ms: latency[Math.ceil(latency.length * 0.95) - 1],
     },
     requestCount: input.cases.reduce((total, item) => total + item.actual.requestCount, 0),

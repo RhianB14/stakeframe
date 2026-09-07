@@ -84,7 +84,9 @@ mostra somente totais e hashes.
 
 Para levar um layout à aprovação, exigir zero divergências na amostra, pelo
 menos 20 imagens distintas do layout, cinco exemplos que não devem ser
-reconhecidos, três múltiplas e três casos com ausências explícitas. Políticas
+reconhecidos, três múltiplas do layout e três casos do próprio layout com
+ausências explícitas. As ausências dos exemplos negativos não substituem essa
+cobertura. Políticas
 que permitem freebet exigem ao menos três exemplos promocionais. Amostras
 repetidas não contam como cobertura. Esses mínimos são critérios de ensaio,
 não estimativa estatística da precisão futura. Cada layout/casa precisa de

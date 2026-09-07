@@ -96,6 +96,7 @@ test('requires representative coverage and distinct images and does not infer pr
   const short = fixture();
   short.cases.pop();
   assert.equal(evaluateCorpus(short).coveragePassed, false);
+  assert.equal(evaluateCorpus(short).latency.medianMs, 111.5);
   const repeated = fixture();
   repeated.cases[1].imageSha256 = repeated.cases[0].imageSha256;
   assert.equal(evaluateCorpus(repeated).coveragePassed, false);
@@ -111,4 +112,20 @@ test('compares decimal spelling exactly by value while preserving text and event
   value.cases[0].actual.extraction.stake = '10.01';
   value.cases[0].actual.extraction.selections[0].event = 'Different event';
   assert.equal(evaluateCorpus(value).essentialFieldErrors, 2);
+});
+
+test('does not use missing fields from negative images to qualify the approved layout', () => {
+  const value = fixture();
+  for (const item of value.cases.filter((item) => item.expectedLayoutId !== null)) {
+    item.expected.placedAtText = '2026-09-07T10:00:00-03:00';
+    item.expected.potentialReturn = '20.00';
+    for (const selection of item.expected.selections) selection.eventDateText = '07/09/2026';
+    item.actual.extraction = structuredClone(item.expected);
+  }
+  const report = evaluateCorpus(value);
+  assert.equal(report.essentialFieldErrors, 0);
+  assert.equal(report.coverage.negative, 5);
+  assert.equal(report.coverage.missingFields, 0);
+  assert.equal(report.coveragePassed, false);
+  assert.equal(report.eligibleForOwnerReview, false);
 });
