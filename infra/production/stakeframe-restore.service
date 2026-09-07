@@ -1,8 +1,7 @@
 [Unit]
 Description=Verify Stakeframe recovery in a new isolated PostgreSQL cluster
-Requires=docker.service
 After=docker.service network-online.target
-Wants=network-online.target
+Wants=docker.service network-online.target
 
 [Service]
 Type=oneshot
@@ -20,7 +19,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/run/stakeframe-restore /var/lib/stakeframe/restore-reports
+ReadWritePaths=/run/stakeframe-restore /var/lib/stakeframe/restore-reports /var/lib/stakeframe/operations-status
 RestrictAddressFamilies=AF_UNIX
 StandardOutput=journal
 StandardError=journal

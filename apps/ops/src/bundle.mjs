@@ -16,7 +16,13 @@ import { join } from 'node:path';
 import { attachmentExpiredSql } from '@stakeframe/db';
 import { BUNDLE, UUID, SHA, MAX_METADATA_BYTES } from './config.mjs';
 
-const files = ['database.dump', 'attachments.json', 'manifest.json', 'roles.json'];
+const files = [
+  'database.dump',
+  'attachments.json',
+  'manifest.json',
+  'roles.json',
+  'permissions.json',
+];
 export async function clearBundle() {
   let info;
   try {
@@ -142,7 +148,8 @@ export async function roles(client) {
   });
   const membership = (
     await client.query(`select count(*)::text as count from pg_auth_members m
-    join pg_roles r on r.oid=m.member where r.rolname='stakeframe_app'`)
+    join pg_roles member on member.oid=m.member join pg_roles granted on granted.oid=m.roleid
+    where member.rolname='stakeframe_app' or granted.rolname='stakeframe_app'`)
   ).rows[0].count;
   assert.equal(membership, '0');
   const owner = (

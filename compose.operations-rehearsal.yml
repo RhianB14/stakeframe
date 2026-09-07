@@ -35,7 +35,12 @@ services:
   tools:
     image: ${OPERATIONS_IMAGE:?Built operations image required}
     read_only: true
-    tmpfs: [/tmp, '/work:size=512m,uid=1000,gid=1000,mode=0700']
+    tmpfs:
+      [
+        /tmp,
+        '/work:size=512m,uid=1000,gid=1000,mode=0700',
+        '/var/lib/stakeframe/restore-reports:size=1m,uid=1000,gid=1000,mode=0700',
+      ]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     mem_limit: 1g
@@ -49,11 +54,13 @@ services:
       DB_PASSWORD_FILE: /run/secrets/db_password
       RESTIC_PASSWORD_FILE: /run/secrets/recovery_key
       RESTIC_REPOSITORY: /repository
-    secrets: [db_password, target_db_password, recovery_key]
+    secrets: [db_password, target_db_password, recovery_key, postgres_password]
     volumes:
       - repository:/repository
       - status:/status
+      - status:/var/lib/stakeframe/operations-status
       - ./tests/operations/drill.mjs:/app/drill.mjs:ro
+      - ./scripts:/runner/scripts:ro
     labels:
       io.stakeframe.operations: ${OPERATIONS_RUN:?Private rehearsal required}
 

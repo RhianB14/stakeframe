@@ -39,17 +39,21 @@ migração explícita/repetível, papel sem superusuário, cadeia TLS válida do
 ensaio, recusas de acesso, cookies seguros e persistência após reinício.
 Limpeza aprovada. O certificado do ensaio não foi instalado no computador.
 
-Ensaio de backup `stk-ops-52f47079008a4731b9751201e969a00f`: sete verificações
+Ensaio de backup `stk-ops-9824dacbd2a1473aa6322b020b345617`: nove verificações
 aprovadas, com dois bilhetes financeiros, três imagens fictícias e repositório
-Restic isolado. A imagem de operações tinha 227.641.557 bytes em AMD64.
+Restic isolado. A imagem de operações tinha 227.642.534 bytes em AMD64.
 Recuperou duas imagens válidas e manteve uma expirada excluída, inclusive ao
-escolher o snapshot histórico. Contagens, saldos, exposição, papéis, revogação
-de sessões e quarentena conferidos. A restauração interna durou 1.345 ms neste
+escolher o snapshot histórico. Contagens, saldos, exposição, papéis, ACLs, revogação
+de sessões e quarentena conferidos. A restauração interna durou 8.257 ms neste
 conjunto mínimo. Limpeza aprovada; isso não mede RTO de produção.
 
 O mesmo ensaio demonstra recusa de chave incorreta, recusa de banco ocupado,
 preservação do último cutoff recuperável durante falha de armazenamento,
 exclusão dos bytes expirados em snapshots antigos e serialização de backups.
+Também recusa grants indevidos, alteração de privilégios padrão, proprietário
+inesperado e memberships da role em ambos os sentidos. O runner mensal foi
+executado em Linux isolado com arquivo inválido e Docker indisponível: ambas
+as falhas substituíram o resultado saudável anterior no estado operacional.
 Uma consulta que usava uma coluna inexistente foi corrigida durante o ensaio;
 o cenário completo foi repetido com sucesso na imagem reconstruída.
 

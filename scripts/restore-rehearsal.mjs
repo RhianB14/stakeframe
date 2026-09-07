@@ -16,6 +16,7 @@ import {
 import { execute, root, assertLocalEndpoint } from './recovery/runtime.mjs';
 import { assertRestoreConfig } from './deployment/restore-config.mjs';
 import { restoreDiskReady } from './deployment/restore-capacity.mjs';
+import { publishRestoreStatus } from './deployment/restore-status.mjs';
 
 // Host-side monthly runner. Activation, secret provisioning and timer installation
 // require the reviewed production authorization. No Docker socket enters a container.
@@ -29,7 +30,6 @@ process.once('SIGINT', () => controller.abort());
 let docker;
 let compose;
 let created = false;
-let deployment;
 let image;
 let capacityTimer;
 let report = { version: 1, project, status: 'failed', startedAt: new Date().toISOString() };
@@ -74,7 +74,7 @@ try {
   assert.ok(within === '..' || within.startsWith(`..${sep}`) || isAbsolute(within));
   const privateConfig = parseEnv(await readFile(path, 'utf8'));
   image = privateConfig.OPERATIONS_IMAGE;
-  deployment = privateConfig.DEPLOYMENT_ID;
+  const deployment = privateConfig.DEPLOYMENT_ID;
   assert.match(image ?? '', /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/);
   assert.match(deployment ?? '', /^[a-z0-9][a-z0-9-]{1,80}$/);
   assert.match(privateConfig.R2_BACKUP_ACCOUNT_ID ?? '', /^[a-f0-9]{32}$/);
@@ -155,6 +155,7 @@ try {
       restored.countsVerified &&
       restored.financeVerified &&
       restored.rolesVerified &&
+      restored.permissionsVerified &&
       restored.importsPaused &&
       restored.sessionsRevoked,
   );
@@ -173,6 +174,7 @@ try {
     countsVerified: true,
     financeVerified: true,
     rolesVerified: true,
+    permissionsVerified: true,
     importsPaused: true,
     sessionsRevoked: true,
   };
@@ -215,42 +217,19 @@ try {
     process.platform === 'linux' &&
     process.env.RESTORE_REHEARSAL_CONFIRM === 'monthly-isolated-recovery'
   ) {
-    await mkdir(reports, { recursive: true, mode: 0o700 });
-    await writeFile(join(reports, `${project}.json`), JSON.stringify(report, null, 2) + '\n', {
-      flag: 'wx',
-      mode: 0o600,
-    });
-  }
-  // Report into the already-existing operations volume only after its deployment
-  // label is checked. A missing volume never gets implicitly created.
-  if (docker && deployment && image) {
     try {
-      const volume = 'stakeframe-production_operations-status';
-      const meta = JSON.parse(
-        (await docker(['volume', 'inspect', volume], { ignoreAbort: true })).stdout,
-      )[0];
-      assert.equal(meta.Labels['io.stakeframe.deployment'], deployment);
-      assert.equal(meta.Labels['com.docker.compose.project'], 'stakeframe-production');
-      const source = `const fs=require('node:fs/promises');const value=${JSON.stringify(report)};fs.writeFile('/status/restore-latest.tmp',JSON.stringify(value)+String.fromCharCode(10),{mode:0o600}).then(()=>fs.rename('/status/restore-latest.tmp','/status/restore-latest.json')).catch(()=>process.exit(1));`;
-      await docker(
-        [
-          'run',
-          '--rm',
-          '--network',
-          'none',
-          '--read-only',
-          '--cap-drop',
-          'ALL',
-          '--security-opt',
-          'no-new-privileges:true',
-          '--mount',
-          `type=volume,source=${volume},target=/status`,
-          image,
-          '-e',
-          source,
-        ],
-        { ignoreAbort: true, timeoutMs: 30000 },
-      );
+      await mkdir(reports, { recursive: true, mode: 0o700 });
+      await writeFile(join(reports, `${project}.json`), JSON.stringify(report, null, 2) + '\n', {
+        flag: 'wx',
+        mode: 0o600,
+      });
+    } catch {
+      report.status = 'failed';
+      report.persistence = 'failed';
+      process.exitCode = 1;
+    }
+    try {
+      await publishRestoreStatus(report);
     } catch {
       console.error('RESTORE_REHEARSAL_STATUS_FAILED');
       process.exitCode = 1;

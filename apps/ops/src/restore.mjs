@@ -15,6 +15,7 @@ import {
   roles,
 } from './bundle.mjs';
 import { run } from './process.mjs';
+import { permissions } from './permissions.mjs';
 
 export async function restore(config, requestedSnapshot, parentSignal) {
   const controller = new AbortController();
@@ -64,7 +65,13 @@ export async function restore(config, requestedSnapshot, parentSignal) {
     await command(['check']);
     await prepareBundle();
     prepared = true;
-    for (const name of ['manifest.json', 'roles.json', 'attachments.json', 'database.dump']) {
+    for (const name of [
+      'manifest.json',
+      'roles.json',
+      'permissions.json',
+      'attachments.json',
+      'database.dump',
+    ]) {
       await command(['dump', selected.id, `${BUNDLE}/${name}`], {
         output: join(BUNDLE, name),
         maxBytes: name === 'database.dump' ? MAX_DUMP_BYTES : MAX_METADATA_BYTES,
@@ -85,6 +92,7 @@ export async function restore(config, requestedSnapshot, parentSignal) {
       ['database.dump', 'databaseSha256'],
       ['attachments.json', 'attachmentsSha256'],
       ['roles.json', 'rolesSha256'],
+      ['permissions.json', 'permissionsSha256'],
     ])
       assert.equal(await hashFile(join(BUNDLE, file)), manifest[key], 'OPS_BACKUP_CHECKSUM_FAILED');
     assert.deepEqual(await readJson('roles.json'), expectedRoles);
@@ -129,6 +137,11 @@ export async function restore(config, requestedSnapshot, parentSignal) {
       'OPS_RESTORE_FINANCE_MISMATCH',
     );
     assert.deepEqual(await roles(client), expectedRoles);
+    assert.deepEqual(
+      await permissions(client),
+      await readJson('permissions.json'),
+      'OPS_RESTORE_PERMISSIONS_MISMATCH',
+    );
     const expired = new Set(
       (
         await client.query(`select a.id from integration.attachment a
@@ -203,6 +216,7 @@ export async function restore(config, requestedSnapshot, parentSignal) {
       countsVerified: true,
       financeVerified: true,
       rolesVerified: true,
+      permissionsVerified: true,
       importsPaused: true,
       sessionsRevoked: true,
     };

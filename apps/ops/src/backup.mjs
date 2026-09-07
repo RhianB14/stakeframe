@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { writeFile, rename } from 'node:fs/promises';
 import { createDatabase, createR2Storage, claimExpiredAttachmentsForBackup } from '@stakeframe/db';
 import { run } from './process.mjs';
+import { permissions } from './permissions.mjs';
 import {
   BACKUP_HOST,
   BACKUP_TAG,
@@ -179,7 +180,7 @@ export async function backup(config, env, parentSignal, dependencies = {}) {
       .filter((row) => !row.expired)
       .reduce((total, row) => total + row.size, 0);
     assert.ok(
-      totalImages + MAX_DUMP_BYTES + 2 * MAX_METADATA_BYTES < MAX_BUNDLE_BYTES,
+      totalImages + MAX_DUMP_BYTES + 4 * MAX_METADATA_BYTES < MAX_BUNDLE_BYTES,
       'OPS_STAGING_CAPACITY',
     );
     await prepareBundle();
@@ -191,6 +192,7 @@ export async function backup(config, env, parentSignal, dependencies = {}) {
       counts: await tableCounts(client),
       finance: await financialIntegrity(client),
       rolesSha256: await writeJson('roles.json', await roles(client)),
+      permissionsSha256: await writeJson('permissions.json', await permissions(client)),
       attachmentsSha256: await writeJson('attachments.json', rows),
       imageCount: rows.filter((row) => !row.expired).length,
       imageBytes: totalImages,

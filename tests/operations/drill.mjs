@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import {
   createDatabase,
   createFinanceService,
@@ -11,7 +12,9 @@ import {
 import { migrateLocalDatabase } from './node_modules/@stakeframe/db/dist/migrate.js';
 import { backup, restic, snapshots } from './src/backup.mjs';
 import { restore } from './src/restore.mjs';
-import { readOpsConfig, readStatus, BUNDLE } from './src/config.mjs';
+import { readOpsConfig, readStatus, readRestoreTestHealth, BUNDLE } from './src/config.mjs';
+import { roles } from './src/bundle.mjs';
+import { permissions } from './src/permissions.mjs';
 
 const sharp = createRequire(import.meta.resolve('@stakeframe/db'))('sharp');
 const config = readOpsConfig(process.env);
@@ -26,6 +29,39 @@ const checked = (name) => {
 };
 try {
   await migrateLocalDatabase(database);
+  const adminUrl = new URL(config.connectionString);
+  adminUrl.username = 'postgres';
+  adminUrl.password = (await readFile('/run/secrets/postgres_password', 'utf8')).trim();
+  const admin = createDatabase(adminUrl.toString());
+  try {
+    await database.pool.query('grant select on finance.settings to public');
+    await assert.rejects(permissions(database.pool), /OPS_OBJECT_PERMISSIONS_CHANGED/);
+    await database.pool.query('revoke select on finance.settings from public');
+    await database.pool.query(
+      'alter default privileges in schema finance grant select on tables to public',
+    );
+    await assert.rejects(permissions(database.pool), /OPS_DEFAULT_PERMISSIONS_CHANGED/);
+    await database.pool.query(
+      'alter default privileges in schema finance revoke select on tables from public',
+    );
+    await admin.pool.query('alter schema integration owner to postgres');
+    await assert.rejects(permissions(database.pool), /OPS_OBJECT_OWNER_CHANGED/);
+    await admin.pool.query('alter schema integration owner to stakeframe_app');
+    const member = `stk_ops_member_${randomUUID().replaceAll('-', '')}`;
+    assert.match(member, /^stk_ops_member_[a-f0-9]{32}$/);
+    await admin.pool.query(`create role ${member} nologin`);
+    await admin.pool.query(`grant stakeframe_app to ${member}`);
+    await assert.rejects(roles(database.pool));
+    await admin.pool.query(`revoke stakeframe_app from ${member}`);
+    await admin.pool.query(`grant ${member} to stakeframe_app`);
+    await assert.rejects(roles(database.pool));
+    await admin.pool.query(`revoke ${member} from stakeframe_app`);
+    await admin.pool.query(`drop role ${member}`);
+    await permissions(database.pool);
+  } finally {
+    await admin.close();
+  }
+  checked('unexpected-acls-defaults-owners-and-both-role-memberships-refused');
   const finance = createFinanceService(database);
   const imports = createImportService(database);
   const execute = async (input) =>
@@ -180,6 +216,7 @@ try {
   await assert.rejects(restore(wrongKey, undefined, signal));
   checked('wrong-recovery-key-refused');
   const restored = await restore(targetConfig, remaining.at(-1).id, signal);
+  assert.equal(restored.permissionsVerified, true);
   assert.equal(restored.restoredImages, 2);
   assert.equal(restored.expiredImages, 1);
   assert.equal(restored.importsPaused, true);
@@ -223,6 +260,40 @@ try {
   }
   checked('historical-restore-respects-latest-expiry-and-preserves-financial-data');
   checked('occupied-target-refused-and-imports-quarantined');
+  for (const file of ['/work/missing-deployment.env', '/work/valid-deployment.env']) {
+    if (file.includes('/valid-'))
+      await writeFile(
+        file,
+        [
+          'OPERATIONS_IMAGE=example.invalid/operations@sha256:' + 'a'.repeat(64),
+          'DEPLOYMENT_ID=fictional-installation',
+          'R2_BACKUP_ACCOUNT_ID=' + 'a'.repeat(32),
+          'R2_BACKUP_BUCKET=fictional-backups',
+          'SECRET_DIRECTORY=/fictional-secrets',
+        ].join('\n'),
+        { flag: 'wx', mode: 0o600 },
+      );
+    await writeFile(
+      '/status/restore-latest.json',
+      JSON.stringify({
+        version: 1,
+        status: 'passed',
+        cleanup: 'passed',
+        completedAt: new Date().toISOString(),
+      }),
+      { mode: 0o600 },
+    );
+    assert.equal(await readRestoreTestHealth(), 'ready');
+    const run = spawnSync(process.execPath, ['/runner/scripts/restore-rehearsal.mjs', file], {
+      env: { ...process.env, RESTORE_REHEARSAL_CONFIRM: 'monthly-isolated-recovery' },
+      timeout: 15000,
+      encoding: 'utf8',
+    });
+    assert.equal(run.status, 1);
+    assert.ok(!run.stderr.includes('RESTORE_REHEARSAL_STATUS_FAILED'));
+    assert.equal(await readRestoreTestHealth(), 'failed');
+  }
+  checked('early-configuration-and-unavailable-docker-failures-replace-old-success');
   report.status = 'passed';
 } catch (error) {
   report.status = 'failed';
@@ -233,7 +304,9 @@ try {
     ? {
         type: error.cause.code ?? error.cause.name,
         code: /^[A-Z_]+$/.test(error.cause.message ?? '') ? error.cause.message : undefined,
-        source: error.cause.stack?.match(/(?:backup|bundle|process|config)\.mjs:\d+:\d+/)?.[0],
+        source: error.cause.stack?.match(
+          /(?:backup|bundle|process|config|permissions)\.mjs:\d+:\d+/,
+        )?.[0],
       }
     : undefined;
   // Fixtures are synthetic; only the fixed error code/name is emitted.

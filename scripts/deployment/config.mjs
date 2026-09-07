@@ -109,6 +109,12 @@ export function assertDeploymentConfig(
     assert.equal(ops.volumes[0].source, 'operations-status');
     assert.equal(ops.volumes[0].target, '/status');
     assert.ok(config.volumes['operations-status']);
+    assert.equal(config.volumes['operations-status'].driver, 'local');
+    assert.deepEqual(config.volumes['operations-status'].driver_opts, {
+      type: 'none',
+      o: 'bind',
+      device: '/var/lib/stakeframe/operations-status',
+    });
     assert.equal(services.api.environment.MONITORING_ENABLED, 'true');
     assert.equal(worker.MONITORING_ENABLED, 'true');
     assert.equal(services.api.environment.MONITOR_TOKEN_FILE, '/run/secrets/monitor_token');

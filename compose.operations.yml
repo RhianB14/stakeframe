@@ -68,6 +68,11 @@ networks:
 
 volumes:
   operations-status:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/stakeframe/operations-status
     labels:
       io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
 

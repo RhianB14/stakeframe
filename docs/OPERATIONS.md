@@ -44,10 +44,15 @@ de operações e confirmação de retenção, seguindo
 anexos e backup devem ser distintos e privados. Não aplicar lifecycle que remova
 objetos internos do Restic. A retenção é gerenciada pelo próprio repositório.
 
+Provisionar `/var/lib/stakeframe/operations-status` com UID/GID 1000 e modo
+0700 na janela autorizada. O volume operacional usa esse diretório fixo como
+bind. Assim, o runner mensal registra seu resultado diretamente no host, mesmo
+se o Docker estiver indisponível ou o arquivo de deployment for inválido.
+
 `DEPLOYMENT_ID` identifica a instalação e permanece igual ao atualizar imagens;
 os labels dos volumes persistentes usam essa identidade. Registrar commit e
-digests da release separadamente. Trocar a identidade sem reprovisionar volumes
-faz o ensaio mensal recusar a gravação do estado operacional.
+digests da release separadamente. Conferir essa identidade antes de reutilizar
+os volumes em qualquer atualização.
 
 ```bash
 node scripts/deployment-check.mjs /etc/stakeframe/deployment.env --integrations --operations
@@ -68,8 +73,12 @@ O dump lógico usa o snapshot exportado de uma transação repetível. As imagen
 ficam em arquivos individuais, separados do dump, e seus metadados completos
 ficam no pacote de recuperação. Assim, remover uma imagem histórica não exige
 alterar os lançamentos financeiros. O manifesto registra contagens, saldos por
-conta, exposição, papéis e checksums. A role `stakeframe_app` deve continuar sem
+conta, exposição, papéis, permissões e checksums. A role `stakeframe_app` deve continuar sem
 superusuário, criação de papéis/bancos, replicação, bypass de RLS ou memberships.
+O pacote registra proprietários e ACLs de banco, schemas, relações, colunas,
+rotinas e tipos; recusa grants ou privilégios padrão fora da baseline revisada.
+A recuperação compara essas permissões entre origem e destino e verifica
+memberships nos dois sentidos.
 A consistência entre conexões usa o parâmetro `--snapshot` do
 [pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html).
 
@@ -148,7 +157,9 @@ e medição com o volume real.
 
 O runner confere labels antes de remover apenas os recursos que criou. Guarda
 relatórios privados em `/var/lib/stakeframe/restore-reports` e o resultado mais
-recente no volume operacional da implantação conferida. Um teste com falha na
+recente em `/var/lib/stakeframe/operations-status/restore-latest.json`, por troca
+atômica após conferir caminho, proprietário e permissões do diretório. Uma
+falha inicial de configuração ou Docker substitui o sucesso anterior. Um teste com falha na
 limpeza não conta como sucesso. RTO real depende do volume de produção, servidor
 disponível e atuação do operador; o ensaio fictício não comprova o RTO real.
 
@@ -191,7 +202,8 @@ não é garantia de custo zero. Referência:
 `pnpm operations:rehearse` constrói a imagem e usa banco, repositório Restic e
 anexos fictícios em rede isolada. Verifica backup de imagens locais/remotas,
 recusa de armazenamento ausente, lock de sobreposição, exclusão histórica,
-chave incorreta, restauração, quarentena e recusa de destino ocupado. Relatórios
+chave incorreta, restauração, quarentena, recusa de destino ocupado, permissões
+indevidas e atualização do estado após falhas iniciais do runner mensal. Relatórios
 sanitizados ficam em `.cache/operations-reports`. O armazenamento remoto do
 ensaio é um adaptador fictício; não demonstra a permissão real do R2.
 
