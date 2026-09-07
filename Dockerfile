@@ -36,6 +36,9 @@ CMD ["node", "dist/migrate-cli.js"]
 
 FROM restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510 AS restic
 FROM postgres:18.4-bookworm@sha256:882236b897e39051d2368c5ccc6cda944904723506b2dfc97f2a8f5bc9afa382 AS operations
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 COPY --from=runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 COPY --from=packages --chown=1000:1000 /out/ops /app
