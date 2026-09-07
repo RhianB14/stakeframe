@@ -331,7 +331,7 @@ export async function applyFinanceCommand(
       kind: 'bet_stake',
       effectiveAt: placedAt,
       actor,
-      reason: command.freebetId ? 'Uso de crédito promocional' : 'Registro manual da aposta',
+      reason: command.freebetId ? 'Uso de crédito promocional' : 'Registro da aposta',
       postings: [
         { accountId: house.id, amount: -realStake },
         { accountId: exposure.id, amount: realStake },

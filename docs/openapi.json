@@ -1536,8 +1536,23 @@
             }
           },
           "duplicateCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "automatic": { "type": "boolean", "enum": [false] },
-          "automaticReason": { "type": "string", "enum": ["LAYOUT_NOT_VALIDATED"] }
+          "automatic": { "type": "boolean" },
+          "automaticReason": {
+            "type": "string",
+            "enum": [
+              "IMPORTED",
+              "LAYOUT_NOT_VALIDATED",
+              "EXTRACTION_UNCERTAIN",
+              "CAPTION_UNRESOLVED",
+              "BOOKMAKER_CONFLICT",
+              "PLACED_AT_UNCERTAIN",
+              "FREEBET_UNRESOLVED",
+              "RETURN_MISMATCH",
+              "UNIT_REQUIRED",
+              "DUPLICATE_REVIEW_REQUIRED",
+              "FINANCIAL_REVIEW_REQUIRED"
+            ]
+          }
         },
         "required": [
           "item",
@@ -4163,8 +4178,23 @@
             }
           },
           "duplicateCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "automatic": { "type": "boolean", "enum": [false] },
-          "automaticReason": { "type": "string", "enum": ["LAYOUT_NOT_VALIDATED"] }
+          "automatic": { "type": "boolean" },
+          "automaticReason": {
+            "type": "string",
+            "enum": [
+              "IMPORTED",
+              "LAYOUT_NOT_VALIDATED",
+              "EXTRACTION_UNCERTAIN",
+              "CAPTION_UNRESOLVED",
+              "BOOKMAKER_CONFLICT",
+              "PLACED_AT_UNCERTAIN",
+              "FREEBET_UNRESOLVED",
+              "RETURN_MISMATCH",
+              "UNIT_REQUIRED",
+              "DUPLICATE_REVIEW_REQUIRED",
+              "FINANCIAL_REVIEW_REQUIRED"
+            ]
+          }
         },
         "required": [
           "item",

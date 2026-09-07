@@ -71,6 +71,7 @@ jobs:
         run: |
           pnpm telegram:test
           pnpm ai:test
+          pnpm validation:test-corpus
           pnpm test
           pnpm build
       - name: Start the local stack with disposable credentials
@@ -83,6 +84,8 @@ jobs:
         run: pnpm deployment:rehearse
       - name: PostgreSQL 18, Google auth protocol and pg-boss integration
         run: pnpm local:test-db
+      - name: Reconcile and measure 10000 fictional bets
+        run: pnpm validation:performance
       - name: Browser checks on desktop and mobile
         run: |
           pnpm exec playwright install --with-deps chromium

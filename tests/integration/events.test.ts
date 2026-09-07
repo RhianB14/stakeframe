@@ -19,7 +19,7 @@ import { createApp } from '../../apps/api/src/app.js';
 import type { OwnerAuth } from '../../apps/api/src/auth.js';
 
 const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
-const admin = createDatabase(source);
+const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 let database: Database;
 let finance: FinanceService;
 let events: EventService;

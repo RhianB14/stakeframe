@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { parseCaption, ticketExtractionSchema, type BetInput } from '@stakeframe/shared';
+import {
+  parseCaption,
+  ticketExtractionSchema,
+  automaticDecisionSchema,
+  type BetInput,
+} from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { createInboxStore } from './inbox.js';
@@ -164,6 +169,11 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             : row.extraction;
         const parsed = ticketExtractionSchema.safeParse(evidence);
         const extraction = parsed.success ? parsed.data : null;
+        const decision = automaticDecisionSchema.safeParse(
+          row.extraction && typeof row.extraction === 'object' && 'automatic' in row.extraction
+            ? row.extraction.automatic
+            : null,
+        );
         const aliases = (
           await client.query<{ catalog_id: string; kind: string; label: string }>(
             'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where c.active',
@@ -202,8 +212,10 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           },
           duplicates: duplicates.slice(0, 100),
           duplicateCount: duplicates.length,
-          automatic: false as const,
-          automaticReason: 'LAYOUT_NOT_VALIDATED' as const,
+          automatic: decision.success && decision.data.reason === 'IMPORTED',
+          automaticReason: decision.success
+            ? decision.data.reason
+            : ('LAYOUT_NOT_VALIDATED' as const),
         };
       } catch (error) {
         await client.query('rollback');

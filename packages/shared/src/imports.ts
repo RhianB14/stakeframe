@@ -75,6 +75,52 @@ export const ticketExtractionSchema = z.strictObject({
   warnings: z.array(text).max(20),
 });
 export type TicketExtraction = z.infer<typeof ticketExtractionSchema>;
+export const automaticReasonSchema = z.enum([
+  'IMPORTED',
+  'LAYOUT_NOT_VALIDATED',
+  'EXTRACTION_UNCERTAIN',
+  'CAPTION_UNRESOLVED',
+  'BOOKMAKER_CONFLICT',
+  'PLACED_AT_UNCERTAIN',
+  'FREEBET_UNRESOLVED',
+  'RETURN_MISMATCH',
+  'UNIT_REQUIRED',
+  'DUPLICATE_REVIEW_REQUIRED',
+  'FINANCIAL_REVIEW_REQUIRED',
+]);
+export type AutomaticReason = z.infer<typeof automaticReasonSchema>;
+export const automaticDecisionSchema = z.strictObject({
+  reason: automaticReasonSchema,
+  policyId: z.string().nullable(),
+  policyDigest: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .nullable(),
+});
+export const validatedLayoutSchema = z.strictObject({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
+  bookmakerId: z.uuid(),
+  model: z.literal(OPENROUTER_MODEL),
+  description: z.string().trim().min(20).max(1000),
+  placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo']),
+  allowFreebet: z.boolean(),
+  corpusSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  evaluationSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  sampleCount: z.number().int().min(20).max(10000),
+  essentialFieldErrors: z.literal(0),
+  approvedBy: z.literal('owner'),
+  approvedAt: z.iso.datetime({ offset: true }),
+});
+export const validatedLayoutsSchema = z
+  .array(validatedLayoutSchema)
+  .max(5)
+  .refine((layouts) => new Set(layouts.map((layout) => layout.id)).size === layouts.length);
+export type ValidatedLayout = z.infer<typeof validatedLayoutSchema>;
+export const layoutExtractionSchema = z.strictObject({
+  layoutId: z.string().nullable(),
+  extraction: ticketExtractionSchema,
+});
+export const layoutExtractionJsonSchema = z.toJSONSchema(layoutExtractionSchema);
 export const duplicateSchema = z.object({
   betId: z.uuid(),
   reference: z.string(),
@@ -100,8 +146,8 @@ export const importDetailSchema = z
     }),
     duplicates: z.array(duplicateSchema),
     duplicateCount: z.number().int().nonnegative(),
-    automatic: z.literal(false),
-    automaticReason: z.literal('LAYOUT_NOT_VALIDATED'),
+    automatic: z.boolean(),
+    automaticReason: automaticReasonSchema,
   })
   .meta({ id: 'ImportDetail' });
 export type ImportDetail = z.infer<typeof importDetailSchema>;
