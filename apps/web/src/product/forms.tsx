@@ -6,6 +6,7 @@ import {
   type CatalogItem,
   type Bet,
   type SelectionInput,
+  type ImportDetail,
 } from '@stakeframe/shared';
 import { CommandForm } from './actions.js';
 import { decimalInput, localNow, localInstant, type CommandInput } from './api.js';
@@ -431,19 +432,27 @@ const newSelection = (): SelectionForm => ({
 export function BetForm({
   workspace,
   bet,
+  review,
   onDone,
 }: {
   workspace: Workspace;
   bet?: Bet;
+  review?: ImportDetail;
   onDone: () => void;
 }) {
-  const [bookmakerId, setBookmaker] = useState(bet?.bookmakerId ?? '');
-  const [tipsterId, setTipster] = useState(bet?.tipsterId ?? '');
-  const [stake, setStake] = useState(bet?.stake ?? '');
-  const [odds, setOdds] = useState(bet?.odds ?? '');
-  const [placedAt, setPlaced] = useState(localNow);
-  const [freebetId, setFreebet] = useState(bet?.freebetId ?? '');
-  const [reference, setReference] = useState(bet?.reference ?? '');
+  const [bookmakerId, setBookmaker] = useState(
+    bet?.bookmakerId ??
+      (review?.matches.conflict
+        ? ''
+        : (review?.matches.captionBookmakerId ?? review?.matches.extractedBookmakerId ?? '')),
+  );
+  const [tipsterId, setTipster] = useState(bet?.tipsterId ?? review?.matches.tipsterId ?? '');
+  const [stake, setStake] = useState(bet?.stake ?? review?.extraction?.stake ?? '');
+  const [odds, setOdds] = useState(bet?.odds ?? review?.extraction?.odds ?? '');
+  const [placedAt, setPlaced] = useState(() => (review ? '' : localNow()));
+  const [freebetId, setFreebet] = useState(bet?.freebetId ?? (review ? 'unconfirmed' : ''));
+  const [reference, setReference] = useState(bet?.reference ?? review?.extraction?.reference ?? '');
+  const [duplicateReason, setDuplicateReason] = useState('');
   const [selections, setSelections] = useState<SelectionForm[]>(() =>
     bet
       ? bet.selections.map((value) => ({
@@ -459,7 +468,19 @@ export function BetForm({
               }).format(new Date(value.eventAt))
             : '',
         }))
-      : [newSelection()],
+      : review?.extraction
+        ? review.extraction.selections.map((value) => ({
+            ...newSelection(),
+            event: value.event ?? '',
+            sport: value.sport,
+            market: value.market ?? '',
+            selection: value.selection ?? '',
+            odds: value.odds,
+            dateStatus: 'pending',
+          }))
+        : review
+          ? [{ ...newSelection(), sport: null, dateStatus: 'pending' }]
+          : [newSelection()],
   );
   const [allowMissingUnit, setMissing] = useState(false);
   const [reason, setReason] = useState('');
@@ -491,9 +512,17 @@ export function BetForm({
   return (
     <CommandForm
       onDone={onDone}
-      submitLabel={bet ? 'Salvar correção' : 'Registrar aposta'}
-      onSubmit={() =>
+      submitLabel={
         bet
+          ? 'Salvar correção'
+          : review
+            ? 'Confirmar importação e registrar aposta'
+            : 'Registrar aposta'
+      }
+      onSubmit={() => {
+        if (review && freebetId === 'unconfirmed')
+          throw new Error('Confirme se a aposta usa dinheiro real ou freebet.');
+        return bet
           ? {
               type: 'bet.update',
               id: bet.id,
@@ -502,19 +531,40 @@ export function BetForm({
               selections: built(),
               reason,
             }
-          : {
-              type: 'bet.create',
-              bookmakerId,
-              tipsterId: tipsterId || null,
-              stake: decimalInput(stake),
-              odds: odds.replace(',', '.'),
-              placedAt: localInstant(placedAt),
-              freebetId: freebetId || null,
-              reference,
-              selections: built(),
-              allowMissingUnit,
-            }
-      }
+          : review
+            ? {
+                type: 'import.confirm',
+                importId: review.item.id,
+                expectedInboxVersion: review.item.version,
+                decision: {
+                  kind: 'create',
+                  duplicateReason,
+                  bet: {
+                    bookmakerId,
+                    tipsterId: tipsterId || null,
+                    stake: decimalInput(stake),
+                    odds: odds.replace(',', '.'),
+                    placedAt: localInstant(placedAt),
+                    freebetId: freebetId || null,
+                    reference,
+                    selections: built(),
+                    allowMissingUnit,
+                  },
+                },
+              }
+            : {
+                type: 'bet.create',
+                bookmakerId,
+                tipsterId: tipsterId || null,
+                stake: decimalInput(stake),
+                odds: odds.replace(',', '.'),
+                placedAt: localInstant(placedAt),
+                freebetId: freebetId || null,
+                reference,
+                selections: built(),
+                allowMissingUnit,
+              };
+      }}
     >
       <div className="form-grid">
         <Field label="Casa de aposta">
@@ -524,7 +574,7 @@ export function BetForm({
             value={bookmakerId}
             onChange={(event) => {
               setBookmaker(event.target.value);
-              setFreebet('');
+              setFreebet(review ? 'unconfirmed' : '');
             }}
           >
             <option value="">Selecione</option>
@@ -556,6 +606,11 @@ export function BetForm({
                   if (credit) setStake(credit.amount);
                 }}
               >
+                {review ? (
+                  <option value="unconfirmed" disabled>
+                    Confirme dinheiro real ou freebet
+                  </option>
+                ) : null}
                 <option value="">Dinheiro real</option>
                 {workspace.freebets
                   .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
@@ -569,7 +624,7 @@ export function BetForm({
             <Field label="Valor apostado (R$)">
               <input
                 required
-                disabled={!!freebetId}
+                disabled={!!freebetId && freebetId !== 'unconfirmed'}
                 inputMode="decimal"
                 value={stake}
                 onChange={(event) => setStake(event.target.value)}
@@ -728,6 +783,30 @@ export function BetForm({
           Se faltar unidade histórica, registrar com essa pendência identificada para revisão.
         </label>
       )}
+      {review ? (
+        <>
+          <Field
+            label="Justificativa para registrar separadamente"
+            hint={
+              review.duplicates.length
+                ? 'Existe possível duplicação. Explique por que este é outro bilhete.'
+                : 'Preencha se houver bilhete semelhante já cadastrado.'
+            }
+          >
+            <textarea
+              required={review.duplicates.length > 0}
+              minLength={3}
+              maxLength={500}
+              value={duplicateReason}
+              onChange={(event) => setDuplicateReason(event.target.value)}
+            />
+          </Field>
+          <label className="checkbox-field">
+            <input type="checkbox" required />
+            Conferi casa, valor, odd, origem do dinheiro, seleções e data da aposta no comprovante.
+          </label>
+        </>
+      ) : null}
     </CommandForm>
   );
 }

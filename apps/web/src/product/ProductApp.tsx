@@ -25,10 +25,13 @@ import {
   SettleForm,
 } from './forms.js';
 import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
+import { ImportsPage, ImportReview, UploadForm } from './imports.js';
+import { savePendingUpload } from './upload-storage.js';
 import './product.css';
 
 export type Modal =
-  | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' }
+  | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' | 'upload' }
+  | { kind: 'import'; id: string }
   | {
       kind: 'cash';
       operation: 'deposit' | 'withdrawal' | 'transfer' | 'reconcile';
@@ -44,6 +47,7 @@ type Owner = { id: string; name: string };
 const navigation = [
   { id: 'overview', title: 'Visão geral', icon: '◫' },
   { id: 'bets', title: 'Apostas', icon: '▤' },
+  { id: 'imports', title: 'Importações', icon: '⇧' },
   { id: 'finance', title: 'Financeiro', icon: '⇄' },
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
@@ -92,8 +96,9 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
   const client = useQueryClient();
   const logout = useMutation({
     mutationFn: () => authAction('sign-out'),
-    onSuccess: () => {
+    onSuccess: async () => {
       sessionStorage.removeItem('stakeframe.pending-command');
+      await savePendingUpload(null, true).catch(() => undefined);
       client.clear();
     },
   });
@@ -201,6 +206,8 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
             <BetsPage workspace={workspace} open={open} />
           ) : page === 'finance' ? (
             <FinancePage workspace={workspace} open={open} />
+          ) : page === 'imports' ? (
+            <ImportsPage workspace={workspace} open={open} />
           ) : (
             <SettingsPage workspace={workspace} open={open} />
           )}
@@ -213,6 +220,7 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
         <ModalContent
           key={JSON.stringify(modal, (key, value: unknown) => (key === 'build' ? null : value))}
           modal={modal}
+          owner={owner.id}
           workspace={workspace}
           close={close}
           open={open}
@@ -301,11 +309,13 @@ export function Metric({
 }
 function ModalContent({
   modal,
+  owner,
   workspace,
   close,
   open,
 }: {
   modal: Modal;
+  owner: string;
   workspace: Workspace;
   close: () => void;
   open: OpenModal;
@@ -313,6 +323,14 @@ function ModalContent({
   let title: string;
   let content: ReactNode;
   switch (modal.kind) {
+    case 'upload':
+      title = 'Enviar comprovante';
+      content = <UploadForm owner={owner} onDone={close} open={open} />;
+      break;
+    case 'import':
+      title = 'Revisar importação';
+      content = <ImportReview id={modal.id} workspace={workspace} open={open} onDone={close} />;
+      break;
     case 'initialize':
       title = 'Saldos iniciais';
       content = <InitializeForm workspace={workspace} onDone={close} />;

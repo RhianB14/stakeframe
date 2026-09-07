@@ -38,6 +38,10 @@ export function registerApiContracts(app: FastifyInstance) {
       tags: [
         { name: 'Financeiro', description: 'Banca, cadastros e histórico auditável.' },
         { name: 'Apostas', description: 'Apostas manuais e liquidações.' },
+        {
+          name: 'Importações',
+          description: 'Comprovantes privados, extração e revisão antes do lançamento financeiro.',
+        },
         { name: 'Operação', description: 'Verificações técnicas públicas, sem dados privados.' },
         {
           name: 'Autenticação',
@@ -66,6 +70,15 @@ export function registerApiContracts(app: FastifyInstance) {
     transform: jsonSchemaTransform,
     transformObject: (input) => {
       const document = jsonSchemaTransformObject(input) as OpenAPIV3.Document;
+      const image = document.paths['/api/v1/imports/{id}/image']?.get;
+      if (image)
+        image.responses['200'] = {
+          description: 'Bytes privados; sessão exigida em cada leitura.',
+          content: {
+            'image/png': { schema: { type: 'string', format: 'binary' } },
+            'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+          },
+        };
       // Swagger assumes Fastify always requires schema.body. Our Zod compiler also
       // accepts absent bodies (Fastify passes null), so derive this from the route schema.
       for (const path of Object.values(document.paths)) {

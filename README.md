@@ -6,7 +6,8 @@ acompanhamento de resultados.
 > **Estado atual: fundação e núcleo financeiro locais.** Web, API, worker e
 > PostgreSQL executam em Docker Compose. O acesso privado permite cadastrar
 > banca, apostas, liquidações, freebets, cashouts e estornos auditáveis.
-> Importação assistida, eventos e análises seguem em implementação. O setup
+> Upload privado, revisão de importações e anexos estão implementados localmente.
+> Eventos e análises seguem em implementação. O setup
 > operacional do M0 e o piloto de produção continuam pendentes.
 > Consulte [o plano](docs/PLAN.md), [o modelo financeiro](docs/FINANCIAL-MODEL.md)
 > e [o progresso do setup](docs/M0-CHECKLIST.md).
@@ -27,6 +28,8 @@ resultados com liquidação manual e auditoria completa.
 - Hospedagem em VPS Oracle Always Free (Docker Compose + Caddy).
 - Runtime Gemini 3.8 Flash via OpenRouter e Telegram, desativados por padrão;
   configuração e limites em [INTEGRATION-RUNTIME.md](docs/INTEGRATION-RUNTIME.md).
+- Upload, revisão, duplicidade e retenção de comprovantes em
+  [IMPORTS.md](docs/IMPORTS.md).
 
 ## Desenvolvimento
 

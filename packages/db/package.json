@@ -15,12 +15,14 @@
     }
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1127.0",
     "@stakeframe/shared": "workspace:*",
     "drizzle-orm": "0.45.2",
-    "pg": "8.23.0"
+    "pg": "8.23.0",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
-    "drizzle-kit": "0.31.10",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.10"
   }
 }

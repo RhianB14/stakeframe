@@ -1,6 +1,12 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import type { PgBoss } from 'pg-boss';
-import { createInboxStore, type Database, type PoolClient } from '@stakeframe/db';
+import {
+  createInboxStore,
+  createR2Storage,
+  type Database,
+  type PoolClient,
+  type ObjectStorage,
+} from '@stakeframe/db';
 import { probeSchema } from '@stakeframe/shared';
 import { readAiConfig, extractTicket } from './openrouter.js';
 import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
@@ -17,15 +23,49 @@ export async function prepareExtractionQueue(boss: PgBoss) {
   });
 }
 
-export function integrationStore(database: Database, boss: PgBoss) {
-  return createInboxStore(database, async (client, id) => {
+export function integrationStore(database: Database, boss: PgBoss, storage?: ObjectStorage) {
+  return createInboxStore(
+    database,
+    async (client, id) => {
+      const queued = await boss.send(
+        EXTRACTION_QUEUE,
+        { nonce: id },
+        { id, db: { executeSql: (text, values) => client.query(text, values) } },
+      );
+      if (!queued) throw new IntegrationError('EXTRACTION_ENQUEUE_FAILED');
+    },
+    storage,
+  );
+}
+
+export async function drainExtractionRequest(database: Database, boss: PgBoss) {
+  const client = await database.pool.connect();
+  try {
+    await client.query('begin');
+    const row = (
+      await client.query<{ id: string; inbox_id: string }>(
+        'select id,inbox_id from integration.extraction_request order by created_at limit 1 for update skip locked',
+      )
+    ).rows[0];
+    if (!row) {
+      await client.query('commit');
+      return false;
+    }
     const queued = await boss.send(
       EXTRACTION_QUEUE,
-      { nonce: id },
-      { id, db: { executeSql: (text, values) => client.query(text, values) } },
+      { nonce: row.inbox_id },
+      { id: row.id, db: { executeSql: (text, values) => client.query(text, values) } },
     );
     if (!queued) throw new IntegrationError('EXTRACTION_ENQUEUE_FAILED');
-  });
+    await client.query('delete from integration.extraction_request where id=$1', [row.id]);
+    await client.query('commit');
+    return true;
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function startIntegrations(
@@ -38,31 +78,43 @@ export async function startIntegrations(
   const telegram = readTelegramConfig(env);
   if (!ai && !telegram) return { stop: async () => {}, check: () => {} };
   await prepareExtractionQueue(boss);
-  const store = integrationStore(database, boss);
+  const store = integrationStore(database, boss, createR2Storage(env));
   const controller = new AbortController();
   const tasks: Promise<void>[] = [];
   let leader: PoolClient | undefined;
   try {
     if (ai) {
+      tasks.push(
+        (async () => {
+          while (!controller.signal.aborted) {
+            try {
+              if (await drainExtractionRequest(database, boss)) continue;
+            } catch {
+              console.warn('EXTRACTION_DISPATCH_FAILED');
+            }
+            await delay(1000, undefined, { signal: controller.signal }).catch(() => undefined);
+          }
+        })(),
+      );
       await store.recoverInterrupted();
       await boss.work(EXTRACTION_QUEUE, { pollingIntervalSeconds: 1 }, async (jobs) => {
         const parsed = probeSchema.safeParse(jobs[0]?.data);
         if (!parsed.success) throw new IntegrationError('INVALID_EXTRACTION_JOB');
         const id = parsed.data.nonce;
-        const image = await store.claim(id);
-        if (!image) return { state: 'unchanged' };
+        const claim = await store.claim(id);
+        if (!claim) return { state: 'unchanged' };
         try {
           const result = await extractTicket({
             apiKey: ai.apiKey,
-            image,
+            image: claim.image,
             fetchImpl,
             signal: controller.signal,
           });
-          await store.complete(id, result);
+          await store.complete(id, claim.attempt, result);
           return { state: 'review' };
         } catch (error) {
           const code = error instanceof IntegrationError ? error.code : 'AI_OUTCOME_UNCERTAIN';
-          await store.fail(id, code);
+          await store.fail(id, claim.attempt, code);
           return { state: 'failed', code };
         }
       });

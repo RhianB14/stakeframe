@@ -48,8 +48,44 @@ export const selectionInputSchema = z.strictObject({
   dateStatus: z.enum(['confirmed', 'estimated', 'pending']),
 });
 const command = z.strictObject({ expectedVersion: version });
+export const betInputSchema = z.strictObject({
+  bookmakerId: z.uuid(),
+  tipsterId: z.uuid().nullable(),
+  stake: positiveMoneySchema,
+  odds: oddsSchema,
+  placedAt: instant,
+  freebetId: z.uuid().nullable(),
+  reference: z.string().trim().max(150),
+  selections: z.array(selectionInputSchema).min(1).max(40),
+  allowMissingUnit: z.boolean(),
+});
+export type BetInput = z.infer<typeof betInputSchema>;
 export const financeCommandSchema = z
   .discriminatedUnion('type', [
+    command.extend({
+      type: z.literal('import.confirm'),
+      importId: z.uuid(),
+      expectedInboxVersion: version,
+      decision: z.discriminatedUnion('kind', [
+        z.strictObject({
+          kind: z.literal('create'),
+          bet: betInputSchema,
+          duplicateReason: z.string().trim().max(500),
+        }),
+        z.strictObject({ kind: z.literal('link'), betId: z.uuid(), reason: note }),
+      ]),
+    }),
+    command.extend({
+      type: z.literal('import.discard'),
+      importId: z.uuid(),
+      expectedInboxVersion: version,
+      reason: note,
+    }),
+    command.extend({
+      type: z.literal('import.retry'),
+      importId: z.uuid(),
+      expectedInboxVersion: version,
+    }),
     command.extend({
       type: z.literal('catalog.create'),
       kind: catalogKindSchema,

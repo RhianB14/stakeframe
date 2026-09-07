@@ -75,6 +75,11 @@ recuperação de chamadas incertas. [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME
 documenta configuração, testes e armazenamento provisório. Integrações continuam
 desativadas nos Composes padrão; não houve implantação na VPS.
 
+M3 acrescenta anexos compartilhados, upload autenticado, revisão, confirmação
+financeira atômica, outbox de reprocessamento e retenção recuperável. A API lê
+os arquivos privados com sessão vigente; o worker transfere para R2 somente
+quando explicitamente configurado. [IMPORTS.md](IMPORTS.md).
+
 Monorepo TypeScript estrito com pnpm workspaces:
 
 | Pacote planejado  | Responsabilidade                                         |

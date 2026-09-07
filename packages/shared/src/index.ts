@@ -32,6 +32,11 @@ export const apiErrorCodeSchema = z.enum([
   'UNIT_REQUIRED',
   'NOT_INITIALIZED',
   'ALIAS_CONFLICT',
+  'DUPLICATE_REVIEW_REQUIRED',
+  'INVALID_INBOX_IMAGE',
+  'INBOX_BUSY',
+  'INBOX_CAPACITY_REACHED',
+  'ATTACHMENT_UNAVAILABLE',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z

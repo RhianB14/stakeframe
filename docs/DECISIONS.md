@@ -324,3 +324,22 @@ recebem status `Superseded` e apontam a substituta.
   produção, alteração de credenciais/proteções ou operações destrutivas.
   Preparar os artefatos concretos antes de pedir a autorização correspondente;
   somente um piloto real e os critérios do plano permitem declarar v1.0.0.
+
+## D020 — Revisão transacional e acesso privado aos comprovantes (2026-09-07)
+
+- **Decisão:** upload e Telegram compartilham armazenamento por hash, preservando
+  entradas distintas. Confirmar uma importação, registrar a aposta e movimentar
+  a banca ocorre na mesma transação, com versões e idempotência. Candidatos por
+  imagem, referência ou valores/data exigem decisão explícita; nenhum bilhete
+  semelhante é descartado automaticamente.
+- **Privacidade:** a API entrega bytes após verificar a sessão em cada leitura,
+  com `no-store` e sem URLs portadoras de credencial. Essa escolha substitui a
+  previsão de URLs temporárias no plano e permite revogação imediata da sessão.
+  R2 continua privado e usa credencial exclusiva do bucket de anexos.
+- **Retenção:** aguardar 30 dias após todas as referências terminarem; preservar
+  imagem enquanto houver aposta aberta ou revisão pendente. Exclusão externa
+  recuperável, sem apagar histórico financeiro. Upload incerto mantém os bytes
+  locais e a obrigação de verificar/excluir o possível objeto remoto.
+- **Limites:** todos os layouts continuam sem validação representativa de piloto,
+  portanto toda extração exige revisão. Integrações e armazenamento externo
+  permanecem desativados nos Composes padrão. [IMPORTS.md](IMPORTS.md).
