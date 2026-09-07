@@ -67,7 +67,7 @@ Somente o job de diagnóstico existe, sem dados financeiros ou integrações.
 `local:init` gera uma senha aleatória em `.env.local`, sem imprimir seu valor
 e sem sobrescrever um arquivo existente. Não use `.env.example` como arquivo
 do Compose: ele documenta também integrações futuras. O ambiente local não
-precisa de Google, Telegram, R2 ou OmniRoute para iniciar.
+precisa de Google, Telegram, R2 ou Gemini para iniciar.
 
 Para autenticação, consulte [AUTHENTICATION.md](AUTHENTICATION.md): o arquivo
 opcional `.env.auth.local` fornece somente a configuração da API. O login

@@ -25,6 +25,8 @@
     "recovery:r2": "node scripts/recovery-drill.mjs --r2",
     "telegram:test": "node --test scripts/telegram/owner.test.mjs",
     "telegram:setup": "node scripts/telegram/setup.mjs",
+    "ai:test": "node --test scripts/ai/probe.test.mjs",
+    "ai:setup": "node scripts/ai/setup.mjs",
     "local:init": "node scripts/local-env.mjs",
     "local:up": "docker compose --env-file .env.local -f compose.local.yml up -d --build --wait",
     "local:down": "docker compose --env-file .env.local -f compose.local.yml down",

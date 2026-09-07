@@ -70,6 +70,7 @@ jobs:
       - name: Unit tests and build
         run: |
           pnpm telegram:test
+          pnpm ai:test
           pnpm test
           pnpm build
       - name: Start the local stack with disposable credentials

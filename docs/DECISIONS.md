@@ -262,3 +262,27 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** este ensaio não ativa backups reais, retenção, agendamento ou
   alertas, nem comprova RPO/RTO ou custódia da chave de produção. O token de
   preparação expira em 2026-10-06. Procedimento em [R2.md](R2.md).
+
+## D017 — Consumir Gemini diretamente e preservar o OmniRoute local (2026-09-06)
+
+- **Contexto:** o proprietário já tem API Gemini gratuita e envia menos de 30
+  bilhetes por dia normalmente, com picos de 45–60. Instalar outro serviço de
+  roteamento não é necessário para esse provedor. A comparação e as cotas
+  efetivas foram apresentadas, e o proprietário aprovou continuar com Gemini.
+- **Decisão:** API direta pelo worker da VPS; principal inicial
+  `gemini-3.1-flash-lite`, que passou na prova fictícia. O candidato original
+  `gemini-3.5-flash-lite` e o candidato à segunda leitura `gemini-3.8-flash`
+  retornaram HTTP 503 e permanecem sujeitos a revalidação. Respeitar cotas do projeto, fila e retentativas
+  limitadas. Falhas preservam o trabalho para revisão/reprocessamento, sem
+  recorrer automaticamente a cobrança ou outros planos.
+- **Limite de evidência:** a prova de imagem fictícia valida o protocolo e os
+  campos daquele exemplo. A escolha por precisão exige amostra privada das
+  casas usadas. Não atribuir acesso genérico de produto à assinatura Go ou Pro.
+- **Preservação:** backup Restic local do OmniRoute, com SQLite consistente,
+  configuração, código e alterações locais; restauração de arquivos e material
+  de decifragem verificada sem iniciar a cópia. A limpeza das duas pastas
+  temporárias privadas foi bloqueada pela revisão automática e ficou pendente.
+- **Operação:** sem instalação OmniRoute na VPS ou transferência de suas
+  sessões. Segredo Gemini fora do Git; nível gratuito com suas condições de
+  uso de conteúdo. Não há implantação ou processamento de bilhetes reais nesta
+  decisão. [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).

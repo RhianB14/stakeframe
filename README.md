@@ -24,7 +24,7 @@ resultados com liquidação manual e auditoria completa.
 - PostgreSQL 18 com Drizzle ORM.
 - Processamento assíncrono com pg-boss.
 - Hospedagem em VPS Oracle Always Free (Docker Compose + Caddy).
-- IA via OmniRoute em Docker na VPS.
+- IA via API Gemini direta, com execução pelo worker na VPS (planejada).
 
 ## Desenvolvimento
 
@@ -68,6 +68,11 @@ O [ensaio de recuperação](docs/RECOVERY-DRILL.md) valida PostgreSQL com dados
 descartáveis; backups externos e recuperação completa ainda não estão ativos.
 O [ensaio R2](docs/R2.md) usa credencial autorizada e dados fictícios para
 verificar armazenamento externo; sua execução é separada da CI e da produção.
+
+A [seleção de IA](docs/AI-MODEL-SELECTION.md) usa Gemini direto; o
+[ensaio de imagem](docs/AI-PROBE.md) é limitado a um bilhete fictício e sua
+execução real é separada da CI. Preservação do OmniRoute local e evidências em
+[M0-16-VALIDATION.md](docs/M0-16-VALIDATION.md).
 
 O [cliente Google de produção](docs/M0-14-VALIDATION.md) está preparado em
 projeto separado, com callback HTTPS e credenciais privadas. O login nesse
