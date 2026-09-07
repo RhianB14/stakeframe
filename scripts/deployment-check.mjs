@@ -1,8 +1,9 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { access, lstat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { execute, root } from './recovery/runtime.mjs';
 import { assertDeploymentConfig } from './deployment/config.mjs';
+import { inspectSecretDirectories } from './deployment/secrets.mjs';
 
 try {
   const [file, ...extra] = process.argv.slice(2);
@@ -49,6 +50,11 @@ try {
     if (!info.isFile() || info.size < 1 || info.size > 4096) throw new Error();
     await access(secret.file, constants.R_OK);
   }
+  // The directory holding each secret must not expose names or metadata to
+  // group or other users. Repeated directories are verified exactly once.
+  await inspectSecretDirectories(
+    Object.values(config.secrets).map((secret) => dirname(secret.file)),
+  );
   if (options.automatic) {
     const file = config.services.worker.volumes[0].source;
     const info = await lstat(file);

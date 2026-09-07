@@ -1,8 +1,9 @@
 # Implantação
 
-> **STATUS: PRODUÇÃO NÃO IMPLANTADA.** A configuração de produção e o ensaio
-> isolado estão descritos em [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md).
-> Publicação de imagens, DNS/ACME e operação na VPS permanecem pendentes.
+> **STATUS: PILOTO ARM64 IMPLANTADO; HTTPS PÚBLICO ATIVO.** A execução
+> autorizada de 07/09/2026 está registrada em
+> [M0-24-VALIDATION.md](M0-24-VALIDATION.md). Após a correção do registro A,
+> o Caddy obteve o certificado Let's Encrypt e os probes públicos passaram.
 
 ## Alvo (planejado)
 
@@ -11,8 +12,9 @@
   em rede interna; apenas Caddy exposto publicamente. O worker usará a API
   Gemini 3.8 Flash via OpenRouter, conforme [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
 - Imagens construídas pela CI e referenciadas por versão/digest.
-- Domínio `stakeframe.com.br` (compra informada pelo proprietário em
-  06/09/2026); DNS e HTTPS automático via Caddy ainda pendentes.
+- Domínio `stakeframe.com.br`; a aplicação está na VPS ARM64
+  `129.146.113.111`. O registro A foi corrigido do endereço anterior
+  (`162.240.81.81`) e o certificado ACME foi emitido para o domínio.
 
 ## Preparação do artefato
 
@@ -36,6 +38,14 @@ da primeira janela estão em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
    backups e recuperação. O checker não comprova esses gates externos.
 5. Registrar autorização explícita do Codex com commit, digests, ambiente,
    migrações previstas, evidência de backup e estratégia de reversão.
+
+## Operação executada no piloto ARM64
+
+O piloto usou a configuração privada em `/etc/stakeframe/deployment.env`, os
+três arquivos Compose (produção, integrações e operações) e o perfil
+`operations`. Os cinco digests aprovados foram baixados, os serviços foram
+recriados e a migração foi executada explicitamente. O procedimento e os
+resultados estão em [M0-24-VALIDATION.md](M0-24-VALIDATION.md).
 
 ## Operação futura, somente após autorização
 
@@ -79,11 +89,16 @@ Registrar commit, digests, horário, resultados e autorização no relatório.
 - [x] VPS existente inventariada e acesso administrativo testado; revalidar
       acesso e recuperação independente antes da futura janela.
 - [x] Domínio adquirido, conforme informação do proprietário.
-- [ ] DNS e HTTPS configurados e verificados.
-- [ ] Imagens publicadas por digest e artefato de release revisado.
+- [x] DNS corrigido para `129.146.113.111` e HTTPS verificado: o Caddy obteve
+      o certificado Let's Encrypt e os probes públicos responderam conforme o
+      esperado.
+- [x] Imagens publicadas por digest e artefato de release revisado; publicação
+      #10 e execução ARM64 estão registradas em `M0-24-VALIDATION.md`.
 - [ ] Backup externo funcionando e restauração testada.
 - [ ] Segredos de produção configurados fora do repositório.
-- [ ] OAuth de produção e procedimento de reversão validados.
+- [ ] OAuth de produção e procedimento de reversão validados; o início do
+      fluxo, o callback seguro e a recusa sem sessão foram verificados, mas o
+      login real do proprietário permanece pendente.
 - [ ] Autorização expressa do Codex.
 
 O ensaio local comprova somente o cenário descrito em

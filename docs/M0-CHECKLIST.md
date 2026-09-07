@@ -19,6 +19,13 @@ VPS, conforme autorização do proprietário; [PUBLICATION.md](PUBLICATION.md).
 STK-M0-21 ([issue #52](https://github.com/RhianB14/stakeframe/issues/52)) criou
 as quatro credenciais R2 privadas, com 34 verificações de escopo aprovadas;
 a instalação na VPS permanece pendente.
+O piloto ARM64 foi executado em 07/09/2026 após a publicação #10: os cinco
+serviços foram atualizados por digest, a migração retornou `MIGRATIONS_COMPLETE`
+e todos os serviços ficaram saudáveis. A evidência está em
+[M0-24-VALIDATION.md](M0-24-VALIDATION.md). Após a correção do registro A,
+o Caddy obteve o certificado Let's Encrypt e os probes públicos passaram; o
+início do fluxo OAuth, o callback seguro e a recusa sem sessão foram
+verificados, mas o login real do proprietário permanece pendente.
 O avanço ocorre por determinação
 do proprietário (D019), preservando piloto, ativação operacional e release
 como pendências. STK-M0-16 foi
@@ -276,8 +283,9 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).
 - [x] Configurar a suíte da aplicação e inspeção das imagens em runner ARM64
       nativo na CI (STK-M0-11); resultados por head registrados na PR.
-- [ ] Validar execução ARM64 na VPS em futura janela autorizada; o manifest
-      multiarch das imagens base não substitui essa execução.
+- [x] Validar execução ARM64 na VPS; o piloto de 07/09/2026 atualizou os cinco
+      serviços por digest e executou a migração. O manifest multiarch das
+      imagens base não substitui essa execução.
 
 ### Integrações
 
@@ -332,11 +340,12 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       descartável com persistência após reinício. Isso não conclui o deploy.
       [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md) e
       [M0-12-VALIDATION.md](M0-12-VALIDATION.md).
-- [ ] Docker Compose inicial (app, api, worker, PostgreSQL, Caddy)
+- [x] Docker Compose inicial (app, api, worker, PostgreSQL, Caddy)
       com volumes e redes internas.
       Base local disponível na STK-M0-07; configuração de produção
-      preparada na STK-M0-12. Execução na VPS ainda pendente.
-- [ ] HTTPS com Caddy + renovação; DNS do domínio.
+      preparada na STK-M0-12; piloto ARM64 executado em M0-24.
+- [ ] HTTPS com Caddy + renovação; DNS corrigido e certificado Let's Encrypt
+      obtido pelo Caddy, conforme o piloto de M0-24.
 - [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
       teste de restauração demonstrado (RPO 1h / RTO 4h).
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
