@@ -198,7 +198,8 @@ que uma assinatura permita qualquer modelo ou modalidade de API.
 **Critério de conclusão da fase zero:** repositório configurado, permissões
 verificadas, PR de setup aprovada e integrada, infraestrutura acessível,
 autenticação restrita, integrações básicas verificadas e restauração de backup
-demonstrada. Só então começar as funcionalidades.
+demonstrada. A restrição original ao início das funcionalidades foi substituída
+pela diretriz D019 (§5.1); os critérios operacionais de conclusão do M0 permanecem.
 
 ## 3. Produto e regras de negócio
 
@@ -487,6 +488,13 @@ específica do Codex.
 
 Cada marco tem critérios de aceite e revisão do Codex antes da autorização do
 próximo.
+
+**Diretriz de continuidade (06/09/2026, D019):** o proprietário determinou que
+Codex continue toda a implementação do projeto. O desenvolvimento e a validação
+local de M1–M5 prosseguem enquanto os itens operacionais de M0 são preparados.
+Essa sequência não marca M0 como concluído nem dispensa piloto real, autorização
+de produção ou os critérios de release em §5.5. PRs continuam vinculadas ao SHA,
+à base e aos checks validados; autoria e verificação direta são identificadas.
 
 ### 5.2. Formato obrigatório dos prompts para o Hermes
 

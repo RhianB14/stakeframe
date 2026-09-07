@@ -3,16 +3,20 @@ import { createDatabase, requireDatabaseUrl, readDatabaseConfig } from '@stakefr
 import { PROBE_QUEUE } from '@stakeframe/shared';
 import { startWorker } from './worker.js';
 import { startIntegrations } from './integrations.js';
+import { startMonthlyUnits } from './monthly-unit.js';
 
 async function main() {
   const connectionString = requireDatabaseUrl(readDatabaseConfig(process.env));
   const database = createDatabase(connectionString);
   let boss;
   let integrations = { stop: async () => {}, check: () => {} };
+  let monthlyUnits = { stop: async () => {}, check: () => {} };
   try {
     boss = await startWorker(connectionString);
     integrations = await startIntegrations(database, boss, process.env);
+    monthlyUnits = await startMonthlyUnits(database);
   } catch {
+    await integrations.stop();
     await boss?.stop({ graceful: false });
     await database.close();
     throw new Error('WORKER_START_FAILED');
@@ -22,6 +26,7 @@ async function main() {
       try {
         await database.check();
         integrations.check();
+        monthlyUnits.check();
         if (!(await boss.getQueue(PROBE_QUEUE))) throw new Error('QUEUE_MISSING');
         response.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ready"}');
       } catch {
@@ -36,6 +41,7 @@ async function main() {
     });
   } catch {
     await integrations.stop();
+    await monthlyUnits.stop();
     await boss.stop({ graceful: false });
     await database.close();
     throw new Error('WORKER_START_FAILED');
@@ -47,6 +53,7 @@ async function main() {
     server.close();
     void integrations
       .stop()
+      .then(() => monthlyUnits.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(database.close)
       .catch(() => {

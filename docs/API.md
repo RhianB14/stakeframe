@@ -16,6 +16,11 @@ O documento usa a origem relativa `/` e não depende de banco ou credenciais.
 | GET    | `/api/auth/callback/google` | 302: retorno OAuth, com `Location` e cookies, sem corpo JSON      |
 | POST   | `/api/auth/sign-out`        | 200: `success: true`                                              |
 | GET    | `/api/v1/me`                | 200: id, nome e expiração da sessão; 401: sessão ausente/inválida |
+| GET    | `/api/v1/workspace`         | 200: saldos, contas, catálogos, unidades, freebets e versão       |
+| POST   | `/api/v1/commands`          | 200: recibo de comando financeiro idempotente                     |
+| GET    | `/api/v1/bets`              | 200: apostas paginadas e filtradas                                |
+| GET    | `/api/v1/bets/{id}`         | 200: aposta, seleções e histórico de liquidações                  |
+| GET    | `/api/v1/journal`           | 200: lançamentos e estornos paginados                             |
 
 As mutações de autenticação exigem `Origin` igual à origem configurada. O corpo
 pode ser ausente, `null` ou objeto; campos enviados são ignorados. Provedor,
@@ -66,7 +71,11 @@ Respostas JSON são validadas na saída. Campos extras de objetos são removidos
 campos obrigatórios inválidos resultam em 500 sanitizado. O adaptador de
 autenticação converte o JSON da biblioteca em objeto antes da serialização,
 preservando os cookies e cabeçalhos de controle. Todas as respostas usam
-`Cache-Control: no-store`. A documentação não oferece operações de produto.
+`Cache-Control: no-store`. Todas as rotas financeiras exigem sessão do
+proprietário antes da validação dos dados. Mutações exigem `Origin` autorizado,
+`Idempotency-Key` UUID e `expectedVersion`. Dinheiro e odds são strings decimais;
+datas financeiras são instantes ISO com offset. Não há chaves de serviço que
+substituam a sessão. Fluxos e erros de domínio em [FINANCIAL-MODEL.md](FINANCIAL-MODEL.md).
 
 ## Atualização e verificação
 
@@ -81,7 +90,7 @@ A exportação não inicia servidor nem usa variáveis privadas. O parser verifi
 o documento e suas referências internas, com resolução externa desativada.
 
 A CI executa a comparação do documento gerado. Testes adicionais conferem a
-cobertura das sete rotas, rejeição de entradas inválidas, filtragem de campos,
+cobertura das rotas, rejeição de entradas inválidas, filtragem de campos,
 erro de serialização e regressões do fluxo OAuth com PostgreSQL real. O próprio
 endpoint da especificação e os HEAD automáticos não são operações duplicadas
 no documento.

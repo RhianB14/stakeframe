@@ -1,4 +1,4 @@
-import { createDatabase } from '@stakeframe/db';
+import { createDatabase, createFinanceService } from '@stakeframe/db';
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { createOwnerAuth } from './auth.js';
@@ -11,6 +11,7 @@ async function main() {
     checkDatabase: database.check,
     logger: true,
     runtime: config.runtime,
+    finance: createFinanceService(database),
     ...(ownerAuth ? { ownerAuth } : {}),
   });
   app.addHook('onClose', database.close);

@@ -11,12 +11,15 @@ import { registerAuthRoutes } from './auth-routes.js';
 import type { OwnerAuth } from './auth.js';
 import { registerApiContracts } from './openapi.js';
 import { sendApiError } from './api-errors.js';
+import { registerFinanceRoutes } from './finance-routes.js';
+import type { FinanceService } from '@stakeframe/db';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
   logger?: boolean;
   ownerAuth?: OwnerAuth;
   runtime?: 'local' | 'production';
+  finance?: FinanceService;
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
@@ -93,11 +96,12 @@ export function createApp(options: {
           stage: options.runtime === 'production' ? 'production-setup' : 'local-setup',
           database,
           authentication: options.ownerAuth ? 'google' : 'not-configured',
-          productEnabled: false,
+          productEnabled: Boolean(options.finance),
         });
       },
     );
     registerAuthRoutes(app, options.ownerAuth);
+    registerFinanceRoutes(app, options.ownerAuth, options.finance);
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));

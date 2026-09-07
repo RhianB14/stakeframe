@@ -8,10 +8,14 @@
     "dev": "vite --host 127.0.0.1"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "1.1.23",
     "@stakeframe/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

@@ -5,6 +5,7 @@ import { authSchema } from './auth-schema.js';
 export { authSchema } from './auth-schema.js';
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
 export type { PoolClient } from 'pg';
+export { createFinanceService, FinanceError, type FinanceService } from './finance-service.js';
 export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
 
 export function createDatabase(connectionString: string) {

@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { systemStatusSchema } from '@stakeframe/shared';
-import { OwnerAccess } from './OwnerAccess.js';
+import { OwnerAccess, loadOwner } from './OwnerAccess.js';
+import { ProductApp } from './product/ProductApp.js';
 
 async function loadStatus() {
   const response = await fetch('/api/v1/system/status', { signal: AbortSignal.timeout(5_000) });
@@ -9,12 +11,34 @@ async function loadStatus() {
 }
 
 export function App() {
+  const client = useQueryClient();
   const status = useQuery({
     queryKey: ['system-status'],
     queryFn: loadStatus,
     refetchInterval: 15_000,
   });
   const online = !status.isError && status.data?.database === 'available';
+  const owner = useQuery({
+    queryKey: ['owner-session'],
+    queryFn: loadOwner,
+    enabled: status.data?.authentication === 'google',
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  useEffect(() => {
+    const expired = () => {
+      client.setQueryData(['owner-session'], null);
+      client.removeQueries({ queryKey: ['product'] });
+    };
+    window.addEventListener('stakeframe:session-expired', expired);
+    return () => window.removeEventListener('stakeframe:session-expired', expired);
+  }, [client]);
+  useEffect(() => {
+    if (owner.isError || owner.data === null) client.removeQueries({ queryKey: ['product'] });
+  }, [client, owner.isError, owner.data]);
+  if (status.data?.productEnabled && owner.data && !owner.isError) {
+    return <ProductApp owner={owner.data.user} />;
+  }
   const production = status.data?.stage === 'production-setup';
   const connectionLabel = status.isPending
     ? 'Verificando conexão'
