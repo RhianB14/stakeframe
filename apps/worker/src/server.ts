@@ -4,6 +4,7 @@ import { PROBE_QUEUE } from '@stakeframe/shared';
 import { startWorker } from './worker.js';
 import { startIntegrations } from './integrations.js';
 import { startMonthlyUnits } from './monthly-unit.js';
+import { startAttachments } from './attachments.js';
 
 async function main() {
   const connectionString = requireDatabaseUrl(readDatabaseConfig(process.env));
@@ -11,12 +12,16 @@ async function main() {
   let boss;
   let integrations = { stop: async () => {}, check: () => {} };
   let monthlyUnits = { stop: async () => {}, check: () => {} };
+  let attachments = { stop: async () => {}, check: () => {} };
   try {
     boss = await startWorker(connectionString);
     integrations = await startIntegrations(database, boss, process.env);
     monthlyUnits = await startMonthlyUnits(database);
+    attachments = startAttachments(database, process.env);
   } catch {
     await integrations.stop();
+    await monthlyUnits.stop();
+    await attachments.stop();
     await boss?.stop({ graceful: false });
     await database.close();
     throw new Error('WORKER_START_FAILED');
@@ -27,6 +32,7 @@ async function main() {
         await database.check();
         integrations.check();
         monthlyUnits.check();
+        attachments.check();
         if (!(await boss.getQueue(PROBE_QUEUE))) throw new Error('QUEUE_MISSING');
         response.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ready"}');
       } catch {
@@ -42,6 +48,7 @@ async function main() {
   } catch {
     await integrations.stop();
     await monthlyUnits.stop();
+    await attachments.stop();
     await boss.stop({ graceful: false });
     await database.close();
     throw new Error('WORKER_START_FAILED');
@@ -54,6 +61,7 @@ async function main() {
     void integrations
       .stop()
       .then(() => monthlyUnits.stop())
+      .then(() => attachments.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(database.close)
       .catch(() => {

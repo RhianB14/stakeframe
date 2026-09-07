@@ -10,7 +10,8 @@ O consumidor aceita somente mensagens privadas da identidade configurada,
 recusando grupos, bots, mensagens encaminhadas e intermediários. A verificação
 antecede download e persistência. PNG/JPEG têm limite de 8 MiB; respostas HTTP
 têm limites de tamanho, prazo e redirecionamentos recusados. A verificação de
-formato reconhece cabeçalhos; não é uma decodificação completa da imagem.
+formato é complementada na admissão por decodificação completa com Sharp,
+limitada a uma página e 40 milhões de pixels. Arquivos truncados são recusados.
 
 Imagem, legenda, metadados e job pg-boss são gravados na mesma transação.
 O cursor só avança depois do commit. Repetir a mesma mensagem retorna a entrada
@@ -19,9 +20,10 @@ para revisão. Um hash indexado permite investigar duplicidade sem descartar
 automaticamente apostas legítimas. Um lock de sessão impede dois consumidores
 Telegram; perder a conexão interrompe o consumidor e invalida sua readiness.
 
-As imagens ficam provisoriamente no PostgreSQL privado, com admissão limitada
-a 2.000 entradas/1 GiB. A transferência para R2, retenção e interface de revisão
-são etapas posteriores. A capacidade bloqueia novas entradas sem confirmar sua
+As imagens ficam inicialmente no PostgreSQL privado, com admissão limitada
+a 2.000 entradas ativas/1 GiB de bytes locais compartilhados. O adaptador R2,
+a retenção e a revisão estão implementados em [IMPORTS.md](IMPORTS.md), sem
+ativar serviços externos. A capacidade bloqueia novas entradas sem confirmar sua
 recepção ao Telegram. Telegram não é backup: sua retenção de updates é limitada.
 
 ## Extração
@@ -30,7 +32,7 @@ O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 2.048 token
 raciocínio `low`, prazo de 60 segundos e fallback desativado. A saída é validada
 novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
 preservadas como texto, sem inferir ano/fuso. Toda extração vai para revisão;
-nenhuma entrada cria uma aposta ou movimentação financeira nesta etapa.
+o lançamento exige confirmação do proprietário pelo comando `import.confirm`.
 
 A reserva de cota ocorre em transação antes da chamada externa: até 60 chamadas
 por dia e 1.500 por mês UTC. Falhas e chamadas incertas também contam. Isso limita
@@ -41,7 +43,9 @@ Processamentos interrompidos por mais de três minutos ficam em falha com
 
 Estados técnicos: `pending`, `processing`, `review`, `failed`, `discarded`,
 `imported`. São independentes do resultado de uma aposta. O estado `imported`
-fica reservado à futura confirmação financeira.
+é gravado junto da aposta/vínculo financeiro. Reprocessamento cria um pedido
+durável com identificador novo, sem repetir automaticamente chamadas pagas;
+respostas tardias só podem concluir a tentativa que as originou.
 
 ## Configuração e operação
 
@@ -54,7 +58,7 @@ fictícias: a validação falha e o worker não inicia.
 
 Os Composes padrão mantêm integrações desativadas e worker sem saída externa.
 Para ativação futura, preparar montagem dos arquivos privados, saída HTTPS,
-migração `0001_integration_inbox` e o ambiente explícito antes de iniciar o worker.
+migrações até `0003_import_attachments` e o ambiente explícito antes de iniciar o worker.
 O runtime local aguarda o migrador; produção segue seu runbook de migração prévia.
 Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
 provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.

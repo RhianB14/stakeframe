@@ -79,6 +79,21 @@ substituam a sessão. Fluxos e erros de domínio em [FINANCIAL-MODEL.md](FINANCI
 
 ## Atualização e verificação
 
+Importações usam `GET/POST /api/v1/imports`, `GET /api/v1/imports/:id` e
+`GET /api/v1/imports/:id/image`. Upload aceita JSON com imagem base64 e legenda;
+o limite binário é 8 MiB. Sessão e origem são verificadas antes de analisar o
+corpo. O POST exige `Idempotency-Key`; repetir com outro conteúdo retorna 409.
+Listagens aceitam paginação, situação e `betId`. Imagens respondem como PNG/JPEG,
+sem endereço público do objeto e com `no-store`.
+
+`import.confirm`, `import.discard` e `import.retry` usam `/api/v1/commands`,
+`expectedVersion` financeiro e `expectedInboxVersion`. A decisão de confirmação
+é `create` com os dados conferidos da aposta ou `link` com aposta e justificativa.
+`DUPLICATE_REVIEW_REQUIRED` exige conferir os candidatos e justificar o novo
+registro. `INVALID_INBOX_IMAGE`, `INBOX_BUSY`, `INBOX_CAPACITY_REACHED` e
+`ATTACHMENT_UNAVAILABLE` distinguem arquivo inválido, admissão ocupada,
+capacidade temporária e imagem ausente. [IMPORTS.md](IMPORTS.md).
+
 ```bash
 pnpm api:spec        # compila a API e atualiza docs/openapi.json
 pnpm api:spec:check  # valida OpenAPI e falha se o documento versionado divergir

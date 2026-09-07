@@ -6,6 +6,7 @@ export class FinanceError extends Error {
   constructor(
     public readonly code:
       | 'STATE_CONFLICT'
+      | 'DUPLICATE_REVIEW_REQUIRED'
       | 'VERSION_CONFLICT'
       | 'IDEMPOTENCY_CONFLICT'
       | 'INVALID_FINANCIAL_OPERATION'

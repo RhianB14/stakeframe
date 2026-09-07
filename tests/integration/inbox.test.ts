@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import {
   createDatabase,
@@ -22,7 +23,7 @@ const name = `stk_inbox_test_${randomUUID().replaceAll('-', '')}`;
 let database: Database;
 let boss: Awaited<ReturnType<typeof startWorker>>;
 let created = false;
-const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+const image = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 const input = () => ({
   sourceKey: `test:${randomUUID()}`,
   caption: 'Tipster\nCasa',
@@ -60,9 +61,10 @@ describe('durable extraction inbox', () => {
     expect(await store.accept(data, download)).toBe(id);
     expect(download).toHaveBeenCalledTimes(1);
     expect((await boss.getJobById(EXTRACTION_QUEUE, id))?.data).toEqual({ nonce: id });
-    const row = await database.pool.query('select image,state from integration.inbox where id=$1', [
-      id,
-    ]);
+    const row = await database.pool.query(
+      'select a.image,i.state from integration.inbox i join integration.attachment a on a.id=i.attachment_id where i.id=$1',
+      [id],
+    );
     expect(row.rows[0].image).toEqual(image);
     expect(row.rows[0].state).toBe('pending');
     // Similar or identical images from distinct messages remain distinct candidates for review.
@@ -87,7 +89,7 @@ describe('durable extraction inbox', () => {
     const id = await store.accept(input(), async () => image);
     const results = await Promise.all([store.claim(id), store.claim(id)]);
     expect(results.filter(Boolean)).toHaveLength(1);
-    await store.fail(id, 'AI_CONNECTION_FAILED');
+    await store.fail(id, results.find(Boolean)!.attempt, 'AI_CONNECTION_FAILED');
     expect(await store.claim(id)).toBeNull();
     expect(
       (await database.pool.query('select attempts,state from integration.inbox where id=$1', [id]))
@@ -99,6 +101,31 @@ describe('durable extraction inbox', () => {
     await store.advance(21);
     await store.advance(10);
     expect(await store.offset()).toBe(21);
+  });
+  it('ignores late completions from an earlier extraction attempt', async () => {
+    const store = integrationStore(database, boss);
+    const id = await store.accept(input(), async () => image);
+    const first = (await store.claim(id))!;
+    await database.pool.query(
+      "update integration.inbox set state='pending',version=version+1 where id=$1",
+      [id],
+    );
+    const second = (await store.claim(id))!;
+    expect(second.attempt).toBe(first.attempt + 1);
+    await store.complete(id, first.attempt, { stale: true });
+    await store.fail(id, first.attempt, 'AI_CONNECTION_FAILED');
+    expect(
+      (
+        await database.pool.query('select state,extraction from integration.inbox where id=$1', [
+          id,
+        ])
+      ).rows[0],
+    ).toEqual({ state: 'processing', extraction: null });
+    await store.complete(id, second.attempt, { current: true });
+    expect(
+      (await database.pool.query('select extraction from integration.inbox where id=$1', [id]))
+        .rows[0].extraction,
+    ).toEqual({ current: true });
   });
   it('recovers an interrupted call for explicit review without repeating the paid request', async () => {
     const store = integrationStore(database, boss);

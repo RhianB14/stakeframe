@@ -20,6 +20,14 @@ const messages: Record<ApiErrorCode, string> = {
     'A unidade deste mês está pendente. Informe a unidade histórica ou confirme a revisão.',
   NOT_INITIALIZED: 'Confira os saldos iniciais antes de continuar.',
   ALIAS_CONFLICT: 'Este nome ou alias já pertence a outro cadastro.',
+  DUPLICATE_REVIEW_REQUIRED:
+    'Há uma aposta possivelmente repetida. Confira e justifique o novo registro.',
+  INVALID_INBOX_IMAGE: 'Envie uma imagem PNG ou JPEG válida, com até 8 MiB e 40 milhões de pixels.',
+  INBOX_BUSY: 'Há imagens sendo verificadas. Aguarde e verifique o envio novamente.',
+  INBOX_CAPACITY_REACHED:
+    'O espaço temporário de importações está cheio. Revise os itens pendentes.',
+  ATTACHMENT_UNAVAILABLE:
+    'O comprovante não está disponível. O histórico da aposta permanece preservado.',
 };
 
 export function sendApiError(

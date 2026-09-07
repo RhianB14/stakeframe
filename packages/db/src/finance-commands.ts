@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { cents, money, saoPauloDate, type FinanceCommand } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
+import { findDuplicates } from './import-review.js';
+import { enqueueExtraction } from './inbox.js';
 import {
   FinanceError,
   accountByKind,
@@ -25,6 +27,73 @@ export async function applyFinanceCommand(
   now: Date,
 ): Promise<{ id: string; before: unknown }> {
   const type = command.type;
+  if (type === 'import.confirm' || type === 'import.discard' || type === 'import.retry') {
+    const row = (
+      await client.query<{
+        id: string;
+        state: string;
+        version: number;
+        attachment_id: string;
+        extraction: unknown;
+      }>(
+        'select id,state,version,attachment_id,extraction from integration.inbox where id=$1 for update',
+        [command.importId],
+      )
+    ).rows[0];
+    if (!row) throw new FinanceError('NOT_FOUND');
+    if (row.version !== command.expectedInboxVersion) throw new FinanceError('VERSION_CONFLICT');
+    if (!['pending', 'review', 'failed'].includes(row.state))
+      throw new FinanceError('STATE_CONFLICT');
+    if (type === 'import.discard') {
+      await client.query('delete from integration.extraction_request where inbox_id=$1', [row.id]);
+      await client.query(
+        "update integration.inbox set state='discarded',version=version+1,updated_at=now() where id=$1",
+        [row.id],
+      );
+      return { id: row.id, before: row };
+    }
+    const attachment = (
+      await client.query<{ state: string }>(
+        'select state from integration.attachment where id=$1 for update',
+        [row.attachment_id],
+      )
+    ).rows[0];
+    if (!attachment || ['deleting', 'deleted'].includes(attachment.state))
+      throw new FinanceError('STATE_CONFLICT');
+    if (type === 'import.retry') {
+      if (row.state === 'pending') throw new FinanceError('STATE_CONFLICT');
+      await client.query(
+        "update integration.inbox set state='pending',error_code=null,version=version+1,updated_at=now() where id=$1",
+        [row.id],
+      );
+      await enqueueExtraction(client, row.id);
+      return { id: row.id, before: row };
+    }
+    if (!settings.initialized) throw new FinanceError('NOT_INITIALIZED');
+    let betId: string;
+    if (command.decision.kind === 'link') {
+      await getBetRow(client, command.decision.betId);
+      betId = command.decision.betId;
+    } else {
+      const duplicates = await findDuplicates(client, row.id, command.decision.bet);
+      if (duplicates.length && command.decision.duplicateReason.trim().length < 3)
+        throw new FinanceError('DUPLICATE_REVIEW_REQUIRED');
+      const created = await applyFinanceCommand(
+        client,
+        { ...command.decision.bet, type: 'bet.create', expectedVersion: command.expectedVersion },
+        actor,
+        settings,
+        now,
+      );
+      betId = created.id;
+    }
+    await client.query('delete from integration.extraction_request where inbox_id=$1', [row.id]);
+    await client.query(
+      "update integration.inbox set state='imported',imported_bet_id=$2,version=version+1,updated_at=now() where id=$1",
+      [row.id, betId],
+    );
+    return { id: betId, before: row };
+  }
   if (type === 'catalog.create') {
     const id = randomUUID();
     await client.query('insert into finance.catalog(id,kind,name) values($1,$2,$3)', [
@@ -379,6 +448,12 @@ export async function applyFinanceCommand(
     return { id, before };
   }
   if (type === 'settlement.reverse') {
+    // Retention takes the settings lock first, then claims the attachment before external deletion.
+    const deleting = await client.query(
+      "select 1 from integration.inbox i join integration.attachment a on a.id=i.attachment_id join finance.settlement s on s.bet_id=i.imported_bet_id where s.id=$1 and a.state='deleting'",
+      [command.id],
+    );
+    if (deleting.rowCount) throw new FinanceError('STATE_CONFLICT');
     const row = (
       await client.query<{
         id: string;

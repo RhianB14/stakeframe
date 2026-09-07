@@ -66,6 +66,6 @@ apresentar a verificação do próprio código como revisão independente do Git
 
 O setup operacional do M0 continua em andamento. Por determinação do
 proprietário, Codex também avança na implementação local do produto;
-fundação e núcleo financeiro estão implementados. Os registros de cada PR
+fundação, núcleo financeiro e importação com revisão estão implementados. Os registros de cada PR
 distinguem código validado, operação pendente e autorização de produção.
 As regras deste documento valem desde o primeiro commit.

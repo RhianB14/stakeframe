@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { saoPauloDate, type Workspace, type Bet } from '../../packages/shared/src/index.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import {
+  saoPauloDate,
+  type Workspace,
+  type Bet,
+  type ImportDetail,
+} from '../../packages/shared/src/index.js';
 
 const house = '10000000-0000-4000-8000-000000000001';
 const reserve = '10000000-0000-4000-8000-000000000002';
@@ -96,6 +103,9 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
     route.fulfill({ json: { bet, settlements: [] } }),
   );
   await page.route('**/api/v1/journal?*', (route) =>
+    route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
+  );
+  await page.route('**/api/v1/imports?*', (route) =>
     route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
   );
 }
@@ -230,4 +240,239 @@ test('an expired API session removes cached private records', async ({ page }) =
   await page.getByRole('link', { name: 'Financeiro', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Entrar com Google' })).toBeVisible();
   await expect(page.getByText('R$ 1.000,00', { exact: true })).toHaveCount(0);
+});
+
+const importId = '10000000-0000-4000-8000-000000000005';
+const imageFile = fileURLToPath(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
+function importFixture(): ImportDetail {
+  return {
+    item: {
+      id: importId,
+      source: 'web',
+      caption: 'Analista\nBet365',
+      state: 'review',
+      version: 2,
+      attempts: 1,
+      createdAt: '2026-09-01T18:00:00Z',
+      updatedAt: '2026-09-01T18:00:01Z',
+      errorCode: null,
+      betId: null,
+      imageAvailable: true,
+    },
+    extraction: {
+      bookmaker: 'Superbet',
+      reference: 'BILHETE-FICTICIO',
+      placedAtText: 'ontem, 15h',
+      currency: null,
+      stake: '25.50',
+      odds: '2.10',
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'Aurora × Central',
+          sport: 'Futebol',
+          market: 'Gols',
+          selection: 'Mais de 2,5',
+          odds: null,
+          eventDateText: 'amanhã',
+        },
+      ],
+      warnings: ['Confira a casa e as datas'],
+    },
+    labels: { tipster: 'Analista', bookmaker: 'Bet365', requiresReview: false },
+    matches: {
+      tipsterId: null,
+      captionBookmakerId: house,
+      extractedBookmakerId: null,
+      conflict: true,
+    },
+    duplicates: [],
+    duplicateCount: 0,
+    automatic: false,
+    automaticReason: 'LAYOUT_NOT_VALIDATED',
+  };
+}
+async function importRoutes(page: Page, detail = importFixture()) {
+  await page.route('**/api/v1/imports?*', (route) =>
+    route.fulfill({ json: { items: [detail.item], total: 1, page: 1, pageSize: 25 } }),
+  );
+  await page.route(`**/api/v1/imports/${importId}`, (route) => route.fulfill({ json: detail }));
+  await page.route(`**/api/v1/imports/${importId}/image`, (route) =>
+    route.fulfill({ contentType: 'image/png', body: readFileSync(imageFile) }),
+  );
+}
+test('review displays conflicting evidence, leaves unknown dates blank and confirms one financial command', async ({
+  page,
+}, info) => {
+  await enabledProduct(page);
+  await importRoutes(page);
+  const commands: unknown[] = [];
+  await page.route('**/api/v1/commands', (route) => {
+    commands.push(route.request().postDataJSON());
+    return route.fulfill({ json: { id: betId, version: 2 } });
+  });
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  await expect(page.getByRole('dialog')).toContainText('A casa da legenda diverge');
+  await expect(page.getByLabel('Casa de aposta', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Data e hora da aposta', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Data do evento 1', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toHaveValue('25.50');
+  expect(commands).toHaveLength(0);
+  await page.screenshot({ path: info.outputPath('import-review.png'), fullPage: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= (visualViewport?.width ?? innerWidth),
+    ),
+  ).toBe(true);
+  await page.getByLabel('Casa de aposta', { exact: true }).selectOption(house);
+  await page.getByLabel('Origem da aposta', { exact: true }).selectOption('');
+  await page.getByLabel('Data e hora da aposta', { exact: true }).fill('2026-09-01T15:00');
+  await page.getByRole('checkbox', { name: /Conferi casa, valor/ }).check();
+  await page.getByRole('button', { name: 'Confirmar importação e registrar aposta' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toMatchObject({
+    type: 'import.confirm',
+    importId,
+    expectedInboxVersion: 2,
+    expectedVersion: 1,
+    decision: {
+      kind: 'create',
+      bet: {
+        bookmakerId: house,
+        stake: '25.50',
+        odds: '2.10',
+        placedAt: '2026-09-01T18:00:00.000Z',
+        freebetId: null,
+        selections: [{ eventDate: null, eventAt: null, dateStatus: 'pending' }],
+      },
+    },
+  });
+});
+test('upload recovers its original image, caption and key from durable browser storage after reload', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  await importRoutes(page);
+  const sent: { key: string | undefined; body: unknown }[] = [];
+  await page.route('**/api/v1/imports', async (route) => {
+    sent.push({
+      key: route.request().headers()['idempotency-key'],
+      body: route.request().postDataJSON(),
+    });
+    if (sent.length === 1) await route.abort('failed');
+    else await route.fulfill({ json: { id: importId } });
+  });
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await page.getByLabel('Imagem do comprovante').setInputFiles(imageFile);
+  await page.getByLabel('Legenda (opcional)').fill('Analista\nBet365');
+  await page.getByRole('button', { name: 'Enviar para revisão' }).click();
+  await expect(page.getByRole('button', { name: 'Verificar envio' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await page.getByRole('button', { name: 'Verificar envio' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Revisar importação', exact: true }),
+  ).toBeVisible();
+  expect(sent).toHaveLength(2);
+  expect(sent[0]).toEqual(sent[1]);
+  await page.getByRole('button', { name: 'Fechar janela' }).click();
+  await page.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await expect(page.getByLabel('Imagem do comprovante')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Verificar envio' })).toHaveCount(0);
+});
+test('tabs with copied session storage recover their own uncertain uploads independently', async ({
+  page,
+  context,
+}) => {
+  await enabledProduct(page);
+  await importRoutes(page);
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Enviar para revisão' })).toBeEnabled();
+  const inheritedSlot = await page.evaluate(() => sessionStorage.getItem('stakeframe.upload-slot'));
+  expect(inheritedSlot).toBeTruthy();
+  const duplicate = await context.newPage();
+  await enabledProduct(duplicate);
+  await importRoutes(duplicate);
+  await duplicate.goto('/#imports');
+  // Match the copied sessionStorage of a duplicated tab/opener before the form claims ownership.
+  await duplicate.evaluate(
+    (slot) => sessionStorage.setItem('stakeframe.upload-slot', slot!),
+    inheritedSlot,
+  );
+  await duplicate.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+  await expect(duplicate.getByRole('button', { name: 'Enviar para revisão' })).toBeEnabled();
+  expect(await duplicate.evaluate(() => sessionStorage.getItem('stakeframe.upload-slot'))).not.toBe(
+    inheritedSlot,
+  );
+  const attempts: { key: string | undefined; body: unknown }[][] = [[], []];
+  for (const [index, tab] of [page, duplicate].entries()) {
+    await tab.route('**/api/v1/imports', async (route) => {
+      attempts[index]!.push({
+        key: route.request().headers()['idempotency-key'],
+        body: route.request().postDataJSON(),
+      });
+      if (attempts[index]!.length === 1) await route.abort('failed');
+      else await route.fulfill({ json: { id: importId } });
+    });
+    await tab.getByLabel('Imagem do comprovante').setInputFiles(imageFile);
+    await tab.getByLabel('Legenda (opcional)').fill(`Analista ${index + 1}\nBet365`);
+    await tab.getByRole('button', { name: 'Enviar para revisão' }).click();
+    await expect(tab.getByRole('button', { name: 'Verificar envio' })).toBeVisible();
+  }
+  expect(attempts[0]![0]!.key).not.toBe(attempts[1]![0]!.key);
+  for (const [index, tab] of [page, duplicate].entries()) {
+    await tab.reload();
+    await tab.getByRole('button', { name: 'Enviar comprovante', exact: true }).click();
+    await tab.getByRole('button', { name: 'Verificar envio' }).click();
+    await expect(
+      tab.getByRole('heading', { name: 'Revisar importação', exact: true }),
+    ).toBeVisible();
+    expect(attempts[index]).toHaveLength(2);
+    expect(attempts[index]![0]).toEqual(attempts[index]![1]);
+    expect(attempts[index]![1]!.body).toMatchObject({ caption: `Analista ${index + 1}\nBet365` });
+  }
+  await duplicate.close();
+});
+test('duplicate review links a selected existing bet without posting another stake', async ({
+  page,
+}) => {
+  const detail = importFixture();
+  detail.duplicates = [
+    {
+      betId,
+      reference: 'Mesmo bilhete',
+      bookmakerId: house,
+      stake: '100.00',
+      placedAt: bet.placedAt,
+      reasons: ['image'],
+    },
+  ];
+  detail.duplicateCount = 1;
+  await enabledProduct(page, fixture(), [bet]);
+  await importRoutes(page, detail);
+  const commands: unknown[] = [];
+  await page.route('**/api/v1/commands', (route) => {
+    commands.push(route.request().postDataJSON());
+    return route.fulfill({ json: { id: betId, version: 2 } });
+  });
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  await expect(page.getByRole('heading', { name: 'Possíveis bilhetes repetidos' })).toBeVisible();
+  await page.getByRole('button', { name: 'Vincular existente', exact: true }).click();
+  await page.getByLabel('Aposta existente', { exact: true }).selectOption(betId);
+  await page.getByLabel('Motivo do vínculo').fill('Mesmo bilhete reenviado');
+  await page.getByRole('checkbox', { name: /Conferi que o comprovante/ }).check();
+  await page.getByRole('button', { name: 'Vincular sem novo lançamento' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toMatchObject({
+    type: 'import.confirm',
+    decision: { kind: 'link', betId, reason: 'Mesmo bilhete reenviado' },
+  });
+  expect(commands[0]).not.toHaveProperty('decision.bet');
 });

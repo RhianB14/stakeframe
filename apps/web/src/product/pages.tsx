@@ -12,6 +12,7 @@ import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { request, dateLabel } from './api.js';
 import type { OpenModal } from './ProductApp.js';
+import { BetAttachments } from './imports.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
 const outcomeLabels: Record<string, string> = {
@@ -356,6 +357,7 @@ export function BetDetails({
         Apostada em {dateLabel(bet.placedAt)} · Cadastrada em {dateLabel(bet.createdAt)}
       </p>
       {bet.reference ? <p>Referência: {bet.reference}</p> : null}
+      <BetAttachments id={id} version={workspace.version} open={open} />
       {bet.selections.map((selection, index) => (
         <div className="selection-form" key={index}>
           <strong>

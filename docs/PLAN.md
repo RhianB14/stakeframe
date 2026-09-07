@@ -212,6 +212,7 @@ positivos e negativos usam cores acompanhadas de texto ou símbolos.
 | ------------- | ---------------------------------------------------- |
 | Visão geral   | Banca, exposição, resultados e pendências            |
 | Apostas       | Lista, filtros, detalhes, cadastro e liquidação      |
+| Importações   | Upload, comprovantes, revisão e vínculos com apostas |
 | Calendário    | Eventos e apostas relacionadas                       |
 | Financeiro    | Reserva, casas, aportes, retiradas e conciliação     |
 | Análises      | Resultados por período, tipster, casa e esporte      |
@@ -422,7 +423,8 @@ aposta.
 - Login somente para a identidade Google previamente autorizada.
 - Verificação de acesso no servidor em todas as operações.
 - Bot Telegram restrito.
-- Anexos privados, acessados por URLs temporárias.
+- Anexos privados, acessados pela API com sessão conferida em cada leitura
+  (D020; sem URL pública ou credencial de acesso no endereço).
 - Validação de formato e tamanho de arquivos.
 - Segredos fora do repositório e logs sem conteúdo sensível.
 - Ambientes, bancos e credenciais separados.

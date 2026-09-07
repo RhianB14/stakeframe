@@ -32,6 +32,209 @@
                 "exclusiveMinimum": true,
                 "maximum": 2147483646
               },
+              "type": { "type": "string", "enum": ["import.confirm"] },
+              "importId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "expectedInboxVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "decision": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["create"] },
+                      "bet": {
+                        "type": "object",
+                        "properties": {
+                          "bookmakerId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "tipsterId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "stake": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
+                          },
+                          "odds": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
+                          },
+                          "placedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "freebetId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "reference": { "type": "string", "maxLength": 150 },
+                          "selections": {
+                            "minItems": 1,
+                            "maxItems": 40,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "event": { "type": "string", "minLength": 1, "maxLength": 300 },
+                                "sport": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "market": { "type": "string", "minLength": 1, "maxLength": 300 },
+                                "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
+                                "odds": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
+                                },
+                                "eventDate": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                "eventAt": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "dateStatus": {
+                                  "type": "string",
+                                  "enum": ["confirmed", "estimated", "pending"]
+                                }
+                              },
+                              "required": [
+                                "event",
+                                "sport",
+                                "market",
+                                "selection",
+                                "odds",
+                                "eventDate",
+                                "eventAt",
+                                "dateStatus"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "allowMissingUnit": { "type": "boolean" }
+                        },
+                        "required": [
+                          "bookmakerId",
+                          "tipsterId",
+                          "stake",
+                          "odds",
+                          "placedAt",
+                          "freebetId",
+                          "reference",
+                          "selections",
+                          "allowMissingUnit"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "duplicateReason": { "type": "string", "maxLength": 500 }
+                    },
+                    "required": ["kind", "bet", "duplicateReason"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["link"] },
+                      "betId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+                    },
+                    "required": ["kind", "betId", "reason"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": ["expectedVersion", "type", "importId", "expectedInboxVersion", "decision"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "type": { "type": "string", "enum": ["import.discard"] },
+              "importId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "expectedInboxVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+            },
+            "required": ["expectedVersion", "type", "importId", "expectedInboxVersion", "reason"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "type": { "type": "string", "enum": ["import.retry"] },
+              "importId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "expectedInboxVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              }
+            },
+            "required": ["expectedVersion", "type", "importId", "expectedInboxVersion"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
               "type": { "type": "string", "enum": ["catalog.create"] },
               "kind": { "type": "string", "enum": ["bookmaker", "tipster"] },
               "name": { "type": "string", "minLength": 1, "maxLength": 100 },
@@ -941,6 +1144,319 @@
         },
         "required": ["items", "total", "page", "pageSize"]
       },
+      "ImportPageInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "source": { "type": "string", "enum": ["web", "telegram"] },
+                "caption": { "type": "string" },
+                "state": {
+                  "type": "string",
+                  "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "attempts": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "errorCode": { "nullable": true, "type": "string" },
+                "betId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "imageAvailable": { "type": "boolean" }
+              },
+              "required": [
+                "id",
+                "source",
+                "caption",
+                "state",
+                "version",
+                "attempts",
+                "createdAt",
+                "updatedAt",
+                "errorCode",
+                "betId",
+                "imageAvailable"
+              ]
+            }
+          },
+          "total": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+          "page": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "total", "page", "pageSize"]
+      },
+      "UploadResultInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"]
+      },
+      "ImportDetailInput": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "source": { "type": "string", "enum": ["web", "telegram"] },
+              "caption": { "type": "string" },
+              "state": {
+                "type": "string",
+                "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "attempts": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "errorCode": { "nullable": true, "type": "string" },
+              "betId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "imageAvailable": { "type": "boolean" }
+            },
+            "required": [
+              "id",
+              "source",
+              "caption",
+              "state",
+              "version",
+              "attempts",
+              "createdAt",
+              "updatedAt",
+              "errorCode",
+              "betId",
+              "imageAvailable"
+            ]
+          },
+          "extraction": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "bookmaker": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
+              "reference": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
+              "placedAtText": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "currency": { "nullable": true, "type": "string", "enum": ["BRL"] },
+              "stake": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+              },
+              "odds": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+              },
+              "potentialReturn": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+              },
+              "freebet": { "nullable": true, "type": "boolean" },
+              "selections": {
+                "minItems": 1,
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "event": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "sport": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "market": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "selection": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "odds": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+                    },
+                    "eventDateText": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  },
+                  "required": ["event", "sport", "market", "selection", "odds", "eventDateText"],
+                  "additionalProperties": false
+                }
+              },
+              "warnings": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+              }
+            },
+            "required": [
+              "bookmaker",
+              "reference",
+              "placedAtText",
+              "currency",
+              "stake",
+              "odds",
+              "potentialReturn",
+              "freebet",
+              "selections",
+              "warnings"
+            ],
+            "additionalProperties": false
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "tipster": { "nullable": true, "type": "string" },
+              "bookmaker": { "nullable": true, "type": "string" },
+              "requiresReview": { "type": "boolean" }
+            },
+            "required": ["tipster", "bookmaker", "requiresReview"]
+          },
+          "matches": {
+            "type": "object",
+            "properties": {
+              "tipsterId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "captionBookmakerId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "extractedBookmakerId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "conflict": { "type": "boolean" }
+            },
+            "required": ["tipsterId", "captionBookmakerId", "extractedBookmakerId", "conflict"]
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "betId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "reference": { "type": "string" },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "stake": { "type": "string" },
+                "placedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": { "type": "string", "enum": ["image", "reference", "similar"] }
+                }
+              },
+              "required": ["betId", "reference", "bookmakerId", "stake", "placedAt", "reasons"]
+            }
+          },
+          "duplicateCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "automatic": { "type": "boolean", "enum": [false] },
+          "automaticReason": { "type": "string", "enum": ["LAYOUT_NOT_VALIDATED"] }
+        },
+        "required": [
+          "item",
+          "extraction",
+          "labels",
+          "matches",
+          "duplicates",
+          "duplicateCount",
+          "automatic",
+          "automaticReason"
+        ]
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -976,7 +1492,12 @@
                   "INVALID_FINANCIAL_OPERATION",
                   "UNIT_REQUIRED",
                   "NOT_INITIALIZED",
-                  "ALIAS_CONFLICT"
+                  "ALIAS_CONFLICT",
+                  "DUPLICATE_REVIEW_REQUIRED",
+                  "INVALID_INBOX_IMAGE",
+                  "INBOX_BUSY",
+                  "INBOX_CAPACITY_REACHED",
+                  "ATTACHMENT_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -1037,6 +1558,209 @@
       },
       "FinanceCommand": {
         "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "type": { "type": "string", "enum": ["import.confirm"] },
+              "importId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "expectedInboxVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "decision": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["create"] },
+                      "bet": {
+                        "type": "object",
+                        "properties": {
+                          "bookmakerId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "tipsterId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "stake": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
+                          },
+                          "odds": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
+                          },
+                          "placedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "freebetId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "reference": { "type": "string", "maxLength": 150 },
+                          "selections": {
+                            "minItems": 1,
+                            "maxItems": 40,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "event": { "type": "string", "minLength": 1, "maxLength": 300 },
+                                "sport": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "market": { "type": "string", "minLength": 1, "maxLength": 300 },
+                                "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
+                                "odds": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
+                                },
+                                "eventDate": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                "eventAt": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "dateStatus": {
+                                  "type": "string",
+                                  "enum": ["confirmed", "estimated", "pending"]
+                                }
+                              },
+                              "required": [
+                                "event",
+                                "sport",
+                                "market",
+                                "selection",
+                                "odds",
+                                "eventDate",
+                                "eventAt",
+                                "dateStatus"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "allowMissingUnit": { "type": "boolean" }
+                        },
+                        "required": [
+                          "bookmakerId",
+                          "tipsterId",
+                          "stake",
+                          "odds",
+                          "placedAt",
+                          "freebetId",
+                          "reference",
+                          "selections",
+                          "allowMissingUnit"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "duplicateReason": { "type": "string", "maxLength": 500 }
+                    },
+                    "required": ["kind", "bet", "duplicateReason"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["link"] },
+                      "betId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+                    },
+                    "required": ["kind", "betId", "reason"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": ["expectedVersion", "type", "importId", "expectedInboxVersion", "decision"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "type": { "type": "string", "enum": ["import.discard"] },
+              "importId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "expectedInboxVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+            },
+            "required": ["expectedVersion", "type", "importId", "expectedInboxVersion", "reason"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              },
+              "type": { "type": "string", "enum": ["import.retry"] },
+              "importId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "expectedInboxVersion": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 2147483646
+              }
+            },
+            "required": ["expectedVersion", "type", "importId", "expectedInboxVersion"],
+            "additionalProperties": false
+          },
           {
             "type": "object",
             "properties": {
@@ -1968,6 +2692,327 @@
         "required": ["items", "total", "page", "pageSize"],
         "additionalProperties": false
       },
+      "ImportPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "source": { "type": "string", "enum": ["web", "telegram"] },
+                "caption": { "type": "string" },
+                "state": {
+                  "type": "string",
+                  "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "attempts": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "errorCode": { "nullable": true, "type": "string" },
+                "betId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "imageAvailable": { "type": "boolean" }
+              },
+              "required": [
+                "id",
+                "source",
+                "caption",
+                "state",
+                "version",
+                "attempts",
+                "createdAt",
+                "updatedAt",
+                "errorCode",
+                "betId",
+                "imageAvailable"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+          "page": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "total", "page", "pageSize"],
+        "additionalProperties": false
+      },
+      "UploadResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      },
+      "ImportDetail": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "source": { "type": "string", "enum": ["web", "telegram"] },
+              "caption": { "type": "string" },
+              "state": {
+                "type": "string",
+                "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true,
+                "maximum": 9007199254740991
+              },
+              "attempts": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "errorCode": { "nullable": true, "type": "string" },
+              "betId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "imageAvailable": { "type": "boolean" }
+            },
+            "required": [
+              "id",
+              "source",
+              "caption",
+              "state",
+              "version",
+              "attempts",
+              "createdAt",
+              "updatedAt",
+              "errorCode",
+              "betId",
+              "imageAvailable"
+            ],
+            "additionalProperties": false
+          },
+          "extraction": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "bookmaker": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
+              "reference": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
+              "placedAtText": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "currency": { "nullable": true, "type": "string", "enum": ["BRL"] },
+              "stake": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+              },
+              "odds": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+              },
+              "potentialReturn": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+              },
+              "freebet": { "nullable": true, "type": "boolean" },
+              "selections": {
+                "minItems": 1,
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "event": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "sport": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "market": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "selection": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "odds": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,4})?$"
+                    },
+                    "eventDateText": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  },
+                  "required": ["event", "sport", "market", "selection", "odds", "eventDateText"],
+                  "additionalProperties": false
+                }
+              },
+              "warnings": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+              }
+            },
+            "required": [
+              "bookmaker",
+              "reference",
+              "placedAtText",
+              "currency",
+              "stake",
+              "odds",
+              "potentialReturn",
+              "freebet",
+              "selections",
+              "warnings"
+            ],
+            "additionalProperties": false
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "tipster": { "nullable": true, "type": "string" },
+              "bookmaker": { "nullable": true, "type": "string" },
+              "requiresReview": { "type": "boolean" }
+            },
+            "required": ["tipster", "bookmaker", "requiresReview"],
+            "additionalProperties": false
+          },
+          "matches": {
+            "type": "object",
+            "properties": {
+              "tipsterId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "captionBookmakerId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "extractedBookmakerId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "conflict": { "type": "boolean" }
+            },
+            "required": ["tipsterId", "captionBookmakerId", "extractedBookmakerId", "conflict"],
+            "additionalProperties": false
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "betId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "reference": { "type": "string" },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "stake": { "type": "string" },
+                "placedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": { "type": "string", "enum": ["image", "reference", "similar"] }
+                }
+              },
+              "required": ["betId", "reference", "bookmakerId", "stake", "placedAt", "reasons"],
+              "additionalProperties": false
+            }
+          },
+          "duplicateCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "automatic": { "type": "boolean", "enum": [false] },
+          "automaticReason": { "type": "string", "enum": ["LAYOUT_NOT_VALIDATED"] }
+        },
+        "required": [
+          "item",
+          "extraction",
+          "labels",
+          "matches",
+          "duplicates",
+          "duplicateCount",
+          "automatic",
+          "automaticReason"
+        ],
+        "additionalProperties": false
+      },
       "SystemStatus": {
         "type": "object",
         "properties": {
@@ -2004,7 +3049,12 @@
                   "INVALID_FINANCIAL_OPERATION",
                   "UNIT_REQUIRED",
                   "NOT_INITIALIZED",
-                  "ALIAS_CONFLICT"
+                  "ALIAS_CONFLICT",
+                  "DUPLICATE_REVIEW_REQUIRED",
+                  "INVALID_INBOX_IMAGE",
+                  "INBOX_BUSY",
+                  "INBOX_CAPACITY_REACHED",
+                  "ATTACHMENT_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -2859,12 +3909,398 @@
           }
         }
       }
+    },
+    "/api/v1/imports": {
+      "get": {
+        "operationId": "listImports",
+        "summary": "Consultar importações privadas",
+        "tags": ["Importações"],
+        "parameters": [
+          {
+            "schema": { "default": 1, "type": "integer", "minimum": 1, "maximum": 100000 },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": { "default": 25, "type": "integer", "minimum": 1, "maximum": 100 },
+            "in": "query",
+            "name": "pageSize",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+            },
+            "in": "query",
+            "name": "state",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "betId",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportPage" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadTicket",
+        "summary": "Enviar comprovante para revisão",
+        "tags": ["Importações"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 11184812,
+                    "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+                  },
+                  "caption": { "type": "string", "maxLength": 1024 }
+                },
+                "required": ["image", "caption"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  },
+                  "required": ["id"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}": {
+      "get": {
+        "operationId": "getImport",
+        "summary": "Conferir extração, aliases e possíveis duplicações",
+        "tags": ["Importações"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportDetail" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/image": {
+      "get": {
+        "operationId": "getImportImage",
+        "summary": "Ler comprovante privado com sessão do proprietário",
+        "tags": ["Importações"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Bytes privados; sessão exigida em cada leitura.",
+            "content": {
+              "image/png": { "schema": { "type": "string", "format": "binary" } },
+              "image/jpeg": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],
   "tags": [
     { "name": "Financeiro", "description": "Banca, cadastros e histórico auditável." },
     { "name": "Apostas", "description": "Apostas manuais e liquidações." },
+    {
+      "name": "Importações",
+      "description": "Comprovantes privados, extração e revisão antes do lançamento financeiro."
+    },
     { "name": "Operação", "description": "Verificações técnicas públicas, sem dados privados." },
     {
       "name": "Autenticação",

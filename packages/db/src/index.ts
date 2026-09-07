@@ -4,6 +4,13 @@ import { sql } from 'drizzle-orm';
 import { authSchema } from './auth-schema.js';
 export { authSchema } from './auth-schema.js';
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
+export { createImportService, type ImportService } from './import-review.js';
+export {
+  createAttachmentStore,
+  createR2Storage,
+  validateImage,
+  type ObjectStorage,
+} from './attachments.js';
 export type { PoolClient } from 'pg';
 export { createFinanceService, FinanceError, type FinanceService } from './finance-service.js';
 export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
