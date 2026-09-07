@@ -209,11 +209,19 @@ export const betSelection = finance.table(
     eventDate: date('event_date'),
     eventAt: instant('event_at'),
     dateStatus: text('date_status').notNull(),
+    dateSource: text('date_source').notNull().default('manual'),
+    dateEvidence: jsonb('date_evidence'),
+    scheduleStatus: text('schedule_status').notNull().default('scheduled'),
   },
   (t) => [
     uniqueIndex('selection_bet_position_idx').on(t.betId, t.position),
     index('selection_event_date_idx').on(t.eventDate),
     check('selection_date_status', sql`${t.dateStatus} in ('confirmed','estimated','pending')`),
+    check('selection_date_source', sql`${t.dateSource} in ('manual','thesportsdb','tavily')`),
+    check(
+      'selection_schedule_status',
+      sql`${t.scheduleStatus} in ('scheduled','postponed','cancelled')`,
+    ),
   ],
 );
 

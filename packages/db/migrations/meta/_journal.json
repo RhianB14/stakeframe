@@ -29,6 +29,13 @@
       "when": 1788752891854,
       "tag": "0003_import_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788754815480,
+      "tag": "0004_event_calendar",
+      "breakpoints": true
     }
   ]
 }

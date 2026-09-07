@@ -27,11 +27,13 @@ import {
 import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
 import { ImportsPage, ImportReview, UploadForm } from './imports.js';
 import { savePendingUpload } from './upload-storage.js';
+import { CalendarPage, EventReview } from './events.js';
 import './product.css';
 
 export type Modal =
   | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' | 'upload' }
   | { kind: 'import'; id: string }
+  | { kind: 'event'; id: string }
   | {
       kind: 'cash';
       operation: 'deposit' | 'withdrawal' | 'transfer' | 'reconcile';
@@ -48,6 +50,7 @@ const navigation = [
   { id: 'overview', title: 'Visão geral', icon: '◫' },
   { id: 'bets', title: 'Apostas', icon: '▤' },
   { id: 'imports', title: 'Importações', icon: '⇧' },
+  { id: 'calendar', title: 'Calendário', icon: '▦' },
   { id: 'finance', title: 'Financeiro', icon: '⇄' },
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
@@ -98,6 +101,8 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
     mutationFn: () => authAction('sign-out'),
     onSuccess: async () => {
       sessionStorage.removeItem('stakeframe.pending-command');
+      for (const key of Object.keys(sessionStorage))
+        if (key.startsWith('stakeframe.pending-event-search:')) sessionStorage.removeItem(key);
       await savePendingUpload(null, true).catch(() => undefined);
       client.clear();
     },
@@ -208,6 +213,8 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
             <FinancePage workspace={workspace} open={open} />
           ) : page === 'imports' ? (
             <ImportsPage workspace={workspace} open={open} />
+          ) : page === 'calendar' ? (
+            <CalendarPage workspace={workspace} open={open} />
           ) : (
             <SettingsPage workspace={workspace} open={open} />
           )}
@@ -323,6 +330,10 @@ function ModalContent({
   let title: string;
   let content: ReactNode;
   switch (modal.kind) {
+    case 'event':
+      title = 'Conferir programação do evento';
+      content = <EventReview id={modal.id} owner={owner} workspace={workspace} onDone={close} />;
+      break;
     case 'upload':
       title = 'Enviar comprovante';
       content = <UploadForm owner={owner} onDone={close} open={open} />;

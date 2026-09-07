@@ -105,6 +105,7 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
   const selections = (
     await client.query<{
       bet_id: string;
+      id: string;
       event: string;
       sport: string | null;
       market: string;
@@ -147,6 +148,7 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       selections: selections
         .filter((value) => value.bet_id === row.id)
         .map((selection) => ({
+          id: selection.id,
           event: selection.event,
           sport: selection.sport,
           market: selection.market,

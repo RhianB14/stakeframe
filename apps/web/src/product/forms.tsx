@@ -496,6 +496,7 @@ export function BetForm({
     );
   const built = () =>
     selections.map((item) => ({
+      ...(item.id ? { id: item.id } : {}),
       event: item.event,
       sport: item.sport || null,
       market: item.market,

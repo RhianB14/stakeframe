@@ -27,6 +27,12 @@ Lançamentos e estornos são imutáveis, com balanceamento imposto no PostgreSQL
 O worker e o acesso ao espaço asseguram a unidade mensal congelada.
 Detalhes, limites e invariantes em [FINANCIAL-MODEL.md](FINANCIAL-MODEL.md).
 
+A STK-M4-01 acrescenta identidade estável das seleções, programação com fonte e
+evidência, calendário e consultas TheSportsDB/Tavily. A tabela
+`integration.event_search` atua como fila durável, cache e registro de cotas;
+chamadas HTTP ficam fora de transações e não modificam datas automaticamente.
+Fontes desligadas por padrão; detalhes em [EVENTS.md](EVENTS.md).
+
 A STK-M0-09 usa os schemas Zod na validação de entrada e na serialização de
 respostas. `@fastify/swagger` e `fastify-type-provider-zod` geram OpenAPI 3.0.3
 das mesmas rotas, sem consultar banco ou configuração privada. A especificação

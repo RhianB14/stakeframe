@@ -12,6 +12,7 @@
   "dependencies": {
     "@stakeframe/db": "workspace:*",
     "@stakeframe/shared": "workspace:*",
-    "pg-boss": "12.30.0"
+    "pg-boss": "12.30.0",
+    "zod": "4.5.4"
   }
 }

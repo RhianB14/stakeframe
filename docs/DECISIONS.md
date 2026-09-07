@@ -343,3 +343,17 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** todos os layouts continuam sem validação representativa de piloto,
   portanto toda extração exige revisão. Integrações e armazenamento externo
   permanecem desativados nos Composes padrão. [IMPORTS.md](IMPORTS.md).
+
+## D021 — Programação de eventos com fontes conferidas (2026-09-07)
+
+- **Decisão:** conservar identidade das seleções, separar data civil de instante
+  e preservar evidências. Datas parciais não recebem horário inventado. Mudanças
+  de data/adiamento exigem comando versionado e justificativa; não liquidam apostas.
+- **Fontes:** TheSportsDB gratuito e Tavily basic oferecem candidatos, sempre
+  sujeitos à conferência. Timestamp sem offset e data de publicação não viram
+  instante do evento. Consulta alguma sobrescreve informação manual confirmada.
+- **Operação:** fila PostgreSQL durável, cache de 24 horas, atualização explícita,
+  cotas persistidas antes de HTTP e nenhuma repetição automática de falha incerta.
+  APIs permanecem desativadas até preparar configuração e autorização operacional.
+- **Calendário:** agenda paginada por seleção, com contagem distinta de bilhetes
+  e sem multiplicação financeira de múltiplas. [EVENTS.md](EVENTS.md).
