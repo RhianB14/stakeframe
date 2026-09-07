@@ -1,0 +1,68 @@
+# Runtime de integrações — STK-M0-17
+
+O worker implementa entrada contínua Telegram e extração OpenRouter, ambas
+desativadas por padrão. Testes usam HTTP simulado e PostgreSQL/pg-boss reais
+em bancos descartáveis. Esta entrega não ativa o bot nem faz chamadas pagas.
+
+## Entrada durável
+
+O consumidor aceita somente mensagens privadas da identidade configurada,
+recusando grupos, bots, mensagens encaminhadas e intermediários. A verificação
+antecede download e persistência. PNG/JPEG têm limite de 8 MiB; respostas HTTP
+têm limites de tamanho, prazo e redirecionamentos recusados. A verificação de
+formato reconhece cabeçalhos; não é uma decodificação completa da imagem.
+
+Imagem, legenda, metadados e job pg-boss são gravados na mesma transação.
+O cursor só avança depois do commit. Repetir a mesma mensagem retorna a entrada
+existente; imagens iguais em mensagens distintas permanecem candidatas distintas
+para revisão. Um hash indexado permite investigar duplicidade sem descartar
+automaticamente apostas legítimas. Um lock de sessão impede dois consumidores
+Telegram; perder a conexão interrompe o consumidor e invalida sua readiness.
+
+As imagens ficam provisoriamente no PostgreSQL privado, com admissão limitada
+a 2.000 entradas/1 GiB. A transferência para R2, retenção e interface de revisão
+são etapas posteriores. A capacidade bloqueia novas entradas sem confirmar sua
+recepção ao Telegram. Telegram não é backup: sua retenção de updates é limitada.
+
+## Extração
+
+O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 2.048 tokens,
+raciocínio `low`, prazo de 60 segundos e fallback desativado. A saída é validada
+novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
+preservadas como texto, sem inferir ano/fuso. Toda extração vai para revisão;
+nenhuma entrada cria uma aposta ou movimentação financeira nesta etapa.
+
+A reserva de cota ocorre em transação antes da chamada externa: até 60 chamadas
+por dia e 1.500 por mês UTC. Falhas e chamadas incertas também contam. Isso limita
+requisições; o teto financeiro efetivo continua sendo USD 5 mensais da chave.
+Chamadas HTTP ficam fora de transações. A fila não repete chamadas pagas.
+Processamentos interrompidos por mais de três minutos ficam em falha com
+`AI_OUTCOME_UNCERTAIN`, aguardando decisão explícita de reprocessamento.
+
+Estados técnicos: `pending`, `processing`, `review`, `failed`, `discarded`,
+`imported`. São independentes do resultado de uma aposta. O estado `imported`
+fica reservado à futura confirmação financeira.
+
+## Configuração e operação
+
+`AI_ENABLED=true` exige as variáveis OpenRouter de `.env.example` e segredo
+válido. `TELEGRAM_ENABLED=true` exige `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_OWNER_USER_ID` e `TELEGRAM_OWNER_CHAT_ID`; os IDs devem corresponder
+à mesma conversa privada. Em produção todos os segredos usam o sufixo `_FILE`
+com caminho absoluto, seguindo `readSecret`. Não ativar ambos sobre credenciais
+fictícias: a validação falha e o worker não inicia.
+
+Os Composes padrão mantêm integrações desativadas e worker sem saída externa.
+Para ativação futura, preparar montagem dos arquivos privados, saída HTTPS,
+migração `0001_integration_inbox` e o ambiente explícito antes de iniciar o worker.
+O runtime local aguarda o migrador; produção segue seu runbook de migração prévia.
+Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
+provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.
+
+Verificação: `pnpm typecheck`, `pnpm test`, `pnpm local:test-db`, `pnpm lint`.
+Os testes de integração conferem atomicidade, rollback de enqueue, concorrência,
+idempotência, cursor, cotas e processamento até revisão. A migração é aditiva e
+o teste de reaplicação verifica que o journal não cresce indevidamente.
+
+Referências: [Telegram Bot API](https://core.telegram.org/bots/api#getupdates),
+[OpenRouter Structured Outputs](https://openrouter.ai/docs/guides/features/structured-outputs).

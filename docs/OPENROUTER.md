@@ -8,7 +8,7 @@ no dia 1 em UTC, confirmada no console. Isso não ativa recarga de saldo.
 
 ## Configuração preparada
 
-As variáveis de [.env.example](../.env.example) descrevem o contrato planejado:
+As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime:
 
 - Provedor `openrouter`, endpoint `https://openrouter.ai/api/v1/chat/completions`.
 - Modelo exato `google/gemini-3.8-flash`; não usar alias `latest` ou roteamento
@@ -22,8 +22,9 @@ As variáveis de [.env.example](../.env.example) descrevem o contrato planejado:
 
 Na máquina do proprietário há `project.env`, segredo, metadados e resultado
 em pasta privada com ACL limitada ao proprietário e SYSTEM. O segredo não
-foi instalado na VPS. Essas variáveis ainda **não são consumidas pelo worker**:
-o importador contínuo é etapa posterior. O helper público `pnpm ai:setup`
+foi instalado na VPS. O worker consome essas variáveis somente quando
+`AI_ENABLED=true`, conforme [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
+A ativação real e a revisão financeira permanecem pendentes. O helper `pnpm ai:setup`
 continua limitado aos ensaios sintéticos Google/Go; não executa OpenRouter.
 
 O limite remoto da chave é o controle efetivo de gasto. Uma variável local

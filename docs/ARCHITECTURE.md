@@ -14,9 +14,10 @@
 - `apps/api`: Fastify, contratos Zod, `/health/live`, `/health/ready` e
   `/api/v1/system/status`. Exige runtime explícito `local` ou `production`; endpoints de produto
   inexistentes retornam 404. Erros têm código e UUID gerado pelo servidor.
-- `apps/worker`: pg-boss, fila técnica `system-probe`, payload UUID validado,
-  resultado persistido e até duas tentativas adicionais. Nenhum job de produto.
-- `packages/db`: pool PostgreSQL e Drizzle. Não há tabelas ou migrações de domínio.
+- `apps/worker`: pg-boss, diagnóstico `system-probe` e runtime opt-in de
+  Telegram/OpenRouter. A fila de extração não repete chamadas pagas.
+- `packages/db`: pool PostgreSQL, Drizzle e inbox técnica com imagens,
+  cursor e cotas. Não há tabelas financeiras nesta etapa.
 - `packages/shared`: contratos de healthcheck, status, erro, autenticação,
   sessão e diagnóstico da fila.
 
@@ -62,6 +63,11 @@ Credenciais de desenvolvimento são geradas em `.env.local` e excluídas do Git 
 do contexto Docker. Não há autorização para usar este Compose em produção.
 
 ## Visão alvo completa (implementação parcial)
+
+A STK-M0-17 acrescenta inbox e enqueue transacional, cotas compartilhadas e
+recuperação de chamadas incertas. [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md)
+documenta configuração, testes e armazenamento provisório. Integrações continuam
+desativadas nos Composes padrão; não houve implantação na VPS.
 
 Monorepo TypeScript estrito com pnpm workspaces:
 
