@@ -26,15 +26,17 @@ Conferir o painel do domínio e os registros antes de propor a alteração.
 O inventário não comprova acesso serial disponível na próxima janela nem as
 regras OCI atuais. Revalidar capacidade, rede e recuperação no início da janela.
 
-A [issue #11](https://github.com/RhianB14/stakeframe/issues/11) ainda registra
-a reconciliação do run de rede antigo como pendência. Localizar e validar a
-procedência da referência IPv4 anterior, conforme
-[RECONCILIATION.md](../scripts/network_security/RECONCILIATION.md). Não fabricar
-evidência histórica a partir do firewall atual. Essa pendência deve ser resolvida
-ou receber decisão operacional explícita antes de outra janela de rede.
-O [encerramento administrativo](../scripts/network_security/ADMINISTRATIVE-CLOSE.md)
-prepara essa decisão sem declarar preservação histórica de IPv4. Sua execução
-na VPS permanece pendente de autorização específica.
+O run de rede antigo foi encerrado administrativamente sob autorização de
+Rhian em 07/09/2026. Bundle e lacuna histórica preservados; resultado em
+[M0-22-VALIDATION.md](M0-22-VALIDATION.md). A [issue #11](https://github.com/RhianB14/stakeframe/issues/11)
+acompanha a nova janela IPv6, preparada em [NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md).
+Essa janela continua dependente de autorização e console independente ativo.
+
+Leitura DNS em 07/09/2026 às 12:09 UTC: nameservers `dns3.hostgator.com.br`
+e `dns4.hostgator.com.br`, um registro A para destino diferente da VPS, nenhum
+AAAA e resposta sem dados CAA. O painel disponível exigiu login; a zona ainda
+precisa ser conferida antes de definir o diff DNS. Não alterar nameservers,
+MX/TXT ou registros por dedução a partir dessa consulta pública.
 
 ## Registro necessário
 

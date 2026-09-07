@@ -5,7 +5,10 @@ STK-M0-22 prepara uma decisão operacional para o run
 localizada. O [reconciliador histórico](RECONCILIATION.md) continua exigindo
 essa referência; este comando separado não a fabrica nem altera aquela regra.
 
-**Estado: implementação e testes locais. Execução na VPS não autorizada.**
+**Estado: execução autorizada e concluída em 07/09/2026**, com verificação
+posterior e cópias privadas externas. Resultado em
+[M0-22-VALIDATION.md](../../docs/M0-22-VALIDATION.md). A proposta e os comandos
+abaixo documentam o procedimento executado; não autorizam outra operação.
 
 ## O que pode ser autorizado
 

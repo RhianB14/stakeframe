@@ -1,5 +1,11 @@
 # STK-M0-03-R2 — Rede e preparação de hardening IPv6
 
+Estado em 07/09/2026: o run legado foi encerrado administrativamente sob
+autorização de Rhian, preservando a lacuna histórica IPv4 e o bundle original.
+[Resultado M0-22](M0-22-VALIDATION.md) e [preparo da próxima janela](NEXT-NETWORK-WINDOW.md).
+As seções de R1/R2 e da primeira janela abaixo são registros históricos;
+não representam autorização ou recuperação disponível para nova aplicação.
+
 > **PR #6: draft. Preparação local; nenhuma aplicação autorizada.**
 > A leitura do guest foi realizada pelo Hermes na R1. A inspeção OCI foi
 > realizada pelo Codex em **05/09/2026** e **retransmitida pelo proprietário**

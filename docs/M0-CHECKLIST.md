@@ -43,14 +43,13 @@ cada integração. O ensaio de recuperação foi integrado pela
 
 O código da reconciliação foi integrado pela
 [PR #13](https://github.com/RhianB14/stakeframe/pull/13), com os comentários
-de revisão resolvidos e CI aprovada na `main`. A execução da STK-M0-06
-continua pendente na [issue #11](https://github.com/RhianB14/stakeframe/issues/11):
-é necessário localizar e validar a procedência da evidência IPv4 anterior
-antes de autorizar a reconciliação histórica na VPS. STK-M0-22 prepara o
-[encerramento administrativo](../scripts/network_security/ADMINISTRATIVE-CLOSE.md)
-com aceitação explícita do estado IPv4 atual, preservando a lacuna histórica.
-Nenhum dos dois caminhos foi executado. As integrações das PRs não autorizam
-deploy, migração de produção ou nova janela de rede.
+de revisão resolvidos e CI aprovada na `main`. O run legado foi encerrado
+administrativamente na STK-M0-22, sob autorização de Rhian, em 07/09/2026:
+units removidas, apontador arquivado e bundle original intacto. A lacuna
+histórica IPv4 permanece registrada; [M0-22-VALIDATION.md](M0-22-VALIDATION.md).
+A [issue #11](https://github.com/RhianB14/stakeframe/issues/11) continua aberta
+para a nova janela IPv6, preparada em [NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md).
+As integrações das PRs não autorizam deploy, migração ou nova janela de rede.
 
 Histórico: STK-M0-05 registrou a recuperação administrativa
 ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9; issue #9, referenciando a issue #7).
