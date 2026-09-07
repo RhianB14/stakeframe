@@ -308,3 +308,19 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** chave fora do Git, ainda não instalada na VPS; configuração
   preparada não implementa o importador contínuo nem autoriza deploy. O backup
   do OmniRoute permanece preservado, sem exigir sua instalação na VPS.
+
+## D019 — Continuar a implementação local de todo o produto (2026-09-06)
+
+- **Contexto:** o proprietário determinou que Codex continue toda a implementação
+  do projeto sem parar, após integrar o runtime de Telegram e OpenRouter.
+- **Decisão:** implementar e validar M1–M5 localmente, mantendo as pendências
+  operacionais de M0 identificadas. Cada etapa continua com issue, PR, checks,
+  autorização vinculada ao SHA/base e CI na main. Codex é autor direto e registra
+  sua própria verificação sem apresentá-la como revisão independente.
+- **Primeira entrega:** interface privada, contratos financeiros, auditoria,
+  comandos idempotentes e unidade mensal no PostgreSQL. Modelo e evidências
+  reproduzíveis em [FINANCIAL-MODEL.md](FINANCIAL-MODEL.md).
+- **Limites:** continuidade de implementação não autoriza deploy, migração de
+  produção, alteração de credenciais/proteções ou operações destrutivas.
+  Preparar os artefatos concretos antes de pedir a autorização correspondente;
+  somente um piloto real e os critérios do plano permitem declarar v1.0.0.

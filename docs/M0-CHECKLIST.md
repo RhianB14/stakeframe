@@ -1,7 +1,11 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-17** — runtime de integrações e inbox transacional
-([issue #34](https://github.com/RhianB14/stakeframe/issues/34)). STK-M0-16 foi
+STK-M0-17 — runtime de integrações e inbox transacional — foi integrada pela
+[PR #35](https://github.com/RhianB14/stakeframe/pull/35), com cinco checks
+aprovados na `main` `5921bcc` e issue #34 encerrada. A implementação local
+prossegue na **STK-M1-01**, [issue #36](https://github.com/RhianB14/stakeframe/issues/36),
+por determinação do proprietário (D019), preservando as pendências operacionais
+deste checklist. STK-M0-16 foi
 integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
 cinco checks aprovados na `main` `f5e6a59`. STK-M0-15 foi
 integrada pela [PR #31](https://github.com/RhianB14/stakeframe/pull/31), com

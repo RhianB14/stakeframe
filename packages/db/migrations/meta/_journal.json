@@ -15,6 +15,13 @@
       "when": 1788745728559,
       "tag": "0001_integration_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788747189017,
+      "tag": "0002_financial_core",
+      "breakpoints": true
     }
   ]
 }

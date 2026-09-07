@@ -5,21 +5,27 @@
 > de segurança de rede. A STK-M0-08 acrescenta autenticação Google restrita ao
 > proprietário, ativada e validada localmente após autorização para configurar
 > credenciais. Novos ambientes continuam desativados por padrão. Produção e
-> funcionalidades do produto permanecem pendentes; o M0 não está concluído.
+> operação real permanecem pendentes; o M0 não está concluído. A STK-M1-01
+> acrescenta interface privada e núcleo financeiro locais (M1/M2), conforme D019.
 
 ## Implementação local
 
-- `apps/web`: React, Vite, Tailwind e TanStack Query; tela de preparação que
-  consulta o estado real do banco pela API. Sem login simulado, apostas ou saldos.
+- `apps/web`: React, Vite, Tailwind, componentes Radix/shadcn e TanStack Query;
+  entrada pública e interface privada de banca, apostas, financeiro e configurações.
 - `apps/api`: Fastify, contratos Zod, `/health/live`, `/health/ready` e
   `/api/v1/system/status`. Exige runtime explícito `local` ou `production`; endpoints de produto
   inexistentes retornam 404. Erros têm código e UUID gerado pelo servidor.
 - `apps/worker`: pg-boss, diagnóstico `system-probe` e runtime opt-in de
   Telegram/OpenRouter. A fila de extração não repete chamadas pagas.
-- `packages/db`: pool PostgreSQL, Drizzle e inbox técnica com imagens,
-  cursor e cotas. Não há tabelas financeiras nesta etapa.
+- `packages/db`: pool PostgreSQL, Drizzle, inbox técnica e schema `finance`;
+  lançamentos balanceados, auditoria, recibos de idempotência e unidades mensais.
 - `packages/shared`: contratos de healthcheck, status, erro, autenticação,
-  sessão e diagnóstico da fila.
+  sessão, diagnóstico da fila, comandos financeiros e cálculo decimal exato.
+
+O núcleo financeiro serializa as mutações pela versão do espaço do proprietário.
+Lançamentos e estornos são imutáveis, com balanceamento imposto no PostgreSQL.
+O worker e o acesso ao espaço asseguram a unidade mensal congelada.
+Detalhes, limites e invariantes em [FINANCIAL-MODEL.md](FINANCIAL-MODEL.md).
 
 A STK-M0-09 usa os schemas Zod na validação de entrada e na serialização de
 respostas. `@fastify/swagger` e `fastify-type-provider-zod` geram OpenAPI 3.0.3

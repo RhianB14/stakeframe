@@ -1,5 +1,7 @@
 import { z } from 'zod';
 export * from './imports.js';
+export * from './decimal.js';
+export * from './finance.js';
 
 export const systemStatusSchema = z
   .object({
@@ -7,7 +9,7 @@ export const systemStatusSchema = z
     stage: z.enum(['local-setup', 'production-setup']),
     database: z.enum(['available', 'unavailable']),
     authentication: z.enum(['not-configured', 'google']),
-    productEnabled: z.literal(false),
+    productEnabled: z.boolean(),
   })
   .meta({ id: 'SystemStatus' });
 
@@ -23,6 +25,13 @@ export const apiErrorCodeSchema = z.enum([
   'AUTH_REQUEST_FAILED',
   'RATE_LIMITED',
   'AUTH_UNAVAILABLE',
+  'STATE_CONFLICT',
+  'VERSION_CONFLICT',
+  'IDEMPOTENCY_CONFLICT',
+  'INVALID_FINANCIAL_OPERATION',
+  'UNIT_REQUIRED',
+  'NOT_INITIALIZED',
+  'ALIAS_CONFLICT',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z

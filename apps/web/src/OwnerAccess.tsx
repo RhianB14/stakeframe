@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ownerSessionSchema } from '@stakeframe/shared';
 
-async function loadOwner() {
+export async function loadOwner() {
   const response = await fetch('/api/v1/me', {
     credentials: 'same-origin',
     signal: AbortSignal.timeout(5_000),
@@ -11,7 +11,7 @@ async function loadOwner() {
   if (!response.ok) throw new Error('SESSION_UNAVAILABLE');
   return ownerSessionSchema.parse(await response.json());
 }
-async function authAction(path: string) {
+export async function authAction(path: string) {
   const response = await fetch(`/api/auth/${path}`, {
     method: 'POST',
     credentials: 'same-origin',
@@ -53,6 +53,7 @@ export function OwnerAccess() {
       await authAction('sign-out');
     },
     onSuccess: () => {
+      sessionStorage.removeItem('stakeframe.pending-command');
       client.clear();
     },
   });

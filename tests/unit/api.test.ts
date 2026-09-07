@@ -33,9 +33,9 @@ describe('API local', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).not.toContain('private-db-error');
   });
-  it('does not expose product routes or trust a caller request ID', async () => {
+  it('returns a stable not-found error without trusting a caller request ID', async () => {
     const response = await appWithDatabase().inject({
-      url: '/api/v1/bets',
+      url: '/api/v1/not-implemented',
       headers: { 'x-request-id': 'caller-controlled' },
     });
     expect(response.statusCode).toBe(404);

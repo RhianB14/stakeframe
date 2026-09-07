@@ -32,10 +32,12 @@ export function registerApiContracts(app: FastifyInstance) {
         title: 'Stakeframe API',
         version: '0.0.0',
         description:
-          'Base local do M0. Login Google exclusivo do proprietário; nenhuma operação financeira disponível. Erros JSON usam código estável e requestId gerado pelo servidor. Readiness indisponível usa o contrato técnico de healthcheck.',
+          'Aplicação pessoal com login Google exclusivo do proprietário. Operações financeiras exigem sessão, origem, chave de idempotência e versão. Decimais são strings; erros usam código estável e requestId gerado pelo servidor.',
       },
       servers: [{ url: '/', description: 'Mesma origem da aplicação' }],
       tags: [
+        { name: 'Financeiro', description: 'Banca, cadastros e histórico auditável.' },
+        { name: 'Apostas', description: 'Apostas manuais e liquidações.' },
         { name: 'Operação', description: 'Verificações técnicas públicas, sem dados privados.' },
         {
           name: 'Autenticação',

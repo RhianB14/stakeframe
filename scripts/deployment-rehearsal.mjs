@@ -343,7 +343,7 @@ async function main() {
   const status = JSON.parse((await https(port, ca, '/api/v1/system/status')).body);
   assert.equal(status.stage, 'production-setup');
   assert.equal(status.authentication, 'google');
-  assert.equal(status.productEnabled, false);
+  assert.equal(status.productEnabled, true);
   assert.equal((await https(port, ca, '/api/v1/me')).status, 401);
   assert.equal(
     (

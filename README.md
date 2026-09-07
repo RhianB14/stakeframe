@@ -3,12 +3,13 @@
 Aplicação pessoal para registro de apostas esportivas, controle de banca e
 acompanhamento de resultados.
 
-> **Estado atual: base local do M0.** Web, API, worker e PostgreSQL executam
-> em Docker Compose. O login Google restrito ao proprietário está implementado
-> e validado com a conta real no ambiente local. Funcionalidades de apostas
-> ainda não estão implementadas. Consulte [docs/PLAN.md](docs/PLAN.md)
-> para o plano mestre e [docs/M0-CHECKLIST.md](docs/M0-CHECKLIST.md) para o
-> progresso do setup.
+> **Estado atual: fundação e núcleo financeiro locais.** Web, API, worker e
+> PostgreSQL executam em Docker Compose. O acesso privado permite cadastrar
+> banca, apostas, liquidações, freebets, cashouts e estornos auditáveis.
+> Importação assistida, eventos e análises seguem em implementação. O setup
+> operacional do M0 e o piloto de produção continuam pendentes.
+> Consulte [o plano](docs/PLAN.md), [o modelo financeiro](docs/FINANCIAL-MODEL.md)
+> e [o progresso do setup](docs/M0-CHECKLIST.md).
 
 ## Objetivo
 

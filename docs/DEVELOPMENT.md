@@ -64,7 +64,10 @@ saudáveis; o serviço temporário `migrate` deve concluir com código 0 antes d
 API. O worker inicializa o schema técnico da fila no PostgreSQL local.
 Além do diagnóstico, o worker possui runtime opt-in Telegram/OpenRouter,
 desativado nos Composes padrão. Configuração e testes em
-[INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md). Não há dados financeiros.
+[INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md). O worker também verifica a
+unidade mensal; a migração financeira é aplicada antes da API e do worker.
+Os saldos começam em zero e somente o proprietário autenticado pode confirmar
+os valores iniciais. [FINANCIAL-MODEL.md](FINANCIAL-MODEL.md) descreve os fluxos.
 
 `local:init` gera uma senha aleatória em `.env.local`, sem imprimir seu valor
 e sem sobrescrever um arquivo existente. Não use `.env.example` como arquivo
