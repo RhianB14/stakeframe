@@ -195,6 +195,7 @@ async function main() {
       .map(([name, value]) => `${name}=${value}`)
       .join('\n') + '\n',
   );
+  stage = 'configuration-base';
   await execute(process.execPath, ['scripts/deployment-check.mjs', checkFile]);
   // Rendering only: these fake provider secrets are never used for network requests.
   for (const flags of [
@@ -203,8 +204,11 @@ async function main() {
     ['--integrations', '--tavily', '--automatic'],
     ['--integrations', '--operations'],
     ['--integrations', '--tavily', '--automatic', '--operations'],
-  ])
+  ]) {
+    stage = `configuration${flags.join('')}`;
     await execute(process.execPath, ['scripts/deployment-check.mjs', checkFile, ...flags]);
+  }
+  stage = 'configuration-restore';
   const restoreProject = `stk-restore-${randomUUID().replaceAll('-', '')}`;
   const restoreShape = JSON.parse(
     (
@@ -274,6 +278,30 @@ async function main() {
     ).stdout,
   );
   assertDeploymentConfig(integrated, { integrations: true });
+  const automatic = JSON.parse(
+    (
+      await docker([
+        'compose',
+        '--env-file',
+        checkFile,
+        '-f',
+        join(root, 'compose.production.yml'),
+        '-f',
+        join(root, 'compose.integrations.yml'),
+        '-f',
+        join(root, 'compose.automatic-import.yml'),
+        '--profile',
+        'migration',
+        'config',
+        '--format',
+        'json',
+      ])
+    ).stdout,
+  );
+  assertDeploymentConfig(automatic, { integrations: true, automatic: true });
+  automatic.services.worker.volumes[0].bind ??= {};
+  automatic.services.worker.volumes[0].bind.create_host_path = true;
+  assert.throws(() => assertDeploymentConfig(automatic, { integrations: true, automatic: true }));
   for (const mutate of [
     (value) => {
       value.services.worker.environment.OPENROUTER_ALLOW_FALLBACKS = 'true';

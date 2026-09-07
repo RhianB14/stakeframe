@@ -178,7 +178,9 @@ export function assertDeploymentConfig(
       assert.equal(mounts[0].type, 'bind');
       assert.equal(mounts[0].target, worker.AUTOMATIC_IMPORT_POLICIES_FILE);
       assert.equal(mounts[0].read_only, true);
-      assert.equal(mounts[0].bind.create_host_path, false);
+      // Compose 2 omits false booleans from its JSON model; true is emitted.
+      assert.ok(mounts[0].bind && typeof mounts[0].bind === 'object');
+      assert.ok([undefined, false].includes(mounts[0].bind.create_host_path));
     } else assert.equal(services.worker.volumes, undefined);
   } else {
     for (const service of ['api', 'worker'])
