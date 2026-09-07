@@ -50,3 +50,10 @@ foram revalidados após a propagação.
 
 O piloto não altera a autorização para produção contínua, retenção externa de
 backups, ativação do Telegram ou instalação de credenciais R2.
+
+## Pendência operacional
+
+As verificações somente leitura encontraram todos os cinco containers saudáveis
+e `OPS_BACKUP_VERIFIED` nos logs. A instalação/ajuste de permissões do diretório
+de segredos e a validação de backups externos R2 continuam pendentes; não foram
+alterados nesta execução porque exigem autorização específica de produção.
