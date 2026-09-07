@@ -6,6 +6,11 @@ Ele não modifica firewall, persistência, script, manifest ou journal originais
 Esta implementação não foi instalada nem executada na VPS. A issue #11 continua
 aberta; execução operacional depende de autorização específica.
 
+Se a observação IPv4 anterior não puder ser localizada, o procedimento separado
+em [ADMINISTRATIVE-CLOSE.md](ADMINISTRATIVE-CLOSE.md) prepara uma aceitação
+explícita do estado atual. Ele não substitui a prova exigida aqui nem declara
+rollback histórico comprovado; também depende de autorização operacional.
+
 ## Execução proposta
 
 ```text

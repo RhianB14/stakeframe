@@ -13,9 +13,12 @@ com CI aprovada na `main` após cada integração. STK-M0-18 foi integrada pela
 na `main` `576c831` e issue #46 encerrada. STK-M0-19 foi integrada pela
 [PR #49](https://github.com/RhianB14/stakeframe/pull/49), com CI aprovada na
 `main` `1382348` e dez arquivos OCI verificados em runners AMD64/ARM64.
-Prossegue em STK-M0-20 ([issue #50](https://github.com/RhianB14/stakeframe/issues/50)),
-com publicação dos cinco índices ARM64 públicos e `packages: write`
-expressamente autorizados pelo proprietário; [PUBLICATION.md](PUBLICATION.md).
+STK-M0-20 foi concluída pela [PR #51](https://github.com/RhianB14/stakeframe/pull/51):
+os cinco índices ARM64 foram publicados e a leitura anônima foi verificada na
+VPS, conforme autorização do proprietário; [PUBLICATION.md](PUBLICATION.md).
+STK-M0-21 ([issue #52](https://github.com/RhianB14/stakeframe/issues/52)) criou
+as quatro credenciais R2 privadas, com 34 verificações de escopo aprovadas;
+a instalação na VPS permanece pendente.
 O avanço ocorre por determinação
 do proprietário (D019), preservando piloto, ativação operacional e release
 como pendências. STK-M0-16 foi
@@ -43,7 +46,10 @@ O código da reconciliação foi integrado pela
 de revisão resolvidos e CI aprovada na `main`. A execução da STK-M0-06
 continua pendente na [issue #11](https://github.com/RhianB14/stakeframe/issues/11):
 é necessário localizar e validar a procedência da evidência IPv4 anterior
-antes de autorizar a operação na VPS. As integrações das PRs não autorizam
+antes de autorizar a reconciliação histórica na VPS. STK-M0-22 prepara o
+[encerramento administrativo](../scripts/network_security/ADMINISTRATIVE-CLOSE.md)
+com aceitação explícita do estado IPv4 atual, preservando a lacuna histórica.
+Nenhum dos dois caminhos foi executado. As integrações das PRs não autorizam
 deploy, migração de produção ou nova janela de rede.
 
 Histórico: STK-M0-05 registrou a recuperação administrativa
@@ -293,7 +299,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
       30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.
-- [ ] Credencial de anexos e credenciais definitivas da operação R2 na VPS;
+- [x] Quatro credenciais R2 de produção criadas com escopos exclusivos de
+      leitura e escrita para cada bucket; custódia privada e 34 testes
+      aprovados, STK-M0-21 ([issue #52](https://github.com/RhianB14/stakeframe/issues/52)).
+- [ ] Instalar e validar essas credenciais na operação R2 da VPS;
       não reutilizar automaticamente o token temporário de ensaio.
 
 ### IA direta com Gemini

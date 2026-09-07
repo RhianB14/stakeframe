@@ -32,6 +32,9 @@ procedência da referência IPv4 anterior, conforme
 [RECONCILIATION.md](../scripts/network_security/RECONCILIATION.md). Não fabricar
 evidência histórica a partir do firewall atual. Essa pendência deve ser resolvida
 ou receber decisão operacional explícita antes de outra janela de rede.
+O [encerramento administrativo](../scripts/network_security/ADMINISTRATIVE-CLOSE.md)
+prepara essa decisão sem declarar preservação histórica de IPv4. Sua execução
+na VPS permanece pendente de autorização específica.
 
 ## Registro necessário
 
@@ -63,9 +66,11 @@ US$5 mensais e os buckets privados `stakeframe-attachments` e
 metadados sem imprimir segredos. A credencial R2 temporária de ensaio tem outro
 escopo/ciclo de vida e não é adotada como credencial definitiva.
 
-Preparar autorização específica para quatro credenciais R2: leitura de anexos,
-leitura/escrita/exclusão de anexos, leitura/escrita/exclusão de backups e leitura
-de backups para recuperação. Nenhuma requer administração de buckets. Gerar
+As quatro credenciais R2 foram criadas e guardadas fora do Git após autorização
+específica na [issue #52](https://github.com/RhianB14/stakeframe/issues/52):
+leitores e escritores exclusivos de anexos e backups, sem administração de
+buckets. Os 34 testes de escopo passaram; os objetos fictícios foram removidos.
+A instalação das chaves na VPS continua pendente. Detalhes em [R2.md](R2.md). Gerar
 segredos de banco, sessão, recuperação e monitor; manter a chave de recuperação
 fora da VPS e conferir sua custódia antes do primeiro backup.
 
