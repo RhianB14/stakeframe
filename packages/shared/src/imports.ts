@@ -84,7 +84,7 @@ export const telegramMessageSchema = telegramUpdateIdSchema.extend({
       .object({
         file_id: z.string().min(1).max(512),
         file_unique_id: z.string().min(1).max(512),
-        file_size: z.number().int().positive().max(MAX_IMAGE_BYTES),
+        file_size: z.number().int().positive().max(MAX_IMAGE_BYTES).optional(),
         mime_type: z.enum(['image/png', 'image/jpeg']),
       })
       .optional(),

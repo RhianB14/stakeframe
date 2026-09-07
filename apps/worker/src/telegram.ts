@@ -103,10 +103,11 @@ export function createTelegramClient(config: TelegramConfig, fetchImpl: typeof f
         !file ||
         typeof file.file_path !== 'string' ||
         !/^(photos|documents)\/[A-Za-z0-9_-]+\.(jpg|jpeg|png)$/.test(file.file_path) ||
-        typeof file.file_size !== 'number' ||
-        !Number.isSafeInteger(file.file_size) ||
-        file.file_size <= 0 ||
-        file.file_size > MAX_IMAGE_BYTES
+        (file.file_size !== undefined &&
+          (typeof file.file_size !== 'number' ||
+            !Number.isSafeInteger(file.file_size) ||
+            file.file_size <= 0 ||
+            file.file_size > MAX_IMAGE_BYTES))
       )
         throw new IntegrationError('TELEGRAM_FILE_INVALID');
       try {

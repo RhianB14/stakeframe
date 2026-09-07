@@ -125,6 +125,35 @@ describe('OpenRouter boundary', () => {
 });
 
 describe('Telegram boundary', () => {
+  it('downloads a valid document when Document and getFile omit optional file_size', async () => {
+    const documentUpdate = {
+      ...update,
+      message: {
+        ...update.message,
+        photo: undefined,
+        document: { file_id: 'document1', file_unique_id: 'unique-doc1', mime_type: 'image/jpeg' },
+      },
+    };
+    const download = vi.fn();
+    const inbox = {
+      offset: vi.fn().mockResolvedValue(0),
+      advance: vi.fn(),
+      accept: async (_image: unknown, load: () => Promise<Buffer>) => {
+        download(await load());
+      },
+    };
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ ok: true, result: [documentUpdate] }))
+      .mockResolvedValueOnce(
+        Response.json({ ok: true, result: { file_path: 'documents/file_1.jpg' } }),
+      )
+      .mockResolvedValueOnce(new Response(image));
+    await pollTelegramOnce(config, inbox, new AbortController().signal, fetchImpl);
+    expect(download).toHaveBeenCalledWith(image);
+    expect(inbox.advance).toHaveBeenCalledWith(11);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
   it('is disabled by default and requires matching private identity', () => {
     expect(readTelegramConfig({})).toBeNull();
     expect(() => readTelegramConfig({ TELEGRAM_ENABLED: 'true' })).toThrow();
