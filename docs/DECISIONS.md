@@ -373,3 +373,18 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** implementação e ensaios fictícios não autorizam ativação, escrita
   ou poda de backups de produção, credenciais, timers ou mensagens externas.
   Evidências em [M0-18-VALIDATION.md](M0-18-VALIDATION.md).
+
+## D023 — Candidato OCI verificável antes da publicação (2026-09-07)
+
+- **Decisão:** gerar os cinco targets em runners nativos AMD64 e ARM64 a partir
+  da main com CI aprovada, preservando arquivos OCI, hashes e proveniência.
+  Validar origem, plataforma e conteúdo antes de emitir o manifesto completo.
+- **Publicação:** os candidatos ficam em artifacts por um dia. Registry,
+  permissões de escrita, deploy e migração dependem de autorização posterior
+  vinculada aos digests; não reconstruir no momento da publicação/implantação.
+- **Operação:** preparar o registro da primeira janela, revalidar rede e
+  recuperação, preservar a referência histórica pendente da issue #11 e
+  demonstrar backup externo/restore antes do aceite do piloto.
+- **Limites:** um índice por arquitetura inclui a imagem e sua proveniência;
+  não é índice multiarch nem assinatura independente. Política de perda do host
+  e gates em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).

@@ -16,6 +16,10 @@
 
 ## Preparação do artefato
 
+O workflow e os critérios de conferência estão em
+[RELEASE-CANDIDATE.md](RELEASE-CANDIDATE.md). O registro dos gates e a sequência
+da primeira janela estão em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
+
 1. Selecionar um commit da `main` com CI aprovada em AMD64/ARM64. Construir e
    publicar os targets `api`, `worker`, `migrate`, `web-production` e `operations`
    em tarefa própria; registrar os cinco digests e a proveniência do build.
