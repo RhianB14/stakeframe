@@ -1,7 +1,9 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-15** — preparação do bot Telegram e associação privada
-([issue #30](https://github.com/RhianB14/stakeframe/issues/30)). STK-M0-14 foi
+Tarefa atual: **STK-M0-16** — Gemini direto, teste de imagem e backup do OmniRoute
+([issue #32](https://github.com/RhianB14/stakeframe/issues/32)). STK-M0-15 foi
+integrada pela [PR #31](https://github.com/RhianB14/stakeframe/pull/31), com
+CI aprovada na `main` `71928cc`. STK-M0-14 foi
 integrada pela [PR #29](https://github.com/RhianB14/stakeframe/pull/29), com
 CI aprovada na `main` `a907626`. STK-M0-12 e
 STK-M0-13 foram integradas pelas
