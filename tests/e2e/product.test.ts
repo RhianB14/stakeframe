@@ -344,6 +344,39 @@ async function importRoutes(page: Page, detail = importFixture()) {
     route.fulfill({ contentType: 'image/png', body: readFileSync(imageFile) }),
   );
 }
+
+test('an automatic import shows its origin and keeps financial creation controls closed', async ({
+  page,
+}, info) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.item.state = 'imported';
+  detail.item.betId = betId;
+  detail.automatic = true;
+  detail.automaticReason = 'IMPORTED';
+  await importRoutes(page, detail);
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Registrada automaticamente com um layout validado',
+  );
+  await expect(page.getByRole('button', { name: 'Ver aposta', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('automatic-import.png'), fullPage: true });
+});
+
+test('a refused automatic import explains the review reason', async ({ page }) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.automaticReason = 'RETURN_MISMATCH';
+  await importRoutes(page, detail);
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'O retorno escrito diverge do cálculo pela stake e pela odd',
+  );
+  await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toBeVisible();
+});
 test('review displays conflicting evidence, leaves unknown dates blank and confirms one financial command', async ({
   page,
 }, info) => {

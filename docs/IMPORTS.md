@@ -33,10 +33,36 @@ escritas permanecem evidência: o formulário exige confirmar o instante da
 aposta e mantém as datas dos eventos vazias até conferência. Origem em dinheiro
 real ou freebet também exige escolha. Ausência de evento/data não inventa fatos.
 
-Todos os layouts continuam sujeitos a revisão: ainda não existe amostra privada
-representativa aprovada das três casas. O campo `automatic=false` com motivo
-`LAYOUT_NOT_VALIDATED` torna essa restrição verificável. Uma única amostra de
-IA da fase M0 não habilita lançamento automático.
+Nenhuma casa vem aprovada por padrão: ainda não existe amostra privada
+representativa aprovada das três casas. Nessas condições, `automatic=false`
+e `LAYOUT_NOT_VALIDATED` mantêm a restrição verificável. Uma única amostra de
+IA da fase M0 não habilita lançamento automático. O fluxo de habilitação e
+o avaliador de amostras estão em [VALIDATION.md](VALIDATION.md).
+
+Com uma política privada aprovada e ativação explícita no worker, a identificação
+do layout usa descrição visual, modelo fixo e digest da política. O servidor
+exige casa e tipster resolvidos por aliases ativos, concordância da casa com o
+layout e o bilhete, moeda BRL, origem real/promocional explícita, referência,
+stake/odd e seleções válidas, nenhuma dúvida na extração e instante da aposta
+interpretável pelo formato aprovado. Não reduz textos para fazê-los caber.
+Datas sem ano, datas futuras e horários ambíguos/inexistentes no horário de
+verão ficam em revisão. Eventos com data explícita entram como estimados;
+ausências permanecem pendentes e horários não são inventados.
+
+O retorno potencial, quando escrito, deve conferir centavo a centavo. Freebets
+exigem permissão na política e exatamente um crédito disponível da mesma casa,
+valor e validade; as regras desse crédito determinam a devolução do principal.
+Unidade histórica ausente e qualquer candidato a duplicata mantêm revisão.
+O sistema nunca justifica duplicata nem escolhe um crédito ambíguo automaticamente.
+
+Extração, aposta, contabilidade, vínculo, versão, recibo e auditoria da decisão
+automática são gravados em uma transação, com os mesmos locks e regras da
+confirmação manual. Validações recusadas preservam a extração e o motivo para
+revisão; falhas inesperadas desfazem tudo e o worker registra resultado incerto,
+sem repetir a chamada paga. Uma tentativa concluída ou substituída não pode
+registrar outra aposta. A auditoria `import.automatic` inclui tentativa,
+política/digest, motivo e vínculo; a exportação JSON já inclui essa tabela.
+Não há migração adicional para esse fluxo.
 
 ## Integridade financeira e duplicidade
 

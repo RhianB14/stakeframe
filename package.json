@@ -32,6 +32,9 @@
     "local:down": "docker compose --env-file .env.local -f compose.local.yml down",
     "local:status": "docker compose --env-file .env.local -f compose.local.yml ps",
     "local:test-db": "pnpm build:types && node --env-file=.env.local scripts/test-local-db.mjs",
+    "validation:performance": "pnpm build:types && node --env-file=.env.local scripts/validation/performance.mjs",
+    "validation:corpus": "pnpm build:types && node scripts/validation/corpus.mjs",
+    "validation:test-corpus": "pnpm build:types && node --test scripts/validation/corpus.test.mjs",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
   },

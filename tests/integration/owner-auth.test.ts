@@ -22,7 +22,7 @@ const config: EnabledAuthConfig = {
   ownerSubject: '111111111111111111111',
 };
 const sourceUrl = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
-const admin = createDatabase(sourceUrl);
+const admin = createDatabase(sourceUrl, { statementTimeoutMs: 30_000 });
 const databaseName = `stk_auth_test_${randomUUID().replaceAll('-', '')}`;
 let database: Database;
 let created = false;

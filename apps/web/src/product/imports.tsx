@@ -9,6 +9,7 @@ import {
   formatBRL,
   type Workspace,
   type ImportDetail,
+  type AutomaticReason,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { BetForm, Field } from './forms.js';
@@ -33,6 +34,23 @@ const extractionErrors: Record<string, string> = {
   AI_CONNECTION_FAILED: 'Não foi possível obter a resposta da IA.',
   AI_EXTRACTION_INVALID: 'A resposta da IA não trouxe dados válidos para revisão.',
 };
+const automaticReasons: Record<AutomaticReason, string> = {
+  IMPORTED:
+    'Registrada automaticamente com um layout validado. Confira o comprovante e a aposta sempre que precisar.',
+  LAYOUT_NOT_VALIDATED: 'Este layout ainda requer conferência manual antes do registro.',
+  EXTRACTION_UNCERTAIN:
+    'Há campos essenciais ausentes ou dúvidas na leitura. Confira os dados antes de registrar.',
+  CAPTION_UNRESOLVED: 'A legenda precisa identificar um tipster e uma casa cadastrados.',
+  BOOKMAKER_CONFLICT: 'A casa identificada no bilhete diverge da legenda ou do layout aprovado.',
+  PLACED_AT_UNCERTAIN: 'A data ou o horário do registro precisa de conferência.',
+  FREEBET_UNRESOLVED: 'O crédito promocional precisa ser escolhido e conferido.',
+  RETURN_MISMATCH:
+    'O retorno escrito diverge do cálculo pela stake e pela odd. Confira os valores e as regras da casa.',
+  UNIT_REQUIRED: 'A unidade histórica da aposta precisa ser definida antes do registro.',
+  DUPLICATE_REVIEW_REQUIRED:
+    'Há uma possível duplicata. Confira os registros antes de criar outra aposta.',
+  FINANCIAL_REVIEW_REQUIRED: 'O registro financeiro precisa de conferência manual.',
+};
 export function ImportsPage({ workspace, open }: { workspace: Workspace; open: OpenModal }) {
   const [state, setState] = useState('');
   const [page, setPage] = useState(1);
@@ -50,7 +68,7 @@ export function ImportsPage({ workspace, open }: { workspace: Workspace; open: O
       <div className="section-heading">
         <div>
           <h2>Comprovantes e revisão</h2>
-          <p>Confira os dados antes de movimentar sua banca.</p>
+          <p>Acompanhe os registros e confira os comprovantes que precisam de revisão.</p>
         </div>
         <Button onClick={() => open({ kind: 'upload' })}>Enviar comprovante</Button>
       </div>
@@ -404,6 +422,11 @@ function ReviewContent({
         <p className="notice warning" role="status">
           {extractionErrors[item.errorCode] ??
             'A extração não foi concluída. Você pode preencher os dados manualmente.'}
+        </p>
+      ) : null}
+      {extraction && (item.state === 'review' || detail.automatic) ? (
+        <p className="notice" role="status">
+          {automaticReasons[detail.automaticReason]}
         </p>
       ) : null}
       {item.state === 'processing' ? (

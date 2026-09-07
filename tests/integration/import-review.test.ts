@@ -28,7 +28,7 @@ import {
 } from '../../apps/worker/src/integrations.js';
 
 const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
-const admin = createDatabase(source);
+const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 const image = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 let database: Database;
 let finance: FinanceService;

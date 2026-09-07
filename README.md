@@ -10,6 +10,8 @@ acompanhamento de resultados.
 > Calendário, correções de datas e adaptadores de busca estão implementados.
 > Análises por evento, filtros e exportações privadas estão implementados localmente. O setup
 > operacional do M0 e o piloto de produção continuam pendentes.
+> Há validação sintética com 10 mil apostas e importação automática condicionada
+> a políticas privadas; nenhuma casa está habilitada automaticamente por padrão.
 > Consulte [o plano](docs/PLAN.md), [o modelo financeiro](docs/FINANCIAL-MODEL.md)
 > e [o progresso do setup](docs/M0-CHECKLIST.md).
 
@@ -33,6 +35,7 @@ resultados com liquidação manual e auditoria completa.
   [IMPORTS.md](docs/IMPORTS.md).
 - Agenda, fusos, datas parciais e buscas com revisão em [EVENTS.md](docs/EVENTS.md).
 - Indicadores, unidades históricas e portabilidade em [REPORTS.md](docs/REPORTS.md).
+- Desempenho, amostras privadas e preparo do piloto em [VALIDATION.md](docs/VALIDATION.md).
 
 ## Desenvolvimento
 
@@ -43,6 +46,7 @@ pnpm install --frozen-lockfile
 pnpm local:init         # gera .env.local privado, sem imprimir a senha
 pnpm local:up           # compila e aguarda os serviços ficarem saudáveis
 pnpm local:test-db      # integração com PostgreSQL e worker reais
+pnpm validation:performance # reconciliação e desempenho com 10 mil apostas fictícias
 pnpm recovery:drill     # ensaio isolado de backup criptografado e restauração
 pnpm images:check       # confere imagens construídas, isolamento e dependências
 pnpm deployment:rehearse # ensaio HTTPS da configuração de produção em Docker local

@@ -18,7 +18,7 @@ import {
 import { OPENROUTER_MODEL } from '../../packages/shared/src/index.js';
 
 const sourceUrl = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
-const admin = createDatabase(sourceUrl);
+const admin = createDatabase(sourceUrl, { statementTimeoutMs: 30_000 });
 const name = `stk_inbox_test_${randomUUID().replaceAll('-', '')}`;
 let database: Database;
 let boss: Awaited<ReturnType<typeof startWorker>>;

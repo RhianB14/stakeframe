@@ -31,6 +31,31 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL and worker', () => {
+  it('cancels timed out work on the server and reuses the same connection', async () => {
+    const limited = createDatabase(connectionString, { statementTimeoutMs: 80 });
+    const client = await limited.pool.connect();
+    try {
+      await expect(client.query('select pg_sleep(2)')).rejects.toMatchObject({ code: '57014' });
+      expect((await client.query('select 42 as value')).rows[0]?.value).toBe(42);
+    } finally {
+      client.release();
+      await limited.close();
+    }
+  });
+  it('uses a separate migration connection with its own bounded execution window', async () => {
+    const client = database.createMigrationClient();
+    try {
+      await client.connect();
+      expect((await client.query('show statement_timeout')).rows[0]?.statement_timeout).toBe('30s');
+      expect((await client.query('show lock_timeout')).rows[0]?.lock_timeout).toBe('10s');
+      await client.query('select pg_sleep(3.2)');
+    } finally {
+      await client.end();
+    }
+    expect((await database.pool.query('show statement_timeout')).rows[0]?.statement_timeout).toBe(
+      '3s',
+    );
+  });
   it('executes Drizzle against PostgreSQL 18 and serves real readiness', async () => {
     await database.check();
     const version = await database.pool.query<{ server_version_num: string }>(

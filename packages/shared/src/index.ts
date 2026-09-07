@@ -69,3 +69,4 @@ export const ownerSessionSchema = z
 export type OwnerSession = z.infer<typeof ownerSessionSchema>;
 export * from './events.js';
 export * from './reports.js';
+export * from './automatic.js';

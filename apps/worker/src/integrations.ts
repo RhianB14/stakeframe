@@ -3,6 +3,7 @@ import type { PgBoss } from 'pg-boss';
 import {
   createInboxStore,
   createR2Storage,
+  createAutomaticImportService,
   type Database,
   type PoolClient,
   type ObjectStorage,
@@ -11,6 +12,7 @@ import { probeSchema } from '@stakeframe/shared';
 import { readAiConfig, extractTicket } from './openrouter.js';
 import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
 import { IntegrationError } from './http.js';
+import { readAutomaticLayouts } from './automatic-config.js';
 
 export const EXTRACTION_QUEUE = 'ticket-extraction';
 
@@ -75,6 +77,8 @@ export async function startIntegrations(
   fetchImpl: typeof fetch = fetch,
 ) {
   const ai = readAiConfig(env);
+  const layouts = readAutomaticLayouts(env);
+  const automatic = createAutomaticImportService(database, layouts);
   const telegram = readTelegramConfig(env);
   if (!ai && !telegram) return { stop: async () => {}, check: () => {} };
   await prepareExtractionQueue(boss);
@@ -109,9 +113,9 @@ export async function startIntegrations(
             image: claim.image,
             fetchImpl,
             signal: controller.signal,
+            layouts,
           });
-          await store.complete(id, claim.attempt, result);
-          return { state: 'review' };
+          return await automatic.complete(id, claim.attempt, result);
         } catch (error) {
           const code = error instanceof IntegrationError ? error.code : 'AI_OUTCOME_UNCERTAIN';
           await store.fail(id, claim.attempt, code);
