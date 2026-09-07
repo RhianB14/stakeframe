@@ -8,6 +8,13 @@
       "when": 1788718471445,
       "tag": "0000_owner_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788745728559,
+      "tag": "0001_integration_inbox",
+      "breakpoints": true
     }
   ]
 }

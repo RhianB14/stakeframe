@@ -30,7 +30,7 @@ destrutivas continuam exigidas; a verificação do próprio código é identific
 | Visual                | Escuro, em português, adaptado para computador e celular |
 | Hospedagem            | VPS Oracle Always Free                                   |
 | Banco de dados        | PostgreSQL na VPS                                        |
-| IA                    | API Gemini direta a partir do worker na VPS              |
+| IA                    | Gemini 3.8 Flash via OpenRouter no worker da VPS         |
 | Entradas              | Telegram, upload pelo site e cadastro manual             |
 | Casas                 | Bet365, Superbet, Novibet e outras cadastráveis          |
 | Gestão                | Banca geral, reserva e saldos por casa                   |

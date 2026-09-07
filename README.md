@@ -24,7 +24,8 @@ resultados com liquidação manual e auditoria completa.
 - PostgreSQL 18 com Drizzle ORM.
 - Processamento assíncrono com pg-boss.
 - Hospedagem em VPS Oracle Always Free (Docker Compose + Caddy).
-- IA com Gemini 3.8 Flash via OpenRouter, pelo worker na VPS (planejada).
+- Runtime Gemini 3.8 Flash via OpenRouter e Telegram, desativados por padrão;
+  configuração e limites em [INTEGRATION-RUNTIME.md](docs/INTEGRATION-RUNTIME.md).
 
 ## Desenvolvimento
 

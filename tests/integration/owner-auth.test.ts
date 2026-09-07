@@ -185,13 +185,18 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
   });
   it('applies the migration twice without duplicating its journal', async () => {
+    const before = Number(
+      (await database.pool.query('SELECT count(*) FROM drizzle.__drizzle_migrations')).rows[0]
+        .count,
+    );
+    expect(before).toBeGreaterThan(0);
     await migrateLocalDatabase(database);
     expect(
       Number(
         (await database.pool.query('SELECT count(*) FROM drizzle.__drizzle_migrations')).rows[0]
           .count,
       ),
-    ).toBe(1);
+    ).toBe(before);
   });
   it('refuses anonymous requests and does not expose generic auth endpoints', async () => {
     expect((await app.inject('/api/v1/me')).statusCode).toBe(401);

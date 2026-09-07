@@ -1,7 +1,9 @@
 # Checklist do M0 — Setup
 
-Tarefa atual: **STK-M0-16** — seleção de IA, OpenRouter e backup do OmniRoute
-([issue #32](https://github.com/RhianB14/stakeframe/issues/32)). STK-M0-15 foi
+Tarefa atual: **STK-M0-17** — runtime de integrações e inbox transacional
+([issue #34](https://github.com/RhianB14/stakeframe/issues/34)). STK-M0-16 foi
+integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
+cinco checks aprovados na `main` `f5e6a59`. STK-M0-15 foi
 integrada pela [PR #31](https://github.com/RhianB14/stakeframe/pull/31), com
 CI aprovada na `main` `71928cc`. STK-M0-14 foi
 integrada pela [PR #29](https://github.com/RhianB14/stakeframe/pull/29), com
@@ -264,8 +266,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] STK-M0-15: bot Telegram criado, grupos bloqueados, token privado,
       associação do chat/usuário por desafio e resposta de teste ao proprietário.
       [TELEGRAM.md](TELEGRAM.md) e [M0-15-VALIDATION.md](M0-15-VALIDATION.md).
-- [ ] Consumidor Telegram contínuo com recusa de outras identidades antes
+- [x] Consumidor Telegram implementado com recusa de outras identidades antes
       de baixar anexos, persistir mensagens ou enfileirar processamento.
+      Inbox/enqueue transacional e testes em [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
+- [ ] Ativar e validar o consumidor contínuo com configuração privada na VPS.
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
       30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.
@@ -288,8 +292,9 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       3.8 Flash retornaram 503; não validados. [M0-16-VALIDATION.md](M0-16-VALIDATION.md).
 - [ ] Medir precisão com bilhetes privados das três casas; validar campos,
       omissões e casos que exigem revisão do proprietário.
-- [ ] Integração contínua no worker, fila persistente, cotas e reprocessamento
-      sem chamadas automáticas pagas; validar operação na VPS sem o PC.
+- [x] Runtime OpenRouter no worker, fila persistente e cotas transacionais;
+      chamadas incertas preservadas sem repetição automática (STK-M0-17).
+- [ ] Interface de reprocessamento explícito e operação na VPS sem o PC.
 
 ### Infraestrutura e operação
 

@@ -62,7 +62,9 @@ Abra [http://127.0.0.1:8088](http://127.0.0.1:8088). A primeira execução baixa
 as imagens e compila a aplicação. O comando aguarda os quatro serviços ficarem
 saudáveis; o serviço temporário `migrate` deve concluir com código 0 antes da
 API. O worker inicializa o schema técnico da fila no PostgreSQL local.
-Somente o job de diagnóstico existe, sem dados financeiros ou integrações.
+Além do diagnóstico, o worker possui runtime opt-in Telegram/OpenRouter,
+desativado nos Composes padrão. Configuração e testes em
+[INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md). Não há dados financeiros.
 
 `local:init` gera uma senha aleatória em `.env.local`, sem imprimir seu valor
 e sem sobrescrever um arquivo existente. Não use `.env.example` como arquivo

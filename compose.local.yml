@@ -68,6 +68,7 @@ services:
     networks: [backend]
     depends_on:
       postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
