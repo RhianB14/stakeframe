@@ -22,9 +22,10 @@ a instalação na VPS permanece pendente.
 O piloto ARM64 foi executado em 07/09/2026 após a publicação #10: os cinco
 serviços foram atualizados por digest, a migração retornou `MIGRATIONS_COMPLETE`
 e todos os serviços ficaram saudáveis. A evidência está em
-[M0-24-VALIDATION.md](M0-24-VALIDATION.md). O DNS ainda aponta para
-`162.240.81.81`, então a emissão ACME e a validação HTTPS pública continuam
-pendentes.
+[M0-24-VALIDATION.md](M0-24-VALIDATION.md). Após a correção do registro A,
+o Caddy obteve o certificado Let's Encrypt e os probes públicos passaram; o
+início do fluxo OAuth, o callback seguro e a recusa sem sessão foram
+verificados, mas o login real do proprietário permanece pendente.
 O avanço ocorre por determinação
 do proprietário (D019), preservando piloto, ativação operacional e release
 como pendências. STK-M0-16 foi
@@ -343,8 +344,8 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       com volumes e redes internas.
       Base local disponível na STK-M0-07; configuração de produção
       preparada na STK-M0-12; piloto ARM64 executado em M0-24.
-- [ ] HTTPS com Caddy + renovação; DNS do domínio ainda aponta para
-      `162.240.81.81` em vez de `129.146.113.111`.
+- [ ] HTTPS com Caddy + renovação; DNS corrigido e certificado Let's Encrypt
+      obtido pelo Caddy, conforme o piloto de M0-24.
 - [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
       teste de restauração demonstrado (RPO 1h / RTO 4h).
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes

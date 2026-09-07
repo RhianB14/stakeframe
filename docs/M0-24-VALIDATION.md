@@ -38,7 +38,10 @@ Digests instalados no arquivo privado `/etc/stakeframe/deployment.env`:
 - O início do OAuth respondeu `200`, criou o cookie de estado seguro e gerou
   uma URL no host `accounts.google.com` com callback HTTPS para o domínio.
   Um callback sem estado foi recusado com redirecionamento controlado para
-  `/?auth=failed&error=state_not_found`.
+  `/?auth=failed&error=state_not_found`. **Limite da evidência:** o início do
+  fluxo, o callback seguro e a recusa sem sessão foram verificados; o login
+  real do proprietário ainda não foi executado, portanto o OAuth end-to-end
+  permanece pendente.
 
 ## Limitação externa
 
