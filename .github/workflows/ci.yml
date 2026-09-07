@@ -33,6 +33,11 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      - name: Verify release source gates and OCI archive boundaries
+        run: |
+          node --test scripts/release/source.test.mjs
+          python3 -B -m unittest discover -s scripts/release -p 'test_*.py' -v
+
   application-check:
     name: ${{ matrix.check }}
     strategy:

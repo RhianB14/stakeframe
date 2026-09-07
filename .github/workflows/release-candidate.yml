@@ -1,0 +1,92 @@
+name: Release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Current main commit with successful CI (40 hexadecimal characters)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: candidate-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      TARGET_ARCH: ${{ matrix.arch }}
+      BUILDER: stk-candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+    steps:
+      - name: Checkout reviewed workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Require current main and successful CI on both architectures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/source.mjs
+      - name: Start isolated pinned builder
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          version: v0.37.0
+          name: ${{ env.BUILDER }}
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+            memory=4g
+          buildkitd-config: infra/production/buildkitd.toml
+          buildkitd-flags: --debug=false
+          cache-binary: false
+      - name: Build five OCI archives and verify content and provenance
+        run: |
+          set -euo pipefail
+          for target in api worker migrate web-production operations; do
+            docker buildx build --builder "$BUILDER" --platform "linux/$TARGET_ARCH" \
+              --target "$target" --provenance=mode=max,version=v0.2 \
+              --tag "ghcr.io/rhianb14/stakeframe-$target:candidate-$SOURCE_SHA-$TARGET_ARCH" \
+              --label "org.opencontainers.image.source=https://github.com/RhianB14/stakeframe" \
+              --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+              --output "type=oci,dest=.cache/release/$target.oci.tar,oci-artifact=false" \
+              --metadata-file ".cache/release/$target.metadata.json" \
+              "https://github.com/RhianB14/stakeframe.git#$SOURCE_SHA"
+            python3 -B scripts/release/verify_oci.py ".cache/release/$target.oci.tar" \
+              ".cache/release/$target.metadata.json" "$SOURCE_SHA" "$TARGET_ARCH" "$target"
+          done
+          python3 -B scripts/release/manifest.py .cache/release "$SOURCE_SHA" "$TARGET_ARCH"
+          cat .cache/release/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain candidate artifacts for review
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: candidate-${{ inputs.source_sha }}-${{ matrix.arch }}
+          path: |
+            .cache/release/*.oci.tar
+            .cache/release/*.metadata.json
+            .cache/release/*.verified.json
+            .cache/release/source-validation.json
+            .cache/release/candidate.json
+            .cache/release/summary.md
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error

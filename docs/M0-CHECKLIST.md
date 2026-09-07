@@ -8,8 +8,10 @@ M3 ([PR #39](https://github.com/RhianB14/stakeframe/pull/39)) e
 M4 ([PR #41](https://github.com/RhianB14/stakeframe/pull/41)), com CI aprovada
 após cada integração. M5 foi integrado pela [PR #43](https://github.com/RhianB14/stakeframe/pull/43)
 e a preparação de validação M6 pela [PR #45](https://github.com/RhianB14/stakeframe/pull/45),
-com CI aprovada na `main` após cada integração. Prossegue em STK-M0-18
-([issue #46](https://github.com/RhianB14/stakeframe/issues/46)), por determinação
+com CI aprovada na `main` após cada integração. STK-M0-18 foi integrada pela
+[PR #47](https://github.com/RhianB14/stakeframe/pull/47), com cinco checks aprovados
+na `main` `576c831` e issue #46 encerrada. Prossegue em STK-M0-19
+([issue #48](https://github.com/RhianB14/stakeframe/issues/48)), por determinação
 do proprietário (D019), preservando piloto, ativação operacional e release
 como pendências. STK-M0-16 foi
 integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
@@ -102,7 +104,9 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
 - [x] Verificar Docker + Docker Compose na VPS: Docker 29.7.2, API 1.55 e
       Compose v5.5.0; daemon disponível, zero containers e zero projetos Compose.
-- [ ] Definir e documentar política de recuperação de instâncias ociosas.
+- [x] Definir e documentar política de recuperação de instâncias ociosas em
+      [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md); operação real e RTO seguem
+      pendentes de validação, sem geração artificial de carga.
 - [x] Registrar o diagnóstico e as pendências restantes de acesso em
       [docs/INFRASTRUCTURE-INVENTORY.md](INFRASTRUCTURE-INVENTORY.md).
 - [x] STK-M0-02 concluída pela [PR #4](https://github.com/RhianB14/stakeframe/pull/4),
