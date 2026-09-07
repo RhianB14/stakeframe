@@ -27,7 +27,7 @@
     {
       "target": "migrate",
       "repository": "ghcr.io/rhianb14/stakeframe-migrate",
-      "digest": "sha256:7377ea30f9fd46f966d873097ae175965149be895c8c6ad6cf6bfc497bd9f68"
+      "digest": "sha256:7377ea30f9fd46f966d873097ae175965149be895c8c6ad6cf6bfc497bd9f68a"
     },
     {
       "target": "web-production",
