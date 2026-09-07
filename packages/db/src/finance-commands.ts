@@ -28,6 +28,25 @@ export async function applyFinanceCommand(
   now: Date,
 ): Promise<{ id: string; before: unknown }> {
   const type = command.type;
+  if (type === 'bet.unit.resolve') {
+    const before = await getBetRow(client, command.id);
+    if (before.unit_amount && cents(before.unit_amount) > 0n)
+      throw new FinanceError('STATE_CONFLICT');
+    const month = saoPauloDate(before.placed_at).slice(0, 7);
+    const unit = (
+      await client.query<{ amount: string }>(
+        'select amount from finance.monthly_unit where month=$1',
+        [month],
+      )
+    ).rows[0];
+    if (!unit || cents(unit.amount) <= 0n) throw new FinanceError('UNIT_REQUIRED');
+    await client.query('update finance.bet set unit_month=$2,unit_amount=$3 where id=$1', [
+      before.id,
+      month,
+      unit.amount,
+    ]);
+    return { id: before.id, before };
+  }
   if (type === 'event.update') return updateEvent(client, command);
   if (type === 'import.confirm' || type === 'import.discard' || type === 'import.retry') {
     const row = (

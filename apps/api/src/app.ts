@@ -12,7 +12,8 @@ import type { OwnerAuth } from './auth.js';
 import { registerApiContracts } from './openapi.js';
 import { sendApiError } from './api-errors.js';
 import { registerFinanceRoutes } from './finance-routes.js';
-import type { FinanceService, ImportService, EventService } from '@stakeframe/db';
+import type { FinanceService, ImportService, EventService, ReportService } from '@stakeframe/db';
+import { registerReportRoutes } from './report-routes.js';
 import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
 
@@ -24,6 +25,7 @@ export function createApp(options: {
   finance?: FinanceService;
   imports?: ImportService;
   events?: EventService;
+  reports?: ReportService;
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
@@ -108,6 +110,7 @@ export function createApp(options: {
     registerFinanceRoutes(app, options.ownerAuth, options.finance);
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
+    registerReportRoutes(app, options.ownerAuth, options.reports);
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));

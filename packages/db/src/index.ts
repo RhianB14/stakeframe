@@ -20,6 +20,7 @@ export {
 } from './attachments.js';
 export type { PoolClient } from 'pg';
 export { createFinanceService, FinanceError, type FinanceService } from './finance-service.js';
+export { createReportService, type ReportService } from './reports.js';
 export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
 
 export function createDatabase(connectionString: string) {

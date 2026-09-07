@@ -3,7 +3,10 @@
 STK-M0-17 — runtime de integrações e inbox transacional — foi integrada pela
 [PR #35](https://github.com/RhianB14/stakeframe/pull/35), com cinco checks
 aprovados na `main` `5921bcc` e issue #34 encerrada. A implementação local
-prossegue na **STK-M1-01**, [issue #36](https://github.com/RhianB14/stakeframe/issues/36),
+integrou M1/M2 ([PR #38](https://github.com/RhianB14/stakeframe/pull/38)),
+M3 ([PR #39](https://github.com/RhianB14/stakeframe/pull/39)) e
+M4 ([PR #41](https://github.com/RhianB14/stakeframe/pull/41)), com CI aprovada
+após cada integração. Prossegue em M5 ([issue #42](https://github.com/RhianB14/stakeframe/issues/42)),
 por determinação do proprietário (D019), preservando as pendências operacionais
 deste checklist. STK-M0-16 foi
 integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
@@ -249,7 +252,8 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] STK-M0-09: OpenAPI gerado dos schemas de entrada/resposta, erros estáveis
       e validação de sincronização na CI. [API.md](API.md) e
       [M0-09-VALIDATION.md](M0-09-VALIDATION.md).
-- [ ] Schema de produto e componentes shadcn/ui: etapas seguintes.
+- [x] Schema de produto e componentes Radix/shadcn da interface privada
+      implementados em M1/M2; migrações de produto validadas somente em ambientes locais/CI.
 - [x] STK-M0-11: imagens separadas de API, worker e migrações, limitadas aos
       arquivos e dependências de execução, com verificação de conteúdo.
       [RUNTIME-IMAGES.md](RUNTIME-IMAGES.md).
@@ -298,7 +302,8 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       omissões e casos que exigem revisão do proprietário.
 - [x] Runtime OpenRouter no worker, fila persistente e cotas transacionais;
       chamadas incertas preservadas sem repetição automática (STK-M0-17).
-- [ ] Interface de reprocessamento explícito e operação na VPS sem o PC.
+- [x] Interface de reprocessamento explícito com confirmação, versão e idempotência em M3.
+- [ ] Operação contínua das integrações na VPS sem o PC.
 
 ### Infraestrutura e operação
 

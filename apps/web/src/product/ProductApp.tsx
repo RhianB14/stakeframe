@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   workspaceSchema,
@@ -28,7 +28,9 @@ import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
 import { ImportsPage, ImportReview, UploadForm } from './imports.js';
 import { savePendingUpload } from './upload-storage.js';
 import { CalendarPage, EventReview } from './events.js';
+import { OverviewReport } from './overview-report.js';
 import './product.css';
+const AnalyticsPage = lazy(() => import('./analytics.js'));
 
 export type Modal =
   | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' | 'upload' }
@@ -51,6 +53,7 @@ const navigation = [
   { id: 'bets', title: 'Apostas', icon: '▤' },
   { id: 'imports', title: 'Importações', icon: '⇧' },
   { id: 'calendar', title: 'Calendário', icon: '▦' },
+  { id: 'analytics', title: 'Análises', icon: '↗' },
   { id: 'finance', title: 'Financeiro', icon: '⇄' },
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
@@ -215,6 +218,10 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
             <ImportsPage workspace={workspace} open={open} />
           ) : page === 'calendar' ? (
             <CalendarPage workspace={workspace} open={open} />
+          ) : page === 'analytics' ? (
+            <Suspense fallback={<p role="status">Carregando análises…</p>}>
+              <AnalyticsPage workspace={workspace} open={open} />
+            </Suspense>
           ) : (
             <SettingsPage workspace={workspace} open={open} />
           )}
@@ -291,6 +298,7 @@ function Overview({ workspace, open }: { workspace: Workspace; open: OpenModal }
           ))}
         </div>
       </div>
+      <OverviewReport version={workspace.version} />
       <BetsPage workspace={workspace} open={open} compact />
     </>
   );

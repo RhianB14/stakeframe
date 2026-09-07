@@ -104,6 +104,16 @@ fonte, data aproximada e `refresh` opcional; exige `Idempotency-Key`.
 `EVENT_PROVIDER_DISABLED` e `EVENT_QUEUE_FULL` preservam o cadastro manual.
 Regras de fuso, cache e cotas em [EVENTS.md](EVENTS.md).
 
+Análises usam `GET /api/v1/reports`, `/api/v1/reports/bets` e
+`/api/v1/reports/options`. Intervalos `from`/`to` admitem até 36.600 dias;
+os filtros incluem `bookmakerId`, `tipsterId` (ou `none`), `sport`,
+`kind=all|real|freebet`, `state=open|settled` e `includeEstimated=true|false`.
+O detalhamento aceita `page` e `pageSize`. `/api/v1/exports/csv` usa os mesmos
+filtros; `/api/v1/exports/json` retorna todo o histórico estruturado. Ambos
+exigem sessão e respondem com arquivo privado. Uma exportação já ativa
+retorna 409. `bet.unit.resolve` associa unidade histórica ausente pelo comando
+financeiro auditado. Métricas e contratos de portabilidade em [REPORTS.md](REPORTS.md).
+
 ```bash
 pnpm api:spec        # compila a API e atualiza docs/openapi.json
 pnpm api:spec:check  # valida OpenAPI e falha se o documento versionado divergir

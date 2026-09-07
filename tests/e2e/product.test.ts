@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   saoPauloDate,
+  type PerformanceReport,
+  type ReportMetrics,
   type Workspace,
   type Bet,
   type ImportDetail,
@@ -14,6 +16,43 @@ const house = '10000000-0000-4000-8000-000000000001';
 const reserve = '10000000-0000-4000-8000-000000000002';
 const houseAccount = '10000000-0000-4000-8000-000000000003';
 const betId = '10000000-0000-4000-8000-000000000004';
+const emptyMetrics: ReportMetrics = {
+  bets: 0,
+  settledBets: 0,
+  openBets: 0,
+  realStake: '0.00',
+  freebetStake: '0.00',
+  realPrincipalClosed: '0.00',
+  realReturns: '0.00',
+  freebetReturns: '0.00',
+  realProfit: '0.00',
+  freebetProfit: '0.00',
+  profit: '0.00',
+  profitUnits: '0.000000',
+  knownProfitUnits: '0.000000',
+  missingUnitBets: 0,
+  exposure: '0.00',
+  roiReal: null,
+  hitRateReal: null,
+  hitWinsReal: 0,
+  hitEligibleReal: 0,
+};
+function reportFixture(): PerformanceReport {
+  return {
+    generatedAt: '2026-09-07T00:00:00Z',
+    version: 1,
+    filters: { from: '2026-09-01', to: '2026-09-30', kind: 'all', includeEstimated: 'false' },
+    dateBasis: 'last_event_sao_paulo',
+    granularity: 'day',
+    metrics: { ...emptyMetrics },
+    previous: { from: '2026-08-02', to: '2026-08-31', metrics: { ...emptyMetrics } },
+    exclusions: { unknownDateBets: 0, estimatedDateBets: 0 },
+    timeline: [],
+    byBookmaker: [],
+    byTipster: [],
+    bySport: [],
+  };
+}
 function fixture(): Workspace {
   return {
     version: 1,
@@ -98,6 +137,7 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
     }),
   );
   await page.route('**/api/v1/workspace', (route) => route.fulfill({ json: workspace }));
+  await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: reportFixture() }));
   await page.route('**/api/v1/bets?*', (route) =>
     route.fulfill({ json: { items: bets, total: bets.length, page: 1, pageSize: 25 } }),
   );
@@ -709,4 +749,124 @@ test('an uncertain event search reuses its key and input after reloading without
   await expect(page.getByRole('button', { name: 'Buscar programação' })).toBeVisible();
   expect(attempts).toHaveLength(2);
   expect(attempts[0]).toEqual(attempts[1]);
+});
+
+test('analytics filters reconcile visible results, CSV and bet drilldown on desktop and mobile', async ({
+  page,
+}, info) => {
+  await enabledProduct(page, fixture(), [bet]);
+  const report = reportFixture();
+  report.metrics = {
+    ...emptyMetrics,
+    bets: 8,
+    settledBets: 8,
+    realStake: '800.00',
+    realPrincipalClosed: '800.00',
+    realReturns: '900.00',
+    realProfit: '100.00',
+    profit: '100.00',
+    profitUnits: '10.000000',
+    knownProfitUnits: '10.000000',
+    roiReal: '12.50',
+    hitRateReal: '50.00',
+    hitWinsReal: 4,
+    hitEligibleReal: 8,
+  };
+  report.exclusions = { unknownDateBets: 2, estimatedDateBets: 1 };
+  report.timeline = Array.from({ length: 8 }, (_, i) => ({
+    date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+    metrics: {
+      ...emptyMetrics,
+      bets: 1,
+      profit: i % 2 ? '50.00' : '-25.00',
+      realProfit: i % 2 ? '50.00' : '-25.00',
+    },
+  }));
+  report.byBookmaker = [{ key: house, label: 'Bet365', metrics: report.metrics }];
+  await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/reports/options', (route) =>
+    route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } }),
+  );
+  await page.route('**/api/v1/reports/bets?*', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: betId,
+            reference: 'fixture',
+            eventSummary: 'Aurora × Central',
+            eventDate: '2026-09-08',
+            dateStatus: 'confirmed',
+            bookmakerId: house,
+            bookmaker: 'Bet365',
+            tipsterId: null,
+            tipster: 'Sem tipster',
+            sportKey: 'sport:futebol',
+            sport: 'Futebol',
+            state: 'settled',
+            freebet: false,
+            stake: '100.00',
+            remaining: '0.00',
+            returns: '200.00',
+            profit: '100.00',
+            profitUnits: '10.000000',
+            placedAt: '2026-09-01T18:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 25,
+      },
+    }),
+  );
+  await page.goto('/#analytics');
+  await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  await page.getByLabel('Data final da análise').fill('2026-09-30');
+  await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
+  await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('2 apostas com datas incompletas', { exact: false })).toBeVisible();
+  await expect(page.getByRole('img', { name: /Linhas dos resultados/ })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('analytics.png'), fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByText('Mais filtros', { exact: true }).click();
+  await page.getByLabel('Esporte', { exact: true }).selectOption('sport:futebol');
+  await page.getByLabel('Incluir datas estimadas').check();
+  const request = page.waitForRequest(
+    (request) => request.url().includes('/reports?') && request.url().includes('sport%3Afutebol'),
+  );
+  await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
+  await request;
+  const csv = page.getByRole('link', { name: 'Exportar apostas em CSV ↓' });
+  await expect(csv).toHaveAttribute('href', /sport=sport%3Afutebol/);
+  await expect(csv).toHaveAttribute('href', /includeEstimated=true/);
+  await page.getByRole('button', { name: 'Aurora × Central', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+test('analytics distinguishes missing units and failed data from empty results', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  report.metrics = {
+    ...emptyMetrics,
+    bets: 1,
+    settledBets: 1,
+    profit: '100.00',
+    realProfit: '100.00',
+    profitUnits: null,
+    missingUnitBets: 1,
+  };
+  await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/reports/options', (route) => route.fulfill({ json: { sports: [] } }));
+  await page.route('**/api/v1/reports/bets?*', (route) => route.fulfill({ status: 503, json: {} }));
+  await page.goto('/#analytics');
+  await expect(page.getByText('Unidades a conferir', { exact: true })).toBeVisible();
+  await expect(page.getByText('O total em reais está completo', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('Não foi possível carregar o detalhamento.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Nenhuma aposta corresponde a estes filtros.', { exact: true }),
+  ).toHaveCount(0);
 });
