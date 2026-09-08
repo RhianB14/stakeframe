@@ -210,7 +210,7 @@ git — o conteúdo aprovado é o mesmo; instalar na VPS a partir do checkout gi
 - `/run/stakeframe-restore` — `RuntimeDirectory` (0700), efêmero.
 - Novos secrets (mutação B): `r2_backup_restore_access_key`,
   `r2_backup_restore_secret_key` em `/etc/stakeframe/secrets/`, `root:opc 0640`
-  (padrão dos demais), além de `postgres_password`/`db_password` EFÊMEROS
+  (owner root deliberado; grupo opc e modo 0640), além de `postgres_password`/`db_password` EFÊMEROS
   gerados por run em `/run/stakeframe-restore/<project>/` (0700, arquivos 0444) — nunca persistidos.
 
 ## 7. Janela D — comandos exatos do primeiro restore isolado

@@ -43,8 +43,10 @@ Todos os gates foram aprovados antes da transferência:
 ## 3. Procedimento executado
 
 - Os dois valores foram enviados somente pelo stdin de um processo SSH já
-  autenticado; não foram usados em argumentos, variáveis persistentes, arquivos
-  intermediários, histórico, logs ou output.
+  autenticado. Não foram usados em argumentos, variáveis persistentes, arquivos
+  intermediários locais, histórico, logs ou output. No remoto, existiram somente
+  nos arquivos temporários privados criados dentro de
+  `/etc/stakeframe/secrets` e nos destinos finais autorizados.
 - O processo remoto usou `umask 077`, temporários imprevisíveis dentro de
   `/etc/stakeframe/secrets`, validação hexadecimal e de comprimento, `chown
 root:opc`, `chmod 0640` e `mv -T` atômico para cada destino.
@@ -108,7 +110,9 @@ Nenhum conteúdo foi lido para registro e nenhum valor foi alterado.
 
 ## 7. Repositório e evidências
 
-- Documentação desta execução: este arquivo e a atualização de
-  `docs/M0-26-PREFLIGHT.md`.
+- Documentação desta execução:
+  - `docs/M0-25-VALIDATION.md`
+  - `docs/M0-26-PREFLIGHT.md`
+  - `docs/M0-26B-VALIDATION.md`.
 - Nenhum segredo, hash, identificador de conta ou caminho privado local entra no
   repositório, issue, PR ou logs.
