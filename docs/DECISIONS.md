@@ -405,4 +405,4 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites restabelecidos:** novo commit ou mudança de base invalida
   autorização anterior; CI verde não autoriza merge; merge, deploy, migração,
   credenciais, permissões e exclusões destrutivas continuam exigindo
-  autorização específica. Origem: issue #70.
+  autorização específica. Origem: issues #70 e #72.
