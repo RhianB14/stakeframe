@@ -2,16 +2,18 @@
 
 Este documento define como os agentes operam no repositório Stakeframe.
 
-## Diretriz temporária do proprietário — 06/09/2026
+## Diretriz temporária de 06/09/2026 — encerrada em 08/09/2026
 
-Rhian determinou: **o Codex assume as implementações por enquanto, até nova
-orientação do proprietário**. Durante esse período, Codex também executa as
-verificações e operações Git/GitHub autorizadas por tarefa. Esta diretriz
-substitui a divisão de execução com Hermes descrita abaixo enquanto estiver
-vigente; não é necessário retransmitir prompts de implementação ao Hermes.
+Rhian havia determinado, em 06/09/2026, que o Codex assumisse as
+implementações por tempo limitado, incluindo verificações e operações
+Git/GitHub autorizadas por tarefa. Essa diretriz temporária foi **encerrada por
+decisão do proprietário em 08/09/2026 (D024)**: a dinâmica normal de papéis
+descrita abaixo voltou a valer integralmente.
 
-As exigências de autorização de merge, deploy, migração e operações destrutivas
-continuam válidas. A autoria direta do Codex deve constar dos registros, sem
+O histórico das tarefas executadas sob essa exceção permanece sem reescrita —
+o registro apenas indica que a exceção terminou. As exigências de autorização
+de merge, deploy, migração e operações destrutivas nunca deixaram de valer, e a
+autoria direta do Codex nas tarefas daquele período consta dos registros, sem
 apresentar a verificação do próprio código como revisão independente do GitHub.
 
 ## Papéis
@@ -64,8 +66,9 @@ apresentar a verificação do próprio código como revisão independente do Git
 
 ## Estado atual
 
-O setup operacional do M0 continua em andamento. Por determinação do
-proprietário, Codex também avança na implementação local do produto;
-fundação, núcleo financeiro, importação com revisão e calendário estão implementados. Os registros de cada PR
-distinguem código validado, operação pendente e autorização de produção.
-As regras deste documento valem desde o primeiro commit.
+O setup operacional do M0 continua em andamento. Com a diretriz temporária de
+06/09/2026 encerrada (D024), Hermes volta a executar as implementações e as
+operações Git/GitHub autorizadas; fundação, núcleo financeiro, importação com
+revisão e calendário estão implementados. Os registros de cada PR distinguem
+código validado, operação pendente e autorização de produção. As regras deste
+documento valem desde o primeiro commit.

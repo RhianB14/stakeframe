@@ -388,3 +388,20 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** um índice por arquitetura inclui a imagem e sua proveniência;
   não é índice multiarch nem assinatura independente. Política de perda do host
   e gates em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
+## D024 — Restauração da dinâmica normal de papéis (2026-09-08)
+
+- **Decisão:** encerrar em 08/09/2026 a diretriz temporária de 06/09/2026 que
+  atribuía implementações diretas ao Codex. A divisão normal de papéis volta a
+  valer integralmente em [AGENTS.md](../AGENTS.md) e [PLAN.md](PLAN.md).
+- **Papéis restabelecidos:** Hermes Desktop implementa, verifica e executa as
+  operações Git/GitHub autorizadas por tarefa; Codex planeja, revisa
+  tecnicamente e emite as autorizações de merge, release, deploy, migração e
+  operações destrutivas; o proprietário decide produto e faz a ponte entre os
+  agentes.
+- **Histórico:** as tarefas executadas sob a exceção não têm o registro
+  reescrito — os documentos apenas indicam que a exceção terminou, e a autoria
+  direta do Codex naquele período permanece identificada nos PRs.
+- **Limites restabelecidos:** novo commit ou mudança de base invalida
+  autorização anterior; CI verde não autoriza merge; merge, deploy, migração,
+  credenciais, permissões e exclusões destrutivas continuam exigindo
+  autorização específica. Origem: issue #70.
