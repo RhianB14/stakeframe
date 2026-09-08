@@ -500,6 +500,9 @@ local de M1–M5 prosseguem enquanto os itens operacionais de M0 são preparados
 Essa sequência não marca M0 como concluído nem dispensa piloto real, autorização
 de produção ou os critérios de release em §5.5. PRs continuam vinculadas ao SHA,
 à base e aos checks validados; autoria e verificação direta são identificadas.
+Com o encerramento da diretriz temporária em 08/09/2026 (D024), a continuidade
+prossegue com o Hermes Desktop como autor das implementações, preservando o
+registro do período em que o Codex atuou diretamente.
 
 ### 5.2. Formato obrigatório dos prompts para o Hermes
 
