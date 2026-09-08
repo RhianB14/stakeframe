@@ -15,11 +15,12 @@ pelas aprovações. Hermes Desktop executa as implementações e todas as opera�
 autorizadas no GitHub.** O proprietário participa das decisões de produto e
 encaminha prompts e relatórios entre os dois.
 
-**Diretriz vigente de 06/09/2026:** o proprietário atribuiu ao Codex também as
-implementações e a continuidade autônoma do trabalho. A divisão com Hermes
-abaixo permanece como protocolo de referência, subordinada à diretriz em
-[AGENTS.md](../AGENTS.md). Autorizações por SHA/base, produção e operações
-destrutivas continuam exigidas; a verificação do próprio código é identificada.
+**Diretriz de 06/09/2026 — encerrada em 08/09/2026 (D024):** o proprietário
+havia atribuído ao Codex também as implementações e a continuidade autônoma do
+trabalho; essa exceção terminou e a divisão com Hermes descrita abaixo voltou a
+valer como protocolo vigente, conforme [AGENTS.md](../AGENTS.md).
+Autorizações por SHA/base, produção e operações destrutivas continuam exigidas;
+a verificação do próprio código é identificada.
 
 | Aspecto               | Decisão                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -499,6 +500,9 @@ local de M1–M5 prosseguem enquanto os itens operacionais de M0 são preparados
 Essa sequência não marca M0 como concluído nem dispensa piloto real, autorização
 de produção ou os critérios de release em §5.5. PRs continuam vinculadas ao SHA,
 à base e aos checks validados; autoria e verificação direta são identificadas.
+Com o encerramento da diretriz temporária em 08/09/2026 (D024), a continuidade
+prossegue com o Hermes Desktop como autor das implementações, preservando o
+registro do período em que o Codex atuou diretamente.
 
 ### 5.2. Formato obrigatório dos prompts para o Hermes
 
