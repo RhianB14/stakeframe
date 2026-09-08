@@ -1,13 +1,18 @@
 # STK-M0-26A — Preflight da primeira restauração isolada
 
-> **STATUS: pacote de preflight.** Nenhum segredo, valor de credencial ou dado
-> financeiro aparece neste documento. Inspeção da VPS e do Restic/R2 foi
-> SOMENTE LEITURA (sem lock, sem `prune/forget/unlock/backup/restore/upload`).
-> Este pacote prepara as mutações A–E listadas na seção 8, que exigem
-> autorização própria antes de qualquer execução.
+> **STATUS: preflight + mutação B registrada.** Nenhum segredo, valor de
+> credencial ou dado financeiro aparece neste documento. A inspeção original da
+> VPS e do Restic/R2 foi SOMENTE LEITURA (sem lock, sem
+> `prune/forget/unlock/backup/restore/upload`). A credencial lógica
+> `stakeframe-backups-reader-prod` já havia satisfeito a mutação A na
+> STK-M0-21; a mutação B foi executada na STK-M0-26B sob autorização própria,
+> com evidência sanitizada em `docs/M0-26B-VALIDATION.md`. As mutações C, D e E
+> continuam pendentes de autorização própria.
 
-Base da análise: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
-(branch `codex/m0-26-restore-preflight`, issue #71).
+Base da análise original: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
+(branch histórica `codex/m0-26-restore-preflight`, issue #71). Estado
+reconciliado na `main` @ `0f3fd75a5ce049bebf7648cb72e38396e4f34731` pela
+STK-M0-26B (issue #75).
 
 ## 1. Revalidação dos docs e artefatos
 
@@ -63,7 +68,7 @@ Base da análise: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
   | openrouter_api_key, r2_backup_access_key, r2_backup_secret_key,   |
   | r2_reader_access_key, r2_reader_secret_key, r2_writer_access_key, |
   | r2_writer_secret_key, recovery_key, telegram_bot_token,           |
-  | telegram_owner_chat_id, telegram_owner_user_id (15 arquivos)      | `root:opc`  |
+  | telegram_owner_chat_id, telegram_owner_user_id (15 arquivos)      | `opc:opc`   |
   | 0640                                                              |
   | postgres_password                                                 | `root:root` | 0600 |
 - Ausências esperadas confirmadas (nenhum componente de restore instalado):
@@ -105,7 +110,7 @@ stakeframe-v1` (conta/bucket vindos das envs do container `operations`;
 | (a) PostgreSQL e volumes NOVOS (sem reuso de produção) | `compose.restore.yml:13,56-70` (volume `restore-database` + redes/volumes por-run com labels), `restore-rehearsal.mjs:23,95-103` (project único `stk-restore-<uuid>`, segredos efêmeros gerados por run), `restore.mjs:37-42,62-63` (host fixo `restore-postgres`, recusa banco ocupado), `restore-config.mjs:18-22`                                                                   | **GAP CORRIGIDO nesta branch** (`4293561`): `assertRestoreConfig` não validava os mounts do `restore-postgres`, então um compose que apontasse o banco isolado a um volume de PRODUÇÃO passaria no gate. Correção em `scripts/deployment/restore-config.mjs:23-41`: só permite volume `restore-database` + bind read-only de `init-app-role.sh`; rejeita reuso de produção, binds extras e bind gravável (testado — matriz na seção 5). |
 | (b) não entra na rede nem no banco de produção         | `compose.restore.yml:11,37,56-58` (rede `restore-private` `internal: true`; postgres só nela), `restore-config.mjs:6-11,19,24` (valida `internal: true`, redes exatas), `restore.mjs:37-41` (connection string reescrita para `restore-postgres`, falha se não mudar)                                                                                                                  | OK                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | (c) não publica portas                                 | `compose.restore.yml` (sem `ports:`), `restore-config.mjs:14` (`service.ports === undefined`)                                                                                                                                                                                                                                                                                          | OK                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| (d) usa credencial R2 somente leitura                  | `compose.restore.yml:47-48,78-81` (secrets `r2_backup_restore_access_key`/`_secret_key` — nomes distintos dos de produção `r2_backup_access_key`), `restore-config.mjs:35-42` (valida os arquivos de secret exatos), `backup.mjs:20-26` (`BACKUP_READ_ONLY=true` restringe restic a `snapshots                                                                                         | dump                                                                                                                                                                                                                                                                                                                                                                                                                                    | check`+`--no-lock`), `config.mjs:51` | OK — os segredos de restore AINDA NÃO EXISTEM na VPS (seção 2) e precisam ser criados (mutação A/B, seção 8). |
+| (d) usa credencial R2 somente leitura                  | `compose.restore.yml:47-48,78-81` (secrets `r2_backup_restore_access_key`/`_secret_key` — nomes distintos dos de produção `r2_backup_access_key`), `restore-config.mjs:35-42` (valida os arquivos de secret exatos), `backup.mjs:20-26` (`BACKUP_READ_ONLY=true` restringe restic a `snapshots                                                                                         | dump                                                                                                                                                                                                                                                                                                                                                                                                                                    | check`+`--no-lock`), `config.mjs:51` | OK — a credencial existente `stakeframe-backups-reader-prod` atende a mutação A (STK-M0-21) e seus dois valores foram instalados nos secrets de restore pela mutação B (STK-M0-26B); nenhum token novo foi criado. |
 | (e) valida labels ANTES do cleanup                     | `restore-rehearsal.mjs:37-61` (`owned()` inspeciona cada recurso e assegura `com.docker.compose.project` + `io.stakeframe.restore` ANTES do `finally`), `190-201` (cleanup só remove recursos com os labels; assegura zero após down)                                                                                                                                                  | OK                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | (f) falha se cleanup/manifesto/ACLs/espaço divergirem  | cleanup: `restore-rehearsal.mjs:196-201,211-215`; manifesto: `restore.mjs:80-97` (versão, ciclo, serverVersion 18.x, cutoff, checksums SHA-256 de dump+metadados); ACLs/permissões: `restore.mjs:139-144` (roles + permissions comparadas pós-restore); espaço: `restore-capacity.mjs:1-5` + `restore-rehearsal.mjs:134-143` (gate inicial 10 GiB/20%, monitor 5 s, aborta <5 GiB/10%) | OK                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | (g) integrações em quarentena                          | `restore.mjs:178-193` (cursor `recovery-quarantine`, inbox/search incertos → `failed` com `*_OUTCOME_UNCERTAIN`, `extraction_request` esvaziada, sessões/verificações revogadas, tokens nulos), retomada só com `RESTORE_CONFIRM=reviewed-recovery-and-telegram-backlog` (`server.mjs:49-56`)                                                                                          | OK                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -137,18 +142,23 @@ O runner completo em host Linux só é exercido na janela D (seção 7); o
 `pnpm operations:rehearse`/`deployment:rehearse` cobrem o fluxo com Docker
 real e rodam na CI desta PR.
 
-## 6. Pacote de instalação futura (janelas B/C)
+## 6. Pacote de instalação e próximas janelas (B concluída; C pendente)
 
-### 6.1 Credencial R2 somente leitura (mutação A)
+### 6.1 Credencial R2 somente leitura — mutação A concluída, B executada
 
-- Nomes EXATOS dos dois arquivos de secret a criar:
+- A credencial lógica existente `stakeframe-backups-reader-prod` foi criada e
+  validada na STK-M0-21. Ela tem **Object Read only**, é restrita ao bucket
+  `stakeframe-backups` e permite leitura e listagem de objetos, sem escrita,
+  exclusão ou administração.
+- A mutação A não será repetida: nenhum token novo foi criado nesta execução.
+- A mutação B instalou os dois secrets abaixo na VPS, conforme a validação
+  sanitizada em `docs/M0-26B-VALIDATION.md`:
   - `/etc/stakeframe/secrets/r2_backup_restore_access_key`
   - `/etc/stakeframe/secrets/r2_backup_restore_secret_key`
-- Escopo mínimo Cloudflare: **Token de API customizado** com permissão
-  **Object Read only**, restrita ao bucket `stakeframe-backups`, permitindo
-  leitura e listagem de objetos, sem escrita, exclusão ou administração.
-  Criar como S3 credential (Access Key + Secret) do R2 scoped ao bucket de
-  backups.
+- Os destinos são arquivos regulares, sem symlink, `root:opc 0640`, com
+  tamanhos normalizados 32 e 64; ambos tiveram `MATCH=true`. Os 16 secrets
+  anteriores permaneceram inalterados e os cinco containers permaneceram
+  `running/healthy`, com RestartCount inalterado.
 - A credencial de leitura deve permitir `restic snapshots/dump/check` sem
   lock de escrita; se um `prune` concorrente causar erro de leitura, o ensaio
   falha com segurança e deve ser repetido após o ciclo (OPERATIONS.md:139-142).
@@ -200,7 +210,7 @@ git — o conteúdo aprovado é o mesmo; instalar na VPS a partir do checkout gi
 - `/run/stakeframe-restore` — `RuntimeDirectory` (0700), efêmero.
 - Novos secrets (mutação B): `r2_backup_restore_access_key`,
   `r2_backup_restore_secret_key` em `/etc/stakeframe/secrets/`, `root:opc 0640`
-  (padrão dos demais), além de `postgres_password`/`db_password` EFÊMEROS
+  (owner root deliberado; grupo opc e modo 0640), além de `postgres_password`/`db_password` EFÊMEROS
   gerados por run em `/run/stakeframe-restore/<project>/` (0700, arquivos 0444) — nunca persistidos.
 
 ## 7. Janela D — comandos exatos do primeiro restore isolado
@@ -275,8 +285,8 @@ label=io.stakeframe.restore=<project>`); investigar e remover com os
 
 | Ref | Mutação                             | Escopo                                                                                                                                                                                |
 | --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A   | Criar credencial R2 somente leitura | Token S3 custom no Cloudflare, Object Read apenas no bucket `stakeframe-backups`; sem write/delete/admin                                                                              |
-| B   | Instalar os 2 segredos              | `/etc/stakeframe/secrets/r2_backup_restore_access_key` e `r2_backup_restore_secret_key`, `root:opc 0640`, valores nunca em log                                                        |
+| A   | Criar credencial R2 somente leitura | Concluída na STK-M0-21: `stakeframe-backups-reader-prod`, Object Read only no bucket `stakeframe-backups`, com leitura/listagem e sem write/delete/admin                              |
+| B   | Instalar os 2 segredos              | **Executada na STK-M0-26B**: `/etc/stakeframe/secrets/r2_backup_restore_access_key` e `r2_backup_restore_secret_key`, `root:opc 0640`, valores nunca em log                           |
 | C   | Instalar Node/config/checkout       | `/opt/stakeframe-tools/node` (Node 24.20.0 linux-arm64, hash conferido), `/opt/stakeframe` checkout revisado, `/etc/stakeframe/docker` 0700; conferir `deployment.env`                |
 | D   | Executar o primeiro restore isolado | Janela D da seção 7, gates 1-5, sem merge-e-executa                                                                                                                                   |
 | E   | Instalar e habilitar o timer mensal | `cp infra/production/stakeframe-restore.{service,timer} /etc/systemd/system/` + `daemon-reload` + `enable --now stakeframe-restore.timer`; só após 1º ensaio bem-sucedido na janela D |

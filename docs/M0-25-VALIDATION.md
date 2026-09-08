@@ -88,12 +88,12 @@ segredos era um resíduo da mesma janela.
 
 ## 4. STK-M0-25A — correção de permissões (08/09/2026)
 
-| Caminho                               | Antes                                                  | Depois         |
-| ------------------------------------- | ------------------------------------------------------ | -------------- |
-| `/etc/stakeframe/secrets`             | root:root 0755                                         | root:root 0700 |
-| `/etc/stakeframe/secrets/secrets`     | root:root 0600                                         | root:root 0700 |
-| 16 arquivos do diretório aninhado     | root:root 0666                                         | root:root 0600 |
-| Canônicos `/etc/stakeframe/secrets/*` | 15 × root:opc 0640; `postgres_password` root:root 0600 | intactos       |
+| Caminho                               | Antes                                                 | Depois         |
+| ------------------------------------- | ----------------------------------------------------- | -------------- |
+| `/etc/stakeframe/secrets`             | root:root 0755                                        | root:root 0700 |
+| `/etc/stakeframe/secrets/secrets`     | root:root 0600                                        | root:root 0700 |
+| 16 arquivos do diretório aninhado     | root:root 0666                                        | root:root 0600 |
+| Canônicos `/etc/stakeframe/secrets/*` | 15 × opc:opc 0640; `postgres_password` root:root 0600 | intactos       |
 
 Correção técnica: a mudança de 0600 para 0700 no diretório aninhado
 **acrescentou permissões somente ao proprietário do diretório; grupo e outros
@@ -123,10 +123,18 @@ bytes contra os canônicos resultou 16/16 `SAME`.
 
 ## 6. Arquivos canônicos preservados
 
-O conjunto canônico tem 16 arquivos no total: 15 em root:opc modo 0640 e
+O conjunto canônico tem 16 arquivos no total: 15 em opc:opc modo 0640 e
 `postgres_password` em root:root modo 0600. Todos permanecem em
 `/etc/stakeframe/secrets` com bytes idênticos à baseline (verificado em 25A e
 25B); `deployment.env` root:root 0600 intocado.
+
+## Errata documental (2026-09-08)
+
+A versão anterior deste documento continha erro de transcrição do owner dos
+15 arquivos canônicos. A inspeção posterior somente leitura com `stat`,
+durante a revisão da PR #76, confirmou `opc:opc 0640`. Os arquivos
+permaneceram inalterados nas operações M0-25A, M0-25B e M0-26B; esta correção é
+exclusivamente documental.
 
 ## 7. Saúde dos containers
 
