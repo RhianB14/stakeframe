@@ -9,7 +9,7 @@
 > com evidência sanitizada em `docs/M0-26B-VALIDATION.md`. As mutações C, D e E
 > continuam pendentes de autorização própria.
 
-Base da análise original: `main` @ `ea17414fc44353fa62707e3b5567b43319a3`
+Base da análise original: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
 (branch histórica `codex/m0-26-restore-preflight`, issue #71). Estado
 reconciliado na `main` @ `0f3fd75a5ce049bebf7648cb72e38396e4f34731` pela
 STK-M0-26B (issue #75).
@@ -68,7 +68,7 @@ STK-M0-26B (issue #75).
   | openrouter_api_key, r2_backup_access_key, r2_backup_secret_key,   |
   | r2_reader_access_key, r2_reader_secret_key, r2_writer_access_key, |
   | r2_writer_secret_key, recovery_key, telegram_bot_token,           |
-  | telegram_owner_chat_id, telegram_owner_user_id (15 arquivos)      | `root:opc`  |
+  | telegram_owner_chat_id, telegram_owner_user_id (15 arquivos)      | `opc:opc`   |
   | 0640                                                              |
   | postgres_password                                                 | `root:root` | 0600 |
 - Ausências esperadas confirmadas (nenhum componente de restore instalado):

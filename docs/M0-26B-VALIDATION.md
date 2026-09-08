@@ -87,6 +87,12 @@ owners, modos e tamanhos observados antes da mutação:
 - 15 arquivos: `opc:opc`, `0640`, tamanhos sanitizados preservados;
 - `postgres_password`: `root:root`, `0600`, tamanho sanitizado preservado.
 
+A divergência histórica entre registros anteriores e esta validação é explicada
+pela errata documental de `docs/M0-25-VALIDATION.md`: a versão anterior tinha
+um erro de transcrição do owner; a inspeção posterior somente leitura com
+`stat`, durante a revisão da PR #76, confirmou `opc:opc 0640`. Os arquivos
+permaneceram inalterados nas operações M0-25A, M0-25B e M0-26B.
+
 Nenhum conteúdo foi lido para registro e nenhum valor foi alterado.
 
 ## 6. Rollback, R2 e limitações
