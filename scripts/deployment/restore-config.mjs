@@ -20,6 +20,25 @@ export function assertRestoreConfig(config, project) {
   assert.equal(target.environment.POSTGRES_DB, 'stakeframe');
   assert.equal(target.environment.POSTGRES_PASSWORD_FILE, '/run/secrets/postgres_password');
   assert.equal(target.environment.POSTGRES_PASSWORD, undefined);
+  // Only the fresh per-run database volume and the read-only init script may be
+  // mounted: a production volume or bind here would silently reuse live state.
+  const targetVolumes = target.volumes ?? [];
+  assert.equal(targetVolumes.length, 2);
+  assert.deepEqual(
+    {
+      type: targetVolumes[0].type,
+      source: targetVolumes[0].source,
+      target: targetVolumes[0].target,
+    },
+    { type: 'volume', source: 'restore-database', target: '/var/lib/postgresql' },
+  );
+  assert.equal(targetVolumes[1].type, 'bind');
+  assert.match(
+    targetVolumes[1].source.replace(/\\/g, '/'),
+    /infra\/production\/init-app-role\.sh$/,
+  );
+  assert.equal(targetVolumes[1].target, '/docker-entrypoint-initdb.d/10-app-role.sh');
+  assert.equal(targetVolumes[1].read_only, true);
   const restore = config.services.restore;
   assert.deepEqual(Object.keys(restore.networks).sort(), ['restore-egress', 'restore-private']);
   assert.deepEqual(restore.command, ['src/server.mjs', 'restore']);
