@@ -95,7 +95,11 @@ Registrar commit, digests, horário, resultados e autorização no relatório.
 - [x] Imagens publicadas por digest e artefato de release revisado; publicação
       #10 e execução ARM64 estão registradas em `M0-24-VALIDATION.md`.
 - [ ] Backup externo funcionando e restauração testada.
-- [ ] Segredos de produção configurados fora do repositório.
+- [ ] Segredos de produção configurados fora do repositório — parcial: a
+      configuração privada em `/etc/stakeframe/deployment.env` e os arquivos
+      de segredos montados foram usados no piloto M0-24; o ajuste de
+      permissões do diretório de segredos na VPS segue pendente
+      ([M0-24-VALIDATION.md](M0-24-VALIDATION.md)).
 - [ ] OAuth de produção e procedimento de reversão validados; o início do
       fluxo, o callback seguro e a recusa sem sessão foram verificados, mas o
       login real do proprietário permanece pendente.
@@ -103,7 +107,9 @@ Registrar commit, digests, horário, resultados e autorização no relatório.
 
 O ensaio local comprova somente o cenário descrito em
 [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md). A primeira execução
-na VPS será tratada como piloto, com autorização e registro próprios. A integração
+na VPS como piloto foi autorizada e executada em 07/09/2026
+([M0-24-VALIDATION.md](M0-24-VALIDATION.md)); a operação contínua permanece
+condicionada a autorização específica. A integração
 contínua com OpenRouter, Telegram e R2 está preparada no overlay de integrações,
 com backup, retenção e monitor em [OPERATIONS.md](OPERATIONS.md). A instalação
 do OmniRoute na VPS foi dispensada pela decisão D017.

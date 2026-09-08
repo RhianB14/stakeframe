@@ -485,6 +485,13 @@ associada ao head e na CI; não confundir checks simulados com probes da VPS.
 - [ ] Segunda conexão SSH e probes reais **depois** da alteração.
 - [ ] Confirmação real sem corrida, rollback não iniciado e estado final conferido.
 
+O encerramento administrativo do run legado (STK-M0-22) e a simulação de rede
+na CI não equivalem a execução técnica na VPS: os gates abertos acima exigem
+janela autorizada com console independente, e a futura janela IPv6
+([issue #11](https://github.com/RhianB14/stakeframe/issues/11),
+[NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md)) permanece dependente dos
+gates de recuperação.
+
 Os testes simulados validam a lógica do controlador, incluindo confirmação normal
 com service nunca iniciada e rejeição de qualquer timestamp positivo. Não
 confundir essa camada com a validação do adaptador contra systemd real.
