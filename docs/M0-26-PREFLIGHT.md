@@ -1,13 +1,17 @@
 # STK-M0-26A — Preflight da primeira restauração isolada
 
-> **STATUS: preflight + mutação B registrada.** Nenhum segredo, valor de
+> **STATUS: preflight + mutações B e C registradas.** Nenhum segredo, valor de
 > credencial ou dado financeiro aparece neste documento. A inspeção original da
 > VPS e do Restic/R2 foi SOMENTE LEITURA (sem lock, sem
 > `prune/forget/unlock/backup/restore/upload`). A credencial lógica
 > `stakeframe-backups-reader-prod` já havia satisfeito a mutação A na
 > STK-M0-21; a mutação B foi executada na STK-M0-26B sob autorização própria,
-> com evidência sanitizada em `docs/M0-26B-VALIDATION.md`. As mutações C, D e E
-> continuam pendentes de autorização própria.
+> com evidência sanitizada em `docs/M0-26B-VALIDATION.md`; a mutação C foi
+> executada na STK-M0-26C sob autorização própria, com evidência sanitizada em
+> `docs/M0-26C-VALIDATION.md` (Node instalado, permissões corrigidas e Docker
+> config privado validados; a troca do checkout foi revertida pelo rollback
+> prescrito após divergência de EOL no bind do PostgreSQL — decisão do Codex
+> pendente). As mutações D e E continuam pendentes de autorização própria.
 
 Base da análise original: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
 (branch histórica `codex/m0-26-restore-preflight`, issue #71). Estado
@@ -283,10 +287,10 @@ label=io.stakeframe.restore=<project>`); investigar e remover com os
 
 ## 8. Mutações que exigem autorização própria
 
-| Ref | Mutação                             | Escopo                                                                                                                                                                                |
-| --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A   | Criar credencial R2 somente leitura | Concluída na STK-M0-21: `stakeframe-backups-reader-prod`, Object Read only no bucket `stakeframe-backups`, com leitura/listagem e sem write/delete/admin                              |
-| B   | Instalar os 2 segredos              | **Executada na STK-M0-26B**: `/etc/stakeframe/secrets/r2_backup_restore_access_key` e `r2_backup_restore_secret_key`, `root:opc 0640`, valores nunca em log                           |
-| C   | Instalar Node/config/checkout       | `/opt/stakeframe-tools/node` (Node 24.20.0 linux-arm64, hash conferido), `/opt/stakeframe` checkout revisado, `/etc/stakeframe/docker` 0700; conferir `deployment.env`                |
-| D   | Executar o primeiro restore isolado | Janela D da seção 7, gates 1-5, sem merge-e-executa                                                                                                                                   |
-| E   | Instalar e habilitar o timer mensal | `cp infra/production/stakeframe-restore.{service,timer} /etc/systemd/system/` + `daemon-reload` + `enable --now stakeframe-restore.timer`; só após 1º ensaio bem-sucedido na janela D |
+| Ref | Mutação                             | Escopo                                                                                                                                                                                                                                                                                                                               |
+| --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A   | Criar credencial R2 somente leitura | Concluída na STK-M0-21: `stakeframe-backups-reader-prod`, Object Read only no bucket `stakeframe-backups`, com leitura/listagem e sem write/delete/admin                                                                                                                                                                             |
+| B   | Instalar os 2 segredos              | **Executada na STK-M0-26B**: `/etc/stakeframe/secrets/r2_backup_restore_access_key` e `r2_backup_restore_secret_key`, `root:opc 0640`, valores nunca em log                                                                                                                                                                          |
+| C   | Instalar Node/config/checkout       | **Executada na STK-M0-26C com exceção documentada**: Node 24.20.0 linux-arm64 instalado em `/opt/stakeframe-tools/node` (hash conferido), `/etc/stakeframe/docker` 0700 criado e permissões da árvore corrigidas; troca do checkout revertida pelo rollback prescrito (divergência de EOL no bind) — ver `docs/M0-26C-VALIDATION.md` |
+| D   | Executar o primeiro restore isolado | Janela D da seção 7, gates 1-5, sem merge-e-executa                                                                                                                                                                                                                                                                                  |
+| E   | Instalar e habilitar o timer mensal | `cp infra/production/stakeframe-restore.{service,timer} /etc/systemd/system/` + `daemon-reload` + `enable --now stakeframe-restore.timer`; só após 1º ensaio bem-sucedido na janela D                                                                                                                                                |
