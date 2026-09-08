@@ -29,8 +29,8 @@ Base da análise: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
 
 - Host: `vnci110`, Ubuntu (arm64), uptime 8 d 16 h, carga 0.09/0.15/0.11.
   RAM 11 927 MiB total, 10 959 MiB disponível. Disco `/` (raiz do Docker,
-  `/var/lib/docker`): 48 GB, 7.9 GB usados, 40 GB livres (17%) — passa o gate
-  de início do runner (10 GiB / 20%).
+  `/var/lib/docker`): 48 GB, 7.9 GB usados, 40 GB livres (17% usados,
+  aproximadamente 83% livres) — passa o gate de início do runner (10 GiB / 20%).
 - Relógio: NTP ativo e sincronizado.
 - Containers (todos os 5 `running` + `healthy`;RestartCount/ExitCode abaixo):
 
@@ -63,7 +63,7 @@ Base da análise: `main` @ `ea17414fc44353fa62707e3b5567b43319a3d2a3`
   | openrouter_api_key, r2_backup_access_key, r2_backup_secret_key,   |
   | r2_reader_access_key, r2_reader_secret_key, r2_writer_access_key, |
   | r2_writer_secret_key, recovery_key, telegram_bot_token,           |
-  | telegram_owner_chat_id, telegram_owner_user_id (15 arquivos)      | `opc:opc`   |
+  | telegram_owner_chat_id, telegram_owner_user_id (15 arquivos)      | `root:opc`  |
   | 0640                                                              |
   | postgres_password                                                 | `root:root` | 0600 |
 - Ausências esperadas confirmadas (nenhum componente de restore instalado):
@@ -145,9 +145,10 @@ real e rodam na CI desta PR.
   - `/etc/stakeframe/secrets/r2_backup_restore_access_key`
   - `/etc/stakeframe/secrets/r2_backup_restore_secret_key`
 - Escopo mínimo Cloudflare: **Token de API customizado** com permissão
-  **Object Read** apenas no bucket `stakeframe-backups` (sem List, sem Write,
-  sem Delete, sem Admin Read/Write). Criar como S3 credential (Access Key +
-  Secret) do R2 scoped ao bucket de backups.
+  **Object Read only**, restrita ao bucket `stakeframe-backups`, permitindo
+  leitura e listagem de objetos, sem escrita, exclusão ou administração.
+  Criar como S3 credential (Access Key + Secret) do R2 scoped ao bucket de
+  backups.
 - A credencial de leitura deve permitir `restic snapshots/dump/check` sem
   lock de escrita; se um `prune` concorrente causar erro de leitura, o ensaio
   falha com segurança e deve ser repetido após o ciclo (OPERATIONS.md:139-142).
@@ -198,7 +199,7 @@ git — o conteúdo aprovado é o mesmo; instalar na VPS a partir do checkout gi
   (`mkdir mode 0700`); relatórios `*.json` 0600.
 - `/run/stakeframe-restore` — `RuntimeDirectory` (0700), efêmero.
 - Novos secrets (mutação B): `r2_backup_restore_access_key`,
-  `r2_backup_restore_secret_key` em `/etc/stakeframe/secrets/`, `opc:opc 0640`
+  `r2_backup_restore_secret_key` em `/etc/stakeframe/secrets/`, `root:opc 0640`
   (padrão dos demais), além de `postgres_password`/`db_password` EFÊMEROS
   gerados por run em `/run/stakeframe-restore/<project>/` (0700, arquivos 0444) — nunca persistidos.
 
@@ -275,7 +276,7 @@ label=io.stakeframe.restore=<project>`); investigar e remover com os
 | Ref | Mutação                             | Escopo                                                                                                                                                                                |
 | --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A   | Criar credencial R2 somente leitura | Token S3 custom no Cloudflare, Object Read apenas no bucket `stakeframe-backups`; sem write/delete/admin                                                                              |
-| B   | Instalar os 2 segredos              | `/etc/stakeframe/secrets/r2_backup_restore_access_key` e `r2_backup_restore_secret_key`, `opc:opc 0640`, valores nunca em log                                                         |
+| B   | Instalar os 2 segredos              | `/etc/stakeframe/secrets/r2_backup_restore_access_key` e `r2_backup_restore_secret_key`, `root:opc 0640`, valores nunca em log                                                        |
 | C   | Instalar Node/config/checkout       | `/opt/stakeframe-tools/node` (Node 24.20.0 linux-arm64, hash conferido), `/opt/stakeframe` checkout revisado, `/etc/stakeframe/docker` 0700; conferir `deployment.env`                |
 | D   | Executar o primeiro restore isolado | Janela D da seção 7, gates 1-5, sem merge-e-executa                                                                                                                                   |
 | E   | Instalar e habilitar o timer mensal | `cp infra/production/stakeframe-restore.{service,timer} /etc/systemd/system/` + `daemon-reload` + `enable --now stakeframe-restore.timer`; só após 1º ensaio bem-sucedido na janela D |

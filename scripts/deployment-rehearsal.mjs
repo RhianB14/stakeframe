@@ -253,6 +253,22 @@ async function main() {
         target: '/var/run/docker.sock',
       });
     },
+    (value) => {
+      value.services['restore-postgres'].volumes[0].source = 'stakeframe-production_database';
+    },
+    (value) => {
+      value.services['restore-postgres'].volumes.splice(0, 1);
+    },
+    (value) => {
+      value.services['restore-postgres'].volumes.push({
+        type: 'bind',
+        source: '/var/lib/docker/volumes/stakeframe-production_database/_data',
+        target: '/production-db',
+      });
+    },
+    (value) => {
+      delete value.services['restore-postgres'].volumes[1].read_only;
+    },
   ]) {
     const invalid = structuredClone(restoreShape);
     mutate(invalid);
