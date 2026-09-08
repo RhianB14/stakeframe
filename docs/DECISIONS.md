@@ -388,6 +388,7 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** um índice por arquitetura inclui a imagem e sua proveniência;
   não é índice multiarch nem assinatura independente. Política de perda do host
   e gates em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
+
 ## D024 — Restauração da dinâmica normal de papéis (2026-09-08)
 
 - **Decisão:** encerrar em 08/09/2026 a diretriz temporária de 06/09/2026 que
