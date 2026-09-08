@@ -1,9 +1,13 @@
 # STK-M0-25 — Reconciliação do estado operacional
 
 Data: 2026-09-08. Issue: [#67](https://github.com/RhianB14/stakeframe/issues/67).
-Base: `main` `5a84beb6e60014b2e610101682f95e03c7862399`. Execução e verificação
-pelo Codex. Autorização cobre somente documentação — issue, branch, commit, push
-e PR; nenhuma mudança na VPS, R2, DNS, GitHub ou credenciais foi executada.
+Base: `main` `5a84beb6e60014b2e610101682f95e03c7862399`. Autoria: STK-M0-25A e
+25B foram executadas e verificadas pelo Hermes sob autorizações específicas do
+Codex, com evidências retransmitidas pelo proprietário; o Codex revisa a
+evidência e a PR, sem apresentar essa revisão como verificação independente da
+VPS. A STK-M0-25C cobre exclusivamente a alteração documental — issue, branch,
+commit, push e PR; as mutações de 25A (permissões) e 25B (remoção da cópia
+redundante) já ocorreram na VPS sob as autorizações correspondentes.
 
 ## Contexto
 
@@ -42,8 +46,13 @@ segredos era um resíduo da mesma janela.
 - Retenção ativa: `BACKUP_CONFIRM=production-with-retention` e
   `retention: true` em `backup.json`.
 - Estado contínuo `state=ready`, com cutoff/completedAt avançando a cada ciclo.
-- Credenciais R2 `reader`, `writer` e `backup` presentes; `r2_backup_restore_*`
-  permanecem ausentes (instalação futura com autorização própria).
+- Uso em operação: o daemon `operations` usa a credencial de backup e a
+  credencial reader de anexos; a credencial writer de anexos não é usada pelo
+  daemon. As credenciais `r2_backup_restore_*` permanecem ausentes
+  (instalação futura no ensaio de restauração, com autorização própria).
+  Presença de arquivo não equivale a validação operacional: com
+  `imageCount=0`, reader/writer de anexos ainda não foram validadas com
+  anexos reais.
 
 ## 3. Ciclos comprovados e retenção
 
@@ -66,7 +75,7 @@ segredos era um resíduo da mesma janela.
 | `/etc/stakeframe/secrets`             | root:root 0755                                         | root:root 0700 |
 | `/etc/stakeframe/secrets/secrets`     | root:root 0600                                         | root:root 0700 |
 | 16 arquivos do diretório aninhado     | root:root 0666                                         | root:root 0600 |
-| Canônicos `/etc/stakeframe/secrets/*` | 16 × root:opc 0640; `postgres_password` root:root 0600 | intactos       |
+| Canônicos `/etc/stakeframe/secrets/*` | 15 × root:opc 0640; `postgres_password` root:root 0600 | intactos       |
 
 Correção técnica: a mudança de 0600 para 0700 no diretório aninhado
 **acrescentou permissões somente ao proprietário do diretório; grupo e outros
@@ -96,9 +105,10 @@ bytes contra os canônicos resultou 16/16 `SAME`.
 
 ## 6. Arquivos canônicos preservados
 
-16 arquivos root:opc modo 0640 e `postgres_password` root:root modo 0600
-permanecem em `/etc/stakeframe/secrets`, com bytes idênticos à baseline
-(verificado em 25A e 25B); `deployment.env` root:root 0600 intocado.
+O conjunto canônico tem 16 arquivos no total: 15 em root:opc modo 0640 e
+`postgres_password` em root:root modo 0600. Todos permanecem em
+`/etc/stakeframe/secrets` com bytes idênticos à baseline (verificado em 25A e
+25B); `deployment.env` root:root 0600 intocado.
 
 ## 7. Saúde dos containers
 
@@ -111,18 +121,21 @@ relacionado às janelas 25A/25B.
 
 Comprovado nesta reconciliação:
 
-- [x] Backup externo ativo e recorrente (ciclos de 30 min, retenção ativa,
-      estado `ready`, 35 ciclos verificados).
+- Backup externo ativo e recorrente (ciclos de 30 min, retenção ativa, estado
+  `ready`, 36 ciclos verificados).
 
-Continua pendente, exigindo autorização e janela próprias:
+Pendente, exigindo autorização e janela próprias:
 
-- [ ] Restauração em ambiente isolado, com anexos reais e manifesto (hoje
-      `imageCount=0` — a ausência de anexos impede comprovar esse cenário).
-- [ ] Alerta de atraso de backup.
-- [ ] Timer mensal de ensaio de restauração.
-- [ ] Métricas RPO/RTO medidas.
-- [ ] Monitor externo.
-- [ ] Instalação das credenciais `r2_backup_restore_*`.
+- Restauração em ambiente isolado, com anexos reais e manifesto (hoje
+  `imageCount=0` — a ausência de anexos impede comprovar esse cenário).
+- Alerta de atraso de backup.
+- Timer mensal de ensaio de restauração.
+- Métricas RPO/RTO medidas.
+- Monitor externo.
+- Instalação e validação das credenciais `r2_backup_restore_*`.
+
+Este documento é evidência, não um quinto checklist canônico: usa listas
+textuais "Comprovado"/"Pendente" e não entra na contagem de checkboxes.
 
 Nenhum destes itens foi marcado como concluído em nenhum documento. Login
 Google real, Telegram contínuo e operação integral sem PC permanecem sem
@@ -134,9 +147,9 @@ Ciclo automático seguinte: `OPS_BACKUP_VERIFIED` na fronteira 12:30 UTC;
 `backup.json` com novo cutoff/completedAt e `state=ready`; cinco containers
 `healthy` com RestartCount inalterado; zero WARN/ERR/FAIL desde a exclusão.
 
-Contagens documentais (checkboxes em `docs/*.md`, incluindo este documento):
-83/116 → 88/127 itens concluídos. Os cinco novos itens concluídos correspondem
-à ativação comprovada; os onze itens novos são pendências explicitadas pela
-divisão dos requisitos compostos, o que reduz a taxa percentual (71,6% →
-69,3%) sem indicar regressão — o estado real é o mesmo, agora descrito sem
-agregações que ocultavam pendências.
+Contagens documentais (checkboxes dos quatro documentos canônicos de
+checklist: M0-CHECKLIST, DEPLOYMENT, NETWORK-SECURITY e RECOVERY):
+83/109 → 87/113 itens concluídos (76% → 77%). Foram adicionados quatro estados
+concluídos e quatro divisões de denominador (pendências antes agregadas em
+itens compostos, agora explícitas), sem ocultar pendências reais. Este
+documento, por ser evidência, não entra na contagem.

@@ -5,7 +5,7 @@ ativação operacional (repositório Restic e daemon de backup com retenção)
 ocorreu em 07/09/2026 junto à janela do piloto e está registrada em
 [M0-25-VALIDATION.md](M0-25-VALIDATION.md). O monitor externo, o ensaio mensal
 agendado e a validação com anexos reais continuam sujeitos a autorização
-específica. Codex é autor e executor das verificações.
+específica. Hermes executa sob autorização específica; Codex revisa e autoriza.
 
 ## Composição e credenciais
 

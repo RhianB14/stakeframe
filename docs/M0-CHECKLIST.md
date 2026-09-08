@@ -31,8 +31,8 @@ reconciliou o estado operacional: backup externo R2 ativo desde 07/09/2026,
 permissões do diretório de segredos corrigidas e cópia redundante aninhada
 removida ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
 O avanço ocorre por determinação
-do proprietário (D019), preservando piloto, ativação operacional e release
-como pendências. STK-M0-16 foi
+do proprietário (D019), preservando operação integral, restauração, alertas,
+monitor e release como pendências. STK-M0-16 foi
 integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
 cinco checks aprovados na `main` `f5e6a59`. STK-M0-15 foi
 integrada pela [PR #31](https://github.com/RhianB14/stakeframe/pull/31), com
@@ -77,21 +77,27 @@ da STK-M0-06 está registrada abaixo; a STK-M0-07 não executa ações remotas.
 O M0 ainda está em andamento e só é considerado concluído quando todos os
 itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
-## Resumo de reconciliação — 2026-09-07
+## Resumo de reconciliação — 2026-09-08
 
 Auditoria dos checkboxes rastreados nos quatro documentos de checklist
 ([M0-CHECKLIST.md](M0-CHECKLIST.md), [DEPLOYMENT.md](DEPLOYMENT.md),
 [NETWORK-SECURITY.md](NETWORK-SECURITY.md), [RECOVERY.md](RECOVERY.md)),
-conferidos contra a evidência real na `main` (squash `fb4b78a`, PRs #64 e #65
-integradas):
+conferidos contra a evidência real na `main` (`5a84beb`, PRs #64, #65 e #66
+integradas) e nas janelas STK-M0-25A/25B
+([M0-25-VALIDATION.md](M0-25-VALIDATION.md)):
 
 | Documento           | Concluídos | Abertos | Total   | Percentual |
 | ------------------- | ---------- | ------- | ------- | ---------- |
-| M0-CHECKLIST.md     | 74         | 13      | 87      | 85%        |
-| DEPLOYMENT.md       | 4          | 4       | 8       | 50%        |
+| M0-CHECKLIST.md     | 76         | 14      | 90      | 84%        |
+| DEPLOYMENT.md       | 6          | 3       | 9       | 67%        |
 | NETWORK-SECURITY.md | 5          | 6       | 11      | 45%        |
 | RECOVERY.md         | 0          | 3       | 3       | 0%         |
-| **Total**           | **83**     | **26**  | **109** | **76%**    |
+| **Total**           | **87**     | **26**  | **113** | **77%**    |
+
+Em relação à auditoria de 2026-09-07 (83/109, 76%), foram adicionados quatro
+estados concluídos (ativação comprovada nas janelas STK-M0-25A/25B) e quatro
+divisões de denominador: pendências antes agregadas em itens compostos foram
+explicitadas como itens próprios, sem ocultar pendências.
 
 Percentual calculado como concluídos / total. Esta contagem **não substitui os
 critérios de aceite**: percentual alto não autoriza operação, deploy, release
@@ -336,12 +342,13 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Quatro credenciais R2 de produção criadas com escopos exclusivos de
       leitura e escrita para cada bucket; custódia privada e 34 testes
       aprovados, STK-M0-21 ([issue #52](https://github.com/RhianB14/stakeframe/issues/52)).
-- [x] Instalar e validar as credenciais de backup na operação R2 da VPS:
-      writer/backup em uso pelo daemon, 36 ciclos com retenção ativa e
-      `state=ready` desde 07/09/2026 ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
-- [ ] Validar a credencial de leitura em restauração real; instalar e validar
-      as credenciais de restauração (`r2_backup_restore_*`); não reutilizar
-      automaticamente o token temporário de ensaio.
+- [x] Credencial R2 de backup instalada e validada pelos ciclos: 36 ciclos com
+      retenção ativa e `state=ready` desde 07/09/2026
+      ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
+- [ ] Validar reader/writer de anexos com operação real (com `imageCount=0`
+      não há validação de anexos) e instalar/validar as credenciais de
+      restauração (`r2_backup_restore_*`) no ensaio de restauração; não
+      reutilizar automaticamente o token temporário de ensaio.
 
 ### IA direta com Gemini
 
