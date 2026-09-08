@@ -54,9 +54,27 @@ foram revalidados após a propagação.
 O piloto não altera a autorização para produção contínua, retenção externa de
 backups, ativação do Telegram ou instalação de credenciais R2.
 
+**Divergência operacional (registrada em 08/09/2026):** apesar de a retenção
+externa de backups e a instalação de credenciais R2 estarem explicitamente
+fora do escopo registrado acima, o repositório Restic no R2, a retenção e o
+daemon de backup foram ativados nesta mesma janela. A divergência foi
+descoberta em 08/09/2026; cronologia e evidência em
+[M0-25-VALIDATION.md](M0-25-VALIDATION.md).
+
 ## Pendência operacional
 
 As verificações somente leitura encontraram todos os cinco containers saudáveis
-e `OPS_BACKUP_VERIFIED` nos logs. A instalação/ajuste de permissões do diretório
-de segredos e a validação de backups externos R2 continuam pendentes; não foram
-alterados nesta execução porque exigem autorização específica de produção.
+e `OPS_BACKUP_VERIFIED` nos logs; nada foi alterado nesta execução.
+
+Reconciliação posterior (08/09/2026): a ativação do daemon de backup ocorreu na
+mesma janela — primeiro `OPS_SCHEDULER_READY` às 19:09:55 UTC e primeiro
+`OPS_BACKUP_VERIFIED` às 19:10:20 UTC de 07/09 — fora do escopo registrado
+para esta execução. O comando exato de ativação não pôde ser recuperado; o
+próprio registro M0-24 atribui a execução da janela ao Codex, e não há
+evidência para atribuir a ativação ao Hermes. Após a descoberta, o Codex
+autorizou explicitamente manter o daemon em execução durante as janelas
+STK-M0-25A/25B, para não reduzir a proteção existente; as permissões do
+diretório de segredos e a duplicação de segredos foram corrigidas
+separadamente em 25A/25B. Esta reconciliação não transforma retroativamente a
+ativação inicial em ação previamente autorizada. Evidência integral em
+[M0-25-VALIDATION.md](M0-25-VALIDATION.md).
