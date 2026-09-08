@@ -73,6 +73,26 @@ da STK-M0-06 está registrada abaixo; a STK-M0-07 não executa ações remotas.
 O M0 ainda está em andamento e só é considerado concluído quando todos os
 itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
+## Resumo de reconciliação — 2026-09-07
+
+Auditoria dos checkboxes rastreados nos quatro documentos de checklist
+([M0-CHECKLIST.md](M0-CHECKLIST.md), [DEPLOYMENT.md](DEPLOYMENT.md),
+[NETWORK-SECURITY.md](NETWORK-SECURITY.md), [RECOVERY.md](RECOVERY.md)),
+conferidos contra a evidência real na `main` (squash `fb4b78a`, PRs #64 e #65
+integradas):
+
+| Documento           | Concluídos | Abertos | Total   | Percentual |
+| ------------------- | ---------- | ------- | ------- | ---------- |
+| M0-CHECKLIST.md     | 74         | 13      | 87      | 85%        |
+| DEPLOYMENT.md       | 4          | 4       | 8       | 50%        |
+| NETWORK-SECURITY.md | 5          | 6       | 11      | 45%        |
+| RECOVERY.md         | 0          | 3       | 3       | 0%         |
+| **Total**           | **83**     | **26**  | **109** | **76%**    |
+
+Percentual calculado como concluídos / total. Esta contagem **não substitui os
+critérios de aceite**: percentual alto não autoriza operação, deploy, release
+ou janela de rede; cada item exige a evidência descrita.
+
 ## Concluído nesta tarefa (STK-M0-01)
 
 - [x] Inspeção do ambiente local (Git, gh, Node, pnpm, Docker) e da conta
@@ -191,8 +211,8 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 - [x] Consultas adicionais de painel sinalizadas ao Codex em
       ACCESS-RECOVERY §6; inspeção OCI anterior permanece válida; painel não
       repetido.
-- [ ] Executar o teste de recuperação (fases A–F) — **executado na STK-M0-05**
-      dentro da janela autorizada (registro em
+- [x] Executar o teste de recuperação (fases A–F) — executado e verificado na
+      STK-M0-05 dentro da janela autorizada (registro em
       [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9); a preparação histórica
       deste bloco permanece como registro.
 
@@ -250,7 +270,10 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       retornou `ST 0` em 2026-09-05 e a página oficial informa R$ 40,00 por
       um ano. Nenhuma compra foi realizada; a decisão continua do proprietário.
 - [x] Atualização de 2026-09-06: proprietário informou a compra de
-      `stakeframe.com.br` pela HostGator. DNS e HTTPS continuam sem validação.
+      `stakeframe.com.br` pela HostGator. O registro A foi corrigido para
+      `129.146.113.111` e o HTTPS foi verificado no piloto de M0-24: o Caddy
+      obteve o certificado Let's Encrypt e os probes públicos passaram
+      ([M0-24-VALIDATION.md](M0-24-VALIDATION.md)).
 
 ### STK-M0-07 — Base local da aplicação
 
@@ -337,15 +360,20 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
 
 - [x] STK-M0-12: configuração de produção com autenticação obrigatória, segredos
       por arquivo, banco sem superusuário na aplicação, HTTPS e ensaio local
-      descartável com persistência após reinício. Isso não conclui o deploy.
+      descartável com persistência após reinício. O deploy foi registrado à
+      parte no piloto de M0-24 e a operação contínua permanece pendente de
+      autorização.
       [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md) e
       [M0-12-VALIDATION.md](M0-12-VALIDATION.md).
 - [x] Docker Compose inicial (app, api, worker, PostgreSQL, Caddy)
       com volumes e redes internas.
       Base local disponível na STK-M0-07; configuração de produção
       preparada na STK-M0-12; piloto ARM64 executado em M0-24.
-- [ ] HTTPS com Caddy + renovação; DNS corrigido e certificado Let's Encrypt
-      obtido pelo Caddy, conforme o piloto de M0-24.
+- [x] DNS corrigido para `129.146.113.111`, HTTPS ativo e certificado
+      Let's Encrypt emitido pelo Caddy, conforme o piloto de M0-24
+      ([M0-24-VALIDATION.md](M0-24-VALIDATION.md)).
+- [ ] Renovação automática do certificado comprovada em operação; a emissão
+      inicial não comprova o ciclo de renovação do Caddy.
 - [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
       teste de restauração demonstrado (RPO 1h / RTO 4h).
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
@@ -358,9 +386,9 @@ itens abaixo estiverem verificados e o Codex autorizar o avanço.
       dados/ACLs conferidos e chave preservada fora da VPS.
       [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Não ativa backups reais.
 - [ ] Monitoramento externo de disponibilidade e alertas deduplicados.
-- [ ] Procedimentos documentados de deploy, migração e rollback
-      ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12;
-      validação na VPS e reversão real ainda pendentes).
+- [x] Procedimentos documentados de deploy, migração e rollback
+      ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12 e
+      exercitados no piloto M0-24; a reversão real ainda não foi executada).
 
 ## Registro de decisões pendentes para o Codex
 
