@@ -5,7 +5,10 @@
 > Evidências externas em [M0-13-VALIDATION.md](M0-13-VALIDATION.md). STK-M0-18
 > implementa backup completo da aplicação, retenção histórica, agendamento,
 > quarentena de recuperação e monitor; procedimentos em [OPERATIONS.md](OPERATIONS.md).
-> A ativação e validação com dados de produção continuam pendentes.
+> A ativação e validação com dados de produção continuam pendentes. O backup
+> externo R2 está ativo desde 07/09/2026, com ciclos de 30 minutos e retenção
+> ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)); a restauração integral, o alerta
+> de atraso, o timer mensal e as métricas RPO/RTO permanecem pendentes.
 
 ## Objetivos (do plano mestre)
 

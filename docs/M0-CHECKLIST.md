@@ -26,6 +26,10 @@ e todos os serviços ficaram saudáveis. A evidência está em
 o Caddy obteve o certificado Let's Encrypt e os probes públicos passaram; o
 início do fluxo OAuth, o callback seguro e a recusa sem sessão foram
 verificados, mas o login real do proprietário permanece pendente.
+STK-M0-25 ([issue #67](https://github.com/RhianB14/stakeframe/issues/67))
+reconciliou o estado operacional: backup externo R2 ativo desde 07/09/2026,
+permissões do diretório de segredos corrigidas e cópia redundante aninhada
+removida ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
 O avanço ocorre por determinação
 do proprietário (D019), preservando piloto, ativação operacional e release
 como pendências. STK-M0-16 foi
@@ -332,8 +336,12 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Quatro credenciais R2 de produção criadas com escopos exclusivos de
       leitura e escrita para cada bucket; custódia privada e 34 testes
       aprovados, STK-M0-21 ([issue #52](https://github.com/RhianB14/stakeframe/issues/52)).
-- [ ] Instalar e validar essas credenciais na operação R2 da VPS;
-      não reutilizar automaticamente o token temporário de ensaio.
+- [x] Instalar e validar as credenciais de backup na operação R2 da VPS:
+      writer/backup em uso pelo daemon, 36 ciclos com retenção ativa e
+      `state=ready` desde 07/09/2026 ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
+- [ ] Validar a credencial de leitura em restauração real; instalar e validar
+      as credenciais de restauração (`r2_backup_restore_*`); não reutilizar
+      automaticamente o token temporário de ensaio.
 
 ### IA direta com Gemini
 
@@ -374,8 +382,12 @@ ou janela de rede; cada item exige a evidência descrita.
       ([M0-24-VALIDATION.md](M0-24-VALIDATION.md)).
 - [ ] Renovação automática do certificado comprovada em operação; a emissão
       inicial não comprova o ciclo de renovação do Caddy.
-- [ ] Backups externos criptografados (R2) a cada 30 min + alerta de atraso;
-      teste de restauração demonstrado (RPO 1h / RTO 4h).
+- [x] Backups externos criptografados (R2) a cada 30 min: ativos desde
+      07/09/2026, 36 ciclos verificados, retenção ativa e estado `ready`
+      ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
+- [ ] Alerta de atraso de backup ativo.
+- [ ] Teste de restauração demonstrado com dados de produção e RPO 1h / RTO 4h
+      medidos.
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
       de senha, criptografia Restic e restauração em outro cluster, conferindo
       dados, proprietários, ACLs, recusas e limpeza. Sem acesso ao banco real.

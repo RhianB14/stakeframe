@@ -1,8 +1,11 @@
 # Operação, backups e alertas
 
 STK-M0-18 implementa a configuração operacional e os ensaios isolados. A
-ativação na VPS, os segredos, o monitor externo e o piloto continuam sujeitos
-à autorização explícita de produção. Codex é autor e executor das verificações.
+ativação operacional (repositório Restic e daemon de backup com retenção)
+ocorreu em 07/09/2026 junto à janela do piloto e está registrada em
+[M0-25-VALIDATION.md](M0-25-VALIDATION.md). O monitor externo, o ensaio mensal
+agendado e a validação com anexos reais continuam sujeitos a autorização
+específica. Codex é autor e executor das verificações.
 
 ## Composição e credenciais
 

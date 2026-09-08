@@ -57,6 +57,11 @@ backups, ativação do Telegram ou instalação de credenciais R2.
 ## Pendência operacional
 
 As verificações somente leitura encontraram todos os cinco containers saudáveis
-e `OPS_BACKUP_VERIFIED` nos logs. A instalação/ajuste de permissões do diretório
-de segredos e a validação de backups externos R2 continuam pendentes; não foram
-alterados nesta execução porque exigem autorização específica de produção.
+e `OPS_BACKUP_VERIFIED` nos logs; nada foi alterado nesta execução.
+
+Reconciliação posterior (08/09/2026): a ativação do daemon de backup ocorreu na
+mesma janela — primeiro `OPS_SCHEDULER_READY` às 19:09:55 UTC e primeiro
+`OPS_BACKUP_VERIFIED` às 19:10:20 UTC de 07/09. As permissões do diretório de
+segredos foram corrigidas e a cópia redundante aninhada foi removida na
+STK-M0-25A/25B, e o backup externo R2 foi verificado ativo e recorrente.
+Evidência integral em [M0-25-VALIDATION.md](M0-25-VALIDATION.md).

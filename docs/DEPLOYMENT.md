@@ -50,9 +50,13 @@ resultados estão em [M0-24-VALIDATION.md](M0-24-VALIDATION.md).
 ## Operação futura, somente após autorização
 
 Executar no checkout revisado da VPS, com arquivo de configuração privado.
-Os comandos abaixo são o procedimento preparado para a base; não foram executados
-na VPS. Para o piloto completo, acrescentar os overlays e o perfil descritos em
-[OPERATIONS.md](OPERATIONS.md), inicializar o backup e ativar operações somente
+Os comandos abaixo são o procedimento preparado para a base. O piloto de M0-24
+executou a sequência de base e, na mesma janela de 07/09/2026, o repositório de
+backup foi inicializado e o perfil `operations` foi ativado com retenção
+(`BACKUP_CONFIRM=production-with-retention`); a evidência está em
+[M0-24-VALIDATION.md](M0-24-VALIDATION.md) e
+[M0-25-VALIDATION.md](M0-25-VALIDATION.md). Para novas execuções completas,
+acrescentar os overlays e o perfil descritos em [OPERATIONS.md](OPERATIONS.md)
 dentro da autorização que inclua retenção, integrações e agendamento.
 
 ```bash
@@ -94,12 +98,14 @@ Registrar commit, digests, horário, resultados e autorização no relatório.
       esperado.
 - [x] Imagens publicadas por digest e artefato de release revisado; publicação
       #10 e execução ARM64 estão registradas em `M0-24-VALIDATION.md`.
-- [ ] Backup externo funcionando e restauração testada.
-- [ ] Segredos de produção configurados fora do repositório — parcial: a
-      configuração privada em `/etc/stakeframe/deployment.env` e os arquivos
-      de segredos montados foram usados no piloto M0-24; o ajuste de
-      permissões do diretório de segredos na VPS segue pendente
-      ([M0-24-VALIDATION.md](M0-24-VALIDATION.md)).
+- [x] Backup externo funcionando: ativo e recorrente desde 07/09/2026, ciclos
+      de 30 minutos com retenção ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
+- [ ] Restauração testada em ambiente isolado com dados de produção.
+- [x] Segredos de produção configurados fora do repositório: configuração
+      privada em `/etc/stakeframe/deployment.env` e arquivos de segredos
+      montados usados no piloto M0-24; permissões corrigidas (canônico 0700,
+      arquivos 0640/0600) e cópia redundante aninhada removida
+      ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
 - [ ] OAuth de produção e procedimento de reversão validados; o início do
       fluxo, o callback seguro e a recusa sem sessão foram verificados, mas o
       login real do proprietário permanece pendente.
