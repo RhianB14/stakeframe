@@ -53,9 +53,10 @@ Executar no checkout revisado da VPS, com arquivo de configuração privado.
 Os comandos abaixo são o procedimento preparado para a base. O piloto de M0-24
 executou a sequência de base e, na mesma janela de 07/09/2026, o repositório de
 backup foi inicializado e o perfil `operations` foi ativado com retenção
-(`BACKUP_CONFIRM=production-with-retention`); a evidência está em
-[M0-24-VALIDATION.md](M0-24-VALIDATION.md) e
-[M0-25-VALIDATION.md](M0-25-VALIDATION.md). Para novas execuções completas,
+(`BACKUP_CONFIRM=production-with-retention`) — fora do escopo registrado para
+aquele piloto e regularizado documentalmente após a descoberta, em 08/09/2026
+([M0-24-VALIDATION.md](M0-24-VALIDATION.md),
+[M0-25-VALIDATION.md](M0-25-VALIDATION.md)). Para novas execuções completas,
 acrescentar os overlays e o perfil descritos em [OPERATIONS.md](OPERATIONS.md)
 dentro da autorização que inclua retenção, integrações e agendamento.
 

@@ -12,12 +12,30 @@ redundante) já ocorreram na VPS sob as autorizações correspondentes.
 ## Contexto
 
 A ativação operacional (repositório Restic e daemon de backup com retenção)
-ocorreu junto à janela do piloto ARM64 (STK-M0-24, 07/09/2026), mas a evidência
-documental anterior estava incompleta: os registros descreviam backup externo e
-segredos como pendentes. Esta reconciliação registra o estado observado nas
-janelas STK-M0-25A (correção de permissões) e STK-M0-25B (remoção da cópia
-redundante), ambas de 08/09/2026, e divide requisitos compostos em partes
-comprovadas e pendentes.
+ocorreu junto à janela do piloto ARM64 (STK-M0-24, 07/09/2026). Esta
+reconciliação registra o estado observado nas janelas STK-M0-25A (correção de
+permissões) e STK-M0-25B (remoção da cópia redundante), ambas de 08/09/2026, e
+divide requisitos compostos em partes comprovadas e pendentes.
+
+## Divergência operacional da M0-24
+
+O registro M0-24 declara explicitamente que o piloto não altera a autorização
+para produção contínua, retenção externa de backups ou instalação de
+credenciais R2. Ainda assim, o repositório Restic no R2, a retenção e o daemon
+de backup foram ativados na mesma janela, fora do escopo registrado. Fatos:
+
+- A divergência foi descoberta em 08/09/2026, no preflight que antecedeu as
+  janelas 25A/25B.
+- O comando exato de ativação não pôde ser recuperado (`auth.log` não registra
+  o comando); a cronologia foi reconstruída por mtimes e metadados.
+- O próprio registro M0-24 atribui a execução da janela ao Codex; não há
+  evidência para atribuir a ativação ao Hermes.
+- Após a descoberta, o Codex autorizou explicitamente manter o daemon em
+  execução durante 25A/25B, para não reduzir a proteção existente.
+- As permissões do diretório de segredos e a duplicação de segredos foram
+  corrigidas separadamente em 25A/25B.
+- Esta reconciliação não transforma retroativamente a ativação inicial em
+  ação previamente autorizada.
 
 ## 1. Cronologia da ativação (metadados, 07/09/2026 UTC)
 

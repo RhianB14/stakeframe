@@ -2,7 +2,9 @@
 
 STK-M0-18 implementa a configuração operacional e os ensaios isolados. A
 ativação operacional (repositório Restic e daemon de backup com retenção)
-ocorreu em 07/09/2026 junto à janela do piloto e está registrada em
+ocorreu em 07/09/2026 junto à janela do piloto — fora do escopo registrado
+para aquela janela e regularizada documentalmente após a descoberta, em
+08/09/2026 — e está registrada em
 [M0-25-VALIDATION.md](M0-25-VALIDATION.md). O monitor externo, o ensaio mensal
 agendado e a validação com anexos reais continuam sujeitos a autorização
 específica. Hermes executa sob autorização específica; Codex revisa e autoriza.
