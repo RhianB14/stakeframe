@@ -5,7 +5,7 @@ STK-M0-28 (base `36c0e6386fb4cc47cb899e32ae70fc25877f043f`). A primeira
 tentativa (STK-M0-27) não alcançou o objetivo por causa da ausência do runtime
 root; a correção M0-28 (PR #84) tornou o runner autossuficiente. Este documento
 registra o novo resultado. O histórico da primeira tentativa permanece em
-[docs/M0-27-VALIDATION.md](docs/M0-27-VALIDATION.md), sem reescrita.
+[docs/M0-27-VALIDATION.md](M0-27-VALIDATION.md), sem reescrita.
 
 ## 1. Revalidação final (§5) — 13/13 gates aprovados
 

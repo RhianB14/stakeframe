@@ -200,5 +200,5 @@ ponta a ponta) foi alcançado na execução única autorizada pela STK-M0-29, ap
 a correção M0-28 (PR #84): `RESTORE_REHEARSAL_PASSED`, `RUNNER_EXIT=0`,
 `status=passed` com `cleanup=passed` e todos os critérios da autorização
 satisfeitos. Evidência completa em
-[docs/M0-29-VALIDATION.md](docs/M0-29-VALIDATION.md). As seções anteriores
+[docs/M0-29-VALIDATION.md](M0-29-VALIDATION.md). As seções anteriores
 deste documento permanecem sem reescrita.
