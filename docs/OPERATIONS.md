@@ -151,8 +151,18 @@ A instalação/ativação do timer só ocorre na janela autorizada.
 O primeiro ensaio deve ser executado na ativação, sem esperar pelo próximo mês:
 
 ```bash
-RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery /opt/stakeframe-tools/node/bin/node scripts/restore-rehearsal.mjs /etc/stakeframe/deployment.env
+sudo env \
+  RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery \
+  DOCKER_CONFIG=/etc/stakeframe/docker \
+  /opt/stakeframe-tools/node/bin/node \
+  /opt/stakeframe/scripts/restore-rehearsal.mjs \
+  /etc/stakeframe/deployment.env
 ```
+
+O runner cria `/run/stakeframe-restore` (0700, root:root) quando ausente e remove
+apenas o runtime root que ele próprio criou nesta execução; um diretório
+preexistente — inclusive o provisionado pelo `RuntimeDirectory` do systemd — é
+validado e preservado.
 
 O runner exige pelo menos 10 GiB e 20% livres no filesystem de dados do Docker
 antes de iniciar. Durante o ensaio, confere o espaço a cada cinco segundos e

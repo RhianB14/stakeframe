@@ -138,6 +138,17 @@ sudo env RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery \
   A nova execução da mutação D dependerá dessa correção revisada e de nova
   autorização operacional.
 
+  Encaminhamento (STK-M0-28): a correção do runner foi implementada e
+  encaminhada na PR de código dedicada (branch
+  `hermes/m0-28-restore-runtime-root`). O runner passa a criar o runtime root
+  `/run/stakeframe-restore` quando ausente (`0700`, `root:root`), recusar
+  arquivo, symlink, proprietário/grupo divergentes ou permissões mais amplas,
+  aceitar um diretório preexistente somente com `realpath` exato e só remover
+  o runtime root criado pela própria execução; o comando manual documentado
+  passou a incluir `DOCKER_CONFIG=/etc/stakeframe/docker`. Este registro não
+  altera o resultado da mutação D: ela permanece pendente e a execução
+  retratada neste documento continua sendo a única tentativa.
+
 ## 7. Baseline antes/depois (sanitizada)
 
 | Container                            | ID (prefixo)   | `StartedAt` (UTC)    | `RestartCount` | `OOMKilled` | Health  |

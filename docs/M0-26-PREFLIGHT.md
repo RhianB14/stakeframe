@@ -216,7 +216,12 @@ git — o conteúdo aprovado é o mesmo; instalar na VPS a partir do checkout gi
 - `/var/lib/stakeframe/restore-reports` — criado pelo unit
   (`StateDirectory=stakeframe/restore-reports`, 0700) e pelo runner
   (`mkdir mode 0700`); relatórios `*.json` 0600.
-- `/run/stakeframe-restore` — `RuntimeDirectory` (0700), efêmero.
+- `/run/stakeframe-restore` — `RuntimeDirectory` (0700) no unit, efêmero.
+  Na execução manual (sem `RuntimeDirectory`), o runner cria o diretório
+  (`0700`, `root:root`), valida diretório real, sem symlink, `realpath` exato,
+  proprietário `root:root` e modo exatamente `0700`, e só remove o runtime
+  root que ele mesmo criou nesta execução — um diretório preexistente é
+  preservado.
 - Novos secrets (mutação B): `r2_backup_restore_access_key`,
   `r2_backup_restore_secret_key` em `/etc/stakeframe/secrets/`, `root:opc 0640`
   (owner root deliberado; grupo opc e modo 0640), além de `postgres_password`/`db_password` EFÊMEROS
@@ -245,8 +250,11 @@ Execução (todos os comandos como root no host da VPS):
 systemctl list-timers 'stakeframe-restore*'
 
 # 2. Primeira execução manual, sem esperar o timer:
-sudo env RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery \
-  /opt/stakeframe-tools/node/bin/node /opt/stakeframe/scripts/restore-rehearsal.mjs \
+sudo env \
+  RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery \
+  DOCKER_CONFIG=/etc/stakeframe/docker \
+  /opt/stakeframe-tools/node/bin/node \
+  /opt/stakeframe/scripts/restore-rehearsal.mjs \
   /etc/stakeframe/deployment.env
 
 # 3. Verificações pós-execução:
