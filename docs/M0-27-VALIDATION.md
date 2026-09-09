@@ -192,3 +192,13 @@ Comparação mecânica antes/depois da execução: **idênticos em todos os camp
 - Hashes de artefatos truncados a 16 caracteres; IDs de container a 12;
   run id a 8. O relatório bruto permanece apenas em armazenamento privado na
   VPS (`/var/lib/stakeframe/restore-reports/`, `root:root 0600`).
+
+## 11. Referência ao novo resultado (STK-M0-29)
+
+O objetivo desta primeira execução (mutação D — validar o restore isolado de
+ponta a ponta) foi alcançado na execução única autorizada pela STK-M0-29, após
+a correção M0-28 (PR #84): `RESTORE_REHEARSAL_PASSED`, `RUNNER_EXIT=0`,
+`status=passed` com `cleanup=passed` e todos os critérios da autorização
+satisfeitos. Evidência completa em
+[docs/M0-29-VALIDATION.md](M0-29-VALIDATION.md). As seções anteriores
+deste documento permanecem sem reescrita.
