@@ -112,8 +112,23 @@ test('refuses an insecure runtime root mode', { skip: !posix }, async (t) => {
   const root = join(await tempBase(t), 'stakeframe-restore');
   await mkdir(root, { recursive: true, mode: 0o755 });
   await chmod(root, 0o755);
+  // Production mode enforcement against the real filesystem; identity stays
+  // neutralized because the test cannot run as root (mode is what is under test).
   await assert.rejects(
-    prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy }),
+    prepareRuntimeRoot({
+      rootPath: root,
+      policy: (info, code) =>
+        assertRootOwnedDirectory(
+          {
+            isDirectory: () => info.isDirectory(),
+            isSymbolicLink: () => info.isSymbolicLink(),
+            mode: info.mode,
+            uid: 0,
+            gid: 0,
+          },
+          code,
+        ),
+    }),
     (error) => error.message === RESTORE_RUNTIME_ROOT_REFUSED,
   );
 });

@@ -36,12 +36,18 @@ export function sanitizeFailureCode(error) {
     : RESTORE_FAILURE_GENERIC;
 }
 
+// Pure mode enforcement shared by the production policy and tests: exactly
+// 0700 effective, rejecting setuid/setgid/sticky and wider permissions.
+export function assertSafeDirectoryMode(info, code) {
+  if ((info.mode & 0o7777) !== 0o700) throw new Error(code);
+}
+
 // Production policy, pure so tests exercise it deterministically with synthetic
 // stat objects, without root and on any platform: a real directory (never a
 // symlink), exactly 0700, owned by root:root (UID/GID 0).
 export function assertRootOwnedDirectory(info, code) {
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error(code);
-  if ((info.mode & 0o7777) !== 0o700) throw new Error(code);
+  assertSafeDirectoryMode(info, code);
   if (info.uid !== 0 || info.gid !== 0) throw new Error(code);
 }
 
