@@ -461,24 +461,38 @@ test(
   async (t) => {
     const root = join(await tempBase(t), 'stakeframe-restore');
     const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
+    // Probe the privilege with a round trip first: without it the drift
+    // cannot be produced and the test must skip instead of passing vacuously.
+    const original = await lstat(root);
     try {
       await chown(root, 65534, 65534);
+      await chown(root, original.uid, original.gid);
     } catch {
       return t.skip('chown unavailable without privileges');
     }
-    // Same inode, changed owner: the full final validation must refuse it.
-    const fresh = await lstat(root);
-    assert.equal(fresh.ino, prepared.ino);
+    let calls = 0;
+    const ownerPolicy = async (info, code) => {
+      calls += 1;
+      if (calls === 1) return relaxedPolicy(info, code);
+      // The drift happens inside the cleanup window, between the first read
+      // and the final read — the real chown is injected at the second policy
+      // call, so the divergence only exists for the pre-rmdir validation.
+      await chown(root, 65534, 65534);
+      const drifted = await lstat(root);
+      if (drifted.uid === info.uid && drifted.gid === info.gid) return relaxedPolicy(info, code); // chown silently ineffective
+      throw new Error(code);
+    };
     await assert.rejects(
       removeRuntimeRoot({
         rootPath: root,
         createdRoot: true,
         ino: prepared.ino,
         dev: prepared.dev,
-        policy: relaxedPolicy,
+        policy: ownerPolicy,
       }),
       (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
     );
+    assert.equal(calls, 2);
     assert.ok((await lstat(root)).isDirectory());
   },
 );
