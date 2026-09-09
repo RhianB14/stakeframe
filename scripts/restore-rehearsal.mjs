@@ -14,6 +14,13 @@ import {
   statfs,
 } from 'node:fs/promises';
 import { execute, root, assertLocalEndpoint } from './recovery/runtime.mjs';
+import {
+  applyCleanupFailure,
+  prepareRuntimeRoot,
+  removeRuntimeRoot,
+  sanitizeFailureCode,
+  RESTORE_RUNTIME_ROOT,
+} from './deployment/restore-runtime-root.mjs';
 import { assertRestoreConfig } from './deployment/restore-config.mjs';
 import { restoreDiskReady } from './deployment/restore-capacity.mjs';
 import { publishRestoreStatus } from './deployment/restore-status.mjs';
@@ -21,7 +28,6 @@ import { publishRestoreStatus } from './deployment/restore-status.mjs';
 // Host-side monthly runner. Activation, secret provisioning and timer installation
 // require the reviewed production authorization. No Docker socket enters a container.
 const project = `stk-restore-${randomUUID().replaceAll('-', '')}`;
-const directory = `/run/stakeframe-restore/${project}`;
 const reports = '/var/lib/stakeframe/restore-reports';
 const known = ['postgres_password', 'db_password', 'empty.env', 'restore.json'];
 const controller = new AbortController();
@@ -30,6 +36,8 @@ process.once('SIGINT', () => controller.abort());
 let docker;
 let compose;
 let created = false;
+let directory;
+let runtimeRoot = undefined;
 let image;
 let capacityTimer;
 let report = { version: 1, project, status: 'failed', startedAt: new Date().toISOString() };
@@ -92,7 +100,13 @@ try {
       ...options,
       signal: options.ignoreAbort ? undefined : controller.signal,
     });
-  await mkdir(directory, { mode: 0o700 });
+  // Root provisioning is recorded before the individual directory is prepared,
+  // so a later failure still removes a root created by this run in the cleanup.
+  const rootInfo = await prepareRuntimeRoot({ rootPath: RESTORE_RUNTIME_ROOT });
+  runtimeRoot = { createdRoot: rootInfo.createdRoot, ino: rootInfo.ino, dev: rootInfo.dev };
+  report.runtimeRoot = rootInfo.createdRoot ? 'created' : 'preexisting';
+  const runtime = await prepareRuntimeRoot({ rootPath: RESTORE_RUNTIME_ROOT, project });
+  directory = runtime.directory;
   created = true;
   assert.equal(await realpath(directory), directory);
   for (const name of ['postgres_password', 'db_password'])
@@ -178,10 +192,11 @@ try {
     importsPaused: true,
     sessionsRevoked: true,
   };
-} catch {
+} catch (error) {
   process.exitCode = 1;
   report.status = 'failed';
   report.completedAt = new Date().toISOString();
+  report.failureCode = sanitizeFailureCode(error);
   console.error('RESTORE_REHEARSAL_FAILED');
 } finally {
   clearInterval(capacityTimer);
@@ -207,10 +222,12 @@ try {
       for (const entry of entries) await unlink(join(directory, entry.name));
       await rmdir(directory);
     }
+    if (runtimeRoot) await removeRuntimeRoot({ ...runtimeRoot, rootPath: RESTORE_RUNTIME_ROOT });
     report.cleanup = 'passed';
-  } catch {
-    report.cleanup = 'failed';
-    report.status = 'failed';
+  } catch (error) {
+    // The cleanup failure keeps its own sanitized code beside the main one;
+    // diagnostics from the main failure are never overwritten.
+    report = applyCleanupFailure(report, error);
     process.exitCode = 1;
   }
   if (
