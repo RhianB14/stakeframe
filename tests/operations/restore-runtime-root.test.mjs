@@ -15,10 +15,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  applyCleanupFailure,
   prepareRuntimeRoot,
   removeRuntimeRoot,
   sanitizeFailureCode,
   assertRootOwnedDirectory,
+  assertSameIdentity,
   RESTORE_RUNTIME_ROOT_REFUSED,
   RESTORE_INDIVIDUAL_DIRECTORY_REFUSED,
   RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
@@ -55,6 +57,8 @@ test('creates a missing runtime root with 0700 and the exclusive individual dire
     await removeRuntimeRoot({
       rootPath: root,
       createdRoot: prepared.createdRoot,
+      ino: prepared.ino,
+      dev: prepared.dev,
       policy: relaxedPolicy,
     }),
     true,
@@ -91,7 +95,7 @@ test('refuses a symlink at the runtime root', async (t) => {
   try {
     await symlink(target, root, 'dir');
   } catch {
-    t.skip('symlink creation unavailable on this platform');
+    return t.skip('symlink creation unavailable on this platform');
   }
   await assert.rejects(
     prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy }),
@@ -192,20 +196,21 @@ test('cleanup preserves a preexisting runtime root', async (t) => {
   assert.ok((await lstat(root)).isDirectory());
 });
 
-test('cleanup refuses a changed inode or identity and keeps the root', async (t) => {
+test('cleanup refuses a divergent identity and keeps the root', async (t) => {
   const base = await tempBase(t);
   const root = join(base, 'stakeframe-restore');
   await mkdir(root, { recursive: true, mode: 0o700 });
+  const real = await lstat(root);
   await assert.rejects(
-    removeRuntimeRoot({ rootPath: root, createdRoot: true, ino: 1, dev: 2, policy: relaxedPolicy }),
+    removeRuntimeRoot({
+      rootPath: root,
+      createdRoot: true,
+      ino: real.ino + 1,
+      dev: real.dev,
+      policy: relaxedPolicy,
+    }),
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
-  if (posix) {
-    await assert.rejects(
-      removeRuntimeRoot({ rootPath: root, createdRoot: true }),
-      (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
-    );
-  }
   assert.ok((await lstat(root)).isDirectory());
 });
 
@@ -224,6 +229,87 @@ test('cleanup refuses a non-empty runtime root and keeps the root', async (t) =>
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
   assert.ok((await lstat(root)).isDirectory());
+});
+
+test('cleanup without the captured ino or dev refuses before touching the filesystem', async () => {
+  const rootPath = join('restore-runtime-root-untouched', 'stakeframe-restore');
+  for (const identity of [{ dev: 2 }, { ino: 1 }, {}])
+    await assert.rejects(
+      removeRuntimeRoot({ rootPath, createdRoot: true, ...identity }),
+      (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+    );
+});
+
+test('assertSameIdentity anchors every revalidation read to the captured object', () => {
+  const identity = { ino: 11, dev: 22 };
+  assert.doesNotThrow(() =>
+    assertSameIdentity({ ino: 11, dev: 22 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+  );
+  assert.throws(
+    () => assertSameIdentity({ ino: 12, dev: 22 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.throws(
+    () => assertSameIdentity({ ino: 11, dev: 23 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+});
+
+test('cleanup refuses a replaced directory whose later read diverges', async (t) => {
+  const root = join(await tempBase(t), 'stakeframe-restore');
+  const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
+  await rmdir(root);
+  await mkdir(root, { mode: 0o700 });
+  const fresh = await lstat(root);
+  if (fresh.ino === prepared.ino && fresh.dev === prepared.dev) return;
+  // The replacement got a different object identity: cleanup must refuse and
+  // keep whatever object now sits at the path.
+  await assert.rejects(
+    removeRuntimeRoot({
+      rootPath: root,
+      createdRoot: true,
+      ino: prepared.ino,
+      dev: prepared.dev,
+      policy: relaxedPolicy,
+    }),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.ok((await lstat(root)).isDirectory());
+});
+
+test('a freshly created root failing validation is rolled back without traces', async (t) => {
+  const root = join(await tempBase(t), 'stakeframe-restore');
+  await assert.rejects(
+    prepareRuntimeRoot({
+      rootPath: root,
+      policy: () => {
+        throw new Error(RESTORE_RUNTIME_ROOT_REFUSED);
+      },
+    }),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_REFUSED,
+  );
+  await assert.rejects(lstat(root), { code: 'ENOENT' });
+});
+
+test('cleanup failure composes its own sanitized code without overwriting the main one', () => {
+  const failed = applyCleanupFailure(
+    { version: 1, status: 'failed', failureCode: RESTORE_RUNTIME_ROOT_REFUSED },
+    new Error('RECOVERY_COMMAND_FAILED'),
+  );
+  assert.equal(failed.failureCode, RESTORE_RUNTIME_ROOT_REFUSED);
+  assert.equal(failed.cleanupFailureCode, 'RECOVERY_COMMAND_FAILED');
+  assert.equal(failed.cleanup, 'failed');
+  assert.equal(failed.status, 'failed');
+
+  const flipped = applyCleanupFailure(
+    { version: 1, status: 'passed', cleanup: 'passed' },
+    new Error(`secret leak /private/path ${'a'.repeat(64)}`),
+  );
+  assert.equal(flipped.status, 'failed');
+  assert.equal(flipped.cleanup, 'failed');
+  assert.equal(flipped.cleanupFailureCode, RESTORE_FAILURE_GENERIC);
+  assert.ok(!JSON.stringify(flipped).includes('/private/path'));
+  assert.ok(!JSON.stringify(flipped).includes('secret leak'));
 });
 
 test('only allowlisted failure codes reach the report', () => {

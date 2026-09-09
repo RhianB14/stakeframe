@@ -15,6 +15,7 @@ import {
 } from 'node:fs/promises';
 import { execute, root, assertLocalEndpoint } from './recovery/runtime.mjs';
 import {
+  applyCleanupFailure,
   prepareRuntimeRoot,
   removeRuntimeRoot,
   sanitizeFailureCode,
@@ -223,9 +224,10 @@ try {
     }
     if (runtimeRoot) await removeRuntimeRoot({ ...runtimeRoot, rootPath: RESTORE_RUNTIME_ROOT });
     report.cleanup = 'passed';
-  } catch {
-    report.cleanup = 'failed';
-    report.status = 'failed';
+  } catch (error) {
+    // The cleanup failure keeps its own sanitized code beside the main one;
+    // diagnostics from the main failure are never overwritten.
+    report = applyCleanupFailure(report, error);
     process.exitCode = 1;
   }
   if (

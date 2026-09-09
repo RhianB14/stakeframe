@@ -51,6 +51,31 @@ export function assertRootOwnedDirectory(info, code) {
   if (info.uid !== 0 || info.gid !== 0) throw new Error(code);
 }
 
+// Pure identity comparison anchored to the stat captured when the run created
+// the root: every revalidation read must describe that same object.
+export function assertSameIdentity(info, identity, code) {
+  if (info.ino !== identity.ino || info.dev !== identity.dev) throw new Error(code);
+}
+
+// Structural-only policy for the internal rollback of a just-created root
+// whose validation failed: the production policy already refused that root by
+// definition, so the rollback proves bare structure, emptiness and identity.
+export function assertStructuralDirectory(info, code) {
+  assertDirectoryShape(info, code);
+}
+
+// Compose a cleanup failure into the private report: the cleanup gets its own
+// sanitized code beside — never over — the main failure code, and the run is
+// failed even when the restore itself had passed.
+export function applyCleanupFailure(report, error) {
+  return {
+    ...report,
+    cleanup: 'failed',
+    status: 'failed',
+    cleanupFailureCode: sanitizeFailureCode(error),
+  };
+}
+
 // Structural checks applied to every accepted directory on every platform.
 // Identity and mode stay in the policy so CI can exercise the real filesystem
 // without root while production keeps enforcing UID/GID 0.
@@ -107,6 +132,7 @@ export async function prepareRuntimeRoot({
     info = undefined;
   }
   let createdRoot = false;
+  let initialIdentity;
   if (info === undefined) {
     // Non-recursive creation of the exact leaf: no intermediate path is created
     // or followed. A missing parent (or anything else) is refused.
@@ -118,13 +144,20 @@ export async function prepareRuntimeRoot({
     createdRoot = true;
     try {
       info = await lstat(rootPath);
+      initialIdentity = { ino: info.ino, dev: info.dev };
       assertDirectoryShape(info, code);
       policy(info, code);
       await assertExactRealpath(rootPath, code);
     } catch (error) {
-      // The root was created by this call but failed validation: remove it only
-      // if it is still the empty, unchanged directory just created.
-      await removeRuntimeRoot({ rootPath, createdRoot: true, policy }).catch(() => {});
+      // The root was created by this call but failed validation: remove it
+      // only if it is still the same object just created (structural policy
+      // plus the identity captured above), empty, and nothing else.
+      await removeRuntimeRoot({
+        rootPath,
+        createdRoot: true,
+        ...(initialIdentity ? { ino: initialIdentity.ino, dev: initialIdentity.dev } : {}),
+        policy: assertStructuralDirectory,
+      }).catch(() => {});
       throw error;
     }
   } else {
@@ -145,9 +178,13 @@ export async function removeRuntimeRoot({
   policy = assertRootOwnedDirectory,
 } = {}) {
   // A runtime root provided by systemd (or any earlier execution) is never
-  // removed here; only a root created by the same run may be.
+  // removed here; only a root created by the same run may be. Removal is
+  // refused unless the caller proves it knows the exact object it created:
+  // ino and dev are required whenever createdRoot is true.
   if (!createdRoot) return false;
   const code = RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED;
+  if (ino === undefined || dev === undefined) throw new Error(code);
+  const identity = { ino, dev };
   let info;
   try {
     info = await lstat(rootPath);
@@ -157,8 +194,8 @@ export async function removeRuntimeRoot({
   assertDirectoryShape(info, code);
   policy(info, code);
   await assertExactRealpath(rootPath, code);
-  if (ino !== undefined && info.ino !== ino) throw new Error(code);
-  if (dev !== undefined && info.dev !== dev) throw new Error(code);
+  // Every revalidation read must describe the same object this run created.
+  assertSameIdentity(info, identity, code);
   let entries;
   try {
     entries = await readdir(rootPath);
@@ -167,10 +204,12 @@ export async function removeRuntimeRoot({
   }
   // Never recursive: any remaining entry refuses the removal entirely.
   if (entries.length) throw new Error(code);
-  // Identity and inode must be stable between validation and removal.
+  // Last read immediately before rmdir, anchored to the same original
+  // identity. A swap after this read cannot be fully ruled out, but rmdir
+  // itself refuses a non-empty replacement; the anchored reads are the
+  // guarantee actually implemented, no more.
   const before = await lstat(rootPath);
-  const after = await lstat(rootPath);
-  if (before.ino !== after.ino || before.dev !== after.dev) throw new Error(code);
+  assertSameIdentity(before, identity, code);
   try {
     await rmdir(rootPath);
   } catch {
