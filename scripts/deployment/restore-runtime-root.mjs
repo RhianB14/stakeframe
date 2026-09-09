@@ -170,6 +170,18 @@ export async function prepareRuntimeRoot({
   return { ...root, ...(await prepareProjectDirectory({ rootPath, project, policy })) };
 }
 
+// One full revalidation read of the root, anchored to the identity captured
+// at creation: real directory (never a symlink), the caller policy (owner,
+// group, mode), exact realpath and the same inode and device. Both the first
+// read and the final read immediately before rmdir run this, so a chmod/chown
+// or a type change between reads is refused, not only an inode swap.
+export async function assertRootStillSafe(rootPath, info, identity, policy, code) {
+  assertDirectoryShape(info, code);
+  await policy(info, code);
+  await assertExactRealpath(rootPath, code);
+  assertSameIdentity(info, identity, code);
+}
+
 export async function removeRuntimeRoot({
   rootPath = RESTORE_RUNTIME_ROOT,
   createdRoot = false,
@@ -191,11 +203,7 @@ export async function removeRuntimeRoot({
   } catch {
     throw new Error(code);
   }
-  assertDirectoryShape(info, code);
-  policy(info, code);
-  await assertExactRealpath(rootPath, code);
-  // Every revalidation read must describe the same object this run created.
-  assertSameIdentity(info, identity, code);
+  await assertRootStillSafe(rootPath, info, identity, policy, code);
   let entries;
   try {
     entries = await readdir(rootPath);
@@ -204,12 +212,19 @@ export async function removeRuntimeRoot({
   }
   // Never recursive: any remaining entry refuses the removal entirely.
   if (entries.length) throw new Error(code);
-  // Last read immediately before rmdir, anchored to the same original
-  // identity. A swap after this read cannot be fully ruled out, but rmdir
-  // itself refuses a non-empty replacement; the anchored reads are the
+  // Final full revalidation immediately before rmdir: the same object must
+  // still be a real, safe directory with unchanged owner, group, mode,
+  // realpath and identity — a chmod/chown after the emptiness check is
+  // refused here. A swap after this read cannot be fully ruled out, but
+  // rmdir itself refuses a non-empty replacement; the anchored reads are the
   // guarantee actually implemented, no more.
-  const before = await lstat(rootPath);
-  assertSameIdentity(before, identity, code);
+  let before;
+  try {
+    before = await lstat(rootPath);
+  } catch {
+    throw new Error(code);
+  }
+  await assertRootStillSafe(rootPath, before, identity, policy, code);
   try {
     await rmdir(rootPath);
   } catch {

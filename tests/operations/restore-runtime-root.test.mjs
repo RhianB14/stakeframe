@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   chmod,
+  chown,
   lstat,
   mkdir,
   mkdtemp,
-  rmdir,
   readFile,
+  realpath,
+  rmdir,
   rm,
   symlink,
   writeFile,
@@ -20,6 +22,8 @@ import {
   removeRuntimeRoot,
   sanitizeFailureCode,
   assertRootOwnedDirectory,
+  assertRootStillSafe,
+  assertSafeDirectoryMode,
   assertSameIdentity,
   RESTORE_RUNTIME_ROOT_REFUSED,
   RESTORE_INDIVIDUAL_DIRECTORY_REFUSED,
@@ -254,6 +258,230 @@ test('assertSameIdentity anchors every revalidation read to the captured object'
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
 });
+
+test('assertRootStillSafe runs the production order: shape, policy, realpath, identity', async (t) => {
+  const base = await tempBase(t);
+  const root = join(base, 'stakeframe-restore');
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const calls = [];
+  const trackingPolicy = (info, code) => {
+    calls.push('policy');
+    relaxedPolicy(info, code);
+  };
+  const info = await lstat(root);
+  await assertRootStillSafe(
+    root,
+    info,
+    { ino: info.ino, dev: info.dev },
+    trackingPolicy,
+    RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.deepEqual(calls, ['policy']);
+  // Identity anchored: a same-shape object with a different ino is refused.
+  await assert.rejects(
+    assertRootStillSafe(
+      root,
+      info,
+      { ino: info.ino + 1, dev: info.dev },
+      trackingPolicy,
+      RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+    ),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  // A symlink-shaped object is refused before the policy ever runs.
+  calls.length = 0;
+  await assert.rejects(
+    assertRootStillSafe(
+      root,
+      { isDirectory: () => true, isSymbolicLink: () => true, ino: info.ino, dev: info.dev },
+      { ino: info.ino, dev: info.dev },
+      trackingPolicy,
+      RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+    ),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.deepEqual(calls, []);
+});
+
+// Deterministic proof that the final pre-rmdir read runs the FULL validation
+// (shape, policy, realpath, identity), not only the identity check: the policy
+// accepts the first read and refuses the second — the read between the
+// emptiness check and rmdir. Owner, mode, type or realpath drift in that
+// window is therefore refused; the categories are covered by the synthetic
+// matrix below and the redirected-path test.
+test('final pre-rmdir read runs the full validation and refuses late drift', async (t) => {
+  const base = await tempBase(t);
+  const root = join(base, 'stakeframe-restore');
+  const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
+  let calls = 0;
+  await assert.rejects(
+    removeRuntimeRoot({
+      rootPath: root,
+      createdRoot: true,
+      ino: prepared.ino,
+      dev: prepared.dev,
+      policy: async (info, code) => {
+        calls += 1;
+        if (calls === 2) throw new Error(code); // final read: state drifted
+        relaxedPolicy(info, code);
+      },
+    }),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.equal(calls, 2);
+  const kept = await lstat(root);
+  assert.ok(kept.isDirectory());
+  assert.equal(kept.ino, prepared.ino);
+});
+
+// Owner, mode, group and type drift observed on any revalidation read is
+// refused by the same helper the final read uses (synthetic stats, no race).
+for (const [label, info, policy] of [
+  [
+    'mode drift',
+    {
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+      mode: 0o40600,
+      uid: 0,
+      gid: 0,
+      ino: 1,
+      dev: 2,
+    },
+    (info, code) => assertSafeDirectoryMode(info, code),
+  ],
+  [
+    'owner drift',
+    {
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+      mode: 0o40700,
+      uid: 1000,
+      gid: 0,
+      ino: 1,
+      dev: 2,
+    },
+    assertRootOwnedDirectory,
+  ],
+  [
+    'group drift',
+    {
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+      mode: 0o40700,
+      uid: 0,
+      gid: 1000,
+      ino: 1,
+      dev: 2,
+    },
+    assertRootOwnedDirectory,
+  ],
+  [
+    'type drift',
+    {
+      isDirectory: () => false,
+      isSymbolicLink: () => false,
+      mode: 0o40700,
+      uid: 0,
+      gid: 0,
+      ino: 1,
+      dev: 2,
+    },
+    assertRootOwnedDirectory,
+  ],
+]) {
+  test(`revalidation refuses ${label}`, async () => {
+    // A real existing path so the realpath step itself cannot be the reason:
+    // the synthetic stat is what must be refused by the policy category.
+    const existing = await realpath(tmpdir());
+    await assert.rejects(
+      assertRootStillSafe(
+        existing,
+        info,
+        { ino: 1, dev: 2 },
+        policy,
+        RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+      ),
+      (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+    );
+  });
+}
+
+test('revalidation accepts the unchanged safe stat', async () => {
+  const existing = await realpath(tmpdir());
+  await assert.doesNotReject(
+    assertRootStillSafe(
+      existing,
+      {
+        isDirectory: () => true,
+        isSymbolicLink: () => false,
+        mode: 0o40700,
+        uid: 0,
+        gid: 0,
+        ino: 1,
+        dev: 2,
+      },
+      { ino: 1, dev: 2 },
+      assertRootOwnedDirectory,
+      RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+    ),
+  );
+});
+
+test('cleanup refuses a redirected path and keeps the target intact', async (t) => {
+  const base = await tempBase(t);
+  const root = join(base, 'stakeframe-restore');
+  const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
+  await rmdir(root);
+  const real = join(base, 'stakeframe-restore-real');
+  await mkdir(real, { mode: 0o700 });
+  try {
+    await symlink(real, root, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch {
+    return t.skip('symlink/junction creation unavailable on this platform');
+  }
+  const fresh = await lstat(root);
+  if (!fresh.isSymbolicLink()) return t.skip('junction not reported as a symlink');
+  await assert.rejects(
+    removeRuntimeRoot({
+      rootPath: root,
+      createdRoot: true,
+      ino: prepared.ino,
+      dev: prepared.dev,
+      policy: relaxedPolicy,
+    }),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.ok((await lstat(real)).isDirectory());
+});
+
+test(
+  'final pre-rmdir revalidation refuses owner drift and keeps the root',
+  { skip: !posix },
+  async (t) => {
+    const root = join(await tempBase(t), 'stakeframe-restore');
+    const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
+    try {
+      await chown(root, 65534, 65534);
+    } catch {
+      return t.skip('chown unavailable without privileges');
+    }
+    // Same inode, changed owner: the full final validation must refuse it.
+    const fresh = await lstat(root);
+    assert.equal(fresh.ino, prepared.ino);
+    await assert.rejects(
+      removeRuntimeRoot({
+        rootPath: root,
+        createdRoot: true,
+        ino: prepared.ino,
+        dev: prepared.dev,
+        policy: relaxedPolicy,
+      }),
+      (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+    );
+    assert.ok((await lstat(root)).isDirectory());
+  },
+);
 
 test('cleanup refuses a replaced directory whose later read diverges', async (t) => {
   const root = join(await tempBase(t), 'stakeframe-restore');
