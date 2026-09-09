@@ -113,9 +113,12 @@ sudo env RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery \
 
 ## 6. Decisão de governança
 
-- Provisionar `/run/stakeframe-restore` manualmente equivaleria a instalar a
-  infraestrutura do unit da mutação E por conta própria — **não autorizado**
-  ("não altere produção para tentar fazer o ensaio passar"). Nada foi criado.
+- Criar `/run/stakeframe-restore` manualmente seria uma mutação adicional não
+  prevista nem no comando executado nem na autorização daquela execução — por
+  isso, corretamente recusada ("não altere produção para tentar fazer o
+  ensaio passar"). Um diretório efêmero em `/run`, isoladamente, não instala
+  o `stakeframe-restore.service` nem o `stakeframe-restore.timer` da mutação
+  E, que permanecem não autorizados. Nada foi criado.
 - Conforme §5 da autorização: não houve repetição automática; a evidência
   privada foi preservada; o cleanup do `finally` do runner executou
   (`cleanup=passed`); o inventário de resíduos por label/run id resultou em
@@ -127,6 +130,13 @@ sudo env RESTORE_REHEARSAL_CONFIRM=monthly-isolated-recovery \
      autorização própria);
   3. ajustar o runner para `mkdir` recursivo do diretório-pai (mudança de
      código revisada).
+
+  Decisão do Codex (09/09/2026): correção no runner em PR separada — preparar
+  o diretório de forma segura (diretório real, sem symlink, `root:root`,
+  `0700`, diretório da execução exclusivo, testes sem `RuntimeDirectory`,
+  exceção registrada no relatório sanitizado), sem instalar service ou timer.
+  A nova execução da mutação D dependerá dessa correção revisada e de nova
+  autorização operacional.
 
 ## 7. Baseline antes/depois (sanitizada)
 
