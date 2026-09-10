@@ -159,6 +159,8 @@ sem host, endereço ou ruleset integral.
 | Retry de rollback com delta ausente e políticas anteriores comprovadas                                              | finaliza como `rolled_back`, **sem nova mutação**                                                                  |
 | Retry de rollback com deriva ou estado não comprovável                                                              | `rollback_required`, sem sobrescrever                                                                              |
 | Acknowledgement perdido / readback indisponível / morte após o commit do rollback                                   | nunca deixam `status()` declarar `applied`; `rolling_back`/`rollback_required` com `state=unknown`                 |
+| Morte entre o commit do rollback e os registros terminais (inclusive com o recibo removido)                         | retry reconcilia via journal `rolling_back` validado, finaliza `rolled_back` **sem nova transação** de firewall    |
+| Journal terminal `rolled_back` gravado e recibo ausente/parcial                                                     | recibo terminal completado sem mutação (`no-op`); nunca declara `applied`                                          |
 | Regras estrangeiras                                                                                                 | nunca removidas nem reordenadas                                                                                    |
 
 **Inventário de referências.** Todas as referências jump/goto à chain própria,
@@ -214,13 +216,22 @@ mutação**; deriva ⇒ `rollback_required`.
   _best-effort_ e a falha primária permanece visível).
 - Após um rollback comprovado, o rollback tenta **descartar duravelmente** o
   recibo antigo (com verificação e `fsync` do diretório quando aplicável) antes
-  de gravar o journal terminal `rolled_back` e o novo recibo. **Quando essa
-  remoção funciona, o recibo antigo é eliminado**; **se a invalidação falhar**
-  (por exemplo, falha de armazenamento), o journal terminal ou de recuperação
-  **prevalece** e impede que `status()` declare `applied`. Nada é declarado
-  fisicamente removido em todos os casos: uma falha de armazenamento pode
-  impedir a remoção, e é exatamente por isso que a precedência do journal é a
-  garantia, não a ausência física do arquivo.
+  de gravar o recibo terminal. **Quando essa remoção funciona, o recibo antigo é
+  eliminado**; **se a invalidação falhar** (por exemplo, falha de armazenamento),
+  o journal terminal ou de recuperação **prevalece** e impede que `status()`
+  declare `applied`. Nada é declarado fisicamente removido em todos os casos:
+  uma falha de armazenamento pode impedir a remoção, e é exatamente por isso que
+  a precedência do journal é a garantia, não a ausência física do arquivo.
+- **A transição terminal é à prova de crash.** O journal terminal
+  (`rolled_back`/`clean`) é persistido e confirmado **antes** de o recibo stale
+  ser tocado, e só depois o recibo terminal é gravado. Uma morte do processo
+  entre o commit do rollback e os registros terminais — inclusive depois da
+  remoção do recibo, ou com remoção parcial do par `receipt.json`/`.sha256` —
+  nunca perde a prova: o retry usa o journal `rolling_back` integralmente
+  validado e correspondente (mesmo boot/controlador/política) quando o recibo
+  está ausente ou ilegível, finaliza como `rolled_back` **sem nova transação de
+  firewall** e, com journal terminal já persistido, apenas completa o recibo
+  (`no-op` sem mutação).
 - `status()` prioriza o journal de recuperação (`rolling_back`, `failed`,
   `failed_rolled_back`, `rollback_required`, `interrupted_rolled_back`,
   `rolled_back_unrecorded`, `rolled_back`) sobre qualquer recibo antigo: o
@@ -236,9 +247,9 @@ mutação**; deriva ⇒ `rollback_required`.
 
 ## 9. Testes e evidências
 
-- `scripts/network_security/test_ipv6_persistence.py`: **110 testes**, com
+- `scripts/network_security/test_ipv6_persistence.py`: **118 testes**, com
   backend falso determinístico que reproduz a semântica atômica validada.
-- Suíte completa de `network_security`: **240 testes**, `OK` (0 skips em Linux;
+- Suíte completa de `network_security`: **248 testes**, `OK` (0 skips em Linux;
   6 skips no Windows, por semântica POSIX de symlink/permissão, `fsync` de
   diretório e ausência do `systemd-analyze`).
 - **Janelas de crash da escrita do recibo** (cada uma com teste dedicado):
@@ -267,6 +278,14 @@ mutação**; deriva ⇒ `rollback_required`.
   e o retry reconcilia; retry com delta ausente ⇒ finaliza **sem nova mutação**
   (contagem de transações inalterada); retry com deriva ⇒ `rollback_required`
   sem sobrescrever; `status()` imediatamente após cada cenário.
+- **Janela terminal do rollback** (à prova de crash): morte entre o commit e os
+  registros terminais, inclusive com o recibo removido — o retry, **em nova
+  instância do controlador**, finaliza `rolled_back` sem nova transação de
+  firewall (contagem de transações inalterada) e grava o recibo terminal;
+  remoção parcial do par `receipt.json`/`.sha256` (sidecar sem JSON e JSON sem
+  sidecar) reconciliada pelo journal `rolling_back`; journal terminal
+  `rolled_back` com recibo ausente ⇒ recibo completado com `no-op` sem mutação;
+  journal terminal com delta presente ⇒ recusa sem mutação.
 - **Registros malformados**: JSON sintaticamente inválido e bytes UTF-8
   inválidos, com sidecar válido e journal correspondente ⇒ rollback
   conservador; os mesmos casos sem journal ⇒ recusa sem mutação; `OSError` na
@@ -288,7 +307,11 @@ mutação**; deriva ⇒ `rollback_required`.
   **E2E de readback indisponível após o commit do rollback** (`rollback_required`
   /`unknown`, delta removido); **E2E de retry de `rolling_back`** (delta
   removido ⇒ finaliza; delta ativo ⇒ executa; `apply_on_boot` recusa o pendente);
-  arquivos de persistência byte-idênticos antes/depois.
+  **E2E da janela terminal** (morte após o commit e a remoção do recibo, antes do
+  journal terminal: nova instância do controlador finaliza `rolled_back` sem
+  nenhuma nova transação de firewall — contagem zero; remoção parcial com apenas
+  o sidecar reconciliada pelo journal); arquivos de persistência byte-idênticos
+  antes/depois.
 - **Unit**: `systemd-analyze verify` rc 0; ausência de `ConditionPathExists`;
   controlador ausente ⇒ `ExecStart` falha com código não-zero.
 - `plan` não cria diretório nem arquivos; a saída pública não contém endereços,
@@ -299,7 +322,7 @@ mutação**; deriva ⇒ `rollback_required`.
 Procedimento previsto, **dependente de autorização posterior do Codex**:
 
 1. instalar `ipv6_persistence.py` e a unit por staging + conferência de hashes
-   (`b695dafc4cfba7665154e6a9286c62d1c9e72eb508de12028b5a2708b7d6239e` para o
+   (`94ec6700d034408439462045e889c5812502645b8d497aae4d246d3ae9fdbbf5` para o
    controlador; `bb448b8cd42b2654baee89892b28382907db0a92de6b8bafb3b89d6fbc45febd`
    para a unit);
 2. manter backup privado dos artefatos substituídos;

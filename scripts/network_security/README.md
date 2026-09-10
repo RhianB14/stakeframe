@@ -359,16 +359,20 @@ recibo é o marcador final de sucesso e o journal pré-transação nunca é
 reescrito entre o commit e o evento terminal. O rollback grava um journal
 durável `rolling_back` (`state=unknown`) antes de qualquer snapshot/transação;
 acknowledgement perdido, readback indisponível ou morte após o commit nunca
-deixam `status()` declarar `applied`; após um rollback comprovado, a remoção
-durável do recibo antigo é tentada — quando funciona, o recibo é eliminado, e se
-a invalidação falhar o journal terminal/de recuperação prevalece e impede
-`status()` de declarar `applied`. `rolling_back`/`rollback_required` significam
-estado não comprovado (`state=unknown`); `clean` só depois de rollback ou
-ausência do delta comprovados.
+deixam `status()` declarar `applied`; a transição terminal grava o journal
+`rolled_back`/`clean` ANTES de tocar o recibo stale, e uma morte nessa janela
+(inclusive com o recibo removido ou parcial) é reconciliada no retry — via
+journal `rolling_back` validado quando o recibo está ausente/ilegível — sem nova
+transação de firewall; após um rollback comprovado, a remoção durável do recibo
+antigo é tentada — quando funciona, o recibo é eliminado, e se a invalidação
+falhar o journal terminal/de recuperação prevalece e impede `status()` de
+declarar `applied`. `rolling_back`/`rollback_required` significam estado não
+comprovado (`state=unknown`); `clean` só depois de rollback ou ausência do delta
+comprovados.
 Referências jump/goto à chain própria são inventariadas em todas as chains e
 qualquer desvio é recusado antes de mutar; o rollback exige `INPUT`/`FORWARD` em
 `DROP` e identidade completa do recibo (`policy_sha256` incluído). Journal e
 recibo passam por validação estrutural (incluindo coerência `phase`/`state`)
 antes de serem usados como prova. A unit não usa `ConditionPathExists`:
-controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 110 testes; suíte
-completa: 240 testes, sem skips em Linux.
+controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 118 testes; suíte
+completa: 248 testes, sem skips em Linux.

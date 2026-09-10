@@ -602,12 +602,19 @@ recuperação por journal; recibo coerente exige `phase`/`state` consistentes e
 `policy_sha256` atual antes de qualquer rollback; o rollback grava um journal
 durável `rolling_back` (`state=unknown`) antes de qualquer snapshot/transação —
 acknowledgement perdido, readback indisponível ou morte após o commit nunca
-deixam `status()` declarar `applied`; depois de um rollback comprovado, a
-remoção durável do recibo antigo é tentada, e **quando ela funciona** o recibo é
-eliminado — se a invalidação falhar, o journal terminal/de recuperação prevalece
-e impede `status()` de declarar `applied`; `rolling_back`/`rollback_required`
-significam estado **não comprovado** (`state=unknown`) e só há `clean` depois de
-rollback ou ausência do delta comprovados; controlador ausente no caminho
+deixam `status()` declarar `applied`; a transição terminal é à prova de crash —
+o journal `rolled_back`/`clean` é persistido **antes** de o recibo stale ser
+tocado e só depois o recibo terminal é gravado; depois de um rollback comprovado,
+a remoção durável do recibo antigo é tentada, e **quando ela funciona** o recibo
+é eliminado — se a invalidação falhar, o journal terminal/de recuperação
+prevalece e impede `status()` de declarar `applied`; uma morte entre o commit e
+os registros terminais, inclusive com o recibo removido (ou removido em parte),
+é reconciliada no retry por um journal `rolling_back` integralmente validado —
+finaliza `rolled_back` **sem nova transação de firewall**; um journal terminal
+já persistido apenas completa o recibo, sem mutação; `rolling_back`/
+`rollback_required` significam estado **não comprovado** (`state=unknown`) e só
+há `clean` depois de rollback ou ausência do delta comprovados; controlador
+ausente no caminho
 instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
 Todas as referências jump/goto à `STK6_BOOT` em qualquer chain são inventariadas:
 fora de `INPUT` posição 1 com a especificação revisada, o estado é recusado antes
