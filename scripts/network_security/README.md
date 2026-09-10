@@ -16,6 +16,12 @@ Runbook e proveniência das evidências:
   injetado para validar a interface do adaptador. Não usa root, SSH ou comandos
   reais de firewall/systemd. A suíte bloqueia `subprocess.Popen` e `os.system`.
 - Python 3.11+ e biblioteca padrão; nenhuma dependência de aplicação adicionada.
+- `ipv6_persistence.py` (STK-M0-33): aplicador de boot versionado do delta IPv6, com
+  `plan`, `apply-on-boot`, `status` e `rollback`, transação atômica única
+  (`ip6tables-restore --noflush`) e adaptador Linux injetável.
+- `test_ipv6_persistence.py`: backend falso determinístico; cobre máquina de
+  estados, idempotência, rollback, lock, recibos adulterados e preservação de
+  Docker/Fail2Ban/IPv4/OUTPUT. Não usa root, firewall real ou systemd real.
 - Alvo futuro condicionado: Ubuntu 24.04 ARM64, `ip6tables 1.8.10 (nf_tables)`.
   Divergência ou comando indisponível bloqueiam o caminho real; não instalar
   pacotes automaticamente. Validar os executáveis absolutos do adaptador,
@@ -324,3 +330,22 @@ O reboot encerra este hardening ativo conforme o estado persistente preexistente
 a rotina recusa atuar com evidência de outro boot. Persistência futura precisa
 de delta/backup/restauração próprios revisados e testes que comprovem que o boot
 não reintroduz uma mudança revertida. Isso não faz parte desta janela.
+
+## Persistência de boot — STK-M0-33 (implementação, não instalada)
+
+A unit versionada `infra/systemd/stk6-ipv6-persistence.service` reaplica no boot o
+delta IPv6 confirmado, por transação atômica própria. Ela **não** é instalada,
+habilitada ou iniciada por esta implementação; a instalação depende de autorização
+posterior do Codex.
+
+- `python -B scripts/network_security/ipv6_persistence.py plan` — contrato offline;
+  não cria diretório, não escreve e não acessa a rede.
+- `apply-on-boot --execute-reviewed-linux` — usada pela unit; exige Linux/root.
+- `status` / `rollback --execute-reviewed-linux` — leitura durável e remoção
+  exclusiva do delta próprio.
+
+Não usar `netfilter-persistent save`, captura integral de `ip6tables-save`,
+restauração integral do ruleset, `nft flush ruleset` nem sequências de comandos
+independentes. A ordenação exige `systemd-analyze verify`; detalhes e limitações em
+[docs/M0-33-VALIDATION.md](../../docs/M0-33-VALIDATION.md). O delta atual continua
+**não persistente** até a instalação autorizada.

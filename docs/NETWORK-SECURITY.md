@@ -81,6 +81,12 @@ janela. A futura preparação deve confirmar existência/conteúdo/permissões d
 arquivos de persistência com leitura fresca e backup privado antes de qualquer
 mudança; o estado `active exited` isoladamente não comprova conteúdo salvo.
 
+A STK-M0-33 (implementação pronta, **não instalada**) adiciona um aplicador de
+boot próprio com transação atômica única e unit versionada, sem usar
+`netfilter-persistent save`, captura integral de `ip6tables-save` ou restauração
+integral do ruleset. O delta permanece **não persistente** até a instalação
+autorizada; detalhes, evidências e limitações em [M0-33-VALIDATION.md](M0-33-VALIDATION.md).
+
 ### Interfaces e serviços
 
 - `enp0s6` routable/configured, MTU 9000, DHCPv4 por `systemd-networkd`;
@@ -542,3 +548,33 @@ A validação real não cobre firewall, exposição de portas ou recuperação d
 CI verde não autoriza merge. Nenhuma alteração de banco, deploy, release, migração,
 compra ou infraestrutura foi realizada nesta rodada. A PR permanece pendente de
 revisão do Codex.
+
+## 8. Persistência no boot — STK-M0-33 (implementação, não instalada)
+
+Um aplicador próprio e versionado reaplica, no boot, exatamente o delta IPv6
+confirmado na §4, como **uma única transação atômica** de `ip6tables-nft`
+(`ip6tables-restore --noflush`, gerada em memória). Não há captura integral do
+ruleset, restauração integral, `nft flush ruleset`, `netfilter-persistent save`,
+sequência de comandos independentes nem adoção de chain externa pelo nome.
+
+A transação nomeia apenas a chain própria (`STK6_BOOT`), seu salto único em
+`INPUT` (posição 1) e as políticas `INPUT`/`FORWARD`. IPv4, IPv6 `OUTPUT`, NAT,
+chains/regras Docker e Fail2Ban, regras terceiras, SSH e rpcbind não são citados
+nem passam por flush; a preservação é garantida por construção e verificada em
+container descartável.
+
+Ordenação da unit: `After=netfilter-persistent.service`,
+`Before=docker.service network-online.target`, aprovada por `systemd-analyze
+verify` (rc 0) sem ciclo. `CapabilityBoundingSet=CAP_NET_ADMIN` é suficiente
+(validado em container), `RemainAfterExit=yes`, `Restart=no`,
+`TimeoutStartSec=90`, diretórios `RuntimeDirectory`/`StateDirectory` privados em
+`0700` e hardening compatível com Python e `ip6tables`.
+
+Falha no boot **não** é fail-closed: se a unit falhar, o host permanece no estado
+fornecido pela persistência preexistente (IPv6 `INPUT`/`FORWARD` permissivos),
+sem estado parcial, com a falha visível no journal
+(`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
+`rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
+O delta atual continua não persistente, e a instalação, a ativação e qualquer
+reboot exigem autorização posterior do Codex. VPS, reboot e recuperação real não
+foram testados ([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
