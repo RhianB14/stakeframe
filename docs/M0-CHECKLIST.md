@@ -35,6 +35,14 @@ STK-M0-30 ([issue #86](https://github.com/RhianB14/stakeframe/issues/86)) instal
 e habilitou o timer mensal e validou uma execução inicial supervisionada. O
 timer está ativo para 01/10/2026 às 03:26 UTC; evidências em
 [M0-30-VALIDATION.md](M0-30-VALIDATION.md).
+STK-M0-31 ([issue #11](https://github.com/RhianB14/stakeframe/issues/11))
+reconciliou a documentação com a janela IPv6 executada e confirmada em
+07/09/2026 e registrou o aborto seguro do preflight de 10/09/2026, sem mutação
+([M0-31-VALIDATION.md](M0-31-VALIDATION.md)). STK-M0-32
+([issue #89](https://github.com/RhianB14/stakeframe/issues/89)) removeu o
+rollback do checkout retido pela STK-M0-29 sob autorização destrutiva específica
+do proprietário, após conferir identidade, ausência de uso e integridade do
+checkout ativo ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 O avanço ocorre por determinação
 do proprietário (D019), preservando recuperação integral/failover, alertas,
 monitor e release como pendências. STK-M0-16 foi
@@ -116,6 +124,12 @@ ou janela de rede; cada item exige a evidência descrita.
 > [NETWORK-SECURITY.md](NETWORK-SECURITY.md) §7 foram fechados; a contagem acima
 > não foi recalculada nesta tarefa
 > ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §7).
+
+> **Nota (STK-M0-32, 10/09/2026):** o rollback do checkout retido pela STK-M0-29
+> foi **removido** sob autorização destrutiva específica do proprietário, após
+> conferência de identidade, ausência de uso e integridade do checkout ativo.
+> Nenhum outro diretório, staging, bundle, journal, archive ou recurso foi
+> removido ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 
 ## Concluído nesta tarefa (STK-M0-01)
 
