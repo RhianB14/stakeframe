@@ -49,6 +49,10 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 # The receipt is the terminal success/rollback marker; the journal narrates the
 # attempt and may legitimately stay in a non-terminal phase after a crash.
 RECEIPT_PHASES = ("applied", "rolled_back")
+# Identity fields carried by every durable record (receipt, journal, terminal
+# records) so any of them can be rebuilt from the others when needed.
+TERMINAL_FIELDS = ("schema", "policy_version", "boot_id", "controller_sha256",
+                   "policy_sha256", "chain", "tag", "before_policies")
 JOURNAL_PHASES = ("applying", "acquired", "rolling_back", "failed", "failed_rolled_back",
                   "rollback_required", "interrupted_rolled_back", "rolled_back_unrecorded",
                   "rolled_back")
@@ -773,12 +777,38 @@ class Controller:
 
     def rollback(self):
         with self.store.lock():
-            receipt = self.store.receipt()
-            if receipt is None:
-                raise PersistenceError("no durable receipt; nothing owned to roll back")
-            validate_receipt(receipt)
-            self._full_receipt_identity(receipt, self.backend.boot_id())
-            if receipt["phase"] == "rolled_back":
+            boot_id = self.backend.boot_id()
+            controller_hash = controller_sha256()
+            receipt = None
+            try:
+                receipt = self.store.receipt()
+            except PersistenceError:
+                receipt = None  # unusable receipt: the recovery journal may still prove the attempt
+            if receipt is not None:
+                validate_receipt(receipt)
+                self._full_receipt_identity(receipt, boot_id)
+                source = receipt
+            else:
+                # The receipt is missing or unreadable: a fully validated
+                # journal from this same boot/controller/policy is the
+                # equivalent proof. rolling_back authorizes the rollback work;
+                # rolled_back means only the terminal receipt needs completion.
+                journal = self.store.journal()
+                if journal is not None:
+                    validate_journal(journal)
+                if (journal is None
+                        or not self._attempt_identity_matches(journal, boot_id, controller_hash)
+                        or journal["phase"] not in ("rolling_back", "rolled_back")):
+                    raise PersistenceError("no durable receipt; nothing owned to roll back")
+                source = {key: journal[key] for key in TERMINAL_FIELDS if key in journal}
+                # The journal records an attempt that was APPLIED when it was
+                # written; the phase/state here only drive the flow below.
+                source["phase"] = "applied"
+                source["state"] = "applied"
+                self._full_receipt_identity(source, boot_id)
+                if journal["phase"] == "rolled_back":
+                    return self._complete_terminal_records(source)
+            if source["phase"] == "rolled_back":
                 # Read-only decision: no durable intent and no mutation happen
                 # on this branch.
                 snapshot = self.backend.snapshot()
@@ -789,31 +819,63 @@ class Controller:
             # Durable intent BEFORE any snapshot or transaction that can take
             # part in the mutation. If this write fails, the firewall is
             # untouched and the operation aborts.
-            intent = {**receipt, "phase": "rolling_back", "state": "unknown"}
+            intent = {**source, "phase": "rolling_back", "state": "unknown"}
             try:
                 self.store.write_record("journal.json", intent)
             except BaseException as exc:
                 raise PersistenceError("could not record the durable rolling_back intent; firewall untouched") from exc
             try:
-                self._rollback_delta(receipt["before_policies"])
+                self._rollback_delta(source["before_policies"])
             except BaseException as exc:
                 # Either finalizes a PROVEN rollback (lost acknowledgement) or
                 # raises with a conservative state (rolling_back/rollback_required).
-                return self._reconcile_uncertain_rollback(receipt, intent, exc)
-            return self._finalize_rollback(receipt)
+                return self._reconcile_uncertain_rollback(source, intent, exc)
+            return self._finalize_rollback(source)
 
-    def _finalize_rollback(self, receipt):
-        """Persist the terminal rolled_back records. Raises on storage failure."""
+    def _finalize_rollback(self, source):
+        """Persist the terminal rolled_back records, durable proof FIRST.
+
+        The terminal journal is written and fsynced BEFORE the stale receipt is
+        touched, so no crash window between the rollback commit and the terminal
+        records can lose the rolled_back proof: whichever step dies, the journal
+        (rolling_back or rolled_back) or the surviving stale receipt keeps the
+        system reconcilable, and status() never reports applied.
+        """
+        terminal = {key: source[key] for key in TERMINAL_FIELDS if key in source}
+        terminal.update(phase="rolled_back", state="clean")
+        try:
+            self.store.write_record("journal.json", terminal)
+        except BaseException as exc:
+            # Nothing was consolidated: the journal still narrates the attempt
+            # (rolling_back); a retry reconciles. Keep the failure visible.
+            raise PersistenceError("rollback executed but its terminal journal could not be persisted") from exc
         try:
             self.store.discard_record("receipt.json")
-            self.store.write_record("journal.json", {**receipt, "phase": "rolled_back", "state": "clean"})
-            self.store.write_record("receipt.json", {**receipt, "phase": "rolled_back", "state": "clean"})
+            self.store.write_record("receipt.json", terminal)
         except BaseException as exc:
-            self._record_phase(receipt, "rolled_back_unrecorded", exc, state="clean",
-                               note="firewall already rolled back; terminal receipt could not be persisted")
+            # The durable proof is already rolled_back/clean; a surviving stale
+            # receipt is covered by the journal precedence in status().
             raise PersistenceError("rollback executed but its terminal receipt could not be persisted") from exc
         return {"schema": SCHEMA, "mode": "rollback", "phase": "rolled_back",
                 "policy_version": POLICY_VERSION, "writes": "owned-delta-only"}
+
+    def _complete_terminal_records(self, source):
+        """Terminal journal already persisted: complete the receipt, no mutation."""
+        snapshot = self.backend.snapshot()
+        if CHAIN in snapshot["chains"] or references_to_owned_chain(snapshot):
+            raise PersistenceError("journal says rolled back but the owned delta is still present")
+        if (snapshot["policies"]["INPUT"] != source["before_policies"]["INPUT"]
+                or snapshot["policies"]["FORWARD"] != source["before_policies"]["FORWARD"]):
+            raise PersistenceError("journal says rolled back but the IPv6 policies are not proven restored")
+        terminal = {key: source[key] for key in TERMINAL_FIELDS if key in source}
+        terminal.update(phase="rolled_back", state="clean")
+        try:
+            self.store.discard_record("receipt.json")
+            self.store.write_record("receipt.json", terminal)
+        except BaseException as exc:
+            raise PersistenceError("rolled back but the terminal receipt could not be persisted") from exc
+        return {"schema": SCHEMA, "mode": "rollback", "phase": "no-op",
+                "policy_version": POLICY_VERSION, "writes": "none"}
 
     def _reconcile_uncertain_rollback(self, receipt, intent, error):
         """Resolve an uncertain rollback result.

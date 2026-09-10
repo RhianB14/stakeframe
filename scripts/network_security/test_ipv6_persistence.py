@@ -517,13 +517,14 @@ class PostAcquisitionFailureTests(Base):
         with self.inject_write_failure("receipt.json", "write"):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
-        # The firewall result is preserved and recorded as unrecorded, and the
-        # rollback was proven, so status must NOT report an applied state.
+        # The firewall result is preserved and the durable proof is the terminal
+        # journal (rolled_back/clean), written before the receipt step failed:
+        # status must NOT report an applied state.
         self.assertFalse(self.backend.owned())
         self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
-        self.assertEqual(self.journal_phase(), "rolled_back_unrecorded")
+        self.assertEqual(self.journal_phase(), "rolled_back")
         status = self.controller.status()
-        self.assertEqual(status["phase"], "rolled_back_unrecorded")
+        self.assertEqual(status["phase"], "rolled_back")
         self.assertEqual(status["state"], "clean")
 
 
@@ -633,9 +634,11 @@ class CrashReceiptWindowTests(Base):
 class RollbackTerminalFailureTests(Base):
     """The system must never declare applied after a proven rollback."""
 
-    def expect_conservative_status(self):
+    def expect_terminal_rolled_back(self):
+        # The terminal journal is written BEFORE the receipt step, so even when
+        # the receipt update fails the durable proof is rolled_back/clean.
         status = self.controller.status()
-        self.assertEqual(status["phase"], "rolled_back_unrecorded")
+        self.assertEqual(status["phase"], "rolled_back")
         self.assertEqual(status["state"], "clean")
         self.assertNotEqual(status["phase"], "applied")
 
@@ -645,7 +648,7 @@ class RollbackTerminalFailureTests(Base):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
         self.assertFalse(self.backend.owned())
-        self.expect_conservative_status()
+        self.expect_terminal_rolled_back()
         # A later run on the clean state applies again safely.
         self.assertEqual(self.controller.apply_on_boot()["phase"], "applied")
 
@@ -655,7 +658,7 @@ class RollbackTerminalFailureTests(Base):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
         self.assertFalse(self.backend.owned())
-        self.expect_conservative_status()
+        self.expect_terminal_rolled_back()
 
     def test_fsync_file_failure_keeps_status_conservative(self):
         self.controller.apply_on_boot()
@@ -663,7 +666,7 @@ class RollbackTerminalFailureTests(Base):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
         self.assertFalse(self.backend.owned())
-        self.expect_conservative_status()
+        self.expect_terminal_rolled_back()
 
     @unittest.skipUnless(os.name == "posix", "directory fsync semantics")
     def test_fsync_dir_failure_keeps_status_conservative(self):
@@ -672,7 +675,7 @@ class RollbackTerminalFailureTests(Base):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
         self.assertFalse(self.backend.owned())
-        self.expect_conservative_status()
+        self.expect_terminal_rolled_back()
 
     def test_replace_failure_keeps_status_conservative(self):
         self.controller.apply_on_boot()
@@ -680,17 +683,18 @@ class RollbackTerminalFailureTests(Base):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
         self.assertFalse(self.backend.owned())
-        self.expect_conservative_status()
+        self.expect_terminal_rolled_back()
 
     def test_receipt_discard_failure_keeps_status_conservative_then_recovers(self):
         self.controller.apply_on_boot()
         with patch.object(self.controller.store, "discard_record", side_effect=OSError("injected discard failure")):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
-        # The rollback itself succeeded: the delta is gone, the stale applied
-        # receipt is still on disk, but status must prefer the recovery journal.
+        # The rollback itself succeeded and the terminal journal already proves
+        # it; the stale applied receipt is still on disk, but status prefers the
+        # journal.
         self.assertFalse(self.backend.owned())
-        self.expect_conservative_status()
+        self.expect_terminal_rolled_back()
         # A new rollback run re-validates and completes the terminal record.
         result = self.controller.rollback()
         # The firewall was already clean, so the second pass is a proven no-op;
@@ -815,6 +819,115 @@ class RollingBackProtocolTests(Base):
         self.assertNotEqual(status["phase"], "applied")
         # The applied receipt is deliberately still on disk; the journal wins.
         self.assertIsNotNone(self.controller.store.receipt())
+
+
+# ------------------------------------- terminal rollback window (crash safety)
+class FinalizeRollbackWindowTests(Base):
+    """No crash between the rollback commit and the terminal records loses the proof."""
+
+    def rollback_committed_without_terminal_records(self):
+        """Delta removed (rollback committed); durable intent; receipts untouched."""
+        self.controller.apply_on_boot()
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"})
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.assertFalse(self.backend.owned())
+
+    def test_death_after_commit_and_receipt_removal_reconciles_on_fresh_instance(self):
+        # Exactly the reported window: the commit happened, the stale receipt
+        # was removed, and the terminal journal was never written.
+        self.rollback_committed_without_terminal_records()
+        self.controller.store.discard_record("receipt.json")
+        transactions = len(self.backend.transactions)
+        fresh = persistence.Controller(self.root, self.backend)
+        result = fresh.rollback()
+        self.assertEqual(result["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)  # no new firewall transaction
+        self.assertEqual(fresh.status()["phase"], "rolled_back")
+        self.assertEqual(fresh.status()["state"], "clean")
+        self.assertEqual(fresh.store.receipt()["phase"], "rolled_back")
+
+    def test_removal_of_receipt_json_with_stale_sidecar_reconciles(self):
+        self.rollback_committed_without_terminal_records()
+        (self.root / "receipt.json").unlink()  # sidecar remains
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+
+    def test_removal_of_sidecar_with_receipt_json_present_reconciles(self):
+        self.rollback_committed_without_terminal_records()
+        (self.root / "receipt.json.sha256").unlink()  # JSON remains
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_unreadable_receipt_with_matching_rolling_back_journal_reconciles(self):
+        self.rollback_committed_without_terminal_records()
+        raw = (self.root / "receipt.json").read_bytes()
+        persistence.private_write(self.root / "receipt.json", raw[:-10])  # truncated; sidecar now stale
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_terminal_journal_with_missing_receipt_completes_without_mutation(self):
+        self.rollback_committed_without_terminal_records()
+        # The finalize got as far as the terminal journal before dying; the
+        # receipt pair is gone.
+        terminal = {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"}
+        self.controller.store.write_record("journal.json", terminal)
+        self.controller.store.discard_record("receipt.json")
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "no-op")
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+        self.assertEqual(self.controller.status()["state"], "clean")
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+
+    def test_death_between_terminal_journal_and_receipt_steps_converges(self):
+        self.controller.apply_on_boot()
+        # Died right after the terminal journal write: the stale applied receipt
+        # is still on disk and the delta is gone.
+        terminal = {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"}
+        self.controller.store.write_record("journal.json", terminal)
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)  # converges without mutation
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+
+    def test_terminal_journal_with_delta_present_is_refused_without_mutation(self):
+        self.controller.apply_on_boot()
+        terminal = {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"}
+        self.controller.store.write_record("journal.json", terminal)
+        self.controller.store.discard_record("receipt.json")
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "still present"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+
+    def test_terminal_journal_receipt_completion_failure_stays_conservative(self):
+        self.rollback_committed_without_terminal_records()
+        terminal = {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"}
+        self.controller.store.write_record("journal.json", terminal)
+        self.controller.store.discard_record("receipt.json")
+        with self.inject_write_failure("receipt.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolled_back")  # never applied, never clean-erased
+        self.assertEqual(status["state"], "clean")
 
 
 # --------------------------------------------- malformed records (parser)
