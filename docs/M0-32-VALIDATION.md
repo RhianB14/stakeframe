@@ -108,24 +108,40 @@ passou integralmente.
 
 ## 7. Pós-validação
 
-| Verificação                                                                                                                 | Resultado                                                                                    |
-| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| rollback autorizado ausente; zero quarentena residual                                                                       | ✅                                                                                           |
-| checkout ativo: mesma identidade (inode) e mesma revisão                                                                    | ✅                                                                                           |
-| artefatos operacionais ativos com hashes inalterados                                                                        | ✅                                                                                           |
-| produção 5/5 `running/healthy`; baseline inalterada                                                                         | ✅                                                                                           |
-| backup                                                                                                                      | `state=ready`                                                                                |
-| `stakeframe-restore.timer`                                                                                                  | `enabled/active/waiting`                                                                     |
-| `stakeframe-restore.service`                                                                                                | `inactive/dead`, `Result=success`, `ExecMainStatus=0`                                        |
-| restore disparado                                                                                                           | **nenhum** (journal do timer sem entradas no período)                                        |
-| firewall IPv6 e run confirmado da STK-M0-23                                                                                 | intocados: INPUT/FORWARD `DROP`, OUTPUT `ACCEPT`, 7 chains `STK6_*`, salto de INPUT presente |
-| recursos IPv6 preservados (`active.json`, dois diretórios de run, journals, unit files, archive legado arquivado, stagings) | ✅                                                                                           |
-| outros arquivos ou diretórios removidos                                                                                     | **nenhum**                                                                                   |
+| Verificação                                                                                                                 | Resultado                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| rollback autorizado ausente; zero quarentena residual                                                                       | ✅                                                                                                                                      |
+| checkout ativo: mesma identidade (inode) e mesma revisão                                                                    | ✅                                                                                                                                      |
+| artefatos operacionais ativos com hashes inalterados                                                                        | ✅                                                                                                                                      |
+| produção 5/5 `running/healthy`; baseline inalterada                                                                         | ✅                                                                                                                                      |
+| backup                                                                                                                      | `state=ready`                                                                                                                           |
+| `stakeframe-restore.timer`                                                                                                  | `enabled/active/waiting`                                                                                                                |
+| `stakeframe-restore.service`                                                                                                | `inactive/dead`, `Result=success`, `ExecMainStatus=0`                                                                                   |
+| restore disparado                                                                                                           | **nenhum** (journal do timer sem entradas no período)                                                                                   |
+| firewall IPv6 e run confirmado da STK-M0-23                                                                                 | intocados: INPUT/FORWARD `DROP`, OUTPUT `ACCEPT`, **1 chain própria `STK6_*`** preservada, com salto de `INPUT` e as 5 regras aprovadas |
+| recursos IPv6 preservados (`active.json`, dois diretórios de run, journals, unit files, archive legado arquivado, stagings) | ✅                                                                                                                                      |
+| outros arquivos ou diretórios removidos                                                                                     | **nenhum**                                                                                                                              |
 
 Recursos IPv6 conferidos por contagem, sem publicar caminhos: `active.json`
 presente; dois diretórios de run com 52 arquivos; 2 journals; 2 unit files em
 `/run/systemd/system` com `LoadState=loaded` e `ActiveState=inactive`;
 `stk-ipv6-staging-m0-06` e `stk-ipv6-staging-m0-23` presentes.
+
+Contagens do firewall IPv6 obtidas **separadamente**, somente em leitura:
+
+| Contagem                                 | Valor |
+| ---------------------------------------- | ----- |
+| declarações de chain com prefixo `STK6_` | **1** |
+| saltos de `INPUT` para a chain própria   | **1** |
+| regras dentro da chain própria           | **5** |
+| ocorrências totais da string `STK6_`     | **7** |
+
+O número antes publicado como quantidade de chains `STK6_*` correspondia, na
+verdade, à **contagem de linhas que contêm a string** — 1 declaração + 1 salto +
+5 regras. A chain é **uma só**. As 5 regras internas são loopback, `RELATED,ESTABLISHED`, ICMPv6,
+`TCP/22 NEW` e `DROP`. As políticas permanecem `INPUT`/`FORWARD` `DROP` e
+`OUTPUT` `ACCEPT`. O arquivo de persistência não contém declaração da chain,
+coerente com a persistência deliberadamente fora de escopo naquela janela.
 
 ## 8. Limitações
 
