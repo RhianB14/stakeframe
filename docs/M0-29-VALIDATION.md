@@ -92,7 +92,9 @@ Verificações de resíduos e integridade (`POSTVALID_DONE G=0`):
 
 - Rollback do checkout **retido** (300 arquivos, 3,3 MiB, revisão `d00717f`,
   caminho completo não publicado). Exclusão destrutiva exigirá autorização
-  separada; não houve divergência que justificasse restaurá-lo.
+  separada; não houve divergência que justificasse restaurá-lo. Continua retido
+  após a leitura de reconciliação de 10/09/2026, que **não** o removeu
+  ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §8).
 - Scratch de transporte em `/run` (9expect, 9check, scripts de troca e
   validação) removido após a captura das evidências: `SCRATCH_LEFT=0`.
 - `restore-latest.json` reflete a última tentativa com `status=passed`

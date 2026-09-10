@@ -283,3 +283,18 @@ comprovado. Mutações: `usermod -p` (restauração do campo) e `chage -d`
 Firewall, persistência e demais serviços não foram tocados neste encerramento;
 o estado do run de firewall e sua reconciliação pendente estão em
 [NETWORK-SECURITY.md](NETWORK-SECURITY.md) §5.
+
+### Adendo (STK-M0-23/31, 07–10/09/2026): condição na janela IPv6 executada
+
+Registra-se **somente a condição relevante** da janela de firewall executada em
+07/09/2026, sem reescrever o histórico acima: o requisito desta seção foi
+satisfeito naquela janela — console temporário autenticado, **mantido durante
+toda a alteração**, sem depender de SSH para recriá-lo. A atestação de preflight
+do run registra operador em sessão serial com orquestração do Codex e os checks
+de recuperação do provedor aprovados, e a de pós-execução registra a segunda
+conexão SSH independente. O recurso de console foi encerrado ao fim da janela.
+
+Limites: a condição vale para **aquela** janela; o descarte da chave temporária
+da integração serial segue **não comprovado** e nenhuma recuperação é declarada
+pronta para janelas futuras por este adendo. Detalhamento sanitizado em
+[M0-31-VALIDATION.md](M0-31-VALIDATION.md).
