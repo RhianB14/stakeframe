@@ -1,8 +1,8 @@
 # STK-M0-30 — Instalação do timer mensal de restore
 
-> **STATUS: MUTAÇÃO E CONCLUÍDA.** Os units mensais foram instalados e
-> habilitados, e uma execução inicial supervisionada terminou com sucesso. A
-> produção permaneceu inalterada.
+> **STATUS: MUTAÇÃO E CONCLUÍDA.** O service e o timer mensais foram
+> instalados; o timer foi habilitado e ativado, e uma execução inicial
+> supervisionada terminou com sucesso. A produção permaneceu inalterada.
 
 Autorização explícita do proprietário em 10/09/2026: executar a mutação E pela
 variante supervisionada, incluindo a instalação e habilitação do timer e
@@ -62,13 +62,14 @@ Não houve segunda invocação pelo timer.
 O service encerrou com `Result=success`, `ExecMainStatus=0` e estado final
 `inactive/dead`. O relatório atômico novo registrou:
 
-| Campo                | Resultado                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `status` / `cleanup` | `passed` / `passed`                                                                                                       |
-| Verificações         | `countsVerified`, `financeVerified`, `rolesVerified`, `permissionsVerified`, `importsPaused` e `sessionsRevoked` = `true` |
-| Falhas               | `failureCode=null`, `cleanupFailureCode=null`                                                                             |
-| Janela               | `2026-09-10T10:25:57.162Z` → `2026-09-10T10:26:30.984Z`                                                                   |
-| Duração              | `33822 ms`                                                                                                                |
+| Campo                         | Resultado                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `status` / `cleanup`          | `passed` / `passed`                                                                                                       |
+| Verificações                  | `countsVerified`, `financeVerified`, `rolesVerified`, `permissionsVerified`, `importsPaused` e `sessionsRevoked` = `true` |
+| Falhas                        | `failureCode=null`, `cleanupFailureCode=null`                                                                             |
+| Janela                        | `2026-09-10T10:25:57.162Z` → `2026-09-10T10:26:30.984Z`                                                                   |
+| Duração do drill (durationMs) | `26361 ms`                                                                                                                |
+| Intervalo externo             | `33822 ms` (`completedAt` - `startedAt`)                                                                                  |
 
 ## 4. Pós-validação
 
