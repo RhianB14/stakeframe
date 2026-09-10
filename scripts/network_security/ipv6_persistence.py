@@ -558,14 +558,6 @@ class Controller:
         """
         return self._matching_journal(boot_id, controller_hash, ("rolling_back",))
 
-    def _terminal_rollback_proof(self, boot_id, controller_hash):
-        """A proved terminal rolled_back record from this same boot.
-
-        While it exists, a surviving applied receipt is stale: it never
-        authorizes a new rollback mutation nor a no-op/applied success.
-        """
-        return self._matching_journal(boot_id, controller_hash, ("rolled_back",))
-
     def _recovery_document(self, name):
         """Read a recovery record tolerating an interrupted sidecar update.
 

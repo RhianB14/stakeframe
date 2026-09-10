@@ -369,7 +369,7 @@ mutação**; deriva ⇒ `rollback_required`.
 Procedimento previsto, **dependente de autorização posterior do Codex**:
 
 1. instalar `ipv6_persistence.py` e a unit por staging + conferência de hashes
-   (`67051815e9a5967c69d3406c04e1050bd9f2e13b5bda0d169fa9322961e60a49` para o
+   (`ffe90df4b1f901f7bf69f6ea33b63f6f580af617b6014d11e69337595f2f698c` para o
    controlador; `bb448b8cd42b2654baee89892b28382907db0a92de6b8bafb3b89d6fbc45febd`
    para a unit);
 2. manter backup privado dos artefatos substituídos;
