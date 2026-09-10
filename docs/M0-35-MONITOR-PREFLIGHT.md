@@ -8,22 +8,22 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
 - Wrangler fixado pelo lockfile: **4.129.0**; `pnpm monitor:check` (dry-run) conclui com sucesso e lista os bindings.
 - Worker: `infra/monitor/worker.mjs` (215 linhas) exporta `class StakeframeMonitor` (Durable Object com storage SQLite) e `export default { scheduled, fetch }`.
 - Testes: `tests/operations/monitor.test.mjs` (4 pass), `pnpm operations:test` (0 falhas), dry-run do Wrangler OK.
-- Probes HTTPS sem autenticação: `https://stakeframe.com.br/status` → HTTP 200; workers.dev de monitor → não existe (esperado antes do deploy).
+- Probes HTTPS sem autenticação: `https://stakeframe.com.br/status` → HTTP 200, que é **HTML público da aplicação** — **não é o `/status` do Worker** e não comprova sua proteção. O `/status` do monitor **não foi testado remotamente** porque o Worker ainda não existe (ver §7).
 
 ## 2. Matriz de gates
 
-| #   | Gate                                                                                  | Estado    | Evidência                                                                                                    |
-| --- | ------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
-| 1   | Base `59d8435a` em origin/main                                                        | PASS      | fetch + rev-parse idênticos                                                                                  |
-| 2   | Contrato do Wrangler (binding, classe, DO SQLite, cron, workers_dev, observabilidade) | PASS      | `wrangler.jsonc` + dry-run 4.129.0                                                                           |
-| 3   | `MONITOR_ENABLED=false` (comportamento inerte)                                        | PASS      | worker.mjs L32/L196 retornam cedo; dry-run mostra var `false`                                                |
-| 4   | Validação de segredos antes de uso                                                    | PASS      | regexes L35-39 e L204; falha sem consulta externa                                                            |
-| 5   | Deduplicação/lease/gravação antes do envio                                            | PASS      | testes de monitor (4 pass)                                                                                   |
-| 6   | `/status` protegido                                                                   | PASS      | probe sem auth → 200 público; com token ausente → validado por teste                                         |
-| 7   | Conta Cloudflare autenticável                                                         | BLOQUEADO | `wrangler whoami` → "You are not authenticated"; não existe `CLOUDFLARE_API_TOKEN` no ambiente desta máquina |
-| 8   | Nenhum recurso `stakeframe-monitor` existente                                         | PENDENTE  | não verificável sem autenticação Cloudflare; revalidar na janela de ativação                                 |
-| 9   | `monitor_token` existente utilizável                                                  | BLOQUEADO | nenhum caminho seguro de leitura sem mutação; fica para a janela de ativação                                 |
-| 10  | Segredos instalados no Worker                                                         | BLOQUEADO | exige deploy (fora do escopo)                                                                                |
+| #   | Gate                                                                                  | Estado    | Evidência                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Base `59d8435a` em origin/main                                                        | PASS      | fetch + rev-parse idênticos                                                                                                   |
+| 2   | Contrato do Wrangler (binding, classe, DO SQLite, cron, workers_dev, observabilidade) | PASS      | `wrangler.jsonc` + dry-run 4.129.0                                                                                            |
+| 3   | `MONITOR_ENABLED=false` (comportamento inerte)                                        | PASS      | worker.mjs L32/L196 retornam cedo; dry-run mostra var `false`                                                                 |
+| 4   | Validação de segredos antes de uso                                                    | PASS      | regexes L35-39 e L204; falha sem consulta externa                                                                             |
+| 5   | Deduplicação/lease/gravação antes do envio                                            | PASS      | testes de monitor (4 pass)                                                                                                    |
+| 6   | `/status` protegido (validação local do código/teste)                                 | PASS      | teste automatizado: requisição sem bearer ao handler externo retorna 404. **Probe remoto não executado** (Worker inexistente) |
+| 7   | Conta Cloudflare autenticável                                                         | BLOQUEADO | `wrangler whoami` → "You are not authenticated"; não existe `CLOUDFLARE_API_TOKEN` no ambiente desta máquina                  |
+| 8   | Nenhum recurso `stakeframe-monitor` existente                                         | PENDENTE  | não verificável sem autenticação Cloudflare; **sem inferência por DNS**; revalidar por leitura autenticada                    |
+| 9   | `monitor_token` existente utilizável                                                  | BLOQUEADO | nenhum caminho seguro de leitura sem mutação; fica para a janela de ativação                                                  |
+| 10  | Segredos instalados no Worker                                                         | BLOQUEADO | exige deploy (fora do escopo)                                                                                                 |
 
 ## 3. Estado remoto Cloudflare (sanitizado)
 
@@ -31,8 +31,9 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
   "You are not authenticated" e não há `CLOUDFLARE_API_TOKEN` no ambiente desta
   máquina. Nenhum comando de leitura remota pôde ser executado nesta tarefa.
 - **Worker/deployment/namespace DO `stakeframe-monitor`: PENDENTE** — não verificável
-  sem autenticação; revalidar na janela de ativação (`wrangler deployments list`,
-  KV/DO listing) antes de qualquer `secret put`.
+  sem autenticação; **sem inferência por DNS** (DNS ausente não comprova ausência de
+  recurso). Revalidar na janela de ativação (`wrangler deployments list`, listagem de
+  DO) antes de qualquer `secret put`.
 - Segredos: nada listado, nada lido; nenhum valor impresso, copiado ou persistido.
 - Plano/cotas: **pendente** — não expostos sem autenticação.
 
@@ -52,22 +53,53 @@ Wrangler 4.129.0 para Workers novos, e o dry-run valida a configuração sem err
 Trocar para `migrations` não traria ganho comprovado — mudança descartada por falta
 de evidência técnica concreta.
 
-## 6. Plano de ativação exato (a executar somente com autorização posterior)
+## 6. Sequência normativa única de ativação (nenhuma etapa executada)
 
-1. Criar/instalar os quatro segredos no Worker via `wrangler secret put` (um por vez, valores fora do repositório):
-   `MONITOR_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_USER_ID`, `TELEGRAM_OWNER_CHAT_ID`.
-2. Alterar `MONITOR_ENABLED` para `"true"` em `wrangler.jsonc` (commit documental + revisão).
-3. `pnpm monitor:check` (dry-run) e revisão Codex.
-4. Deploy: `wrangler deploy --config infra/monitor/wrangler.jsonc`.
-5. Pós-deploy: probe sem autenticação em `https://stakeframe-monitor.<subdomínio>.workers.dev` deve falhar (protegido); consulta autenticada ao `/status` deve retornar os campos esperados.
-6. Observar primeiro ciclo de cron (5 min): confirmar execução, ausência de alertas falsos e deduplicação ativa.
-7. Rollback previsto: reverter `MONITOR_ENABLED` para `"false"` e redeploy — sem exclusão de recursos.
+Sequência obrigatória para a janela autorizada; cada mutação só ocorre após o gate
+imediatamente anterior:
+
+a. **Leitura autenticada:** validar identidade (`wrangler whoami`) e listar
+Worker/deployments/namespace/segredos `stakeframe-monitor` (apenas nomes) e
+plano/cotas.
+b. **Recurso preexistente:** se algo já existir com o nome `stakeframe-monitor`,
+**não exigir "inexistência" cegamente**: comparar identidade, configuração e
+propriedade com o repositório. Recurso desconhecido ou divergente → **BLOQUEIA a
+mutação** e retorna ao Codex.
+c. **Gate G0 (antes da primeira mutação):** credencial com permissão mínima válida;
+`pnpm monitor:check` verde; `MONITOR_ENABLED=false` na config; valores dos 4
+segredos prontos **fora do Git**; plano de rollback (§9) lido.
+d. **Primeiro deploy inerte:** `wrangler deploy` com `MONITOR_ENABLED=false`;
+**registrar o version ID inerte**; registrar a criação/reconciliação do ciclo de
+vida do DO SQLite (o primeiro deploy cria o DO — não há versão remota anterior).
+Verificação V1: probe workers.dev **sem auth** → recusa; cron registrado e
+inerte; nenhuma mensagem.
+e. **Segredos:** `wrangler secret put` ×4, **interativo**, um por vez, sem valores
+em argumentos, logs gravados ou Git.
+f. **Presença:** confirmar apenas a presença dos nomes (readback do provedor: nome +
+timestamp/versão).
+g. **Validação privada dos valores:** conferir formato (regexes do worker) e
+igualdade (`TELEGRAM_OWNER_CHAT_ID == TELEGRAM_OWNER_USER_ID`) por leitura
+privada, emitindo **somente PASS/FAIL**. Ler as regexes do código não valida
+valores reais.
+h. **Commit do enable:** commit separado alterando `MONITOR_ENABLED="true"` → CI
+5/5 → revisão do Codex.
+i. **Deploy habilitado — ponto de ativação:** a partir daqui o cron executa
+automaticamente a cada 5 minutos. A ativação é **reversível** via rollback
+(§9).
+j. **Verificação V2:** probes pós-deploy e observação do primeiro ciclo (≤5 min):
+silêncio saudável; consulta autenticada somente leitura ao `/status` (token em
+memória de sessão); logs sem aviso.
 
 ## 7. Registro de probes
 
-- GET sem auth `https://stakeframe.com.br/status` → **HTTP 200** (10/09/2026, ~22:35Z e ~22:36Z) — rota pública responde.
-- GET sem auth no workers.dev do monitor → sem DNS (000) — Worker ainda não implantado (esperado).
-- GET sem auth `https://stakeframe-monitor.example.workers.dev` → 000 (DNS inexistente; confirma que não há Worker público com esse subdomínio de exemplo — prova negativa de superfície).
+- GET sem auth `https://stakeframe.com.br/status` (10/09/2026, ~22:35Z) → HTTP 200.
+  **Prova apenas que a rota pública da aplicação responde** — o retorno é HTML da
+  aplicação, **não o `/status` do Worker**; não comprova a proteção do monitor.
+- **Probe remoto do `/status` do monitor: NÃO EXECUTADO** — o Worker ainda não
+  existe (sem deploy). Será executado na janela de ativação.
+- **Sem inferência por DNS:** sem autenticação Cloudflare, subdomínio, Worker,
+  deployment e namespace permanecem **PENDENTES** de leitura autenticada; ausência
+  de DNS não comprova ausência de recurso.
 - Nenhum valor de segredo impresso, copiado ou persistido nesta tarefa.
 
 ## 8. Distinção entre deploy do Worker e envio real de mensagem Telegram
@@ -80,64 +112,50 @@ de evidência técnica concreta.
   com autorização específica). Cada envio é gravado antes da tentativa (lease no DO)
   e é deduplicado; mensagem "incerta" não é reenviada após restart (provado por
   teste).
-- Portanto **"deploy concluído" nunca implica "Telegram tocado"**. A prova de não-envio
-  em uma janela é: logs do cron sem incidente + estado do DO sem entrega + `getMe`
-  (somente leitura) da Bot API sem novas mensagens.
+- Portanto **"deploy concluído" nunca implica "Telegram tocado"**. A prova de
+  silêncio esperado é: **estado do DO sem entrega + logs do ciclo + observação do
+  chat pelo proprietário**. `getMe` valida apenas a identidade do bot (se
+  necessário); **não informa mensagens**. Não usar `getUpdates` de forma que
+  interfira no consumidor Telegram existente.
 
-## 9. Sequência atômica proposta para implantação posterior (nenhum passo executado)
+## 9. Plano de rollback por versão
 
-1. **Fase 0 — leitura:** revalidar identidade (`wrangler whoami`), inexistência de
-   recursos `stakeframe-monitor` (`wrangler deployments list`, listagem de DO),
-   segredos existentes (apenas nomes), plano/cotas (leitura autenticada).
-2. **Gate G0 (obrigatório antes da primeira mutação):** credencial com permissão
-   mínima válida; nenhum recurso preexistente; `pnpm monitor:check` verde;
-   `MONITOR_ENABLED=false` na config; valores dos 4 segredos prontos **fora do Git**;
-   plano de rollback (§10) lido.
-3. **Fase 1 — deploy inerte:** `wrangler deploy` com `MONITOR_ENABLED=false`.
-   Ponto de verificação V1: probe workers.dev **sem auth** → recusa (rota protegida);
-   cron registrado mas inerte; nenhuma mensagem.
-4. **Fase 2 — segredos:** `wrangler secret put` × 4, um por vez, valores nunca em
-   terminal gravado/Git; readback = apenas nomes + timestamps.
-5. **Gate G1 (antes de habilitar):** 4 segredos presentes (por nome); validação de
-   formato pelo código (regexes) confirmada por leitura; autorização do Codex para o
-   enable.
-6. **Fase 3 — enable (ponto de não-retorno):** commit alterando
-   `MONITOR_ENABLED="true"` → CI 5/5 → revisão Codex → deploy habilitado. A partir
-   daqui o cron roda a cada 5 min por conta própria.
-7. **Verificação V2:** primeiro ciclo (≤5 min): "quiet while healthy" (nenhuma
-   mensagem sem incidente); consulta autenticada somente leitura ao `/status`
-   (token em memória de sessão, nunca persistido); logs sem aviso.
+- **Comando válido (Wrangler 4.129.0):** `wrangler rollback <VERSION_ID> --config
+infra/monitor/wrangler.jsonc`.
+- **Incidente após o enable:** rollback operacional primário = **promoção imediata
+  do version ID inerte** registrado no primeiro deploy (§6-d) — retorno mais rápido
+  ao estado inerte conhecido.
+- **Reconciliação do Git:** após o rollback remoto, abrir **PR própria** revertendo
+  `MONITOR_ENABLED` (ou o ajuste necessário), com CI e revisão; o Git volta a ser a
+  fonte da verdade.
+- **Ciclo de vida do DO:** o primeiro deploy cria/reconcilia o Durable Object
+  SQLite; **não existe versão remota anterior** que desfaça a criação. O rollback de
+  versão afeta código/config do Worker, não o armazenamento do DO.
+- **O rollback não remove nada:** um rollback de versão **não** remove DO, namespace
+  nem segredos. Exclusão desses recursos é **operação destrutiva separada**, com
+  autorização específica.
+- **Pós-rollback (obrigatório):** probe sem auth → recusa; `wrangler deployments
+list` provando a versão ativa; zero mensagens durante um ciclo observado.
 
-## 10. Plano de rollback por versão
+## 10. Teste controlado de falha, recuperação e deduplicação (desenho)
 
-- **Primário:** reverter no Git (`MONITOR_ENABLED="false"`) → CI → deploy da versão
-  inerte. Fonte da verdade é o repositório; não usar `versions rollback` como
-  primeira opção porque preservaria config divergente do Git.
-- **Contingência (Git indisponível):** `wrangler versions rollback <version>` para a
-  última versão inerte conhecida; depois conciliar o Git.
-- **Pós-rollback (obrigatório):** probe sem auth → recusa; leitura de
-  `wrangler deployments list` provando a versão ativa; zero mensagens durante a
-  observação de um ciclo.
-- **Rollback nunca** exclui DO/namespace/segredos — estado preservado para auditoria;
-  exclusão de recursos é operação separada com autorização específica.
+Não executado nesta tarefa (envio de mensagem é proibido aqui). **Sem
+indisponibilizar a aplicação, sem rota unhealthy e sem induzir incerteza de entrega
+em produção** — a falha de entrega incerta permanece comprovada **somente pelo
+teste automatizado**. Sequência com autorização específica:
 
-## 11. Teste controlado de falha, recuperação e deduplicação (desenho para a janela autorizada)
+1. Substituir temporariamente o `MONITOR_TOKEN` **somente no monitor** por um valor
+   **inválido**; o valor correto permanece preservado em custódia privada.
+2. Aguardar um ciclo: o monitor registra incidente (falha de verificação) →
+   **1 mensagem** de incidente; registrar o `message_id` em evidência privada.
+3. Aguardar outro ciclo com a mesma falha: **nenhuma mensagem adicional**
+   (deduplicação).
+4. Restaurar o token correto no monitor.
+5. Aguardar um ciclo: **1 mensagem** de recuperação; estado volta a "quiet while
+   healthy".
+6. Confirmar silêncio posterior: estado do DO + logs do ciclo + observação do chat.
 
-Não executado nesta tarefa (envio de mensagem é proibido aqui). Cenários mínimos,
-na ordem, com autorização específica para cada mensagem:
-
-1. **Falha:** aplicação inacessível (ex.: rota de teste autorizada retornando
-   unhealthy) → incidente gravado → **1 mensagem** de incidente → nova varredura
-   **não** reenvia enquanto o incidente persistir (deduplicação).
-2. **Recuperação:** aplicação volta → **1 mensagem** de recuperação → estado volta a
-   "quiet while healthy".
-3. **Reinício sob incerteza:** interromper entrega (ex.: revogar rede momentânea sob
-   autorização) e reiniciar o Worker → mensagem incerta **não** é reenviada
-   (comportamento já provado em teste automatizado; validar também em produção).
-4. Cada envio: registrar em evidência privada timestamp, chat (via `getMe`/readback),
-   texto sanitizado e estado do DO. Nenhum conteúdo privado em logs públicos.
-
-## 12. Custos e cotas: comprovados vs não comprovados
+## 11. Custos e cotas: comprovados vs não comprovados
 
 - **Comprovado nesta tarefa:** apenas o comportamento local (dry-run, testes). O
   dry-run não consulta cotas.
@@ -148,20 +166,22 @@ na ordem, com autorização específica para cada mensagem:
 - **Nenhum número de cota é afirmado aqui** — valores de plano variam por conta e
   devem ser lidos da API/CLI na janela, com saída sanitizada.
 
-## 13. Evidências privadas a reter fora do Git (checklist da janela de ativação)
+## 12. Evidências privadas a reter fora do Git (checklist da janela de ativação)
 
-- Subdomínio workers.dev real do Worker; ID de conta Cloudflare; saída completa de
-  `wrangler whoami`; logs de deploy (contêm IDs); versões/timestamps de deployment;
-  hashes dos artefatos deployados.
-- Valores dos 4 segredos (`MONITOR_TOKEN`, `TELEGRAM_BOT_TOKEN`,
-  `TELEGRAM_OWNER_USER_ID`, `TELEGRAM_OWNER_CHAT_ID`) — gerados/obtidos fora do Git;
-  readbacks apenas com nome + timestamp.
-- Registros dos testes da §11: timestamps, mensagens enviadas (ids), estado do DO.
-- Destino sugerido: diretório privado na máquina do proprietário + `SHA256SUMS`
-  (padrão já usado nas evidências da M0-33/M0-34). **Nunca** no repositório, PRs,
-  issues ou comentários.
+A evidência privada guarda **apenas metadados e resultados — nunca valores de
+segredos** (estes permanecem somente nos locais de custódia aprovados e nos secret
+stores necessários):
 
-## 14. Limitação de runtime local
+- Nomes dos segredos; presença, timestamps e versões retornados pelo provedor.
+- Identidade sanitizada da conta e do Worker; subdomínio real do Worker; IDs.
+- Version IDs e logs sanitizados; hashes dos artefatos deployados.
+- Resultados PASS/FAIL das validações da §6-g.
+- Message IDs dos testes autorizados da §10, sem tokens ou conteúdo privado.
+- Destino: diretório privado na máquina do proprietário + `SHA256SUMS` (padrão já
+  usado nas evidências da M0-33/M0-34). **Nunca** no repositório, PRs, issues ou
+  comentários.
+
+## 13. Limitação de runtime local
 
 - Projeto fixa Node `v24.20.0` (`.nvmrc`, `engines >=24.20.0 <25`) e
   `pnpm@11.24.0`. A máquina local está em Node v22.23.2 — os testes locais passaram

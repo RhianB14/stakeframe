@@ -221,8 +221,13 @@ ou janela de rede; cada item exige a evidência descrita.
       somente IPv6 INPUT/FORWARD ativo, sem persistência nesta janela, em
       [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md). IPv4, OUTPUT, Docker,
       Fail2Ban, SSH, rpcbind e OCI preservados.
-- [ ] Concluir preparação para execução: revisão do Codex, recuperação
+- [x] Concluir preparação para execução: revisão do Codex, recuperação
       demonstrada e gates reais de janela; simulação não é teste na VPS.
+      **Executada e concluída** — a preparação histórica e a janela IPv6 foram
+      executadas (STK-M0-04/05/33/34). O gate OOB foi **apenas parcialmente
+      validado** (verificação sem sessão OCI mantida, [M0-33-VALIDATION.md
+      §10](M0-33-VALIDATION.md)); a disponibilidade OOB **continua não comprovada
+      para futuras janelas críticas**.
 - [x] Preparar implementação única em `scripts/network_security/ipv6_guard.py`,
       com runbook referenciado, sintaxe/CLI offline e 51 testes simulados
       aprovados localmente. CI inclui job separado de simulação, sem comandos
@@ -323,8 +328,9 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Persistir o delta IPv6 — **concluído e comprovado**: STK-M0-33/STK-M0-34
       instalaram a unit systemd de persistência, habilitaram-na e validaram um
       reboot controlado único com primeira aplicação real pelo boot
-      (`active/exited`, `Result=success`), idempotência `no-op` e delta
-      persistindo entre boots
+      (`active/exited`, `Result=success`), idempotência `no-op` e **unit
+      habilitada** com delta aplicado **no único boot validado**; a reaplicação
+      futura decorre da configuração instalada, **sem segundo reboot observado**
       ([M0-33-VALIDATION.md](M0-33-VALIDATION.md) §10, atualizado pela
       [PR #94](https://github.com/RhianB14/stakeframe/pull/94)). A recuperação
       fora de banda (OOB) **continua não comprovada** para futuras janelas
