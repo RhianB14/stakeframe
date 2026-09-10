@@ -125,3 +125,10 @@ Verificações de resíduos e integridade (`POSTVALID_DONE G=0`):
   intervenção em produção.
 - Este registro cobre a execução única autorizada; repetições exigem nova
   autorização do proprietário.
+
+## 8. Resultado posterior — STK-M0-30
+
+A mutação E foi posteriormente autorizada e concluída na
+[STK-M0-30](M0-30-VALIDATION.md): timer mensal instalado e ativo, com uma nova
+execução inicial supervisionada aprovada. As seções anteriores preservam o
+estado observado durante a STK-M0-29.

@@ -6,9 +6,10 @@
 > implementa backup completo da aplicação, retenção histórica, agendamento,
 > quarentena de recuperação e monitor; procedimentos em [OPERATIONS.md](OPERATIONS.md).
 > O backup externo R2 está ativo desde 07/09/2026, com ciclos de 30 minutos e
-> retenção ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)). Permanecem pendentes
-> a restauração integral com dados de produção, o alerta de atraso, o timer
-> mensal de ensaio, anexos reais com manifesto e as métricas RPO/RTO.
+> retenção ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)). O timer mensal de
+> ensaio foi instalado e validado na [STK-M0-30](M0-30-VALIDATION.md).
+> Permanecem pendentes a restauração integral/failover, o alerta de atraso,
+> anexos reais com manifesto e a comprovação das métricas RPO/RTO.
 
 ## Objetivos (do plano mestre)
 
@@ -98,7 +99,9 @@ Os passos abaixo continuam sendo os critérios operacionais de aceite.
 - [ ] Restauração completa executada com sucesso ao menos uma vez, incluindo
       recriação de roles e conferência de anexos por manifesto.
 - [ ] Alerta de backup atrasado verificado.
-- [ ] Teste mensal de restauração agendado e documentado.
+- [x] Teste mensal de restauração agendado e documentado; timer ativo e
+      execução inicial supervisionada aprovada na
+      [STK-M0-30](M0-30-VALIDATION.md).
 
 O ensaio local valida somente a parte PostgreSQL com roles e permissões, usando
 Restic e dados de teste. Ele não conclui nenhum dos itens integrais acima.
