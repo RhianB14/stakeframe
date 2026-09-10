@@ -30,7 +30,7 @@ As verificações na VPS foram somente leitura até todos os gates passarem:
 | Concorrência e resíduos | zero execução concorrente; containers/volumes/redes `0/0/0`         |
 | Capacidade              | 40 GiB livres, 17% usados                                           |
 | Runtime root            | ausente                                                             |
-| Rollback do checkout    | presente e íntegro; caminho privado não publicado                   |
+| Rollback do checkout    | presente e íntegro nesta janela; **removido em 10/09/2026** (M0-32) |
 
 A observação do `systemd-analyze security` sobre ausência de `UMask=` foi
 aceita sem mudança nesta janela. Os diretórios privados já usam modo `0700`, os
@@ -85,10 +85,13 @@ O service encerrou com `Result=success`, `ExecMainStatus=0` e estado final
 | Backup              | permaneceu `ready`                              |
 
 Como todos os critérios passaram, o rollback da mutação E não foi acionado. O
-rollback antigo do checkout foi preservado e continua sujeito a autorização
-destrutiva separada; permanece **retido** após a leitura de reconciliação de
-10/09/2026, que não o removeu
-([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §8).
+rollback antigo do checkout foi preservado nesta janela e permaneceu sujeito a
+autorização destrutiva separada; continuou **retido** após a leitura de
+reconciliação de 10/09/2026, que não o removeu
+([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §8), e foi **removido em
+10/09/2026** sob autorização destrutiva específica do proprietário, após
+conferência de identidade, ausência de uso e integridade do checkout ativo
+([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 
 ## 5. Limitações e autoria
 

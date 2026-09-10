@@ -25,6 +25,10 @@ Leitura-only, imediatamente antes da execução (`REVALID_DONE G=0`):
 | 12. Node e Docker config                                    | `v24.20.0`; `directory root:root 700` / `regular file root:root 600` |
 | 13. Rollback do checkout                                    | íntegro: 300 arquivos, revisão `d00717f`                             |
 
+> **Retrato datado (09/09/2026).** Este preflight registrou o rollback como
+> íntegro. Ele foi **removido em 10/09/2026**, sob autorização destrutiva
+> específica do proprietário ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
+
 A base obrigatória permaneceu exata (`origin/main` =
 `36c0e6386fb4cc47cb899e32ae70fc25877f043f`, CI 5/5 `completed/success` nesse
 SHA) e o worktree principal permaneceu limpo.
@@ -91,10 +95,13 @@ Verificações de resíduos e integridade (`POSTVALID_DONE G=0`):
 ## 4. Rollback e scratch (§5 da retomada)
 
 - Rollback do checkout **retido** (300 arquivos, 3,3 MiB, revisão `d00717f`,
-  caminho completo não publicado). Exclusão destrutiva exigirá autorização
-  separada; não houve divergência que justificasse restaurá-lo. Continua retido
-  após a leitura de reconciliação de 10/09/2026, que **não** o removeu
-  ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §8).
+  caminho completo não publicado). Exclusão destrutiva exigia autorização
+  separada; não houve divergência que justificasse restaurá-lo. Permaneceu
+  retido após a leitura de reconciliação de 10/09/2026, que **não** o removeu
+  ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §8), e foi **removido em
+  10/09/2026** sob autorização destrutiva específica do proprietário, após
+  conferência de identidade, ausência de uso e integridade do checkout ativo
+  ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 - Scratch de transporte em `/run` (9expect, 9check, scripts de troca e
   validação) removido após a captura das evidências: `SCRATCH_LEFT=0`.
 - `restore-latest.json` reflete a última tentativa com `status=passed`

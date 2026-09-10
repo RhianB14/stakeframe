@@ -19,7 +19,7 @@ obrigatórios `completed/success`.
 | Encerramento administrativo do run legado | 07/09/2026     | units residuais removidas e apontador arquivado, sob autorização própria (STK-M0-22)  |
 | **Janela IPv6 real (STK-M0-23)**          | **07/09/2026** | **apply e confirm concluídos; delta ativo, não revertido**                            |
 | Preflight de reconciliação (STK-M0-31)    | 10/09/2026     | somente leitura; interrompido por divergência, sem mutação                            |
-| Rollback do checkout (STK-M0-29)          | 09/09/2026     | retido no servidor; exclusão exige autorização separada                               |
+| Rollback do checkout (STK-M0-29)          | 09/09/2026     | retido em 09/09; **removido em 10/09/2026** sob autorização específica (STK-M0-32)    |
 
 Nenhum desses acontecimentos equivale a outro. O encerramento administrativo do
 run legado resolveu o apontador residual e **não** aplicou hardening; a tentativa
@@ -173,8 +173,9 @@ residual e o archive administrativo do run legado preservado.
 
 ## 8. Pendências que esta tarefa não encerra
 
-- Rollback do checkout da STK-M0-29 **retido**; exclusão exige autorização
-  específica, vinculada ao estado real.
+- Rollback do checkout da STK-M0-29: permaneceu **retido** nesta leitura e foi
+  **removido em 10/09/2026** sob autorização específica do proprietário,
+  vinculada ao estado real ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 - Stagings `stk-ipv6-staging-m0-06` e `stk-ipv6-staging-m0-23` preservados.
 - Descarte da chave temporária serial não comprovado.
 - Persistência do delta IPv6 fora do escopo, como tarefa própria.
