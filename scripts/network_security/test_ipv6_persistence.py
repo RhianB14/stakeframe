@@ -243,6 +243,9 @@ class Base(unittest.TestCase):
     def journal_phase(self):
         return json.loads((self.root / "journal.json").read_text())["phase"]
 
+    def terminal_phase(self):
+        return json.loads((self.root / "terminal.json").read_text())["phase"]
+
 
 # ---------------------------------------------------------------- rules
 class PolicyTests(Base):
@@ -518,11 +521,12 @@ class PostAcquisitionFailureTests(Base):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
         # The firewall result is preserved and the durable proof is the terminal
-        # journal (rolled_back/clean), written before the receipt step failed:
+        # record (rolled_back/clean), written before the receipt step failed:
         # status must NOT report an applied state.
         self.assertFalse(self.backend.owned())
         self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
-        self.assertEqual(self.journal_phase(), "rolled_back")
+        self.assertEqual(self.terminal_phase(), "rolled_back")
+        self.assertEqual(self.journal_phase(), "rolling_back")  # previous proof left intact
         status = self.controller.status()
         self.assertEqual(status["phase"], "rolled_back")
         self.assertEqual(status["state"], "clean")
@@ -995,6 +999,128 @@ class FinalizeRollbackWindowTests(Base):
             self.controller.rollback()
         self.assert_no_mutation(before)
         self.assertEqual(self.journal_phase(), "rolled_back")
+
+
+# ------------------------------- terminal slot: interrupted double replace
+class TerminalSlotInterruptionTests(Base):
+    """No interruption of the terminal double replace can leave the system
+    without at least one whole, sufficient proof for reconciliation."""
+
+    TERMINAL_DOC = {"phase": "rolled_back", "state": "clean"}
+
+    def rollback_committed(self):
+        """Apply, then a rollback whose commit happened; nothing else."""
+        self.controller.apply_on_boot()
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"})
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.assertFalse(self.backend.owned())
+
+    def assert_reconciled(self, fresh, expected_transactions):
+        status = fresh.status()
+        self.assertEqual(status["phase"], "rolled_back")
+        self.assertEqual(status["state"], "clean")
+        self.assertNotEqual(status["phase"], "applied")
+        result = fresh.rollback()
+        self.assertEqual(result["phase"], "no-op")
+        self.assertEqual(len(self.backend.transactions), expected_transactions)
+        self.assertEqual(fresh.status()["phase"], "rolled_back")
+        self.assertEqual(fresh.store.receipt()["phase"], "rolled_back")
+        self.assertEqual(fresh.store.read_record("terminal.json")["phase"], "rolled_back")
+
+    def test_interrupted_double_replace_on_the_journal_reconciles(self):
+        # Reported window: commit done, rolling_back journal valid, then
+        # journal.json received the terminal document while the process died
+        # BEFORE journal.json.sha256 was replaced.
+        self.rollback_committed()
+        persistence.private_write(
+            self.root / "journal.json",
+            persistence.encoded({**self.applied_receipt(), **self.TERMINAL_DOC}))
+        # journal.json.sha256 still matches the previous rolling_back document.
+        fresh = persistence.Controller(self.root, self.backend)
+        transactions = len(self.backend.transactions)
+        self.assert_reconciled(fresh, transactions)
+        # An exact delta recreated externally is still refused without mutation.
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "still present"):
+            fresh.rollback()
+        self.assert_no_mutation(before)
+        self.assertEqual(len(self.backend.transactions), transactions + 1)  # only the external recreate
+
+    def test_terminal_slot_double_replace_interruption_reconciles(self):
+        # Same window in the new layout: the terminal slot received its JSON
+        # while the process died before the slot sidecar was written. The
+        # rolling_back journal was never touched.
+        self.rollback_committed()
+        persistence.private_write(
+            self.root / "terminal.json",
+            persistence.encoded({**self.applied_receipt(), **self.TERMINAL_DOC}))
+        fresh = persistence.Controller(self.root, self.backend)
+        transactions = len(self.backend.transactions)
+        self.assert_reconciled(fresh, transactions)
+
+    def test_terminal_write_failure_keeps_the_previous_proof_then_retry(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("terminal.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "terminal record could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        # The rolling_back journal remains whole; status never says applied.
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolling_back")
+        self.assertEqual(status["state"], "unknown")
+        self.assertEqual(self.journal_phase(), "rolling_back")
+        # Retry uses the preserved proof: converges without a new transaction.
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_terminal_fsync_failure_keeps_the_previous_proof_then_retry(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("terminal.json", "fsync"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "terminal record could not be persisted"):
+                self.controller.rollback()
+        self.assertEqual(self.controller.status()["phase"], "rolling_back")
+        self.assertEqual(self.journal_phase(), "rolling_back")
+        transactions = len(self.backend.transactions)
+        self.controller.rollback()
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_terminal_replace_failure_keeps_the_previous_proof_then_retry(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("terminal.json", "replace"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "terminal record could not be persisted"):
+                self.controller.rollback()
+        self.assertEqual(self.controller.status()["phase"], "rolling_back")
+        self.assertEqual(self.journal_phase(), "rolling_back")
+        transactions = len(self.backend.transactions)
+        self.controller.rollback()
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_terminal_sidecar_failure_uses_the_new_intact_json(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("terminal.json.sha256", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "terminal record could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        # The terminal JSON is intact; only its sidecar is missing. It is
+        # accepted as read-only evidence: status already reports rolled_back.
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolled_back")
+        self.assertEqual(status["state"], "clean")
+        # Retry completes the records using the new proof, no new transaction.
+        transactions = len(self.backend.transactions)
+        result = self.controller.rollback()
+        self.assertEqual(result["phase"], "no-op")
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
 
 
 # --------------------------------------------- malformed records (parser)
