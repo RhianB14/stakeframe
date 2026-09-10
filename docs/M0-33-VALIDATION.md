@@ -1,9 +1,11 @@
 # STK-M0-33 — Persistência segura do hardening IPv6 (aplicador de boot)
 
-> **STATUS: IMPLEMENTAÇÃO PRONTA E NÃO INSTALADA.** Nenhuma operação foi
-> executada na VPS, nenhuma unit foi instalada ou habilitada, nenhum firewall
-> real foi alterado e nenhum reboot foi feito. Os únicos testes executados
-> rodaram localmente e em containers descartáveis.
+> **STATUS: INSTALADA E ATIVA POR BOOT (atualizado em 10/09/2026).** A unit foi
+> instalada e habilitada e um reboot controlado único validou a primeira
+> aplicação real pelo boot; o registro operacional completo está na §10 e as
+> limitações atualizadas na §11. As seções 1–9 preservam o registro da
+> implementação e dos ensaios anteriores à instalação (locais e em containers
+> descartáveis).
 
 Issue: [#91](https://github.com/RhianB14/stakeframe/issues/91) · PR:
 [#92](https://github.com/RhianB14/stakeframe/pull/92) · Branch:
@@ -386,37 +388,75 @@ mutação**; deriva ⇒ `rollback_required`.
 - `plan` não cria diretório nem arquivos; a saída pública não contém endereços,
   regras nem identificadores de host.
 
-## 10. Instalação futura (não executada nesta tarefa)
+## 10. Instalação, reboot e validação real (executados em 10/09/2026)
 
-Procedimento previsto, **dependente de autorização posterior do Codex**:
+Procedimento executado sob autorização específica, com todos os gates aprovados
+antes da mutação:
 
-1. instalar `ipv6_persistence.py` e a unit por staging + conferência de hashes
-   (`b108b9f6c60de99939415b7a2d7b42f52d7b42a8ddfe24dcfb3cc7e283c11da9` para o
-   controlador; `bb448b8cd42b2654baee89892b28382907db0a92de6b8bafb3b89d6fbc45febd`
-   para a unit);
-2. manter backup privado dos artefatos substituídos;
-3. validar a sintaxe/transação **sem alterar o firewall**
-   (`ip6tables-restore --test`; note-se que `--test` valida a sintaxe e **não**
-   detecta colisão com o ruleset vivo);
-4. `daemon-reload` e `enable` apenas sob autorização futura, sem iniciar a unit
-   no boot corrente;
-5. reverter arquivos, enablement e estado ativo conforme o caso;
-6. tratar o reboot de validação como operação separada;
-7. nunca usar o run antigo da STK-M0-23 como recibo de propriedade do novo
-   controlador. O controlador recusa qualquer chain `STK6_*` que não seja
-   exatamente a sua.
+1. hashes locais dos blobs extraídos do commit aprovado
+   (`6dc615eba32d4ed4641f425f2802adda1c160758`) conferidos antes e depois do
+   transporte; staging root-only no mesmo filesystem dos destinos; instalação
+   como `root:root` (`0644` nos dois arquivos; diretório `0755`);
+2. `ip6tables-restore --test` com a transação gerada pelo controlador: rc 0,
+   somente sintaxe, sem alterar o firewall;
+3. `systemd-analyze verify` rc 0 (staging e instalado); `daemon-reload` rc 0;
+   `systemctl enable` **sem** `--now`; readback com hashes, permissões,
+   `is-enabled=enabled` e unit `inactive/dead` — nunca iniciada nesse ponto;
+4. reboot controlado único: unit executada pelo boot (`apply-on-boot`),
+   `active/exited`, `Result=success`, `ExecMainStatus=0`, `NRestarts=0`;
+   journal do apply com `phase=applied` e nenhum aviso;
+5. `status` do controlador: `applied`/`applied`, `policy_version=1`,
+   `controller_sha256` e `policy_sha256` correspondentes ao artefato instalado
+   e à política revisada; recibo durável em `/var/lib/stk6-persistence`
+   (`root:root 0600`), criado pela `StateDirectory` da unit;
+6. delta vivo exato: chain `STK6_BOOT` com **cinco regras** (loopback;
+   `RELATED,ESTABLISHED`; ICMPv6; tcp/22 `NEW`; DROP final), **uma única
+   referência** — o salto em `INPUT` **posição 1** com tag `stk6:boot:v1` —,
+   nenhuma referência em `FORWARD` ou chains estrangeiras, `INPUT`/`FORWARD` em
+   `DROP`, `OUTPUT` preservada e **ausência de resíduo** do delta temporário da
+   STK-M0-23;
+7. idempotência (chamada direta): `phase=no-op`, `state=applied`,
+   `writes=none`, rc 0; snapshot integral inalterado (digests dos registros e
+   comparações ordenadas de IPv4/IPv6 idênticos antes/depois);
+8. preservação: `rules.v4`/`rules.v6` e `/etc/default/netfilter-persistent`
+   byte-idênticos, sem qualquer `STK6` nos arquivos de persistência; IPv4
+   semanticamente idêntico (nenhuma regra adicionada/removida/alterada além da
+   ordem de reconstrução das regras Docker no boot); IPv6 fora do delta
+   byte-idêntico; Docker, Fail2Ban, SSH e containers de produção saudáveis;
+   sem segundo reboot, sem deploy e sem migração.
 
-## 11. Limitações explícitas
+**Gate de recuperação fora de banda — limitação registrada.** Foram validados
+apenas itens do lado guest (`serial-getty@ttyAMA0` ativo, `console=ttyAMA0` na
+linha de comando do kernel, sshd ativo). **Nenhuma conexão de console OCI foi
+estabelecida ou mantida durante a janela** e o transporte OCI não foi validado
+nesta operação; conforme [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md), getty ativo
+comprova somente a configuração do guest. O reboot concluiu com sucesso e o SSH
+retornou em ~25 s; o caminho de recuperação **não precisou ser usado**. A
+disponibilidade de recuperação fora de banda **continua não comprovada para
+futuras janelas críticas**.
 
-- **Implementação pronta não significa instalada.** Nada foi instalado,
-  habilitado ou iniciado.
-- **O delta atual continua não persistente**: após um reboot, a proteção IPv6
-  descrita na STK-M0-23 não se reaplica sozinha até que a unit seja instalada e
-  autorizada.
-- **VPS, reboot e recuperação real não foram testados.** Os ensaios ocorreram em
-  containers descartáveis e com backend falso; kernel, systemd real do host e
-  conectividade da VPS não foram validados.
-- Instalação, ativação e reboot exigem **autorização posterior**.
+Evidências privadas retidas no host (fases, fingerprints de firewall,
+reconexão e idempotência), comentário operacional público na PR #92 e registro
+documental nesta STK-M0-34 ([issue #93](https://github.com/RhianB14/stakeframe/issues/93)).
+
+## 11. Limitações explícitas (atualizadas em 10/09/2026)
+
+- **Instalada, habilitada e ativa por boot.** A instalação, o enablement e o
+  reboot de validação foram executados em 10/09/2026 sob autorização
+  específica; o delta passou a ser **persistente** (reaplicado pela unit a cada
+  boot). Registro na §10.
+- **Recuperação fora de banda não comprovada para janelas futuras.** O gate foi
+  apenas parcialmente validado (lado guest apto; **nenhuma sessão OCI
+  independente estabelecida ou mantida** durante o reboot). Futuras operações
+  críticas exigem console independente estabelecido e mantido
+  ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md)).
+- **Sem segundo reboot.** A janela cobriu exatamente um reboot controlado; um
+  novo reboot, reset forçado ou operação adicional na VPS exige autorização
+  nova.
+- Falha no boot permanece **não fail-closed** (§5): o host nunca fica com estado
+  parcial, mas a proteção pode ficar ausente até intervenção nova.
+- O rollback do delta próprio segue disponível pelo controlador
+  (`rollback --execute-reviewed-linux`), restrito ao delta `STK6_BOOT`.
 - A persistência via unit **não modifica `rules.v4`/`rules.v6`**; a ausência do
   delta nesses arquivos é verificada em leitura e bloqueia a aplicação.
 - A falha da unit antes do commit preserva o estado fornecido pela persistência
