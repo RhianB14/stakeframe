@@ -390,8 +390,9 @@ mutação**; deriva ⇒ `rollback_required`.
 
 ## 10. Instalação, reboot e validação real (executados em 10/09/2026)
 
-Procedimento executado sob autorização específica, com todos os gates aprovados
-antes da mutação:
+Procedimento executado sob autorização específica, com os resultados dos
+pré-gates registrados antes da mutação; a validação parcial do gate de
+recuperação fora de banda está documentada abaixo:
 
 1. hashes locais dos blobs extraídos do commit aprovado
    (`6dc615eba32d4ed4641f425f2802adda1c160758`) conferidos antes e depois do
@@ -423,7 +424,7 @@ antes da mutação:
    semanticamente idêntico (nenhuma regra adicionada/removida/alterada além da
    ordem de reconstrução das regras Docker no boot); IPv6 fora do delta
    byte-idêntico; Docker, Fail2Ban, SSH e containers de produção saudáveis;
-   sem segundo reboot, sem deploy e sem migração.
+   sem segundo reboot, sem deploy da aplicação e sem migração.
 
 **Gate de recuperação fora de banda — limitação registrada.** Foram validados
 apenas itens do lado guest (`serial-getty@ttyAMA0` ativo, `console=ttyAMA0` na

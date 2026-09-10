@@ -586,17 +586,18 @@ ou readback indisponível** deixa o estado **não declarado** como restaurado
 válida** é recusado sem mutação. Em todos os casos a falha é visível no journal
 (`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
 `rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
-**Deploy validado (10/09/2026).** A unit foi instalada e habilitada sob
-autorização específica e um reboot controlado único executou a primeira
-aplicação real pelo boot: `active/exited`, `Result=success`, `ExecMainStatus=0`,
-`NRestarts=0`; delta `STK6_BOOT` exato (chain própria, 5 regras, salto único em
-`INPUT` posição 1, sem resíduo do delta temporário); idempotência por chamada
-direta em `no-op` com snapshot inalterado; arquivos de persistência intactos;
-serviços e containers saudáveis; sem segundo reboot, deploy ou migração. O gate
-de recuperação fora de banda foi **apenas parcialmente validado**: o lado guest
-(getty serial/console) estava apto, mas **nenhuma sessão OCI independente foi
-estabelecida ou mantida durante o reboot** — a disponibilidade de recuperação
-fora de banda **continua não comprovada para futuras janelas críticas**
+**Instalação e reboot validados (10/09/2026).** A unit foi instalada e
+habilitada sob autorização específica e um reboot controlado único executou a
+primeira aplicação real pelo boot: `active/exited`, `Result=success`,
+`ExecMainStatus=0`, `NRestarts=0`; delta `STK6_BOOT` exato (chain própria, 5
+regras, salto único em `INPUT` posição 1, sem resíduo do delta temporário);
+idempotência por chamada direta em `no-op` com snapshot inalterado; arquivos de
+persistência intactos; serviços e containers saudáveis; sem segundo reboot, sem
+deploy da aplicação e sem migração. O gate de recuperação fora de banda foi
+**apenas parcialmente validado**: o lado guest (getty serial/console) estava
+apto, mas **nenhuma sessão OCI independente foi estabelecida ou mantida durante
+o reboot** — a disponibilidade de recuperação fora de banda **continua não
+comprovada para futuras janelas críticas**
 ([M0-33-VALIDATION.md](M0-33-VALIDATION.md) §10–§11; [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md)).
 
 Recuperação após o commit: todas as etapas posteriores à transação (readback,
