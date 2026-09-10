@@ -240,6 +240,21 @@ class Base(unittest.TestCase):
         with patch.object(persistence, "private_write", wrapper):
             yield state
 
+    @contextlib.contextmanager
+    def inject_discard_failure(self, target_name, times=1):
+        """Fail the discard of a specific record N times, then pass through."""
+        real_discard = self.controller.store.discard_record
+        state = {"fired": 0}
+
+        def wrapper(name):
+            if name == target_name and state["fired"] < times:
+                state["fired"] += 1
+                raise OSError("injected discard failure: " + name)
+            return real_discard(name)
+
+        with patch.object(self.controller.store, "discard_record", wrapper):
+            yield state
+
     def journal_phase(self):
         return json.loads((self.root / "journal.json").read_text())["phase"]
 
@@ -1121,6 +1136,79 @@ class TerminalSlotInterruptionTests(Base):
         self.assertEqual(len(self.backend.transactions), transactions)
         self.assertEqual(self.controller.status()["phase"], "rolled_back")
         self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+
+
+# ------------------------------- reapply handoff: durable proof at every boundary
+class ReapplyHandoffTests(Base):
+    """A reapply must never leave the stale applied receipt as the only proof."""
+
+    def terminal_state_with_stale_receipt(self):
+        """Firewall restored; terminal rolled_back; rolling_back journal; stale applied receipt."""
+        self.controller.apply_on_boot()
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"})
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.controller.store.write_record(
+            "terminal.json", {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"})
+        self.assertFalse(self.backend.owned())
+
+    def test_reapply_failure_before_new_intent_keeps_the_receipt_terminal(self):
+        # Reported window: reapply removes the superseded records and then dies
+        # before the new applying intent. The handoff must have made the receipt
+        # durably terminal BEFORE any removal.
+        self.terminal_state_with_stale_receipt()
+        transactions = len(self.backend.transactions)
+        with self.inject_write_failure("journal.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "applying intent"):
+                self.controller.apply_on_boot()
+        # The only persisted receipt is terminal, never the stale applied one.
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolled_back")
+        self.assertEqual(status["state"], "clean")
+        self.assertEqual(len(self.backend.transactions), transactions)  # no firewall change
+        # A new controller instance: conservative, and the stale receipt can no
+        # longer authorize anything.
+        fresh = persistence.Controller(self.root, self.backend)
+        self.assertEqual(fresh.status()["phase"], "rolled_back")
+        self.backend.apply_transaction(persistence.apply_transaction_text())  # recreated externally
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "refuse adoption"):
+            fresh.apply_on_boot()
+        self.assert_no_mutation(before)
+        with self.assertRaisesRegex(persistence.PersistenceError, "still present"):
+            fresh.rollback()
+        self.assert_no_mutation(before)
+        self.assertEqual(len(self.backend.transactions), transactions + 1)  # only the external recreate
+
+    def test_reapply_discard_terminal_failure_keeps_two_proofs(self):
+        self.terminal_state_with_stale_receipt()
+        with self.inject_discard_failure("terminal.json"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not discard"):
+                self.controller.apply_on_boot()
+        # Receipt already terminal AND the terminal record still present.
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+        self.assertEqual(self.controller.store.read_record("terminal.json")["phase"], "rolled_back")
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+        # The retry completes the handoff and applies.
+        self.assertEqual(self.controller.apply_on_boot()["phase"], "applied")
+
+    def test_reapply_discard_journal_failure_keeps_a_whole_proof(self):
+        self.terminal_state_with_stale_receipt()
+        with self.inject_discard_failure("journal.json", times=2):  # first fires inside the tolerant cleanup
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not discard"):
+                self.controller.apply_on_boot()
+        # Receipt terminal; the rolling_back journal remains whole.
+        self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
+        self.assertEqual(self.journal_phase(), "rolling_back")
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolling_back")
+        self.assertEqual(status["state"], "unknown")
+        self.assertNotEqual(status["phase"], "applied")
+        # rollback() reconciles via the terminal receipt, then apply succeeds.
+        self.assertEqual(self.controller.rollback()["phase"], "no-op")
+        self.assertEqual(self.controller.apply_on_boot()["phase"], "applied")
 
 
 # --------------------------------------------- malformed records (parser)

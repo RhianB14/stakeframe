@@ -576,11 +576,11 @@ class Controller:
     def _terminal_source(self, boot_id, controller_hash):
         """A terminal rolled_back proof for this same boot, if one exists.
 
-        The dedicated terminal slot is checked first; the legacy single-journal
-        layout (terminal document stored in journal.json) is still honoured.
-        A strictly verified record is preferred, but an intact JSON whose
-        sidecar update was interrupted is accepted as well: completion of the
-        terminal records never mutates the firewall.
+        Sources are checked in order: the dedicated terminal slot, the legacy
+        single-journal layout, and the terminal receipt itself. Strictly
+        verified records are preferred, but an intact JSON whose sidecar update
+        was interrupted is accepted as well: completion of the terminal records
+        never mutates the firewall.
         """
         for name in ("terminal.json", "journal.json"):
             document, _verified = self._recovery_document(name)
@@ -599,6 +599,21 @@ class Controller:
                 self._full_receipt_identity(source, boot_id)
             except PersistenceError:
                 continue
+            return source
+        receipt = None
+        try:
+            receipt = self.store.receipt()
+            if receipt is not None:
+                validate_receipt(receipt)
+        except PersistenceError:
+            receipt = None
+        if receipt is not None and receipt.get("phase") == "rolled_back" \
+                and self._attempt_identity_matches(receipt, boot_id, controller_hash):
+            source = {key: receipt[key] for key in TERMINAL_FIELDS if key in receipt}
+            try:
+                self._full_receipt_identity(source, boot_id)
+            except PersistenceError:
+                return None
             return source
         return None
 
@@ -765,9 +780,12 @@ class Controller:
                 raise PersistenceError("a rollback was started and never reconciled; "
                                        "run rollback before any apply")
             if terminal_source is not None:
-                # The terminal proof shows the previous attempt ended in a
-                # rollback: consume the superseded records before re-applying so
-                # no stale terminal record survives the new acquisition.
+                # Durable handoff BEFORE removing the superseded records: the
+                # stale receipt is durably completed as rolled_back/clean first
+                # (same terminal completion routine), so NO failure between the
+                # removals and the new intent can leave the clean firewall with
+                # the stale applied receipt as the only persisted proof.
+                self._complete_terminal_records(terminal_source)
                 try:
                     self.store.discard_record("terminal.json")
                     self.store.discard_record("journal.json")
@@ -780,7 +798,13 @@ class Controller:
                       "controller_sha256": controller_hash, "policy_sha256": policy_sha256(),
                       "chain": CHAIN, "tag": TAG, "before_policies": before_policies,
                       "phase": "applying", "persistence_files": sorted(files)}
-            self.store.write_record("journal.json", record)
+            try:
+                self.store.write_record("journal.json", record)
+            except BaseException as exc:
+                # At this boundary the receipt is already terminal (rolled_back)
+                # or absent: no stale applied proof is left alone.
+                raise PersistenceError("could not write the applying intent; "
+                                       "no firewall change was made") from exc
             try:
                 self.backend.apply_transaction(apply_transaction_text())
                 if classify(self.backend.snapshot())["state"] != "applied":
