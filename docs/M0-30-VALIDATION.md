@@ -86,7 +86,9 @@ O service encerrou com `Result=success`, `ExecMainStatus=0` e estado final
 
 Como todos os critérios passaram, o rollback da mutação E não foi acionado. O
 rollback antigo do checkout foi preservado e continua sujeito a autorização
-destrutiva separada.
+destrutiva separada; permanece **retido** após a leitura de reconciliação de
+10/09/2026, que não o removeu
+([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §8).
 
 ## 5. Limitações e autoria
 

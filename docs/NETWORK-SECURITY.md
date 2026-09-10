@@ -175,7 +175,13 @@ a ausência de ingress no NSG **não nega** os ingress 22/80/443 da Security Lis
 **Nenhuma mudança OCI é proposta nesta primeira janela.** Não abrir portas,
 remover NSG, editar Security List, trocar rotas, criar IPv6 ou alterar IP público.
 
-## 4. Delta fechado para a primeira janela futura
+## 4. Delta fechado — aplicado e confirmado na janela de 07/09/2026
+
+> **Estado atual: aplicado e confirmado.** O delta abaixo deixou de ser
+> proposta: foi executado em 07/09/2026, a confirmação encerrou sem rollback e o
+> timer de recuperação está desarmado. Escopo normalizado, estado terminal e
+> limitações em [M0-31-VALIDATION.md](M0-31-VALIDATION.md). A tabela preserva a
+> descrição aprovada do delta.
 
 Somente hardening **ativo** de `INPUT/FORWARD` IPv6 por `ip6tables-nft`.
 A ausência atual de IPv6 público reduz urgência operacional, mas não torna
@@ -220,7 +226,7 @@ implementação shell em Markdown. Aplicação, confirmação, rollback e unidad
 usam o mesmo código versionado. Todos os comandos de aplicação exigem
 autorização separada. Nenhum artefato foi transferido para o servidor na R2.
 
-### Preparação anterior à futura janela
+### Preparação anterior à janela (executada em 07/09/2026)
 
 1. Codex revisa head/base, scripts, testes e este delta e emite autorização
    explícita de aplicação, retransmitida pelo proprietário, após validação da
@@ -286,6 +292,27 @@ autorização separada. Nenhum artefato foi transferido para o servidor na R2.
 - Hash idêntico de uma unidade preexistente não prova aquisição pela execução.
   Recusar colisões sem parar/adotar unidades externas; registrar aquisição e
   validar o `FragmentPath` carregado antes de parar o timer próprio.
+
+### Registro da janela confirmada (STK-M0-23, 07/09/2026)
+
+A janela autorizada foi executada e **confirmada** no mesmo dia, na base
+`afc07b5e0af65c179123946282f5ff9989fd5604`:
+
+- run `53a5b43c1bd6049fe497`, fase terminal `confirmed`, `rollback_actions` vazio;
+- `authorization_ref` = `user-confirmed-apply-STK-M0-23-2026-09-07`;
+- guard e manifest do run idênticos aos hashes aprovados;
+- atestações de preflight e de post com todos os checks aprovados, `source`
+  operador-observado e sessão serial registrada;
+- segunda conexão SSH independente aberta **após** a alteração, com probes reais;
+- confirmação dentro da janela de 600 segundos, sem corrida e sem iniciar rollback;
+- estado terminal: timer e service `inactive`, sem próximo disparo e sem jobs;
+- delta ativo e **não persistido** — política e chain valem até um reboot, como
+  aprovado; nada foi escrito em persistência.
+
+O recurso temporário de console foi encerrado ao fim da janela. O descarte da
+chave temporária da integração serial **continua não comprovado** e não é
+resolvido por esta reconciliação. Detalhamento em
+[M0-31-VALIDATION.md](M0-31-VALIDATION.md).
 
 ### Registro da primeira janela (STK-M0-06, 06/09/2026)
 
@@ -361,7 +388,14 @@ de recuperação restaurou o firewall, mantendo o encerramento interno incomplet
   não afirmar descarte da chave temporária, que permanece não comprovado
   (adendo em [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9).
 
-## 6. Recuperação OCI/Ubuntu — caminho identificado, não pronta
+## 6. Recuperação OCI/Ubuntu — caminho identificado, exercido na janela
+
+> **Atualização (STK-M0-31):** a condição exigida por esta seção foi satisfeita
+> na janela executada em 07/09/2026 — console independente estabelecido e
+> mantido durante a alteração de firewall, com sessão autenticada e `sudo` root
+> ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §2). O histórico abaixo permanece
+> como registro do estado na R2. O descarte da chave temporária serial continua
+> pendente e explícito.
 
 **Inspeção do Codex retransmitida:** instância → **OS Management → Console
 connection**. A tabela não exibiu conexão existente. Os botões **Launch Cloud
@@ -476,21 +510,26 @@ associada ao head e na CI; não confundir checks simulados com probes da VPS.
       (STK-M0-05; [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9), com exclusão
       da conexão confirmada; descarte da chave temporária permanece pendência
       explícita.
-- [ ] Gate da futura janela: console independente estabelecido e mantido
-      durante toda a janela de firewall, sem depender de SSH para recriá-lo
-      (ACCESS-RECOVERY §5).
-- [ ] Revisão do Codex e autorização explícita para aplicação.
-- [ ] Script/estado/cópia de recuperação presentes no servidor e cópia privada externa.
-- [ ] Timer real armado e agendamento monotônico validado na janela autorizada.
-- [ ] Segunda conexão SSH e probes reais **depois** da alteração.
-- [ ] Confirmação real sem corrida, rollback não iniciado e estado final conferido.
+- [x] Gate da janela: console independente estabelecido e mantido durante toda a
+      janela de firewall, sem depender de SSH para recriá-lo (ACCESS-RECOVERY §5);
+      a atestação registra operador em sessão serial e os checks de recuperação
+      do provedor aprovados ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §2).
+- [x] Revisão do Codex e autorização explícita para aplicação
+      (`user-confirmed-apply-STK-M0-23-2026-09-07`).
+- [x] Script/estado/cópia de recuperação presentes no servidor e cópia privada externa.
+- [x] Timer real armado e agendamento monotônico validado na janela autorizada;
+      desarmado após a confirmação, sem próximo disparo.
+- [x] Segunda conexão SSH e probes reais **depois** da alteração.
+- [x] Confirmação real sem corrida, rollback não iniciado e estado final conferido.
 
 O encerramento administrativo do run legado (STK-M0-22) e a simulação de rede
-na CI não equivalem a execução técnica na VPS: os gates abertos acima exigem
-janela autorizada com console independente, e a futura janela IPv6
+na CI não equivalem a execução técnica na VPS. A janela IPv6 autorizada foi
+executada e confirmada em 07/09/2026, fechando os gates acima
 ([issue #11](https://github.com/RhianB14/stakeframe/issues/11),
-[NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md)) permanece dependente dos
-gates de recuperação.
+[M0-31-VALIDATION.md](M0-31-VALIDATION.md)). O plano que a antecedeu permanece
+como registro histórico em [NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md). A
+pendência histórica do descarte da chave temporária serial **não** é resolvida
+por essa execução.
 
 Os testes simulados validam a lógica do controlador, incluindo confirmação normal
 com service nunca iniciada e rejeição de qualquer timestamp positivo. Não

@@ -63,9 +63,11 @@ de revisão resolvidos e CI aprovada na `main`. O run legado foi encerrado
 administrativamente na STK-M0-22, sob autorização de Rhian, em 07/09/2026:
 units removidas, apontador arquivado e bundle original intacto. A lacuna
 histórica IPv4 permanece registrada; [M0-22-VALIDATION.md](M0-22-VALIDATION.md).
-A [issue #11](https://github.com/RhianB14/stakeframe/issues/11) continua aberta
-para a nova janela IPv6, preparada em [NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md).
-As integrações das PRs não autorizam deploy, migração ou nova janela de rede.
+A janela IPv6 da [issue #11](https://github.com/RhianB14/stakeframe/issues/11)
+foi executada e **confirmada em 07/09/2026**; o plano que a antecedeu permanece
+como registro histórico em [NEXT-NETWORK-WINDOW.md](NEXT-NETWORK-WINDOW.md) e o
+resultado está em [M0-31-VALIDATION.md](M0-31-VALIDATION.md). As integrações das
+PRs não autorizam deploy, migração ou nova janela de rede.
 
 Histórico: STK-M0-05 registrou a recuperação administrativa
 ([ACCESS-RECOVERY.md](ACCESS-RECOVERY.md) §9; issue #9, referenciando a issue #7).
@@ -107,6 +109,13 @@ explicitadas como itens próprios, sem ocultar pendências.
 Percentual calculado como concluídos / total. Esta contagem **não substitui os
 critérios de aceite**: percentual alto não autoriza operação, deploy, release
 ou janela de rede; cada item exige a evidência descrita.
+
+> **Nota (STK-M0-31, 10/09/2026):** esta tabela é um retrato datado de
+> 08/09/2026, anterior à execução da janela IPv6. A janela foi executada e
+> confirmada em 07/09/2026 e os gates de execução de
+> [NETWORK-SECURITY.md](NETWORK-SECURITY.md) §7 foram fechados; a contagem acima
+> não foi recalculada nesta tarefa
+> ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §7).
 
 ## Concluído nesta tarefa (STK-M0-01)
 
@@ -193,11 +202,11 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Revisar dependências de `rpcbind`: somente `portmapper` foi retornado,
       não há montagem NFS e nenhum consumidor NFS/RPC ativo foi observado.
       Eventual desativação de serviço/socket continua sendo tarefa separada.
-- [ ] Obter autorização específica do Codex para a futura aplicação, com
-      recuperação validada, cópia no servidor/externa, timer monotônico e lock.
-- [ ] Após as alterações da futura janela, abrir segunda conexão SSH
-      independente e executar probes; só então confirmar, sem matar rollback
-      já iniciado. OCI sem mudanças.
+- [x] Autorização específica do Codex para a aplicação, com recuperação
+      validada, cópia no servidor/externa, timer monotônico e lock
+      ([M0-31-VALIDATION.md](M0-31-VALIDATION.md)).
+- [x] Após as alterações, segunda conexão SSH independente aberta e probes
+      executados; confirmação sem rollback iniciado. OCI sem mudanças.
 
 ### STK-M0-04 — Preparar validação de recuperação de acesso
 
@@ -270,7 +279,11 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Complemento do Codex: 73 testes simulados e 5 cenários do controlador com
       systemd real em container descartável; referência D-Bus contínua durante
       confirmação, worker concorrente e perda de conexão verificados com
-      firewall simulado. Não comprova uma janela real na VPS.
+      firewall simulado.
+- [x] Janela de aplicação executada e **confirmada em 07/09/2026**: delta IPv6
+      ativo (INPUT/FORWARD `DROP`, OUTPUT preservado), confirmação sem corrida e
+      sem rollback, timer desarmado, segunda conexão SSH com probes aprovados e
+      produção intacta ([M0-31-VALIDATION.md](M0-31-VALIDATION.md)).
 - [ ] Reconciliação do run antigo — **não executada**: unidades em
       `/run/systemd/system` e `active.json` permanecem; proposta revisada com
       lock compartilhado, validação de identidade/hashes, colisões, retomada

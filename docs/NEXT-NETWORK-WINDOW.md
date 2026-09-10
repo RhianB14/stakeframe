@@ -1,5 +1,13 @@
 # Próxima janela IPv6 — STK-M0-23
 
+> **STATUS: JANELA EXECUTADA E CONFIRMADA EM 07/09/2026.** Este documento
+> preserva o **plano histórico** que foi autorizado e executado; ele **não**
+> descreve mais uma aplicação futura. Resultado real, escopo normalizado do
+> delta, estado terminal de timer/service e limitações estão em
+> [M0-31-VALIDATION.md](M0-31-VALIDATION.md). Um preflight posterior
+> (10/09/2026) ainda tratava a janela como futura e abortou por premissa
+> vencida, sem executar prepare, apply ou confirm.
+
 O encerramento administrativo do run legado está concluído. Esta proposta
 prepara uma nova execução do guard para a [issue #11](https://github.com/RhianB14/stakeframe/issues/11),
 acompanhada pela [issue #55](https://github.com/RhianB14/stakeframe/issues/55).
@@ -27,6 +35,11 @@ somente leitura e módulo executado em memória, sem criar arquivo ou lock remot
 | Leitura de dependências | Rotas, endereços, listeners, Docker, Fail2Ban, DNS, relógio e persistência coletados |
 | Recuperação para apply  | Não estabelecida; getty ativo não atende o gate                                      |
 
+A linha da recuperação descreve a leitura **naquele instante**. Na janela
+executada em 07/09/2026 a condição foi satisfeita: a atestação de preflight
+registra operador em sessão serial e os checks de recuperação do provedor
+aprovados ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §2 e §6).
+
 Snapshot completo e saídas permanecem privados fora do Git, com hashes
 conferidos. A tabela IPv4 filter mantém SHA-256
 `af7e02d4cdf781f514079d3842027c015593a80775e930d727c482fec4c2a8ca`.
@@ -34,7 +47,7 @@ Os hashes brutos de iptables-save identificam cada captura, mas seus comentário
 de horário e estado dinâmico impedem usá-los isoladamente como teste de drift.
 Na janela, comparar regras/políticas normalizadas, preservando os bytes originais.
 
-## Escopo proposto para autorização
+## Escopo proposto para autorização (executado em 07/09/2026)
 
 1. Estabelecer conexão temporária de console OCI pelo caminho já validado em
    [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md). Registrar somente os recursos
@@ -62,7 +75,7 @@ Na janela, comparar regras/políticas normalizadas, preservando os bytes origina
    referência de autorização, SHA do JSON e validade monotônica. Falta de
    evidência ou expiração impede apply; não preencher pass por conveniência.
 7. Executar apply, armando o timer monotônico antes do delta. A mudança é a
-   matriz de [NETWORK-SECURITY.md §4](NETWORK-SECURITY.md#4-delta-fechado-para-a-primeira-janela-futura):
+   matriz de [NETWORK-SECURITY.md §4](NETWORK-SECURITY.md#4-delta-fechado--aplicado-e-confirmado-na-janela-de-07092026):
    INPUT em chain própria, permitindo loopback, ESTABLISHED/RELATED, ICMPv6 e
    TCP/22, terminando em DROP; INPUT/FORWARD com política DROP. Preservar
    OUTPUT, IPv4, NAT, saltos Docker, Fail2Ban, persistência, SSH e OCI.
@@ -110,3 +123,12 @@ conhecido. Manter MX/TXT e nameservers; não criar AAAA sem IPv6 público valida
 DNS, revisão de exposição web, provisionamento de segredos, primeira migração,
 backup, monitor e piloto seguem em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
 O encerramento desta janela não libera M0 nem v1.0.0 por si só.
+
+## Encerramento deste plano
+
+O plano acima foi executado em 07/09/2026: o delta IPv6 está ativo e
+confirmado, o timer de rollback está desarmado e o recurso de console
+temporário foi encerrado. Os itens de escopo aqui descritos deixam de ser
+proposta e passam a ser registro histórico; qualquer mudança nova de rede — ou
+persistência do delta — exige autorização própria
+([M0-31-VALIDATION.md](M0-31-VALIDATION.md)).
