@@ -81,11 +81,12 @@ janela. A futura preparação deve confirmar existência/conteúdo/permissões d
 arquivos de persistência com leitura fresca e backup privado antes de qualquer
 mudança; o estado `active exited` isoladamente não comprova conteúdo salvo.
 
-A STK-M0-33 (implementação pronta, **não instalada**) adiciona um aplicador de
-boot próprio com transação atômica única e unit versionada, sem usar
-`netfilter-persistent save`, captura integral de `ip6tables-save` ou restauração
-integral do ruleset. O delta permanece **não persistente** até a instalação
-autorizada; detalhes, evidências e limitações em [M0-33-VALIDATION.md](M0-33-VALIDATION.md).
+A STK-M0-33 (**instalada e habilitada em 10/09/2026; ativa por boot**) adiciona
+um aplicador de boot próprio com transação atômica única e unit versionada, sem
+usar `netfilter-persistent save`, captura integral de `ip6tables-save` ou
+restauração integral do ruleset. O delta é reaplicado pela unit a cada boot
+desde o reboot controlado de 10/09/2026; detalhes, evidências e limitações em
+[M0-33-VALIDATION.md](M0-33-VALIDATION.md).
 
 ### Interfaces e serviços
 
@@ -549,7 +550,7 @@ CI verde não autoriza merge. Nenhuma alteração de banco, deploy, release, mig
 compra ou infraestrutura foi realizada nesta rodada. A PR permanece pendente de
 revisão do Codex.
 
-## 8. Persistência no boot — STK-M0-33 (implementação, não instalada)
+## 8. Persistência no boot — STK-M0-33 (instalada e ativa por boot)
 
 Um aplicador próprio e versionado reaplica, no boot, exatamente o delta IPv6
 confirmado na §4, como **uma única transação atômica** de `ip6tables-nft`
@@ -585,9 +586,19 @@ ou readback indisponível** deixa o estado **não declarado** como restaurado
 válida** é recusado sem mutação. Em todos os casos a falha é visível no journal
 (`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
 `rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
-O delta atual continua não persistente, e a instalação, a ativação e qualquer
-reboot exigem autorização posterior do Codex. VPS, reboot e recuperação real não
-foram testados ([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
+**Instalação e reboot validados (10/09/2026).** A unit foi instalada e
+habilitada sob autorização específica e um reboot controlado único executou a
+primeira aplicação real pelo boot: `active/exited`, `Result=success`,
+`ExecMainStatus=0`, `NRestarts=0`; delta `STK6_BOOT` exato (chain própria, 5
+regras, salto único em `INPUT` posição 1, sem resíduo do delta temporário);
+idempotência por chamada direta em `no-op` com snapshot inalterado; arquivos de
+persistência intactos; serviços e containers saudáveis; sem segundo reboot, sem
+deploy da aplicação e sem migração. O gate de recuperação fora de banda foi
+**apenas parcialmente validado**: o lado guest (getty serial/console) estava
+apto, mas **nenhuma sessão OCI independente foi estabelecida ou mantida durante
+o reboot** — a disponibilidade de recuperação fora de banda **continua não
+comprovada para futuras janelas críticas**
+([M0-33-VALIDATION.md](M0-33-VALIDATION.md) §10–§11; [ACCESS-RECOVERY.md](ACCESS-RECOVERY.md)).
 
 Recuperação após o commit: todas as etapas posteriores à transação (readback,
 recibo, sidecar, `fsync`, `os.replace`) estão no caminho de recuperação; o

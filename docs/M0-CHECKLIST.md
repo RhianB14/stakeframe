@@ -46,9 +46,17 @@ checkout ativo ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 STK-M0-33 ([issue #91](https://github.com/RhianB14/stakeframe/issues/91))
 prepara a persistência segura do hardening IPv6 no boot: aplicador próprio com
 transação atômica única, unit systemd versionada com ordenação verificada e
-suíte dedicada. A implementação está pronta e **não instalada**; o delta segue
-não persistente até instalação autorizada, e nenhuma operação foi feita na VPS
-([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
+suíte dedicada. A unit foi instalada e habilitada em 10/09/2026 (staging com
+hashes conferidos, `ip6tables-restore --test` sem mutação, `systemd-analyze
+verify` rc 0, `daemon-reload` e `enable` sem `--now`) e um reboot controlado
+único validou a primeira aplicação real pelo boot: delta `STK6_BOOT` exato,
+idempotência `no-op`, arquivos de persistência preservados, serviços e
+containers saudáveis, sem segundo reboot e sem rollback. O gate de recuperação
+fora de banda foi apenas parcialmente validado (lado guest preparado; nenhuma
+sessão OCI independente estabelecida ou mantida) e a disponibilidade de
+recuperação continua não comprovada para futuras janelas críticas
+([M0-33-VALIDATION.md](M0-33-VALIDATION.md)). O registro documental é a
+STK-M0-34 ([issue #93](https://github.com/RhianB14/stakeframe/issues/93)).
 O avanço ocorre por determinação
 do proprietário (D019), preservando recuperação integral/failover, alertas,
 monitor e release como pendências. STK-M0-16 foi

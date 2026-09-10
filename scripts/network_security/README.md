@@ -331,12 +331,13 @@ a rotina recusa atuar com evidência de outro boot. Persistência futura precisa
 de delta/backup/restauração próprios revisados e testes que comprovem que o boot
 não reintroduz uma mudança revertida. Isso não faz parte desta janela.
 
-## Persistência de boot — STK-M0-33 (implementação, não instalada)
+## Persistência de boot — STK-M0-33 (instalada e ativa por boot)
 
 A unit versionada `infra/systemd/stk6-ipv6-persistence.service` reaplica no boot o
-delta IPv6 confirmado, por transação atômica própria. Ela **não** é instalada,
-habilitada ou iniciada por esta implementação; a instalação depende de autorização
-posterior do Codex.
+delta IPv6 confirmado, por transação atômica própria. Ela foi **instalada e
+habilitada em 10/09/2026** sob autorização específica, e um reboot controlado
+único validou a primeira aplicação real pelo boot (`active/exited`,
+`Result=success`); desde esse reboot o delta é reaplicado a cada boot.
 
 - `python -B scripts/network_security/ipv6_persistence.py plan` — contrato offline;
   não cria diretório, não escreve e não acessa a rede.
@@ -347,8 +348,10 @@ posterior do Codex.
 Não usar `netfilter-persistent save`, captura integral de `ip6tables-save`,
 restauração integral do ruleset, `nft flush ruleset` nem sequências de comandos
 independentes. A ordenação exige `systemd-analyze verify`; detalhes e limitações em
-[docs/M0-33-VALIDATION.md](../../docs/M0-33-VALIDATION.md). O delta atual continua
-**não persistente** até a instalação autorizada.
+[docs/M0-33-VALIDATION.md](../../docs/M0-33-VALIDATION.md). Desde o reboot
+controlado de 10/09/2026 o delta é **persistente**: a unit o reaplica a cada
+boot; o gate de recuperação fora de banda permanece **não comprovado para
+futuras janelas críticas** (lado guest apto; sem sessão OCI independente).
 
 Recuperação pós-commit: falha depois do commit com o estado próprio comprovado ⇒
 rollback automático do delta próprio; deriva ou readback indisponível ⇒
