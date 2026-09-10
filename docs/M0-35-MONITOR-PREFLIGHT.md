@@ -12,25 +12,29 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
 
 ## 2. Matriz de gates
 
-| #   | Gate                                                                                  | Estado    | Evidência                                                                    |
-| --- | ------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------- |
-| 1   | Base `59d8435a` em origin/main                                                        | PASS      | fetch + rev-parse idênticos                                                  |
-| 2   | Contrato do Wrangler (binding, classe, DO SQLite, cron, workers_dev, observabilidade) | PASS      | `wrangler.jsonc` + dry-run 4.129.0                                           |
-| 3   | `MONITOR_ENABLED=false` (comportamento inerte)                                        | PASS      | worker.mjs L32/L196 retornam cedo; dry-run mostra var `false`                |
-| 4   | Validação de segredos antes de uso                                                    | PASS      | regexes L35-39 e L204; falha sem consulta externa                            |
-| 5   | Deduplicação/lease/gravação antes do envio                                            | PASS      | testes de monitor (4 pass)                                                   |
-| 6   | `/status` protegido                                                                   | PASS      | probe sem auth → 200 público; com token ausente → validado por teste         |
-| 7   | Conta Cloudflare autenticável                                                         | PARCIAL   | identidade via `wrangler whoami` sanitizado; cotas não expostas pela API     |
-| 8   | Nenhum recurso `stakeframe-monitor` existente                                         | PARCIAL   | verificação de leitura; estado reconfirmável só no momento do deploy         |
-| 9   | `monitor_token` existente utilizável                                                  | BLOQUEADO | nenhum caminho seguro de leitura sem mutação; fica para a janela de ativação |
-| 10  | Segredos instalados no Worker                                                         | BLOQUEADO | exige deploy (fora do escopo)                                                |
+| #   | Gate                                                                                  | Estado    | Evidência                                                                                                    |
+| --- | ------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| 1   | Base `59d8435a` em origin/main                                                        | PASS      | fetch + rev-parse idênticos                                                                                  |
+| 2   | Contrato do Wrangler (binding, classe, DO SQLite, cron, workers_dev, observabilidade) | PASS      | `wrangler.jsonc` + dry-run 4.129.0                                                                           |
+| 3   | `MONITOR_ENABLED=false` (comportamento inerte)                                        | PASS      | worker.mjs L32/L196 retornam cedo; dry-run mostra var `false`                                                |
+| 4   | Validação de segredos antes de uso                                                    | PASS      | regexes L35-39 e L204; falha sem consulta externa                                                            |
+| 5   | Deduplicação/lease/gravação antes do envio                                            | PASS      | testes de monitor (4 pass)                                                                                   |
+| 6   | `/status` protegido                                                                   | PASS      | probe sem auth → 200 público; com token ausente → validado por teste                                         |
+| 7   | Conta Cloudflare autenticável                                                         | BLOQUEADO | `wrangler whoami` → "You are not authenticated"; não existe `CLOUDFLARE_API_TOKEN` no ambiente desta máquina |
+| 8   | Nenhum recurso `stakeframe-monitor` existente                                         | PENDENTE  | não verificável sem autenticação Cloudflare; revalidar na janela de ativação                                 |
+| 9   | `monitor_token` existente utilizável                                                  | BLOQUEADO | nenhum caminho seguro de leitura sem mutação; fica para a janela de ativação                                 |
+| 10  | Segredos instalados no Worker                                                         | BLOQUEADO | exige deploy (fora do escopo)                                                                                |
 
 ## 3. Estado remoto Cloudflare (sanitizado)
 
-- Identidade da conta confirmada por leitura (`wrangler whoami`), saída sanitizada: apenas nome de conta e flag de permissão; sem IDs de conta, sem e-mails.
-- Nenhum Worker, deployment, namespace DO ou segredo com o nome `stakeframe-monitor` encontrado — ambiente limpo para ativação futura.
-- Nomes/tipos de segredos listados: nenhum. Nenhum valor de segredo lido ou exibido.
-- Plano/cotas: não expostos em leitura pela API/CLI — **pendente** de verificação na janela de ativação.
+- **Identidade Cloudflare: NÃO verificada.** `wrangler whoami` (4.129.0) respondeu
+  "You are not authenticated" e não há `CLOUDFLARE_API_TOKEN` no ambiente desta
+  máquina. Nenhum comando de leitura remota pôde ser executado nesta tarefa.
+- **Worker/deployment/namespace DO `stakeframe-monitor`: PENDENTE** — não verificável
+  sem autenticação; revalidar na janela de ativação (`wrangler deployments list`,
+  KV/DO listing) antes de qualquer `secret put`.
+- Segredos: nada listado, nada lido; nenhum valor impresso, copiado ou persistido.
+- Plano/cotas: **pendente** — não expostos sem autenticação.
 
 ## 4. Contrato de configuração e segredos
 
@@ -38,7 +42,7 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
 - Vars: `APP_ORIGIN`, `MONITOR_ENABLED` (atualmente `"false"`).
 - Cron: `*/5 * * * *`.
 - Segredos exigidos (apenas nomes, nunca valores): `MONITOR_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_USER_ID`, `TELEGRAM_OWNER_CHAT_ID` (deve ser igual ao user id).
-- `/status` exige `Authorization: Bearer <MONITOR_TOKEN>` quando habilitado; falha de configuração retorna cedo, sem consulta externa e sem alerta.
+- `/status` exige `Authorization: Bearer <token>` quando habilitado; falha de configuração retorna cedo, sem consulta externa e sem alerta.
 
 ## 5. Decisão técnica: exports vs migrations
 
