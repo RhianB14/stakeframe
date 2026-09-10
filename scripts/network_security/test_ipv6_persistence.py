@@ -168,7 +168,19 @@ class Base(unittest.TestCase):
         self.controller.store.write_record(name, document)
         return document
 
-    def crash_after_commit(self, phase="applying", **overrides):
+    def applied_receipt(self, **overrides):
+        """A well-formed applied receipt document (never written by itself)."""
+        document = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
+                    "boot_id": self.backend.boot_id(),
+                    "controller_sha256": persistence.controller_sha256(),
+                    "policy_sha256": persistence.policy_sha256(),
+                    "chain": persistence.CHAIN, "tag": persistence.TAG,
+                    "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
+                    "phase": "applied", "state": "applied"}
+        document.update(overrides)
+        return document
+
+    def crash_after_commit(self, phase="applying", state="auto", **overrides):
         """Reproduce a process death between the firewall commit and the receipt."""
         self.backend.apply_transaction(persistence.apply_transaction_text())
         record = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
@@ -178,6 +190,13 @@ class Base(unittest.TestCase):
                   "chain": persistence.CHAIN, "tag": persistence.TAG,
                   "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
                   "phase": phase}
+        if state == "auto":
+            state = {"failed": "clean", "failed_rolled_back": "clean",
+                     "interrupted_rolled_back": "clean", "rolled_back_unrecorded": "clean",
+                     "rolled_back": "clean", "rolling_back": "unknown",
+                     "rollback_required": "unknown"}.get(phase)
+        if state is not None:
+            record["state"] = state
         record.update(overrides)
         if record.get("_drop", False):
             record.pop("_drop")
@@ -512,17 +531,6 @@ class PostAcquisitionFailureTests(Base):
 class CrashReceiptWindowTests(Base):
     """A receipt that is unreadable must never block journal-based recovery."""
 
-    def applied_receipt(self, **overrides):
-        document = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
-                    "boot_id": self.backend.boot_id(),
-                    "controller_sha256": persistence.controller_sha256(),
-                    "policy_sha256": persistence.policy_sha256(),
-                    "chain": persistence.CHAIN, "tag": persistence.TAG,
-                    "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
-                    "phase": "applied", "state": "applied"}
-        document.update(overrides)
-        return document
-
     def write_applying_journal(self, **overrides):
         record = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
                   "boot_id": self.backend.boot_id(),
@@ -689,6 +697,255 @@ class RollbackTerminalFailureTests(Base):
         # the terminal receipt is still durably completed.
         self.assertIn(result["phase"], ("rolled_back", "no-op"))
         self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+
+# --------------------------------------------- durable rollback protocol
+class RollingBackProtocolTests(Base):
+    """rolling_back: the durable intent written before any rollback mutation."""
+
+    def applied_intent(self):
+        return {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"}
+
+    def test_intent_write_failure_leaves_firewall_intact(self):
+        self.controller.apply_on_boot()
+        before = self.backend.snapshot()
+        with self.inject_write_failure("journal.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "firewall untouched"):
+                self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_transaction_failure_before_commit_keeps_rolling_back_then_retry(self):
+        self.controller.apply_on_boot()
+        self.backend.fail_before = True
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "re-run rollback"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolling_back")
+        self.assertEqual(status["state"], "unknown")
+        # A re-run executes the rollback.
+        self.assertEqual(self.controller.rollback()["phase"], "rolled_back")
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_lost_acknowledgement_finalizes_as_rolled_back(self):
+        self.controller.apply_on_boot()
+        self.backend.fail_after = True  # the transaction committed, the ack was lost
+        self.assertEqual(self.controller.rollback()["phase"], "rolled_back")
+        self.assertFalse(self.backend.owned())
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolled_back")
+        self.assertEqual(status["state"], "clean")
+
+    def test_readback_unavailable_after_commit_records_rollback_required(self):
+        self.controller.apply_on_boot()
+        self.backend.after_commit_hook = lambda: setattr(self.backend, "snapshot_fail_persistent", True)
+        with self.assertRaisesRegex(persistence.PersistenceError, "rollback_required"):
+            self.controller.rollback()
+        # The rollback DID commit, but the outcome is unprovable.
+        self.assertFalse(self.backend.owned())
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rollback_required")
+        self.assertEqual(status["state"], "unknown")
+
+    def test_process_death_after_commit_reconciles_on_retry(self):
+        self.controller.apply_on_boot()
+        # Death right after the rollback commit and before the first metadata
+        # update: durable intent present, firewall clean, receipt still applied.
+        self.controller.store.write_record("journal.json", self.applied_intent())
+        self.backend.apply_transaction(persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.assertFalse(self.backend.owned())
+        # apply_on_boot() must not declare no-op while the intent is pending.
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "never reconciled"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        # The retry reconciles: delta absent + previous policies proven.
+        self.assertEqual(self.controller.rollback()["phase"], "rolled_back")
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_retry_with_delta_removed_finalizes_without_new_mutation(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record("journal.json", self.applied_intent())
+        self.backend.apply_transaction(persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        transactions = len(self.backend.transactions)
+        self.assertEqual(self.controller.rollback()["phase"], "rolled_back")
+        self.assertEqual(len(self.backend.transactions), transactions)  # finalize only, no new mutation
+
+    def test_retry_with_drift_records_rollback_required(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record("journal.json", self.applied_intent())
+        self.backend.apply_transaction(persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.backend.policies["INPUT"] = "DROP"  # delta gone, previous policy NOT restored
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "rollback_required"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rollback_required")
+        self.assertEqual(status["state"], "unknown")
+
+    def test_retry_with_delta_still_active_executes_the_rollback(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record("journal.json", self.applied_intent())
+        # Simulate a first attempt that never reached the firewall: delta intact.
+        self.assertTrue(self.backend.owned())
+        self.assertEqual(self.controller.rollback()["phase"], "rolled_back")
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
+
+    def test_apply_on_boot_refuses_pending_rolling_back(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record("journal.json", self.applied_intent())
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "never reconciled"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_status_never_reports_applied_with_pending_rolling_back(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record("journal.json", self.applied_intent())
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolling_back")
+        self.assertEqual(status["state"], "unknown")
+        self.assertNotEqual(status["phase"], "applied")
+        # The applied receipt is deliberately still on disk; the journal wins.
+        self.assertIsNotNone(self.controller.store.receipt())
+
+
+# --------------------------------------------- malformed records (parser)
+class MalformedRecordTests(Base):
+    """Parser failures are structural invalidations, never raw crashes."""
+
+    def write_receipt_bytes(self, raw):
+        persistence.private_write(self.root / "receipt.json", raw)
+        persistence.private_write(self.root / "receipt.json.sha256", (persistence.digest(raw) + "\n").encode("ascii"))
+
+    def test_syntactically_invalid_json_receipt_recovers_via_journal(self):
+        self.crash_after_commit("applying")
+        self.write_receipt_bytes(b"{this is not valid json")
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+        self.assertIsNone(self.controller.store.receipt())
+
+    def test_invalid_utf8_receipt_recovers_via_journal(self):
+        self.crash_after_commit("applying")
+        self.write_receipt_bytes(b"\xff\xfe\x80 not utf-8")
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+
+    def test_invalid_json_receipt_without_journal_is_refused_without_mutation(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        self.write_receipt_bytes(b"{this is not valid json")
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "unreadable JSON"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+    def test_oserror_reading_receipt_recovers_via_journal(self):
+        self.crash_after_commit("applying")
+        real_read = persistence.private_read
+
+        def failing_read(path):
+            if Path(path).name == "receipt.json":
+                raise PermissionError("simulated I/O failure")
+            return real_read(path)
+
+        with patch.object(persistence, "private_read", failing_read):
+            with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+                self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+
+    def test_oserror_reading_receipt_without_journal_is_refused(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        # Write a well-formed receipt, then fail every read of it.
+        self.craft_record("receipt.json")
+        real_read = persistence.private_read
+
+        def failing_read(path):
+            if Path(path).name == "receipt.json":
+                raise PermissionError("simulated I/O failure")
+            return real_read(path)
+
+        before = self.backend.snapshot()
+        with patch.object(persistence, "private_read", failing_read):
+            with self.assertRaisesRegex(persistence.PersistenceError, "unreadable"):
+                self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+    def test_store_never_leaks_parser_exceptions(self):
+        self.write_receipt_bytes(b"{\xff broken \x80")
+        with self.assertRaises(persistence.PersistenceError):
+            self.controller.store.receipt()
+
+
+# ------------------------------------------------------- journal state matrix
+class JournalMatrixTests(Base):
+    """Explicit phase/state matrix: contradictory combinations are refused."""
+
+    def write_raw_journal(self, phase, state="__absent__"):
+        document = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
+                    "boot_id": self.backend.boot_id(),
+                    "controller_sha256": persistence.controller_sha256(),
+                    "policy_sha256": persistence.policy_sha256(),
+                    "chain": persistence.CHAIN, "tag": persistence.TAG,
+                    "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
+                    "phase": phase}
+        if state != "__absent__":
+            document["state"] = state
+        self.controller.store.write_record("journal.json", document)
+
+    def test_accepted_combinations(self):
+        accepted = [("applying", "__absent__"), ("applying", "unknown"),
+                    ("acquired", "__absent__"), ("rolling_back", "unknown"),
+                    ("rolling_back", "__absent__"), ("rollback_required", "unknown"),
+                    ("rollback_required", "__absent__"), ("failed", "clean"),
+                    ("failed_rolled_back", "clean"), ("interrupted_rolled_back", "clean"),
+                    ("rolled_back_unrecorded", "clean"), ("rolled_back", "clean")]
+        for phase, state in accepted:
+            with self.subTest(phase=phase, state=state):
+                self.write_raw_journal(phase, state)
+                persistence.validate_journal(self.controller.store.journal())
+
+    def test_contradictory_combinations_are_refused(self):
+        refused = [("rollback_required", "clean"), ("rolling_back", "clean"),
+                   ("applying", "applied"), ("rolled_back", "applied"),
+                   ("failed", "unknown"), ("failed", "applied"),
+                   ("rolled_back_unrecorded", "unknown"),
+                   ("interrupted_rolled_back", "applied")]
+        for phase, state in refused:
+            with self.subTest(phase=phase, state=state):
+                self.write_raw_journal(phase, state)
+                with self.assertRaisesRegex(persistence.PersistenceError, "contradictory"):
+                    persistence.validate_journal(self.controller.store.journal())
+
+    def test_status_never_turns_conservative_phases_into_clean(self):
+        for phase in ("rolling_back", "rollback_required"):
+            with self.subTest(phase=phase):
+                self.craft_record("receipt.json")  # a stale applied receipt on disk
+                self.write_raw_journal(phase, "unknown")
+                status = self.controller.status()
+                self.assertEqual(status["phase"], phase)
+                self.assertEqual(status["state"], "unknown")
+                self.assertNotEqual(status["state"], "clean")
+
+    def test_apply_refuses_contradictory_journal_on_a_clean_state_with_broken_receipt(self):
+        # The journal must be fully validated BEFORE its phase is consulted.
+        raw = b"{broken"
+        persistence.private_write(self.root / "receipt.json", raw)
+        persistence.private_write(self.root / "receipt.json.sha256", (persistence.digest(raw) + "\n").encode("ascii"))
+        self.write_raw_journal("rollback_required", "clean")  # contradictory
+        with self.assertRaisesRegex(persistence.PersistenceError, "contradictory"):
+            self.controller.apply_on_boot()
 
 
 # ---------------------------------------------------------------- crash recovery

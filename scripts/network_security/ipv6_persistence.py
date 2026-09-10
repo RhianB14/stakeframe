@@ -49,12 +49,26 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 # The receipt is the terminal success/rollback marker; the journal narrates the
 # attempt and may legitimately stay in a non-terminal phase after a crash.
 RECEIPT_PHASES = ("applied", "rolled_back")
-JOURNAL_PHASES = ("applying", "acquired", "failed", "failed_rolled_back", "rollback_required",
-                  "interrupted_rolled_back", "rolled_back_unrecorded", "rolled_back")
+JOURNAL_PHASES = ("applying", "acquired", "rolling_back", "failed", "failed_rolled_back",
+                  "rollback_required", "interrupted_rolled_back", "rolled_back_unrecorded",
+                  "rolled_back")
+# Explicit journal phase/state matrix. "unknown" means the live state could not
+# be proven; None means the phase carries no state claim at all.
+JOURNAL_STATES = {
+    "applying": ("unknown", None),
+    "acquired": ("unknown", None),
+    "rolling_back": ("unknown", None),
+    "rollback_required": ("unknown", None),
+    "failed": ("clean",),  # only when the previous state was proven intact
+    "failed_rolled_back": ("clean",),
+    "interrupted_rolled_back": ("clean",),
+    "rolled_back_unrecorded": ("clean",),
+    "rolled_back": ("clean",),
+}
 # Journal terminals that are the NEWEST proof and must never be hidden by an
 # older receipt, even when that receipt is still readable. "rolled_back" is
 # also a terminal: it proves the rollback even if the receipt completion failed.
-RECOVERY_JOURNAL_PHASES = ("failed", "failed_rolled_back", "rollback_required",
+RECOVERY_JOURNAL_PHASES = ("rolling_back", "failed", "failed_rolled_back", "rollback_required",
                            "interrupted_rolled_back", "rolled_back_unrecorded", "rolled_back")
 
 
@@ -305,8 +319,8 @@ def validate_receipt(document):
 def validate_journal(document):
     document = validate_document(document, "journal.json")
     state = document.get("state")
-    if state is not None and state not in ("applied", "clean", "unknown"):
-        raise PersistenceError("journal state is invalid: journal.json")
+    if state not in JOURNAL_STATES[document["phase"]]:
+        raise PersistenceError("journal phase/state combination is contradictory: journal.json")
     return document
 
 
@@ -366,16 +380,31 @@ class Store:
 
     def read_record(self, name):
         path = self.root / name
-        if not path.exists():
-            return None
-        data = private_read(path)
+        try:
+            if not path.exists():
+                return None
+            data = private_read(path)
+        except FileNotFoundError:
+            return None  # lost the race with a writer/remover: treat as absent
+        except PersistenceError:
+            raise
+        except OSError as exc:
+            # Raw I/O failures never escape the storage layer: an unreadable
+            # record is unusable, not a crash of the caller.
+            raise PersistenceError("record is unreadable: " + name) from exc
         try:
             sidecar = private_read(self.root / (name + ".sha256"))
         except (FileNotFoundError, PersistenceError) as exc:
             raise PersistenceError("truncated or tampered record: " + name) from exc
+        except OSError as exc:
+            raise PersistenceError("record is unreadable: " + name) from exc
         if sidecar.decode("ascii", "replace").strip() != digest(data):
             raise PersistenceError("truncated or tampered record: " + name)
-        document = json.loads(data)
+        try:
+            document = json.loads(data)
+        except (ValueError, UnicodeDecodeError) as exc:
+            # Parser failures are structural invalidations, never raw crashes.
+            raise PersistenceError("record is unreadable JSON: " + name) from exc
         if not isinstance(document, dict):
             raise PersistenceError("record is not a JSON object: " + name)
         return document
@@ -473,6 +502,27 @@ class Controller:
                 and document.get("controller_sha256") == controller_hash
                 and document.get("policy_sha256") == policy_sha256())
 
+    def _pending_rolling_back(self, boot_id, controller_hash):
+        """A rolling_back intent from this same boot that was never reconciled.
+
+        While it exists, ``apply_on_boot`` must never declare no-op/applied
+        success. An unreadable or invalid journal carries no proof of intent
+        and does not block the normal flow.
+        """
+        try:
+            journal = self.store.journal()
+        except PersistenceError:
+            return None
+        if journal is None:
+            return None
+        try:
+            validate_journal(journal)
+        except PersistenceError:
+            return None
+        if journal["phase"] == "rolling_back" and self._attempt_identity_matches(journal, boot_id, controller_hash):
+            return journal
+        return None
+
     def _rollback_delta(self, before_policies):
         """Remove ONLY the owned delta and restore the recorded previous policies.
 
@@ -485,6 +535,12 @@ class Controller:
         present = CHAIN in chains
         references = references_to_owned_chain(snapshot)
         if not present and not references:
+            # Absence of the delta is only a proven no-op when the configured
+            # policies were also restored to the recorded previous ones.
+            if (policies["INPUT"] != before_policies.get("INPUT")
+                    or policies["FORWARD"] != before_policies.get("FORWARD")):
+                raise PersistenceError("no owned delta, but IPv6 policies do not match the recorded previous ones; "
+                                       "refuse rollback")
             return {"state": "no-op"}
         if not present:
             raise PersistenceError("owned reference without its chain; refuse rollback")
@@ -538,6 +594,8 @@ class Controller:
         validate_journal(journal)
         if not self._attempt_identity_matches(journal, boot_id, controller_hash):
             raise PersistenceError("journal does not match this controller/policy/boot; refuse adoption")
+        if journal["phase"] == "rolling_back":
+            raise PersistenceError("a rollback was started and never reconciled; run rollback before any apply")
         if journal["phase"] not in ("applying", "acquired"):
             raise PersistenceError("journal does not describe an interrupted attempt; refuse without mutation")
         try:
@@ -583,6 +641,11 @@ class Controller:
                         raise PersistenceError("receipt controller hash differs from the running controller")
                     if receipt["policy_sha256"] != policy_sha256():
                         raise PersistenceError("receipt policy hash differs from the reviewed policy")
+                    # A rolling_back intent from this same boot was never
+                    # reconciled: never take it as a no-op/applied success.
+                    if self._pending_rolling_back(boot_id, controller_hash) is not None:
+                        raise PersistenceError("a rollback was started and never reconciled; "
+                                               "run rollback before any apply")
                     return {"schema": SCHEMA, "mode": "apply-on-boot", "phase": "no-op",
                             "policy_version": POLICY_VERSION, "state": "applied", "writes": "none"}
                 # No applicable applied receipt: only a matching interrupted
@@ -595,11 +658,17 @@ class Controller:
                 raise PersistenceError("applied state without a matching receipt/journal; refuse adoption")
             # Clean state: a receipt that is readable but contradictory or a
             # trashed record is refused before any mutation, unless a recovery
-            # terminal journal already explains the broken record.
+            # terminal journal already explains the broken record. The journal
+            # is validated completely BEFORE its phase is consulted.
             if receipt_error is not None:
                 journal = self.store.journal()
+                if journal is not None:
+                    validate_journal(journal)
                 if journal is None or journal["phase"] not in RECOVERY_JOURNAL_PHASES:
                     raise receipt_error
+            if self._pending_rolling_back(boot_id, controller_hash) is not None:
+                raise PersistenceError("a rollback was started and never reconciled; "
+                                       "run rollback before any apply")
             # Clean state: nothing owned is present, so a durable journal that
             # identifies this attempt is written before the firewall changes.
             record = {"schema": SCHEMA, "policy_version": POLICY_VERSION, "boot_id": boot_id,
@@ -709,27 +778,96 @@ class Controller:
                 raise PersistenceError("no durable receipt; nothing owned to roll back")
             validate_receipt(receipt)
             self._full_receipt_identity(receipt, self.backend.boot_id())
-            snapshot = self.backend.snapshot()
             if receipt["phase"] == "rolled_back":
+                # Read-only decision: no durable intent and no mutation happen
+                # on this branch.
+                snapshot = self.backend.snapshot()
                 if CHAIN not in snapshot["chains"] and not references_to_owned_chain(snapshot):
                     return {"schema": SCHEMA, "mode": "rollback", "phase": "no-op",
                             "policy_version": POLICY_VERSION, "writes": "none"}
                 raise PersistenceError("receipt says rolled back but the owned delta is still present")
-            outcome = self._rollback_delta(receipt["before_policies"])
-            # Durably dismiss the stale receipt FIRST (it never carries an
-            # "applied" claim again), then write the recovery-terminal journal,
-            # then the terminal receipt. Any failure is visible and recorded as
-            # rolled_back_unrecorded; the journal takes precedence in status.
+            # Durable intent BEFORE any snapshot or transaction that can take
+            # part in the mutation. If this write fails, the firewall is
+            # untouched and the operation aborts.
+            intent = {**receipt, "phase": "rolling_back", "state": "unknown"}
             try:
-                self.store.discard_record("receipt.json")
-                self.store.write_record("journal.json", {**receipt, "phase": "rolled_back", "state": "clean"})
-                self.store.write_record("receipt.json", {**receipt, "phase": "rolled_back", "state": "clean"})
+                self.store.write_record("journal.json", intent)
             except BaseException as exc:
-                self._record_phase(receipt, "rolled_back_unrecorded", exc, state="clean",
-                                   note="firewall already rolled back; terminal receipt could not be persisted")
-                raise PersistenceError("rollback executed but its terminal receipt could not be persisted") from exc
-            return {"schema": SCHEMA, "mode": "rollback", "phase": outcome["state"],
-                    "policy_version": POLICY_VERSION, "writes": "owned-delta-only"}
+                raise PersistenceError("could not record the durable rolling_back intent; firewall untouched") from exc
+            try:
+                self._rollback_delta(receipt["before_policies"])
+            except BaseException as exc:
+                # Either finalizes a PROVEN rollback (lost acknowledgement) or
+                # raises with a conservative state (rolling_back/rollback_required).
+                return self._reconcile_uncertain_rollback(receipt, intent, exc)
+            return self._finalize_rollback(receipt)
+
+    def _finalize_rollback(self, receipt):
+        """Persist the terminal rolled_back records. Raises on storage failure."""
+        try:
+            self.store.discard_record("receipt.json")
+            self.store.write_record("journal.json", {**receipt, "phase": "rolled_back", "state": "clean"})
+            self.store.write_record("receipt.json", {**receipt, "phase": "rolled_back", "state": "clean"})
+        except BaseException as exc:
+            self._record_phase(receipt, "rolled_back_unrecorded", exc, state="clean",
+                               note="firewall already rolled back; terminal receipt could not be persisted")
+            raise PersistenceError("rollback executed but its terminal receipt could not be persisted") from exc
+        return {"schema": SCHEMA, "mode": "rollback", "phase": "rolled_back",
+                "policy_version": POLICY_VERSION, "writes": "owned-delta-only"}
+
+    def _reconcile_uncertain_rollback(self, receipt, intent, error):
+        """Resolve an uncertain rollback result.
+
+        The durable ``rolling_back`` intent already exists, so the outcome can
+        only be: proven rollback (finalize the records without a new mutation),
+        delta still exactly present (keep the intent and demand a re-run) or an
+        unprovable/diverged state (``rollback_required``, nothing overwritten).
+        Raises in every branch except the proven one, which returns the result
+        of :meth:`_finalize_rollback`.
+        """
+        try:
+            snapshot = self.backend.snapshot()
+        except BaseException as snap_error:
+            self._record_phase(intent, "rollback_required", snap_error, state="unknown",
+                               note="rollback outcome unreadable; intervention required")
+            raise PersistenceError("rollback outcome unknown and the live state could not be read; "
+                                   "rollback_required") from error
+        chains = snapshot["chains"]
+        present = CHAIN in chains
+        references = references_to_owned_chain(snapshot)
+        if present:
+            exact = chains[CHAIN] == policy_rules()
+            if exact:
+                try:
+                    verify_owned_reference(snapshot)
+                except PersistenceError:
+                    exact = False
+            policies_exact = (snapshot["policies"]["INPUT"] == "DROP"
+                              and snapshot["policies"]["FORWARD"] == "DROP")
+            if exact and policies_exact:
+                # The owned delta is still exactly in place: the previous
+                # attempt did not commit. Keep rolling_back; a re-run will
+                # execute the rollback.
+                self._record_phase(intent, "rolling_back", error, state="unknown",
+                                   note="rollback attempt failed before any commit; owned delta intact")
+                raise PersistenceError("rollback failed before the commit; owned delta still present; "
+                                       "re-run rollback") from error
+            self._record_phase(intent, "rollback_required", error, state="unknown",
+                               note="owned delta diverged during rollback; nothing was overwritten")
+            raise PersistenceError(str(error) + "; rollback_required without overwriting") from error
+        if references:
+            self._record_phase(intent, "rollback_required", error, state="unknown",
+                               note="owned reference survived the rollback; nothing was overwritten")
+            raise PersistenceError(str(error) + "; rollback_required without overwriting") from error
+        if (snapshot["policies"]["INPUT"] != receipt["before_policies"]["INPUT"]
+                or snapshot["policies"]["FORWARD"] != receipt["before_policies"]["FORWARD"]):
+            self._record_phase(intent, "rollback_required", error, state="unknown",
+                               note="IPv6 policies were not proven restored; nothing was overwritten")
+            raise PersistenceError("rollback outcome unproven; IPv6 policies do not match the recorded previous "
+                                   "ones; rollback_required") from error
+        # Delta provably gone and previous policies provably restored: the
+        # rollback DID happen (e.g. the acknowledgement was lost). Finalize.
+        return self._finalize_rollback(receipt)
 
 
 class LinuxAdapter:
