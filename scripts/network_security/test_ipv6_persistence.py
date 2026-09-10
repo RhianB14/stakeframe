@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -52,6 +53,8 @@ class FakeLinux:
         self.fail_before = None
         self.fail_after = None
         self.after_commit_hook = None
+        self.snapshot_fail_once = 0
+        self.snapshot_fail_persistent = False
 
     # --- adapter surface -------------------------------------------------
     def validate_host(self):
@@ -65,6 +68,11 @@ class FakeLinux:
         return self.now
 
     def snapshot(self):
+        if self.snapshot_fail_once > 0:
+            self.snapshot_fail_once -= 1
+            raise OSError("simulated transient snapshot failure")
+        if self.snapshot_fail_persistent:
+            raise OSError("simulated persistent snapshot failure")
         return {"policies": dict(self.policies), "chains": copy.deepcopy(self.chains)}
 
     def persistence_files(self):
@@ -155,7 +163,7 @@ class Base(unittest.TestCase):
                     "policy_sha256": persistence.policy_sha256(),
                     "chain": persistence.CHAIN, "tag": persistence.TAG,
                     "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
-                    "phase": "applied"}
+                    "phase": "applied", "state": "applied"}
         document.update(overrides)
         self.controller.store.write_record(name, document)
         return document
@@ -196,6 +204,16 @@ class Base(unittest.TestCase):
                             return real_write(path, data)
                     if stage == "replace":
                         with patch.object(os, "replace", side_effect=OSError("injected replace failure: " + name)):
+                            return real_write(path, data)
+                    if stage == "fsync-dir":
+                        real_fsync = os.fsync
+
+                        def fsync_only_files(fd):
+                            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                                raise OSError("injected directory fsync failure")
+                            return real_fsync(fd)
+
+                        with patch.object(os, "fsync", fsync_only_files):
                             return real_write(path, data)
                     raise AssertionError("unknown injection stage")
             return real_write(path, data)
@@ -356,16 +374,30 @@ class ApplyTests(Base):
             self.controller.apply_on_boot()
         self.assert_no_mutation(before)
 
-    def test_tampered_or_truncated_receipt_is_refused(self):
+    def test_tampered_or_truncated_receipt_recovers_via_interrupted_journal(self):
         self.controller.apply_on_boot()
         raw = (self.root / "receipt.json").read_bytes()
         persistence.private_write(self.root / "receipt.json", raw[:-12])
+        # Without a recovery terminal, status refuses to fabricate a state.
         with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
             self.controller.status()
+        # The valid applying journal authorizes ONLY a conservative rollback.
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+        self.assertIsNone(self.controller.store.receipt())
+
+    def test_truncated_receipt_without_journal_is_refused_without_mutation(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        self.craft_record("receipt.json")
+        raw = (self.root / "receipt.json").read_bytes()
+        persistence.private_write(self.root / "receipt.json", raw[:-12])
         before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
             self.controller.apply_on_boot()
         self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
 
     def test_applied_state_without_receipt_or_journal_is_refused(self):
         self.backend.apply_transaction(persistence.apply_transaction_text())
@@ -413,11 +445,23 @@ class PostAcquisitionFailureTests(Base):
                 self.controller.apply_on_boot()
         self.assert_failed_and_clean()
 
-    def test_acquisition_journal_write_failure_rolls_back(self):
-        with self.inject_write_failure("journal.json", "write", occurrence=2):
-            with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
-                self.controller.apply_on_boot()
-        self.assert_failed_and_clean()
+    def test_journal_is_never_rewritten_between_commit_and_receipt(self):
+        writes = []
+        real_write = persistence.private_write
+
+        def capturing(path, data):
+            name = Path(path).name
+            if name.startswith("journal.json"):
+                writes.append(name)
+            return real_write(path, data)
+
+        with patch.object(persistence, "private_write", capturing):
+            self.controller.apply_on_boot()
+        # The pre-transaction pair is written exactly once; the journal is
+        # never promoted to "acquired" (which would open a rewrite window).
+        self.assertEqual(writes, ["journal.json", "journal.json.sha256"])
+        self.assertEqual(self.journal_phase(), "applying")
+        self.assertEqual(len(self.backend.transactions), 1)
 
     def test_failed_rollback_is_reported_as_rollback_required(self):
         self.backend.fail_after = True
@@ -429,15 +473,222 @@ class PostAcquisitionFailureTests(Base):
         self.assertIn(["-j", "RETURN"], self.backend.chains[persistence.CHAIN])
         self.assertEqual(self.journal_phase(), "rollback_required")
 
+    def test_persistent_snapshot_failure_after_commit_records_rollback_required(self):
+        # The commit succeeds but every snapshot afterwards fails, including the
+        # one inside the recovery path: no blind rollback, best-effort proof loss.
+        self.backend.after_commit_hook = lambda: setattr(self.backend, "snapshot_fail_persistent", True)
+        with self.assertRaisesRegex(persistence.PersistenceError, "rollback_required"):
+            self.controller.apply_on_boot()
+        self.assertTrue(self.backend.owned())  # nothing was overwritten
+        self.assertEqual(self.journal_phase(), "rollback_required")
+        status = self.controller.status()
+        self.assertEqual(status["state"], "unknown")
+
+    def test_transient_snapshot_failure_after_commit_still_rolls_back(self):
+        # Only the readback snapshot fails; the recovery snapshot succeeds.
+        self.backend.after_commit_hook = lambda: setattr(self.backend, "snapshot_fail_once", 1)
+        with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
+        self.assertEqual(self.journal_phase(), "failed_rolled_back")
+
     def test_rollback_terminal_receipt_failure_is_visible_and_keeps_the_result(self):
         self.controller.apply_on_boot()
         with self.inject_write_failure("receipt.json", "write"):
             with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
                 self.controller.rollback()
-        # The firewall result is preserved and recorded as unrecorded.
+        # The firewall result is preserved and recorded as unrecorded, and the
+        # rollback was proven, so status must NOT report an applied state.
         self.assertFalse(self.backend.owned())
         self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
         self.assertEqual(self.journal_phase(), "rolled_back_unrecorded")
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolled_back_unrecorded")
+        self.assertEqual(status["state"], "clean")
+
+
+# ---------------------------------------------------------------- crash receipt windows
+class CrashReceiptWindowTests(Base):
+    """A receipt that is unreadable must never block journal-based recovery."""
+
+    def applied_receipt(self, **overrides):
+        document = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
+                    "boot_id": self.backend.boot_id(),
+                    "controller_sha256": persistence.controller_sha256(),
+                    "policy_sha256": persistence.policy_sha256(),
+                    "chain": persistence.CHAIN, "tag": persistence.TAG,
+                    "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
+                    "phase": "applied", "state": "applied"}
+        document.update(overrides)
+        return document
+
+    def write_applying_journal(self, **overrides):
+        record = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
+                  "boot_id": self.backend.boot_id(),
+                  "controller_sha256": persistence.controller_sha256(),
+                  "policy_sha256": persistence.policy_sha256(),
+                  "chain": persistence.CHAIN, "tag": persistence.TAG,
+                  "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
+                  "phase": "applying"}
+        record.update(overrides)
+        self.controller.store.write_record("journal.json", record)
+
+    def crash_between_receipt_and_sidecar(self):
+        """Commit + journal + receipt.json replaced, sidecar never created."""
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        persistence.private_write(self.root / "receipt.json", persistence.encoded(self.applied_receipt()))
+        self.write_applying_journal()
+
+    def test_crash_between_receipt_replace_and_sidecar_recovers_via_journal(self):
+        self.crash_between_receipt_and_sidecar()
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+        self.assertIsNone(self.controller.store.receipt())
+
+    def test_crash_after_sidecar_replace_is_a_durable_noop(self):
+        # After the sidecar replace the terminal receipt is complete and
+        # durable: the next run is a no-op, never an adoption.
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        self.controller.store.write_record("receipt.json", self.applied_receipt())
+        self.write_applying_journal()
+        result = self.controller.apply_on_boot()
+        self.assertEqual(result["phase"], "no-op")
+        self.assertTrue(self.backend.owned())
+
+    def test_missing_sidecar_recovers_via_journal(self):
+        self.crash_between_receipt_and_sidecar()
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+
+    def test_divergent_sidecar_recovers_via_journal(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        data = persistence.encoded(self.applied_receipt())
+        persistence.private_write(self.root / "receipt.json", data)
+        persistence.private_write(self.root / "receipt.json.sha256",
+                                  (persistence.digest(b"stale") + "\n").encode("ascii"))
+        self.write_applying_journal()
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+
+    def test_missing_sidecar_without_journal_is_refused_without_mutation(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        persistence.private_write(self.root / "receipt.json", persistence.encoded(self.applied_receipt()))
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_divergent_sidecar_without_journal_is_refused_without_mutation(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        data = persistence.encoded(self.applied_receipt())
+        persistence.private_write(self.root / "receipt.json", data)
+        persistence.private_write(self.root / "receipt.json.sha256",
+                                  (persistence.digest(b"stale") + "\n").encode("ascii"))
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_non_object_receipt_with_valid_journal_recovers_via_journal(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        raw = b"[]"
+        persistence.private_write(self.root / "receipt.json", raw)
+        persistence.private_write(self.root / "receipt.json.sha256", (persistence.digest(raw) + "\n").encode())
+        self.write_applying_journal()
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+
+    def test_non_object_receipt_without_journal_is_refused_without_mutation(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        raw = b"[]"
+        persistence.private_write(self.root / "receipt.json", raw)
+        persistence.private_write(self.root / "receipt.json.sha256", (persistence.digest(raw) + "\n").encode())
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "not a JSON object"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+
+# ------------------------------------------------- rollback terminal failures
+class RollbackTerminalFailureTests(Base):
+    """The system must never declare applied after a proven rollback."""
+
+    def expect_conservative_status(self):
+        status = self.controller.status()
+        self.assertEqual(status["phase"], "rolled_back_unrecorded")
+        self.assertEqual(status["state"], "clean")
+        self.assertNotEqual(status["phase"], "applied")
+
+    def test_json_write_failure_keeps_status_conservative_then_recovers(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("receipt.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        self.expect_conservative_status()
+        # A later run on the clean state applies again safely.
+        self.assertEqual(self.controller.apply_on_boot()["phase"], "applied")
+
+    def test_sidecar_write_failure_keeps_status_conservative(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("receipt.json.sha256", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        self.expect_conservative_status()
+
+    def test_fsync_file_failure_keeps_status_conservative(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("receipt.json", "fsync"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        self.expect_conservative_status()
+
+    @unittest.skipUnless(os.name == "posix", "directory fsync semantics")
+    def test_fsync_dir_failure_keeps_status_conservative(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("receipt.json", "fsync-dir"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        self.expect_conservative_status()
+
+    def test_replace_failure_keeps_status_conservative(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("receipt.json", "replace"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        self.assertFalse(self.backend.owned())
+        self.expect_conservative_status()
+
+    def test_receipt_discard_failure_keeps_status_conservative_then_recovers(self):
+        self.controller.apply_on_boot()
+        with patch.object(self.controller.store, "discard_record", side_effect=OSError("injected discard failure")):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        # The rollback itself succeeded: the delta is gone, the stale applied
+        # receipt is still on disk, but status must prefer the recovery journal.
+        self.assertFalse(self.backend.owned())
+        self.expect_conservative_status()
+        # A new rollback run re-validates and completes the terminal record.
+        result = self.controller.rollback()
+        # The firewall was already clean, so the second pass is a proven no-op;
+        # the terminal receipt is still durably completed.
+        self.assertIn(result["phase"], ("rolled_back", "no-op"))
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
 
 
 # ---------------------------------------------------------------- crash recovery
@@ -622,6 +873,15 @@ class RollbackTests(Base):
         self.assert_no_mutation(before)
         self.assertTrue(self.backend.owned())
 
+    def test_rollback_refuses_divergent_policy_hash_without_mutation(self):
+        self.controller.apply_on_boot()
+        self.craft_record("receipt.json", policy_sha256="0" * 64)
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "policy hash differs"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
 
 # ------------------------------------------------------------ record validation
 class RecordValidationTests(Base):
@@ -688,6 +948,27 @@ class RecordValidationTests(Base):
         self.craft_record("journal.json", policy_version=42)
         with self.assertRaisesRegex(persistence.PersistenceError, "schema/version"):
             self.controller.status()
+
+    def test_receipt_without_state_is_refused(self):
+        self.craft_record("receipt.json", state=None)
+        with self.assertRaisesRegex(persistence.PersistenceError, "missing a valid state"):
+            self.controller.status()
+        with self.assertRaisesRegex(persistence.PersistenceError, "missing a valid state"):
+            self.controller.apply_on_boot()
+
+    def test_contradictory_receipt_phase_state_is_refused(self):
+        cases = (("applied", "clean"), ("rolled_back", "applied"))
+        for phase, state in cases:
+            with self.subTest(phase=phase, state=state):
+                self.craft_record("receipt.json", phase=phase, state=state)
+                with self.assertRaisesRegex(persistence.PersistenceError, "contradictory"):
+                    self.controller.status()
+                with self.assertRaisesRegex(persistence.PersistenceError, "contradictory"):
+                    self.controller.apply_on_boot()
+
+    def test_rolled_back_receipt_with_clean_state_is_accepted(self):
+        self.craft_record("receipt.json", phase="rolled_back", state="clean")
+        self.assertEqual(self.controller.status()["phase"], "rolled_back")
 
 
 # ---------------------------------------------------------------- lock

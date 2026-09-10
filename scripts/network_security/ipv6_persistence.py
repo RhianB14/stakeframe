@@ -50,7 +50,12 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 # attempt and may legitimately stay in a non-terminal phase after a crash.
 RECEIPT_PHASES = ("applied", "rolled_back")
 JOURNAL_PHASES = ("applying", "acquired", "failed", "failed_rolled_back", "rollback_required",
-                  "interrupted_rolled_back", "rolled_back_unrecorded")
+                  "interrupted_rolled_back", "rolled_back_unrecorded", "rolled_back")
+# Journal terminals that are the NEWEST proof and must never be hidden by an
+# older receipt, even when that receipt is still readable. "rolled_back" is
+# also a terminal: it proves the rollback even if the receipt completion failed.
+RECOVERY_JOURNAL_PHASES = ("failed", "failed_rolled_back", "rollback_required",
+                           "interrupted_rolled_back", "rolled_back_unrecorded", "rolled_back")
 
 
 class PersistenceError(RuntimeError):
@@ -287,11 +292,22 @@ def validate_document(document, name):
 
 
 def validate_receipt(document):
-    return validate_document(document, "receipt.json")
+    validate_document(document, "receipt.json")
+    # phase/state must be coherent: applied<->applied, rolled_back<->clean.
+    state = document.get("state")
+    if not isinstance(state, str) or not state.strip():
+        raise PersistenceError("receipt is missing a valid state: receipt.json")
+    if {"applied": "applied", "rolled_back": "clean"}.get(document["phase"]) != state:
+        raise PersistenceError("receipt phase/state combination is contradictory: receipt.json")
+    return document
 
 
 def validate_journal(document):
-    return validate_document(document, "journal.json")
+    document = validate_document(document, "journal.json")
+    state = document.get("state")
+    if state is not None and state not in ("applied", "clean", "unknown"):
+        raise PersistenceError("journal state is invalid: journal.json")
+    return document
 
 
 class Store:
@@ -365,15 +381,27 @@ class Store:
         return document
 
     def discard_record(self, name):
-        """Best-effort removal so no stale receipt survives a rollback."""
+        """Durably remove a record and its sidecar. Raises on failure.
+
+        A stale applied receipt must never survive a rollback, so removal is
+        verified and the containing directory is fsynced when applicable.
+        """
         removed = []
         for target in (self.root / name, self.root / (name + ".sha256")):
             try:
-                if target.exists() and not target.is_symlink():
+                if target.is_symlink():
+                    raise PersistenceError("refusing to remove a symlinked record: " + target.name)
+                if target.exists():
                     target.unlink()
                     removed.append(target.name)
-            except OSError:
-                pass
+            except OSError as exc:
+                raise PersistenceError("could not discard record " + target.name) from exc
+        if removed and os.name == "posix":
+            directory_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
         return removed
 
     def receipt(self):
@@ -420,7 +448,7 @@ class Controller:
             raise PersistenceError("delta already present in a persistence file; refuse double application")
         return files
 
-    def _record_phase(self, record, phase, error=None, note=None):
+    def _record_phase(self, record, phase, error=None, note=None, state=None):
         """Best-effort journal update.
 
         A failure to persist recovery metadata must never hide the firewall
@@ -428,6 +456,8 @@ class Controller:
         never raises: the caller keeps its primary, visible failure.
         """
         document = {**record, "phase": phase}
+        if state is not None:
+            document["state"] = state
         if error is not None:
             document["error"] = type(error).__name__
         if note is not None:
@@ -471,21 +501,33 @@ class Controller:
 
     def _post_acquisition_failure(self, record, before, before_policies, error):
         """Recover from any failure after the firewall commit. Always raises."""
-        current = self.backend.snapshot()
+        try:
+            current = self.backend.snapshot()
+        except BaseException as snap_error:
+            # The live state cannot be proven: refuse a blind rollback, record
+            # the lost proof in best effort and keep the primary failure.
+            self._record_phase(record, "rollback_required", snap_error, state="unknown",
+                               note="live state unreadable after the commit; proof lost; nothing overwritten")
+            raise PersistenceError("apply failed after acquisition and the live state could not be read; "
+                                  "rollback_required") from error
         if current == before:
-            saved = self._record_phase(record, "failed", error)
+            saved = self._record_phase(record, "failed", error, state="clean")
             suffix = "" if saved else " (recovery journal write also failed)"
             raise PersistenceError("apply failed before any commit; no change was made" + suffix) from error
         try:
             self._rollback_delta(before_policies)
         except BaseException as recovery:
-            saved = self._record_phase(record, "rollback_required", recovery,
+            saved = self._record_phase(record, "rollback_required", recovery, state="unknown",
                                        note="external drift or lost proof; nothing was overwritten")
             suffix = "" if saved else " (recovery journal write also failed)"
             raise PersistenceError("apply failed after acquisition and the owned delta could not be proven; "
                                   "rollback_required" + suffix) from recovery
-        self.store.discard_record("receipt.json")
-        saved = self._record_phase(record, "failed_rolled_back", error)
+        discard_note = None
+        try:
+            self.store.discard_record("receipt.json")
+        except BaseException as discard_error:
+            discard_note = "receipt discard failed: " + type(discard_error).__name__
+        saved = self._record_phase(record, "failed_rolled_back", error, state="clean", note=discard_note)
         suffix = "" if saved else " (recovery journal write also failed)"
         raise PersistenceError("apply failed after acquisition; only the owned delta was rolled back" + suffix) from error
 
@@ -501,11 +543,16 @@ class Controller:
         try:
             self._rollback_delta(journal["before_policies"])
         except BaseException as recovery:
-            self._record_phase(journal, "rollback_required", recovery,
+            self._record_phase(journal, "rollback_required", recovery, state="unknown",
                                note="interrupted attempt with external drift; nothing was overwritten")
             raise PersistenceError("interrupted attempt could not be proven; rollback_required") from recovery
-        self.store.discard_record("receipt.json")
-        self._record_phase(journal, "interrupted_rolled_back", note="crash after commit, before the receipt")
+        discard_note = None
+        try:
+            self.store.discard_record("receipt.json")
+        except BaseException as discard_error:
+            discard_note = "receipt discard failed: " + type(discard_error).__name__
+        self._record_phase(journal, "interrupted_rolled_back", state="clean",
+                           note="crash after commit, before the receipt" + ("; " + discard_note if discard_note else ""))
         raise PersistenceError("interrupted attempt (commit without receipt) rolled back; no adoption; re-run to apply")
 
     def apply_on_boot(self):
@@ -516,9 +563,18 @@ class Controller:
             before = self.backend.snapshot()
             before_policies = {"INPUT": before["policies"]["INPUT"], "FORWARD": before["policies"]["FORWARD"]}
             kind = classify(before)
-            receipt = self.store.receipt()
-            if receipt is not None:
-                validate_receipt(receipt)
+            # An unreadable or structurally invalid receipt is NEVER a success
+            # proof: it is recorded as the reason, so the interrupted-attempt
+            # journal can still authorize a conservative rollback below.
+            receipt = None
+            receipt_error = None
+            try:
+                receipt = self.store.receipt()
+                if receipt is not None:
+                    validate_receipt(receipt)
+            except PersistenceError as exc:
+                receipt = None
+                receipt_error = exc
             if kind["state"] == "applied":
                 if receipt is not None and receipt["phase"] == "applied":
                     if receipt["boot_id"] != boot_id:
@@ -534,7 +590,16 @@ class Controller:
                 journal = self.store.journal()
                 if journal is not None:
                     self._recover_interrupted(journal, boot_id, controller_hash)
+                if receipt_error is not None:
+                    raise receipt_error
                 raise PersistenceError("applied state without a matching receipt/journal; refuse adoption")
+            # Clean state: a receipt that is readable but contradictory or a
+            # trashed record is refused before any mutation, unless a recovery
+            # terminal journal already explains the broken record.
+            if receipt_error is not None:
+                journal = self.store.journal()
+                if journal is None or journal["phase"] not in RECOVERY_JOURNAL_PHASES:
+                    raise receipt_error
             # Clean state: nothing owned is present, so a durable journal that
             # identifies this attempt is written before the firewall changes.
             record = {"schema": SCHEMA, "policy_version": POLICY_VERSION, "boot_id": boot_id,
@@ -546,10 +611,11 @@ class Controller:
                 self.backend.apply_transaction(apply_transaction_text())
                 if classify(self.backend.snapshot())["state"] != "applied":
                     raise PersistenceError("readback after apply is not the reviewed delta")
-                self.store.write_record("journal.json", {**record, "phase": "acquired"})
                 receipt = {**record, "phase": "applied", "state": "applied",
                            "applied_monotonic_ns": self.backend.monotonic_ns()}
-                # Terminal marker: nothing fallible runs after a successful receipt.
+                # Terminal marker: nothing fallible runs after a successful
+                # receipt. The pre-transaction journal stays "applying" on
+                # purpose: it is never rewritten until a terminal event.
                 self.store.write_record("receipt.json", receipt)
             except BaseException as exc:
                 self._post_acquisition_failure(record, before, before_policies, exc)
@@ -558,24 +624,83 @@ class Controller:
                     "controller_sha256": controller_hash, "policy_sha256": policy_sha256()}
 
     def status(self):
-        receipt = self.store.receipt()
         journal = self.store.journal()
-        if receipt is not None:
-            validate_receipt(receipt)
         if journal is not None:
             validate_journal(journal)
+        if journal is not None and journal["phase"] in RECOVERY_JOURNAL_PHASES:
+            # A recovery terminal is the newest proof and must never be hidden
+            # by an older receipt (e.g. a stale applied receipt after a
+            # rollback whose terminal write failed).
+            return {
+                "schema": SCHEMA,
+                "mode": "status",
+                "policy_version": POLICY_VERSION,
+                "state": journal.get("state", "unknown"),
+                "phase": journal["phase"],
+                "controller_sha256": journal.get("controller_sha256"),
+                "policy_sha256": journal.get("policy_sha256"),
+                "current_policy_sha256": policy_sha256(),
+                "writes": "none",
+            }
+        receipt = None
+        try:
+            receipt = self.store.receipt()
+        except PersistenceError:
+            # An unreadable receipt is not a success; without a recovery
+            # terminal, refuse to report a fabricated state.
+            raise
+        if receipt is not None:
+            validate_receipt(receipt)
+            return {
+                "schema": SCHEMA,
+                "mode": "status",
+                "policy_version": POLICY_VERSION,
+                "state": receipt.get("state", "unknown"),
+                "phase": receipt["phase"],
+                "controller_sha256": receipt.get("controller_sha256"),
+                "policy_sha256": receipt.get("policy_sha256"),
+                "current_policy_sha256": policy_sha256(),
+                "writes": "none",
+            }
+        if journal is not None:
+            return {
+                "schema": SCHEMA,
+                "mode": "status",
+                "policy_version": POLICY_VERSION,
+                "state": "unknown" if journal["phase"] in ("applying", "acquired") else "clean",
+                "phase": journal["phase"],
+                "controller_sha256": journal.get("controller_sha256"),
+                "policy_sha256": journal.get("policy_sha256"),
+                "current_policy_sha256": policy_sha256(),
+                "writes": "none",
+            }
         return {
             "schema": SCHEMA,
             "mode": "status",
             "policy_version": POLICY_VERSION,
-            "state": receipt["state"] if isinstance(receipt, dict) and "state" in receipt else
-                     ("clean" if receipt is not None else "never-applied"),
-            "phase": (receipt or journal or {}).get("phase", "absent"),
-            "controller_sha256": (receipt or {}).get("controller_sha256"),
-            "policy_sha256": (receipt or {}).get("policy_sha256"),
+            "state": "never-applied",
+            "phase": "absent",
             "current_policy_sha256": policy_sha256(),
             "writes": "none",
         }
+
+    def _full_receipt_identity(self, receipt, boot_id):
+        """Validate every identity field of a receipt before any snapshot used for mutation."""
+        if receipt["schema"] != SCHEMA or receipt["policy_version"] != POLICY_VERSION:
+            raise PersistenceError("receipt schema/version is not the reviewed one")
+        if receipt["chain"] != CHAIN or receipt["tag"] != TAG:
+            raise PersistenceError("receipt describes a different owned resource")
+        if receipt["boot_id"] != boot_id:
+            raise PersistenceError("receipt belongs to another boot; refuse stale rollback")
+        if receipt["controller_sha256"] != controller_sha256():
+            raise PersistenceError("receipt controller hash differs from the running controller")
+        if receipt["policy_sha256"] != policy_sha256():
+            raise PersistenceError("receipt policy hash differs from the reviewed policy")
+        if not isinstance(receipt.get("before_policies"), dict) \
+                or set(receipt["before_policies"]) != {"INPUT", "FORWARD"} \
+                or any(receipt["before_policies"][key] not in ("ACCEPT", "DROP") for key in receipt["before_policies"]):
+            raise PersistenceError("receipt previous policies are invalid")
+        return receipt
 
     def rollback(self):
         with self.store.lock():
@@ -583,21 +708,24 @@ class Controller:
             if receipt is None:
                 raise PersistenceError("no durable receipt; nothing owned to roll back")
             validate_receipt(receipt)
-            if receipt["controller_sha256"] != controller_sha256():
-                raise PersistenceError("receipt controller hash differs from the running controller")
+            self._full_receipt_identity(receipt, self.backend.boot_id())
             snapshot = self.backend.snapshot()
             if receipt["phase"] == "rolled_back":
                 if CHAIN not in snapshot["chains"] and not references_to_owned_chain(snapshot):
                     return {"schema": SCHEMA, "mode": "rollback", "phase": "no-op",
                             "policy_version": POLICY_VERSION, "writes": "none"}
                 raise PersistenceError("receipt says rolled back but the owned delta is still present")
-            if receipt["boot_id"] != self.backend.boot_id():
-                raise PersistenceError("receipt belongs to another boot; refuse stale rollback")
             outcome = self._rollback_delta(receipt["before_policies"])
+            # Durably dismiss the stale receipt FIRST (it never carries an
+            # "applied" claim again), then write the recovery-terminal journal,
+            # then the terminal receipt. Any failure is visible and recorded as
+            # rolled_back_unrecorded; the journal takes precedence in status.
             try:
+                self.store.discard_record("receipt.json")
+                self.store.write_record("journal.json", {**receipt, "phase": "rolled_back", "state": "clean"})
                 self.store.write_record("receipt.json", {**receipt, "phase": "rolled_back", "state": "clean"})
             except BaseException as exc:
-                self._record_phase(receipt, "rolled_back_unrecorded", exc,
+                self._record_phase(receipt, "rolled_back_unrecorded", exc, state="clean",
                                    note="firewall already rolled back; terminal receipt could not be persisted")
                 raise PersistenceError("rollback executed but its terminal receipt could not be persisted") from exc
             return {"schema": SCHEMA, "mode": "rollback", "phase": outcome["state"],
