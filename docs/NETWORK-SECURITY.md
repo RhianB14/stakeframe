@@ -611,10 +611,13 @@ prevalece e impede `status()` de declarar `applied`; uma morte entre o commit e
 os registros terminais, inclusive com o recibo removido (ou removido em parte),
 é reconciliada no retry por um journal `rolling_back` integralmente validado —
 finaliza `rolled_back` **sem nova transação de firewall**; um journal terminal
-já persistido apenas completa o recibo, sem mutação; `rolling_back`/
-`rollback_required` significam estado **não comprovado** (`state=unknown`) e só
-há `clean` depois de rollback ou ausência do delta comprovados; controlador
-ausente no caminho
+já persistido apenas completa o recibo, sem mutação; o journal terminal
+`rolled_back`/`clean` **prevalece sobre um recibo `applied` stale** — nenhum
+recibo remanescente autoriza nova mutação nem um no-op/applied, e `rollback()`/
+`apply_on_boot()` recusam com delta, referência ou políticas divergentes sem
+sobrescrever o journal; `rolling_back`/`rollback_required` significam estado
+**não comprovado** (`state=unknown`) e só há `clean` depois de rollback ou
+ausência do delta comprovados; controlador ausente no caminho
 instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
 Todas as referências jump/goto à `STK6_BOOT` em qualquer chain são inventariadas:
 fora de `INPUT` posição 1 com a especificação revisada, o estado é recusado antes

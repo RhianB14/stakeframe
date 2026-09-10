@@ -368,11 +368,14 @@ antigo é tentada — quando funciona, o recibo é eliminado, e se a invalidaç�
 falhar o journal terminal/de recuperação prevalece e impede `status()` de
 declarar `applied`. `rolling_back`/`rollback_required` significam estado não
 comprovado (`state=unknown`); `clean` só depois de rollback ou ausência do delta
-comprovados.
+comprovados. O journal terminal `rolled_back`/`clean` prevalece sobre um recibo
+`applied` stale: nenhum recibo remanescente autoriza nova mutação nem um
+no-op/applied, e `rollback()`/`apply_on_boot()` recusam com delta, referência ou
+políticas divergentes sem sobrescrever o journal.
 Referências jump/goto à chain própria são inventariadas em todas as chains e
 qualquer desvio é recusado antes de mutar; o rollback exige `INPUT`/`FORWARD` em
 `DROP` e identidade completa do recibo (`policy_sha256` incluído). Journal e
 recibo passam por validação estrutural (incluindo coerência `phase`/`state`)
 antes de serem usados como prova. A unit não usa `ConditionPathExists`:
-controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 118 testes; suíte
-completa: 248 testes, sem skips em Linux.
+controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 121 testes; suíte
+completa: 251 testes, sem skips em Linux.
