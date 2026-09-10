@@ -901,9 +901,12 @@ class FinalizeRollbackWindowTests(Base):
         self.backend.apply_transaction(
             persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
         transactions = len(self.backend.transactions)
+        # The terminal journal prevails over the stale receipt: the records are
+        # completed with no new firewall transaction.
         result = self.controller.rollback()
-        self.assertEqual(result["phase"], "rolled_back")
-        self.assertEqual(len(self.backend.transactions), transactions)  # converges without mutation
+        self.assertEqual(result["phase"], "no-op")
+        self.assertEqual(result["writes"], "none")
+        self.assertEqual(len(self.backend.transactions), transactions)  # completes without mutation
         self.assertEqual(self.controller.status()["phase"], "rolled_back")
         self.assertEqual(self.controller.store.receipt()["phase"], "rolled_back")
 
@@ -928,6 +931,70 @@ class FinalizeRollbackWindowTests(Base):
         status = self.controller.status()
         self.assertEqual(status["phase"], "rolled_back")  # never applied, never clean-erased
         self.assertEqual(status["state"], "clean")
+
+    def test_stale_applied_receipt_with_terminal_journal_never_authorizes_mutation(self):
+        # Reported scenario: apply, rollback, terminal journal persisted, death
+        # before the stale receipt is discarded, delta recreated externally.
+        self.controller.apply_on_boot()
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"})
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"})
+        self.backend.apply_transaction(persistence.apply_transaction_text())  # recreated externally
+        self.assertTrue(self.backend.owned())
+
+        fresh = persistence.Controller(self.root, self.backend)
+        self.assertEqual(fresh.status()["phase"], "rolled_back")
+        self.assertEqual(fresh.status()["state"], "clean")
+
+        before = self.backend.snapshot()
+        transactions = len(self.backend.transactions)
+        # rollback() refuses: the terminal proof is newer than the stale receipt.
+        with self.assertRaisesRegex(persistence.PersistenceError, "still present"):
+            fresh.rollback()
+        self.assert_no_mutation(before)
+        self.assertEqual(len(self.backend.transactions), transactions)
+        self.assertEqual(self.journal_phase(), "rolled_back")  # journal never overwritten
+        # apply_on_boot() refuses: no no-op/applied from a stale receipt.
+        with self.assertRaisesRegex(persistence.PersistenceError, "terminal rollback"):
+            fresh.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertEqual(len(self.backend.transactions), transactions)
+        status = fresh.status()
+        self.assertEqual(status["phase"], "rolled_back")
+        self.assertEqual(status["state"], "clean")
+
+    def test_terminal_journal_with_diverged_policies_refused_without_mutation(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"})
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"})
+        self.backend.policies["INPUT"] = "DROP"  # not restored
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "not proven restored"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertEqual(self.journal_phase(), "rolled_back")
+
+    def test_terminal_journal_with_lingering_reference_refused_without_mutation(self):
+        self.controller.apply_on_boot()
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolling_back", "state": "unknown"})
+        self.backend.apply_transaction(
+            persistence.rollback_transaction_text({"INPUT": "ACCEPT", "FORWARD": "ACCEPT"}))
+        self.controller.store.write_record(
+            "journal.json", {**self.applied_receipt(), "phase": "rolled_back", "state": "clean"})
+        self.backend.chains["INPUT"].insert(0, ["-j", persistence.CHAIN])  # lingering reference
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "still present"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertEqual(self.journal_phase(), "rolled_back")
 
 
 # --------------------------------------------- malformed records (parser)

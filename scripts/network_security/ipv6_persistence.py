@@ -506,13 +506,8 @@ class Controller:
                 and document.get("controller_sha256") == controller_hash
                 and document.get("policy_sha256") == policy_sha256())
 
-    def _pending_rolling_back(self, boot_id, controller_hash):
-        """A rolling_back intent from this same boot that was never reconciled.
-
-        While it exists, ``apply_on_boot`` must never declare no-op/applied
-        success. An unreadable or invalid journal carries no proof of intent
-        and does not block the normal flow.
-        """
+    def _matching_journal(self, boot_id, controller_hash, phases):
+        """A validated journal of the given phase(s) for this same boot/controller/policy."""
         try:
             journal = self.store.journal()
         except PersistenceError:
@@ -523,9 +518,35 @@ class Controller:
             validate_journal(journal)
         except PersistenceError:
             return None
-        if journal["phase"] == "rolling_back" and self._attempt_identity_matches(journal, boot_id, controller_hash):
+        if journal["phase"] in phases and self._attempt_identity_matches(journal, boot_id, controller_hash):
             return journal
         return None
+
+    def _pending_rolling_back(self, boot_id, controller_hash):
+        """A rolling_back intent from this same boot that was never reconciled.
+
+        While it exists, ``apply_on_boot`` must never declare no-op/applied
+        success. An unreadable or invalid journal carries no proof of intent
+        and does not block the normal flow.
+        """
+        return self._matching_journal(boot_id, controller_hash, ("rolling_back",))
+
+    def _terminal_rollback_proof(self, boot_id, controller_hash):
+        """A proved terminal rolled_back record from this same boot.
+
+        While it exists, a surviving applied receipt is stale: it never
+        authorizes a new rollback mutation nor a no-op/applied success.
+        """
+        return self._matching_journal(boot_id, controller_hash, ("rolled_back",))
+
+    def _source_from_journal(self, journal):
+        """Rebuild the rollback source from a validated journal document."""
+        source = {key: journal[key] for key in TERMINAL_FIELDS if key in journal}
+        # The journal records an attempt that was APPLIED when it was written;
+        # the phase/state here only drive the flows that consume the source.
+        source["phase"] = "applied"
+        source["state"] = "applied"
+        return source
 
     def _rollback_delta(self, before_policies):
         """Remove ONLY the owned delta and restore the recorded previous policies.
@@ -650,6 +671,11 @@ class Controller:
                     if self._pending_rolling_back(boot_id, controller_hash) is not None:
                         raise PersistenceError("a rollback was started and never reconciled; "
                                                "run rollback before any apply")
+                    # A proved terminal rollback makes this applied receipt STALE:
+                    # never let it justify a no-op/applied success.
+                    if self._terminal_rollback_proof(boot_id, controller_hash) is not None:
+                        raise PersistenceError("a proved terminal rollback exists; the applied receipt is stale; "
+                                               "refuse adoption")
                     return {"schema": SCHEMA, "mode": "apply-on-boot", "phase": "no-op",
                             "policy_version": POLICY_VERSION, "state": "applied", "writes": "none"}
                 # No applicable applied receipt: only a matching interrupted
@@ -779,6 +805,21 @@ class Controller:
         with self.store.lock():
             boot_id = self.backend.boot_id()
             controller_hash = controller_sha256()
+            # The journal is read and validated BEFORE any source is chosen: a
+            # proved terminal rolled_back record is the newest proof and a
+            # surviving applied receipt is stale.
+            journal = self.store.journal()
+            if journal is not None:
+                validate_journal(journal)
+            if (journal is not None and journal["phase"] == "rolled_back"
+                    and self._attempt_identity_matches(journal, boot_id, controller_hash)):
+                # Terminal proof: the previous rollback already ended here. The
+                # stale receipt must NEVER authorize a new mutation: either the
+                # live state is already clean (complete the records, no
+                # transaction) or it diverged (refuse, nothing overwritten).
+                source = self._source_from_journal(journal)
+                self._full_receipt_identity(source, boot_id)
+                return self._complete_terminal_records(source)
             receipt = None
             try:
                 receipt = self.store.receipt()
@@ -790,24 +831,14 @@ class Controller:
                 source = receipt
             else:
                 # The receipt is missing or unreadable: a fully validated
-                # journal from this same boot/controller/policy is the
-                # equivalent proof. rolling_back authorizes the rollback work;
-                # rolled_back means only the terminal receipt needs completion.
-                journal = self.store.journal()
-                if journal is not None:
-                    validate_journal(journal)
+                # rolling_back journal from this same boot/controller/policy is
+                # the equivalent proof for the rollback work.
                 if (journal is None
                         or not self._attempt_identity_matches(journal, boot_id, controller_hash)
-                        or journal["phase"] not in ("rolling_back", "rolled_back")):
+                        or journal["phase"] != "rolling_back"):
                     raise PersistenceError("no durable receipt; nothing owned to roll back")
-                source = {key: journal[key] for key in TERMINAL_FIELDS if key in journal}
-                # The journal records an attempt that was APPLIED when it was
-                # written; the phase/state here only drive the flow below.
-                source["phase"] = "applied"
-                source["state"] = "applied"
+                source = self._source_from_journal(journal)
                 self._full_receipt_identity(source, boot_id)
-                if journal["phase"] == "rolled_back":
-                    return self._complete_terminal_records(source)
             if source["phase"] == "rolled_back":
                 # Read-only decision: no durable intent and no mutation happen
                 # on this branch.
