@@ -304,8 +304,12 @@ A janela autorizada foi executada e **confirmada** no mesmo dia, na base
 - atestações de preflight e de post com todos os checks aprovados, `source`
   operador-observado e sessão serial registrada;
 - segunda conexão SSH independente aberta **após** a alteração, com probes reais;
-- confirmação dentro da janela de 600 segundos, sem corrida e sem iniciar rollback;
-- estado terminal: timer e service `inactive`, sem próximo disparo e sem jobs;
+- cronologia: prepare `14:07:26Z` → apply `14:43:08Z` → confirm `14:44:06Z`;
+  monotônicos `659217693954012` → `661360313857059` → `661417668880919`, com
+  apply → confirm de 57,355 s e 542,645 s de margem na janela de 600 s;
+- estado terminal: as duas unidades permanecem `LoadState=loaded` a partir de
+  `/run/systemd/system`, porém `inactive`/`dead`, `static`, sem job e sem
+  próximo disparo (`NextElapseUSecMonotonic=infinity`);
 - delta ativo e **não persistido** — política e chain valem até um reboot, como
   aprovado; nada foi escrito em persistência.
 

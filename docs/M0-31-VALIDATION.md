@@ -35,8 +35,34 @@ de 10/09 **não** executou prepare, apply nem confirm.
 - `manifest_sha256`: `3363f0c3ea75a625...`; recalculado no servidor e **idêntico** ao registrado no journal
 - `script_sha256`: `63b0ce735a73e352...` — o guard aprovado da `main`, idêntico ao arquivo do run
 - `boot_id`: inalterado entre prepare, apply e confirmação
-- ordem monotônica observada: `prepared < applied < confirmed`, com a confirmação
-  cerca de um minuto após o apply — dentro da janela de 600 segundos
+
+### Cronologia comprovada
+
+O journal registra apenas valores monotônicos; os instantes UTC abaixo são os
+horários de gravação dos artefatos do run (precisão de segundo) e conferem com
+as diferenças monotônicas.
+
+| Fase    | Instante UTC (artefato) | Valor monotônico (ns) |
+| ------- | ----------------------- | --------------------- |
+| prepare | `2026-09-07T14:07:26Z`  | `659217693954012`     |
+| apply   | `2026-09-07T14:43:08Z`  | `661360313857059`     |
+| confirm | `2026-09-07T14:44:06Z`  | `661417668880919`     |
+
+Diferenças calculadas: prepare → apply = **2142,620 s** (35 min 42,62 s);
+apply → confirm = **57,355 s**. As diferenças civis correspondentes (2142 s e
+58 s) confirmam a coerência entre os dois relógios; não há divergência a
+explicar.
+
+A janela monotônica do rollback é de **600 s** a partir do apply, encerrando em
+`661960313857059` ns. A confirmação ocorreu `57,355 s` após o apply, deixando
+**542,645 s** de margem — ou seja, consumiu **9,56 %** da janela disponível.
+
+> Nota de correção: uma devolutiva anterior desta tarefa atribuiu a fase
+> `apply` ao instante 14:07Z. Esse instante é a fase **prepare** (gravação do
+> manifest, do guard e das unit files no diretório do run). O apply é 14:43:08Z,
+> quando as unidades foram instaladas em `/run/systemd/system`, o apontador
+> ativo passou a apontar o run novo e as atestações de preflight foram gravadas.
+
 - atestações: `preflight.accepted.json` e `post.accepted.json` com **todos** os
   checks em `pass`, `source=operator-observed` e operador registrado como sessão
   serial com orquestração do Codex
@@ -65,10 +91,31 @@ pendência de execução.
 
 ## 4. Estado terminal de timer, service e jobs
 
-- timer de rollback: `inactive`, `static`, **sem próximo disparo** (`NextElapseUSecRealtime` vazio)
-- service de rollback: `inactive`/`dead`, `Result=success`, `ExecMainStatus=0`
-- nenhum job em `systemctl list-jobs`
-- nenhuma unidade `stk6*` carregada (as duas unit files permanecem em disco, sem execução)
+Leitura direta de `systemctl show` para as duas unidades do run confirmado:
+
+| Propriedade               | service                                                          | timer                                                          |
+| ------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `LoadState`               | `loaded`                                                         | `loaded`                                                       |
+| `ActiveState`             | `inactive`                                                       | `inactive`                                                     |
+| `SubState`                | `dead`                                                           | `dead`                                                         |
+| `UnitFileState`           | `static`                                                         | `static`                                                       |
+| `FragmentPath`            | `/run/systemd/system/stk6-rollback-53a5b43c1bd6049fe497.service` | `/run/systemd/system/stk6-rollback-53a5b43c1bd6049fe497.timer` |
+| `Result`                  | `success`                                                        | `success`                                                      |
+| `ExecMainStatus`          | `0` (com `NRestarts=0`)                                          | —                                                              |
+| `NextElapseUSecMonotonic` | —                                                                | `infinity`                                                     |
+| `NextElapseUSecRealtime`  | —                                                                | vazio                                                          |
+| `Job`                     | vazio                                                            | vazio                                                          |
+
+As duas unidades permanecem **carregadas** (`LoadState=loaded`) a partir dos
+unit files preservados em `/run/systemd/system`, porém **inativas**
+(`inactive`/`dead`), `static`, **sem job** e **sem próximo disparo**
+(`NextElapseUSecMonotonic=infinity`, que é a marca de ausência de agendamento).
+`LoadState` não é inferido de `ActiveState` ou `UnitFileState`: as propriedades
+foram lidas individualmente e é a combinação `loaded` + `inactive` + `static` +
+sem job que descreve o estado. Nenhum job em `systemctl list-jobs`; a listagem
+`systemctl list-units 'stk6*'` não exibe as unidades por serem `static` e
+inativas, o que **não** significa que estejam descarregadas.
+
 - apontador `active.json` aponta o run confirmado — não há recuperação pendente
 
 ## 5. Produção, backup e preservação

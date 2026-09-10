@@ -284,10 +284,24 @@ ou janela de rede; cada item exige a evidência descrita.
       ativo (INPUT/FORWARD `DROP`, OUTPUT preservado), confirmação sem corrida e
       sem rollback, timer desarmado, segunda conexão SSH com probes aprovados e
       produção intacta ([M0-31-VALIDATION.md](M0-31-VALIDATION.md)).
-- [ ] Reconciliação do run antigo — **não executada**: unidades em
-      `/run/systemd/system` e `active.json` permanecem; proposta revisada com
-      lock compartilhado, validação de identidade/hashes, colisões, retomada
-      idempotente e liberação do apontador somente após evidência durável.
+- [x] Encerramento administrativo do run legado `f15efb347860c80f9271`,
+      executado em **07/09/2026 às 11:03:23 UTC** (`administratively_closed`):
+      as duas units do run legado foram removidas, o apontador ativo foi
+      arquivado com os mesmos bytes e o journal original foi preservado em
+      `rollback_incomplete`. A evidência registra
+      `prior_ipv4_preservation_proven: false`, e esse encerramento **não** aplicou
+      hardening nem alterou firewall, persistência, DNS, OCI, SSH ou credenciais
+      ([M0-22-VALIDATION.md](M0-22-VALIDATION.md)).
+- [ ] Persistir o delta IPv6 — **fora do escopo aprovado**: a mudança é ativa e
+      não durável; exige tarefa própria com backup/restore de persistência.
+- [ ] Descarte da chave temporária da integração serial — **não comprovado**
+      (pendência herdada da STK-M0-05); não é resolvido pela janela executada.
+
+> As units preservadas do run confirmado `53a5b43c1bd6049fe497` **não** são as
+> do run legado: as do run confirmado permanecem em `/run/systemd/system`,
+> carregadas (`LoadState=loaded`) e inativas, como registro da janela executada
+> ([M0-31-VALIDATION.md](M0-31-VALIDATION.md) §4).
+
 - [x] Acesso serial/Cloud Shell encerrado conforme repasse: logout concluído,
       conexões vazias e Cloud Shell fechado; descarte da chave temporária segue
       não comprovado.
