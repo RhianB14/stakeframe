@@ -599,9 +599,15 @@ o recibo ⇒ rollback conservador na execução seguinte (`interrupted_rolled_ba
 sem adoção do delta nem recibo sintetizado; recibo ilegível (truncado, sem
 sidecar, sidecar divergente, JSON não-objeto) nunca é sucesso e nunca bloqueia a
 recuperação por journal; recibo coerente exige `phase`/`state` consistentes e
-`policy_sha256` atual antes de qualquer rollback; após um rollback comprovado o
-recibo antigo é descartado duravelmente e `status()` prioriza o journal de
-recuperação, nunca declarando `applied` depois do rollback; controlador ausente no caminho
+`policy_sha256` atual antes de qualquer rollback; o rollback grava um journal
+durável `rolling_back` (`state=unknown`) antes de qualquer snapshot/transação —
+acknowledgement perdido, readback indisponível ou morte após o commit nunca
+deixam `status()` declarar `applied`; depois de um rollback comprovado, a
+remoção durável do recibo antigo é tentada, e **quando ela funciona** o recibo é
+eliminado — se a invalidação falhar, o journal terminal/de recuperação prevalece
+e impede `status()` de declarar `applied`; `rolling_back`/`rollback_required`
+significam estado **não comprovado** (`state=unknown`) e só há `clean` depois de
+rollback ou ausência do delta comprovados; controlador ausente no caminho
 instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
 Todas as referências jump/goto à `STK6_BOOT` em qualquer chain são inventariadas:
 fora de `INPUT` posição 1 com a especificação revisada, o estado é recusado antes

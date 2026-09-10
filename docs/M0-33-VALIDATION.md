@@ -154,6 +154,11 @@ sem host, endereço ou ruleset integral.
 | Falha após aquisição comprovada                                                                                     | rollback apenas do delta próprio                                                                                   |
 | Snapshot pós-commit persistente indisponível                                                                        | `rollback_required` (sem rollback cego), estado `unknown`                                                          |
 | Rollback repetido após sucesso                                                                                      | no-op comprovado                                                                                                   |
+| `rolling_back` pendente do mesmo boot (não reconciliado)                                                            | `apply_on_boot` recusa (`run rollback`) — nunca no-op/applied; `rollback()` reconcilia                             |
+| Retry de rollback com delta ainda exato ativo                                                                       | executa o rollback                                                                                                 |
+| Retry de rollback com delta ausente e políticas anteriores comprovadas                                              | finaliza como `rolled_back`, **sem nova mutação**                                                                  |
+| Retry de rollback com deriva ou estado não comprovável                                                              | `rollback_required`, sem sobrescrever                                                                              |
+| Acknowledgement perdido / readback indisponível / morte após o commit do rollback                                   | nunca deixam `status()` declarar `applied`; `rolling_back`/`rollback_required` com `state=unknown`                 |
 | Regras estrangeiras                                                                                                 | nunca removidas nem reordenadas                                                                                    |
 
 **Inventário de referências.** Todas as referências jump/goto à chain própria,
@@ -168,6 +173,20 @@ exige, com identidade completa do recibo (schema, versão, `boot_id`, hashes do
 controlador e da política, chain, tag, `phase`/`state`, `before_policies`):
 conteúdo exato da chain própria, referência própria exata e políticas
 `INPUT=DROP`/`FORWARD=DROP`. Qualquer deriva é recusada sem mutação.
+
+**Protocolo durável do rollback (`rolling_back`).** Depois de validar
+integralmente o recibo e **antes de qualquer snapshot ou transação** que possa
+participar da mutação, o rollback grava um journal durável `rolling_back` com
+`state=unknown` e identidade completa; se essa gravação falhar, o firewall não é
+tocado. A transação, o acknowledgement e o readback do rollback ficam todos
+dentro do caminho de recuperação: acknowledgement perdido, readback indisponível
+ou morte do processo após o commit **nunca** deixam `status()` declarar
+`applied`. Após resultado incerto, o journal permanece `rolling_back` (delta
+ainda exatamente ativo — um retry executa o rollback) ou vira
+`rollback_required` (`state=unknown`, nada sobrescrito). Uma repetição de
+`rollback()` reconcilia: delta ativo exato ⇒ executa; delta ausente com
+políticas anteriores comprovadas ⇒ finaliza como `rolled_back` **sem nova
+mutação**; deriva ⇒ `rollback_required`.
 
 ## 8. Registros duráveis e recuperação após o commit
 
@@ -193,22 +212,33 @@ conteúdo exato da chain própria, referência própria exata e políticas
 - Falha ao gravar metadados de recuperação nunca oculta o resultado do firewall
   nem produz alegação falsa de sucesso (o journal é atualizado em regime
   _best-effort_ e a falha primária permanece visível).
-- Após um rollback comprovado, o recibo antigo é **descartado e removido
-  duravelmente** (com `fsync` do diretório quando aplicável); um recibo
-  `applied` válido não sobrevive ao rollback. `status()` prioriza o journal de
-  recuperação (`failed_rolled_back`, `rollback_required`,
-  `interrupted_rolled_back`, `rolled_back_unrecorded`, `rolled_back`) sobre
-  qualquer recibo antigo: o sistema nunca declara `applied` depois de ter
-  comprovado o rollback.
+- Após um rollback comprovado, o rollback tenta **descartar duravelmente** o
+  recibo antigo (com verificação e `fsync` do diretório quando aplicável) antes
+  de gravar o journal terminal `rolled_back` e o novo recibo. **Quando essa
+  remoção funciona, o recibo antigo é eliminado**; **se a invalidação falhar**
+  (por exemplo, falha de armazenamento), o journal terminal ou de recuperação
+  **prevalece** e impede que `status()` declare `applied`. Nada é declarado
+  fisicamente removido em todos os casos: uma falha de armazenamento pode
+  impedir a remoção, e é exatamente por isso que a precedência do journal é a
+  garantia, não a ausência física do arquivo.
+- `status()` prioriza o journal de recuperação (`rolling_back`, `failed`,
+  `failed_rolled_back`, `rollback_required`, `interrupted_rolled_back`,
+  `rolled_back_unrecorded`, `rolled_back`) sobre qualquer recibo antigo: o
+  sistema **nunca** declara `applied` depois de ter iniciado ou comprovado um
+  rollback.
+- `rolling_back` e `rollback_required` significam **estado não comprovado**
+  (`state=unknown`); `status()` nunca os converte em `clean`. O estado só é
+  declarado `clean` depois de rollback comprovado ou ausência do delta
+  comprovada (com as políticas anteriores restauradas).
 - O snapshot pós-commit é adquirido dentro do próprio caminho de recuperação:
   se o estado ativo não puder ser provado, não há rollback cego — registra-se
   `rollback_required` (`state=unknown`) e a falha permanece visível.
 
 ## 9. Testes e evidências
 
-- `scripts/network_security/test_ipv6_persistence.py`: **90 testes**, com
+- `scripts/network_security/test_ipv6_persistence.py`: **110 testes**, com
   backend falso determinístico que reproduz a semântica atômica validada.
-- Suíte completa de `network_security`: **220 testes**, `OK` (0 skips em Linux;
+- Suíte completa de `network_security`: **240 testes**, `OK` (0 skips em Linux;
   6 skips no Windows, por semântica POSIX de symlink/permissão, `fsync` de
   diretório e ausência do `systemd-analyze`).
 - **Janelas de crash da escrita do recibo** (cada uma com teste dedicado):
@@ -229,14 +259,36 @@ conteúdo exato da chain própria, referência própria exata e políticas
   rollbacked, `status()` nunca declara `applied` (prioriza o journal
   `rolled_back_unrecorded`/`rolled_back` com `state=clean`), e a execução
   seguinte consolida o estado.
-- **Container descartável (Ubuntu 24.04, `ip6tables v1.8.10 (nf_tables)`)**:
-  E2E real com `apply-on-boot` → `no-op` → `rollback` → `no-op` (com
+- **Protocolo `rolling_back`** (cada cenário com teste dedicado): falha ao
+  gravar o intent ⇒ firewall intacto; falha da transação antes do commit ⇒
+  `rolling_back` preservado e retry executa; acknowledgement perdido ⇒
+  finalização comprovada como `rolled_back`; readback indisponível após o commit
+  ⇒ `rollback_required`/`unknown`; morte após o commit ⇒ `apply_on_boot` recusa
+  e o retry reconcilia; retry com delta ausente ⇒ finaliza **sem nova mutação**
+  (contagem de transações inalterada); retry com deriva ⇒ `rollback_required`
+  sem sobrescrever; `status()` imediatamente após cada cenário.
+- **Registros malformados**: JSON sintaticamente inválido e bytes UTF-8
+  inválidos, com sidecar válido e journal correspondente ⇒ rollback
+  conservador; os mesmos casos sem journal ⇒ recusa sem mutação; `OSError` na
+  leitura do recibo com journal legível ⇒ rollback conservador; nenhuma exceção
+  bruta de parser escapa da camada de armazenamento.
+- **Matriz explícita de `phase`/`state` do journal**: combinações aceitas e
+  recusadas testadas uma a uma; `status()` nunca converte `rolling_back` ou
+  `rollback_required` em `clean`; o journal é validado por completo antes de sua
+  fase ser consultada no caminho de estado limpo com recibo inválido.
+- **Container descartável (Ubuntu 24.04, `ip6tables v1.8.10 (nf_tables)`)**: E2E
+  real com `apply-on-boot` → `no-op` → `rollback` → `no-op` (com
   `DOCKER-FORWARD`/`f2b-sshd`, regra estrangeira em `INPUT` e regra em `OUTPUT`
   preservadas); **E2E de crash durante a escrita do recibo** (delta removido,
   políticas restauradas, journal `interrupted_rolled_back`, recibo ausente,
-  reaplicação segura); **E2E de snapshot indisponível após o commit**
-  (`rollback_required`, delta não sobrescrito, `state=unknown`); arquivos de
-  persistência byte-idênticos antes/depois.
+  reaplicação segura); **E2E de snapshot indisponível após o commit do apply**
+  (`rollback_required`, delta não sobrescrito, `state=unknown`); **E2E de
+  acknowledgement perdido no rollback** (a transação real confirma e a exceção é
+  levantada em seguida: finaliza `rolled_back/clean` via readback comprovado);
+  **E2E de readback indisponível após o commit do rollback** (`rollback_required`
+  /`unknown`, delta removido); **E2E de retry de `rolling_back`** (delta
+  removido ⇒ finaliza; delta ativo ⇒ executa; `apply_on_boot` recusa o pendente);
+  arquivos de persistência byte-idênticos antes/depois.
 - **Unit**: `systemd-analyze verify` rc 0; ausência de `ConditionPathExists`;
   controlador ausente ⇒ `ExecStart` falha com código não-zero.
 - `plan` não cria diretório nem arquivos; a saída pública não contém endereços,
@@ -247,7 +299,7 @@ conteúdo exato da chain própria, referência própria exata e políticas
 Procedimento previsto, **dependente de autorização posterior do Codex**:
 
 1. instalar `ipv6_persistence.py` e a unit por staging + conferência de hashes
-   (`789422da18e96c90a8840f2a182b1f0a49ee905a0d5de544d83259a88b020b10` para o
+   (`b695dafc4cfba7665154e6a9286c62d1c9e72eb508de12028b5a2708b7d6239e` para o
    controlador; `bb448b8cd42b2654baee89892b28382907db0a92de6b8bafb3b89d6fbc45febd`
    para a unit);
 2. manter backup privado dos artefatos substituídos;
