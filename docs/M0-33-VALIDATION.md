@@ -162,6 +162,7 @@ sem host, endereço ou ruleset integral.
 | Morte entre o commit do rollback e os registros terminais (inclusive com o recibo removido)                         | retry reconcilia via journal `rolling_back` validado, finaliza `rolled_back` **sem nova transação** de firewall                |
 | Journal terminal `rolled_back` gravado e recibo ausente/parcial                                                     | recibo terminal completado sem mutação (`no-op`); nunca declara `applied`                                                      |
 | Journal terminal `rolled_back` correspondente + recibo `applied` **stale** (delta recriado)                         | journal prevalece: recusa sem mutação e sem sobrescrever; `apply_on_boot` nunca declara no-op/applied com base no recibo stale |
+| Par terminal interrompido (`journal.json`/`terminal.json` com JSON íntegro e sidecar stale)                         | o JSON íntegro é prova **somente-leitura** de reconciliação; nenhuma mutação se baseia nele; retry completa os registros       |
 | Regras estrangeiras                                                                                                 | nunca removidas nem reordenadas                                                                                                |
 
 **Inventário de referências.** Todas as referências jump/goto à chain própria,
@@ -243,6 +244,19 @@ mutação**; deriva ⇒ `rollback_required`.
   (snapshot integral idêntico). Em `apply_on_boot()`: estado aparentemente
   aplicado com journal terminal correspondente ⇒ recusa (`refuse adoption`),
   nunca no-op/applied.
+- **O registro terminal tem slot próprio (`terminal.json` + sidecar).** A
+  finalização nunca sobrescreve a última prova válida: o documento terminal é
+  gravado por inteiro (JSON + sidecar + `fsync`) no slot enquanto o journal
+  `rolling_back` permanece intocado; só depois o recibo stale é tocado e a
+  remoção do journal superado é limpeza não crítica. Uma interrupção no meio do
+  duplo replace do slot deixa, no pior caso, o slot incompleto — o journal
+  permanece íntegro e suficiente para reconciliar. **Par interrompido:** quando
+  o JSON de um registro de recuperação está íntegro mas o sidecar está
+  stale/ausente (duplo replace interrompido, inclusive no layout legado do
+  `journal.json`), o documento é aceito como prova **somente-leitura** para
+  reconciliar (completar registros/recusar); **nenhuma mutação de firewall** é
+  autorizada com base nele, e a precedência é resolvida entre as provas válidas
+  (`terminal.json` ⇒ `journal.json` ⇒ recibo).
 - `status()` prioriza o journal de recuperação (`rolling_back`, `failed`,
   `failed_rolled_back`, `rollback_required`, `interrupted_rolled_back`,
   `rolled_back_unrecorded`, `rolled_back`) sobre qualquer recibo antigo: o
@@ -258,9 +272,9 @@ mutação**; deriva ⇒ `rollback_required`.
 
 ## 9. Testes e evidências
 
-- `scripts/network_security/test_ipv6_persistence.py`: **121 testes**, com
+- `scripts/network_security/test_ipv6_persistence.py`: **127 testes**, com
   backend falso determinístico que reproduz a semântica atômica validada.
-- Suíte completa de `network_security`: **251 testes**, `OK` (0 skips em Linux;
+- Suíte completa de `network_security`: **257 testes**, `OK` (0 skips em Linux;
   6 skips no Windows, por semântica POSIX de symlink/permissão, `fsync` de
   diretório e ausência do `systemd-analyze`).
 - **Janelas de crash da escrita do recibo** (cada uma com teste dedicado):
@@ -303,6 +317,16 @@ mutação**; deriva ⇒ `rollback_required`.
   `apply_on_boot()` recusam, o journal não é sobrescrito, o snapshot e a
   contagem de transações permanecem inalterados; políticas divergentes e
   referência remanescente também são recusadas sem mutação.
+- **Slot terminal e duplo replace interrompido** (novos testes): nova instância
+  após commit do rollback + `journal rolling_back` válido + `journal.json`
+  substituído pelo conteúdo terminal + morte antes do sidecar ⇒ reconcilia para
+  `rolled_back` sem nova transação, recibo terminal completado, `status()`
+  nunca `applied`, delta recriado recusado sem mutação; o mesmo cenário no slot
+  `terminal.json` (JSON íntegro, sidecar ausente) ⇒ reconciliado; injeções de
+  falha de escrita, `fsync`, `replace` e sidecar do registro terminal ⇒ a prova
+  anterior (`rolling_back`) permanece íntegra e o retry converge (ou o JSON
+  íntegro do slot é usado como prova somente-leitura), sempre sem nova
+  transação.
 - **Registros malformados**: JSON sintaticamente inválido e bytes UTF-8
   inválidos, com sidecar válido e journal correspondente ⇒ rollback
   conservador; os mesmos casos sem journal ⇒ recusa sem mutação; `OSError` na
@@ -330,7 +354,10 @@ mutação**; deriva ⇒ `rollback_required`.
   o sidecar reconciliada pelo journal); **E2E do recibo stale** (journal terminal
   - recibo `applied` remanescente + delta exato recriado externamente: nova
     instância recusa `rollback()` e `apply_on_boot()`, journal preservado,
-    snapshot e contagem de transações inalterados); arquivos de persistência
+    snapshot e contagem de transações inalterados); **E2E do duplo replace
+    interrompido do slot terminal** (JSON íntegro do `terminal.json` sem sidecar:
+    nova instância reporta `rolled_back/clean` e reconcilia com `no-op`, contagem
+    de transações zero, recibo terminal completado); arquivos de persistência
     byte-idênticos antes/depois.
 - **Unit**: `systemd-analyze verify` rc 0; ausência de `ConditionPathExists`;
   controlador ausente ⇒ `ExecStart` falha com código não-zero.
@@ -342,7 +369,7 @@ mutação**; deriva ⇒ `rollback_required`.
 Procedimento previsto, **dependente de autorização posterior do Codex**:
 
 1. instalar `ipv6_persistence.py` e a unit por staging + conferência de hashes
-   (`17e6c2384a9e496fb668b3f20c37112ca4f7a8f9ddcda61c729820272e367afa` para o
+   (`67051815e9a5967c69d3406c04e1050bd9f2e13b5bda0d169fa9322961e60a49` para o
    controlador; `bb448b8cd42b2654baee89892b28382907db0a92de6b8bafb3b89d6fbc45febd`
    para a unit);
 2. manter backup privado dos artefatos substituídos;

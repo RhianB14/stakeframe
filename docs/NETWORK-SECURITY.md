@@ -615,7 +615,10 @@ já persistido apenas completa o recibo, sem mutação; o journal terminal
 `rolled_back`/`clean` **prevalece sobre um recibo `applied` stale** — nenhum
 recibo remanescente autoriza nova mutação nem um no-op/applied, e `rollback()`/
 `apply_on_boot()` recusam com delta, referência ou políticas divergentes sem
-sobrescrever o journal; `rolling_back`/`rollback_required` significam estado
+sobrescrever o journal; o registro terminal vive em slot próprio
+(`terminal.json`) e nunca sobrescreve a última prova válida antes de estar
+íntegro — um JSON íntegro com sidecar stale é prova somente-leitura de
+reconciliação; `rolling_back`/`rollback_required` significam estado
 **não comprovado** (`state=unknown`) e só há `clean` depois de rollback ou
 ausência do delta comprovados; controlador ausente no caminho
 instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
