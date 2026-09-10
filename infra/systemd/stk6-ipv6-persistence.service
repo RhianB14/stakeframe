@@ -1,0 +1,43 @@
+[Unit]
+Description=Stakeframe STK6 IPv6 boot hardening persistence (owned delta)
+Documentation=https://github.com/RhianB14/stakeframe/blob/main/docs/M0-33-VALIDATION.md
+# Ordering contract (validated with systemd-analyze verify; no cycle):
+#   after  netfilter-persistent.service  (the pre-existing persistence is loaded first)
+#   before docker.service               (Docker chains/jumps are created after our owned delta)
+#   before network-online.target        (no cycle on the reviewed Ubuntu 24.04 target)
+After=netfilter-persistent.service
+Before=docker.service network-online.target
+ConditionPathExists=/usr/lib/stk6-persistence/ipv6_persistence.py
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+ExecStart=/usr/bin/python3 -I -B /usr/lib/stk6-persistence/ipv6_persistence.py apply-on-boot --execute-reviewed-linux --state-dir /var/lib/stk6-persistence
+# Minimal capability: only CAP_NET_ADMIN is required (validated in a disposable container).
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+LockPersonality=true
+RuntimeDirectory=stk6-persistence
+RuntimeDirectoryMode=0700
+StateDirectory=stk6-persistence
+StateDirectoryMode=0700
+TimeoutStartSec=90
+# No blind repetition: a failed boot application stays failed and visible.
+Restart=no
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stk6-ipv6-boot
+
+[Install]
+WantedBy=multi-user.target
