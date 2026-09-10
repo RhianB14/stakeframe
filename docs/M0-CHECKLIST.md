@@ -43,6 +43,12 @@ reconciliou a documentação com a janela IPv6 executada e confirmada em
 rollback do checkout retido pela STK-M0-29 sob autorização destrutiva específica
 do proprietário, após conferir identidade, ausência de uso e integridade do
 checkout ativo ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
+STK-M0-33 ([issue #91](https://github.com/RhianB14/stakeframe/issues/91))
+prepara a persistência segura do hardening IPv6 no boot: aplicador próprio com
+transação atômica única, unit systemd versionada com ordenação verificada e
+suíte dedicada. A implementação está pronta e **não instalada**; o delta segue
+não persistente até instalação autorizada, e nenhuma operação foi feita na VPS
+([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
 O avanço ocorre por determinação
 do proprietário (D019), preservando recuperação integral/failover, alertas,
 monitor e release como pendências. STK-M0-16 foi

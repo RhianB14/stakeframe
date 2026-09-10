@@ -16,6 +16,12 @@ Runbook e proveniência das evidências:
   injetado para validar a interface do adaptador. Não usa root, SSH ou comandos
   reais de firewall/systemd. A suíte bloqueia `subprocess.Popen` e `os.system`.
 - Python 3.11+ e biblioteca padrão; nenhuma dependência de aplicação adicionada.
+- `ipv6_persistence.py` (STK-M0-33): aplicador de boot versionado do delta IPv6, com
+  `plan`, `apply-on-boot`, `status` e `rollback`, transação atômica única
+  (`ip6tables-restore --noflush`) e adaptador Linux injetável.
+- `test_ipv6_persistence.py`: backend falso determinístico; cobre máquina de
+  estados, idempotência, rollback, lock, recibos adulterados e preservação de
+  Docker/Fail2Ban/IPv4/OUTPUT. Não usa root, firewall real ou systemd real.
 - Alvo futuro condicionado: Ubuntu 24.04 ARM64, `ip6tables 1.8.10 (nf_tables)`.
   Divergência ou comando indisponível bloqueiam o caminho real; não instalar
   pacotes automaticamente. Validar os executáveis absolutos do adaptador,
@@ -324,3 +330,58 @@ O reboot encerra este hardening ativo conforme o estado persistente preexistente
 a rotina recusa atuar com evidência de outro boot. Persistência futura precisa
 de delta/backup/restauração próprios revisados e testes que comprovem que o boot
 não reintroduz uma mudança revertida. Isso não faz parte desta janela.
+
+## Persistência de boot — STK-M0-33 (implementação, não instalada)
+
+A unit versionada `infra/systemd/stk6-ipv6-persistence.service` reaplica no boot o
+delta IPv6 confirmado, por transação atômica própria. Ela **não** é instalada,
+habilitada ou iniciada por esta implementação; a instalação depende de autorização
+posterior do Codex.
+
+- `python -B scripts/network_security/ipv6_persistence.py plan` — contrato offline;
+  não cria diretório, não escreve e não acessa a rede.
+- `apply-on-boot --execute-reviewed-linux` — usada pela unit; exige Linux/root.
+- `status` / `rollback --execute-reviewed-linux` — leitura durável e remoção
+  exclusiva do delta próprio.
+
+Não usar `netfilter-persistent save`, captura integral de `ip6tables-save`,
+restauração integral do ruleset, `nft flush ruleset` nem sequências de comandos
+independentes. A ordenação exige `systemd-analyze verify`; detalhes e limitações em
+[docs/M0-33-VALIDATION.md](../../docs/M0-33-VALIDATION.md). O delta atual continua
+**não persistente** até a instalação autorizada.
+
+Recuperação pós-commit: falha depois do commit com o estado próprio comprovado ⇒
+rollback automático do delta próprio; deriva ou readback indisponível ⇒
+`rollback_required` sem sobrescrever (estado `unknown`); crash entre commit e
+recibo ⇒ rollback conservador na execução seguinte (`interrupted_rolled_back`);
+recibo ilegível nunca bloqueia a recuperação por journal nem é sucesso; o
+recibo é o marcador final de sucesso e o journal pré-transação nunca é
+reescrito entre o commit e o evento terminal. O rollback grava um journal
+durável `rolling_back` (`state=unknown`) antes de qualquer snapshot/transação;
+acknowledgement perdido, readback indisponível ou morte após o commit nunca
+deixam `status()` declarar `applied`; a transição terminal grava o journal
+`rolled_back`/`clean` ANTES de tocar o recibo stale, e uma morte nessa janela
+(inclusive com o recibo removido ou parcial) é reconciliada no retry — via
+journal `rolling_back` validado quando o recibo está ausente/ilegível — sem nova
+transação de firewall; após um rollback comprovado, a remoção durável do recibo
+antigo é tentada — quando funciona, o recibo é eliminado, e se a invalidação
+falhar o journal terminal/de recuperação prevalece e impede `status()` de
+declarar `applied`. `rolling_back`/`rollback_required` significam estado não
+comprovado (`state=unknown`); `clean` só depois de rollback ou ausência do delta
+comprovados. O journal terminal `rolled_back`/`clean` prevalece sobre um recibo
+`applied` stale: nenhum recibo remanescente autoriza nova mutação nem um
+no-op/applied, e `rollback()`/`apply_on_boot()` recusam com delta, referência ou
+políticas divergentes sem sobrescrever o journal. O registro terminal tem slot
+próprio (`terminal.json` + sidecar) e a finalização nunca sobrescreve a última
+prova válida antes de a nova estar íntegra; um JSON íntegro com sidecar stale é
+prova somente-leitura de reconciliação. A reaplicação faz handoff durável:
+recibo completado como `rolled_back`/`clean` antes de remover os registros
+superados — nenhuma falha deixa o firewall limpo com o recibo `applied` stale
+como única prova.
+Referências jump/goto à chain própria são inventariadas em todas as chains e
+qualquer desvio é recusado antes de mutar; o rollback exige `INPUT`/`FORWARD` em
+`DROP` e identidade completa do recibo (`policy_sha256` incluído). Journal e
+recibo passam por validação estrutural (incluindo coerência `phase`/`state`)
+antes de serem usados como prova. A unit não usa `ConditionPathExists`:
+controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 130 testes; suíte
+completa: 260 testes, sem skips em Linux.

@@ -81,6 +81,12 @@ janela. A futura preparação deve confirmar existência/conteúdo/permissões d
 arquivos de persistência com leitura fresca e backup privado antes de qualquer
 mudança; o estado `active exited` isoladamente não comprova conteúdo salvo.
 
+A STK-M0-33 (implementação pronta, **não instalada**) adiciona um aplicador de
+boot próprio com transação atômica única e unit versionada, sem usar
+`netfilter-persistent save`, captura integral de `ip6tables-save` ou restauração
+integral do ruleset. O delta permanece **não persistente** até a instalação
+autorizada; detalhes, evidências e limitações em [M0-33-VALIDATION.md](M0-33-VALIDATION.md).
+
 ### Interfaces e serviços
 
 - `enp0s6` routable/configured, MTU 9000, DHCPv4 por `systemd-networkd`;
@@ -542,3 +548,84 @@ A validação real não cobre firewall, exposição de portas ou recuperação d
 CI verde não autoriza merge. Nenhuma alteração de banco, deploy, release, migração,
 compra ou infraestrutura foi realizada nesta rodada. A PR permanece pendente de
 revisão do Codex.
+
+## 8. Persistência no boot — STK-M0-33 (implementação, não instalada)
+
+Um aplicador próprio e versionado reaplica, no boot, exatamente o delta IPv6
+confirmado na §4, como **uma única transação atômica** de `ip6tables-nft`
+(`ip6tables-restore --noflush`, gerada em memória). Não há captura integral do
+ruleset, restauração integral, `nft flush ruleset`, `netfilter-persistent save`,
+sequência de comandos independentes nem adoção de chain externa pelo nome.
+
+A transação nomeia apenas a chain própria (`STK6_BOOT`), seu salto único em
+`INPUT` (posição 1) e as políticas `INPUT`/`FORWARD`. IPv4, IPv6 `OUTPUT`, NAT,
+chains/regras Docker e Fail2Ban, regras terceiras, SSH e rpcbind não são citados
+nem passam por flush; a preservação é garantida por construção e verificada em
+container descartável.
+
+Ordenação da unit: `After=netfilter-persistent.service`,
+`Before=docker.service network-online.target`, aprovada por `systemd-analyze
+verify` (rc 0) sem ciclo. `CapabilityBoundingSet=CAP_NET_ADMIN` é suficiente
+(validado em container), `RemainAfterExit=yes`, `Restart=no`,
+`TimeoutStartSec=90`, diretórios `RuntimeDirectory`/`StateDirectory` privados em
+`0700` e hardening compatível com Python e `ip6tables`.
+
+Falha no boot **não** é fail-closed: se a unit falhar, o host permanece no estado
+fornecido pela persistência preexistente (IPv6 `INPUT`/`FORWARD` permissivos),
+sem estado parcial, com a falha visível no journal
+(`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
+`rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
+Falha no boot **não** é fail-closed. O resultado depende do ponto exato:
+falha **antes do commit** preserva o estado da persistência preexistente (IPv6
+`INPUT`/`FORWARD` permissivos), sem estado parcial; falha **pós-commit** com o
+delta exato comprovado gera rollback automático apenas do delta próprio; **deriva
+ou readback indisponível** deixa o estado **não declarado** como restaurado
+(`rollback_required`, sem sobrescrever nada); **crash** entre o commit e o recibo
+é recuperado na execução seguinte por rollback conservador; **crash sem prova
+válida** é recusado sem mutação. Em todos os casos a falha é visível no journal
+(`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
+`rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
+O delta atual continua não persistente, e a instalação, a ativação e qualquer
+reboot exigem autorização posterior do Codex. VPS, reboot e recuperação real não
+foram testados ([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
+
+Recuperação após o commit: todas as etapas posteriores à transação (readback,
+recibo, sidecar, `fsync`, `os.replace`) estão no caminho de recuperação; o
+recibo é o marcador final de sucesso e o journal pré-transação nunca é
+reescrito entre o commit e o evento terminal. Falha pós-aquisição com o
+estado próprio comprovado ⇒ rollback automático só do delta próprio; deriva ou
+perda de prova ⇒ `rollback_required` sem sobrescrever nada; crash entre o commit e
+o recibo ⇒ rollback conservador na execução seguinte (`interrupted_rolled_back`),
+sem adoção do delta nem recibo sintetizado; recibo ilegível (truncado, sem
+sidecar, sidecar divergente, JSON não-objeto) nunca é sucesso e nunca bloqueia a
+recuperação por journal; recibo coerente exige `phase`/`state` consistentes e
+`policy_sha256` atual antes de qualquer rollback; o rollback grava um journal
+durável `rolling_back` (`state=unknown`) antes de qualquer snapshot/transação —
+acknowledgement perdido, readback indisponível ou morte após o commit nunca
+deixam `status()` declarar `applied`; a transição terminal é à prova de crash —
+o journal `rolled_back`/`clean` é persistido **antes** de o recibo stale ser
+tocado e só depois o recibo terminal é gravado; depois de um rollback comprovado,
+a remoção durável do recibo antigo é tentada, e **quando ela funciona** o recibo
+é eliminado — se a invalidação falhar, o journal terminal/de recuperação
+prevalece e impede `status()` de declarar `applied`; uma morte entre o commit e
+os registros terminais, inclusive com o recibo removido (ou removido em parte),
+é reconciliada no retry por um journal `rolling_back` integralmente validado —
+finaliza `rolled_back` **sem nova transação de firewall**; um journal terminal
+já persistido apenas completa o recibo, sem mutação; o journal terminal
+`rolled_back`/`clean` **prevalece sobre um recibo `applied` stale** — nenhum
+recibo remanescente autoriza nova mutação nem um no-op/applied, e `rollback()`/
+`apply_on_boot()` recusam com delta, referência ou políticas divergentes sem
+sobrescrever o journal; o registro terminal vive em slot próprio
+(`terminal.json`) e nunca sobrescreve a última prova válida antes de estar
+íntegro — um JSON íntegro com sidecar stale é prova somente-leitura de
+reconciliação; a reaplicação usa um handoff durável (recibo completado como
+`rolled_back`/`clean` antes de remover os registros superados), e nenhuma
+falha deixa o firewall limpo com o recibo `applied` stale como única prova;
+`rolling_back`/`rollback_required` significam estado
+**não comprovado** (`state=unknown`) e só há `clean` depois de rollback ou
+ausência do delta comprovados; controlador ausente no caminho
+instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
+Todas as referências jump/goto à `STK6_BOOT` em qualquer chain são inventariadas:
+fora de `INPUT` posição 1 com a especificação revisada, o estado é recusado antes
+de qualquer mutação; deriva de política durante o rollback também é recusada sem
+transação ([M0-33-VALIDATION.md](M0-33-VALIDATION.md) §5, §7 e §8).
