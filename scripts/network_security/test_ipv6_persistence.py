@@ -18,8 +18,6 @@ PROCESS_GUARDS = [patch.object(subprocess, "Popen", side_effect=AssertionError("
                   patch.object(os, "system", side_effect=AssertionError("REAL SHELL FORBIDDEN"))]
 for guard in PROCESS_GUARDS:
     guard.start()
-
-
 sys.path.insert(0, str(Path(__file__).parent))
 try:
     import ipv6_persistence as persistence
@@ -53,6 +51,7 @@ class FakeLinux:
         self.transactions = []
         self.fail_before = None
         self.fail_after = None
+        self.after_commit_hook = None
 
     # --- adapter surface -------------------------------------------------
     def validate_host(self):
@@ -115,6 +114,9 @@ class FakeLinux:
             self.fail_before = None  # Fires exactly once, before any commit.
             raise persistence.PersistenceError("simulated failure before commit")
         self.chains, self.policies = staged, staged_policies
+        if self.after_commit_hook:
+            hook, self.after_commit_hook = self.after_commit_hook, None
+            hook()
         if self.fail_after:
             self.fail_after = None  # A lost acknowledgement fires exactly once.
             raise persistence.PersistenceError("simulated lost acknowledgement after commit")
@@ -137,6 +139,72 @@ class Base(unittest.TestCase):
         self.root = Path(self.tmp.name) / "state"
         self.backend = FakeLinux()
         self.controller = persistence.Controller(self.root, self.backend)
+        self.ipv4_sentinel = copy.deepcopy(self.backend.ipv4)
+        self.files_sentinel = dict(self.backend.files)
+
+    def assert_no_mutation(self, snapshot):
+        """The whole host state must be untouched after a refusal."""
+        self.assertEqual(self.backend.snapshot(), snapshot)
+        self.assertEqual(self.backend.ipv4, self.ipv4_sentinel)
+        self.assertEqual(self.backend.files, self.files_sentinel)
+
+    def craft_record(self, name, **overrides):
+        document = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
+                    "boot_id": self.backend.boot_id(),
+                    "controller_sha256": persistence.controller_sha256(),
+                    "policy_sha256": persistence.policy_sha256(),
+                    "chain": persistence.CHAIN, "tag": persistence.TAG,
+                    "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
+                    "phase": "applied"}
+        document.update(overrides)
+        self.controller.store.write_record(name, document)
+        return document
+
+    def crash_after_commit(self, phase="applying", **overrides):
+        """Reproduce a process death between the firewall commit and the receipt."""
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        record = {"schema": persistence.SCHEMA, "policy_version": persistence.POLICY_VERSION,
+                  "boot_id": self.backend.boot_id(),
+                  "controller_sha256": persistence.controller_sha256(),
+                  "policy_sha256": persistence.policy_sha256(),
+                  "chain": persistence.CHAIN, "tag": persistence.TAG,
+                  "before_policies": {"INPUT": "ACCEPT", "FORWARD": "ACCEPT"},
+                  "phase": phase}
+        record.update(overrides)
+        if record.get("_drop", False):
+            record.pop("_drop")
+            return record
+        self.controller.store.write_record("journal.json", record)
+        return record
+
+    @contextlib.contextmanager
+    def inject_write_failure(self, target_name=None, stage="write", occurrence=1):
+        """Fail the n-th write/fsync/replace of a record file, exactly once."""
+        real_write = persistence.private_write
+        state = {"seen": 0, "fired": False}
+
+        def wrapper(path, data):
+            name = Path(path).name
+            if not state["fired"] and (target_name is None or name == target_name):
+                state["seen"] += 1
+                if state["seen"] >= occurrence:
+                    state["fired"] = True
+                    if stage == "write":
+                        raise OSError("injected write failure: " + name)
+                    if stage == "fsync":
+                        with patch.object(os, "fsync", side_effect=OSError("injected fsync failure: " + name)):
+                            return real_write(path, data)
+                    if stage == "replace":
+                        with patch.object(os, "replace", side_effect=OSError("injected replace failure: " + name)):
+                            return real_write(path, data)
+                    raise AssertionError("unknown injection stage")
+            return real_write(path, data)
+
+        with patch.object(persistence, "private_write", wrapper):
+            yield state
+
+    def journal_phase(self):
+        return json.loads((self.root / "journal.json").read_text())["phase"]
 
 
 # ---------------------------------------------------------------- rules
@@ -184,7 +252,7 @@ class ApplyTests(Base):
         self.assertEqual(self.backend.policies["FORWARD"], "DROP")
         self.assertEqual(self.backend.policies["OUTPUT"], "ACCEPT")
         self.assertTrue(self.backend.foreign_intact())
-        self.assertEqual(self.backend.ipv4, {"INPUT": ["-j", "ACCEPT"], "DOCKER": [["-j", "DOCKER-BRIDGE"]]})
+        self.assertEqual(self.backend.ipv4, self.ipv4_sentinel)
         self.assertEqual(self.backend.chains["INPUT"][0], persistence.owned_jump())
         self.assertTrue(self.root.joinpath("receipt.json").exists())
 
@@ -209,15 +277,19 @@ class ApplyTests(Base):
     def test_duplicate_input_reference_is_refused(self):
         self.controller.apply_on_boot()
         self.backend.chains["INPUT"].append(persistence.owned_jump())
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "exactly once"):
             self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
 
     def test_displaced_input_reference_is_refused(self):
         self.controller.apply_on_boot()
         # A foreign rule ahead of the owned reference must not be skipped.
         self.backend.chains["INPUT"].insert(0, ["-p", "ipv6-icmp", "-j", "ACCEPT"])
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "reviewed position"):
             self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
 
     def test_unexpected_policy_is_refused(self):
         self.backend.policies["INPUT"] = "REJECT"
@@ -242,6 +314,7 @@ class ApplyTests(Base):
         self.assertFalse(self.backend.owned())
         self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
         self.assertTrue(self.backend.foreign_intact())
+        self.assertEqual(self.journal_phase(), "failed")
 
     def test_failure_after_acquisition_rolls_back_only_the_owned_delta(self):
         self.backend.fail_after = True
@@ -251,8 +324,8 @@ class ApplyTests(Base):
         self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
         self.assertEqual(self.backend.policies["FORWARD"], "ACCEPT")
         self.assertTrue(self.backend.foreign_intact())
-        journal = json.loads((self.root / "journal.json").read_text())
-        self.assertEqual(journal["phase"], "failed_rolled_back")
+        self.assertEqual(self.journal_phase(), "failed_rolled_back")
+        self.assertIsNone(self.controller.store.receipt())
 
     def test_simulated_reboot_with_previous_persistent_state(self):
         self.controller.apply_on_boot()
@@ -270,19 +343,18 @@ class ApplyTests(Base):
     def test_applied_state_with_receipt_from_another_boot_is_refused(self):
         self.controller.apply_on_boot()
         self.backend.boot = "boot-B"
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "another boot"):
             self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
 
     def test_divergent_controller_hash_is_refused(self):
         self.controller.apply_on_boot()
-        receipt = json.loads((self.root / "receipt.json").read_text())
-        receipt["controller_sha256"] = "0" * 64
-        data = persistence.encoded(receipt)
-        persistence.private_write(self.root / "receipt.json", data)
-        persistence.private_write(self.root / "receipt.json.sha256",
-                                  (persistence.digest(data) + "\n").encode("ascii"))
+        self.craft_record("receipt.json", controller_sha256="0" * 64)
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "controller hash"):
             self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
 
     def test_tampered_or_truncated_receipt_is_refused(self):
         self.controller.apply_on_boot()
@@ -290,15 +362,223 @@ class ApplyTests(Base):
         persistence.private_write(self.root / "receipt.json", raw[:-12])
         with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
             self.controller.status()
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
             self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
 
-    def test_applied_state_without_receipt_is_refused(self):
-        self.controller.apply_on_boot()
-        (self.root / "receipt.json").unlink()
-        (self.root / "receipt.json.sha256").unlink()
-        with self.assertRaisesRegex(persistence.PersistenceError, "durable receipt"):
+    def test_applied_state_without_receipt_or_journal_is_refused(self):
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "refuse adoption"):
             self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+
+# ------------------------------------------------- post-commit failure coverage
+class PostAcquisitionFailureTests(Base):
+    """Failures after the firewall commit must never leave a false success."""
+
+    def assert_failed_and_clean(self):
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
+        self.assertEqual(self.backend.policies["FORWARD"], "ACCEPT")
+        self.assertTrue(self.backend.foreign_intact())
+        self.assertEqual(self.journal_phase(), "failed_rolled_back")
+        # No valid applied receipt may survive a persistence-failure rollback.
+        self.assertIsNone(self.controller.store.receipt())
+
+    def test_receipt_write_failure_rolls_back(self):
+        with self.inject_write_failure("receipt.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
+                self.controller.apply_on_boot()
+        self.assert_failed_and_clean()
+
+    def test_receipt_sidecar_write_failure_rolls_back(self):
+        with self.inject_write_failure("receipt.json.sha256", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
+                self.controller.apply_on_boot()
+        self.assert_failed_and_clean()
+
+    def test_receipt_fsync_failure_rolls_back(self):
+        with self.inject_write_failure("receipt.json", "fsync"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
+                self.controller.apply_on_boot()
+        self.assert_failed_and_clean()
+
+    def test_receipt_replace_failure_rolls_back(self):
+        with self.inject_write_failure("receipt.json", "replace"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
+                self.controller.apply_on_boot()
+        self.assert_failed_and_clean()
+
+    def test_acquisition_journal_write_failure_rolls_back(self):
+        with self.inject_write_failure("journal.json", "write", occurrence=2):
+            with self.assertRaisesRegex(persistence.PersistenceError, "owned delta was rolled back"):
+                self.controller.apply_on_boot()
+        self.assert_failed_and_clean()
+
+    def test_failed_rollback_is_reported_as_rollback_required(self):
+        self.backend.fail_after = True
+        # External drift appears right after the commit, before any recovery rollback.
+        self.backend.after_commit_hook = lambda: self.backend.chains[persistence.CHAIN].append(["-j", "RETURN"])
+        with self.assertRaisesRegex(persistence.PersistenceError, "rollback_required"):
+            self.controller.apply_on_boot()
+        # Nothing was overwritten and the drift is still visible.
+        self.assertIn(["-j", "RETURN"], self.backend.chains[persistence.CHAIN])
+        self.assertEqual(self.journal_phase(), "rollback_required")
+
+    def test_rollback_terminal_receipt_failure_is_visible_and_keeps_the_result(self):
+        self.controller.apply_on_boot()
+        with self.inject_write_failure("receipt.json", "write"):
+            with self.assertRaisesRegex(persistence.PersistenceError, "could not be persisted"):
+                self.controller.rollback()
+        # The firewall result is preserved and recorded as unrecorded.
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
+        self.assertEqual(self.journal_phase(), "rolled_back_unrecorded")
+
+
+# ---------------------------------------------------------------- crash recovery
+class CrashRecoveryTests(Base):
+    def assert_interrupted_clean(self):
+        self.assertFalse(self.backend.owned())
+        self.assertEqual(self.backend.policies["INPUT"], "ACCEPT")
+        self.assertEqual(self.backend.policies["FORWARD"], "ACCEPT")
+        self.assertTrue(self.backend.foreign_intact())
+        self.assertIsNone(self.controller.store.receipt())
+
+    def test_crash_with_applying_journal_recovers_by_rollback(self):
+        self.crash_after_commit("applying")
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assert_interrupted_clean()
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+        # A later run on the now-clean state applies safely.
+        self.assertEqual(self.controller.apply_on_boot()["phase"], "applied")
+        self.assertTrue(self.backend.owned())
+
+    def test_crash_with_acquired_journal_recovers_by_rollback(self):
+        self.crash_after_commit("acquired")
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted"):
+            self.controller.apply_on_boot()
+        self.assert_interrupted_clean()
+        self.assertEqual(self.journal_phase(), "interrupted_rolled_back")
+
+    def test_applied_delta_without_recovery_journal_is_refused_without_mutation(self):
+        self.crash_after_commit(_drop=True)
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "refuse adoption"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_journal_from_another_boot_is_refused_without_mutation(self):
+        self.crash_after_commit("applying", boot_id="boot-Z")
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "refuse adoption"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+    def test_journal_with_divergent_controller_hash_is_refused_without_mutation(self):
+        self.crash_after_commit("applying", controller_sha256="0" * 64)
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "refuse adoption"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+    def test_tampered_journal_is_refused_without_mutation(self):
+        self.crash_after_commit("applying")
+        raw = (self.root / "journal.json").read_bytes()
+        persistence.private_write(self.root / "journal.json", raw[:-9])
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+    def test_terminal_journal_phase_does_not_trigger_recovery(self):
+        self.crash_after_commit("failed")
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "interrupted attempt"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+
+# ------------------------------------------------------- reference inventory
+class ReferenceInventoryTests(Base):
+    """Any additional or divergent reference to the owned chain is a refusal."""
+
+    def refused_for(self, pattern, mutate):
+        self.controller.apply_on_boot()
+        mutate()
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, pattern):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        with self.assertRaisesRegex(persistence.PersistenceError, pattern):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_foreign_tagged_reference_in_input_is_refused(self):
+        self.refused_for("specification diverges",
+                         lambda: self.backend.chains["INPUT"].__setitem__(
+                             0, ["-m", "comment", "--comment", "foreign", "-j", persistence.CHAIN]))
+
+    def test_second_reference_in_input_is_refused(self):
+        self.refused_for("exactly once", lambda: self.backend.chains["INPUT"].append(persistence.owned_jump()))
+
+    def test_reference_in_forward_is_refused(self):
+        self.refused_for("exactly once",
+                         lambda: self.backend.chains["FORWARD"].append(
+                             ["-m", "comment", "--comment", "other", "-j", persistence.CHAIN]))
+
+    def test_reference_in_foreign_chain_is_refused(self):
+        self.refused_for("exactly once",
+                         lambda: self.backend.chains["DOCKER-FORWARD"].append(["-j", persistence.CHAIN]))
+
+    def test_goto_reference_is_refused(self):
+        self.refused_for("specification diverges",
+                         lambda: self.backend.chains["INPUT"].__setitem__(0, ["-g", persistence.CHAIN]))
+
+    def test_reference_without_chain_is_refused(self):
+        self.controller.apply_on_boot()
+        del self.backend.chains[persistence.CHAIN]
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "without its chain"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        with self.assertRaisesRegex(persistence.PersistenceError, "without its chain"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+
+    def test_single_reviewed_reference_is_the_only_accepted_state(self):
+        self.controller.apply_on_boot()
+        references = persistence.references_to_owned_chain(self.backend.snapshot())
+        self.assertEqual(references, [("INPUT", 0, persistence.owned_jump())])
+        self.assertEqual(self.controller.apply_on_boot()["phase"], "no-op")
+
+
+# ------------------------------------------------------------ rollback drift
+class RollbackPolicyDriftTests(Base):
+    def test_rollback_refuses_input_policy_drift_without_mutation(self):
+        self.controller.apply_on_boot()
+        self.backend.policies["INPUT"] = "ACCEPT"
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "policies drifted"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_rollback_refuses_forward_policy_drift_without_mutation(self):
+        self.controller.apply_on_boot()
+        self.backend.policies["FORWARD"] = "ACCEPT"
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "policies drifted"):
+            self.controller.rollback()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
 
 
 # ---------------------------------------------------------------- rollback
@@ -328,15 +608,86 @@ class RollbackTests(Base):
     def test_stale_boot_rollback_is_refused(self):
         self.controller.apply_on_boot()
         self.backend.boot = "boot-B"
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "another boot"):
             self.controller.rollback()
+        self.assert_no_mutation(before)
 
     def test_rollback_refuses_foreign_or_partial_chain(self):
         self.controller.apply_on_boot()
         self.backend.chains[persistence.CHAIN].append(["-j", "RETURN"])
+        before = self.backend.snapshot()
         with self.assertRaisesRegex(persistence.PersistenceError, "diverged"):
             self.controller.rollback()
+        self.assert_no_mutation(before)
         self.assertTrue(self.backend.owned())
+
+
+# ------------------------------------------------------------ record validation
+class RecordValidationTests(Base):
+    def test_non_object_receipt_is_refused(self):
+        data = b"[]"
+        persistence.private_write(self.root / "receipt.json", data)
+        persistence.private_write(self.root / "receipt.json.sha256", (persistence.digest(data) + "\n").encode())
+        with self.assertRaisesRegex(persistence.PersistenceError, "not a JSON object"):
+            self.controller.status()
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "not a JSON object"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+
+    def test_non_object_journal_with_applied_state_is_refused(self):
+        # The journal is only proof in the crash-recovery path: with the owned
+        # delta live and no receipt, a non-object journal must refuse.
+        self.backend.apply_transaction(persistence.apply_transaction_text())
+        data = b"[]"
+        persistence.private_write(self.root / "journal.json", data)
+        persistence.private_write(self.root / "journal.json.sha256", (persistence.digest(data) + "\n").encode())
+        before = self.backend.snapshot()
+        with self.assertRaisesRegex(persistence.PersistenceError, "not a JSON object"):
+            self.controller.apply_on_boot()
+        self.assert_no_mutation(before)
+        self.assertTrue(self.backend.owned())
+
+    def test_corrupt_journal_on_a_clean_state_is_superseded_safely(self):
+        data = b"[]"
+        persistence.private_write(self.root / "journal.json", data)
+        persistence.private_write(self.root / "journal.json.sha256", (persistence.digest(data) + "\n").encode())
+        # Nothing is owned and there is nothing to recover, so the fresh attempt
+        # replaces the unusable record instead of blocking the boot.
+        self.assertEqual(self.controller.apply_on_boot()["phase"], "applied")
+        self.assertTrue(self.backend.owned())
+
+    def test_invalid_receipt_schema_is_refused(self):
+        self.craft_record("receipt.json", schema=99)
+        with self.assertRaisesRegex(persistence.PersistenceError, "schema/version"):
+            self.controller.apply_on_boot()
+
+    def test_invalid_receipt_identity_fields_are_refused(self):
+        cases = (("boot_id", "", "missing a valid boot_id"),
+                 ("controller_sha256", "xyz", "hashes are malformed"),
+                 ("chain", "OTHER_CHAIN", "different owned resource"),
+                 ("phase", "acquired", "phase is not valid"))
+        for field, value, pattern in cases:
+            self.craft_record("receipt.json", **{field: value})
+            with self.assertRaisesRegex(persistence.PersistenceError, pattern):
+                self.controller.status()
+
+    def test_invalid_before_policies_are_refused(self):
+        self.craft_record("receipt.json", before_policies={"INPUT": "REJECT", "FORWARD": "ACCEPT"})
+        with self.assertRaisesRegex(persistence.PersistenceError, "previous policies are invalid"):
+            self.controller.apply_on_boot()
+
+    def test_receipt_without_sidecar_is_refused(self):
+        self.craft_record("receipt.json")
+        (self.root / "receipt.json.sha256").unlink()
+        with self.assertRaisesRegex(persistence.PersistenceError, "truncated or tampered"):
+            self.controller.status()
+
+    def test_invalid_journal_document_is_refused(self):
+        self.craft_record("journal.json", policy_version=42)
+        with self.assertRaisesRegex(persistence.PersistenceError, "schema/version"):
+            self.controller.status()
 
 
 # ---------------------------------------------------------------- lock
@@ -440,6 +791,12 @@ class UnitTests(unittest.TestCase):
         self.assertIn("TimeoutStartSec=90", self.text)
         self.assertIn("ExecStart=/usr/bin/python3 -I -B /usr/lib/stk6-persistence/ipv6_persistence.py", self.text)
         self.assertIn("--execute-reviewed-linux", self.text)
+
+    def test_unit_never_hides_a_missing_controller(self):
+        # ConditionPathExists would silently skip the unit; an absent controller
+        # must surface as a failed unit instead.
+        self.assertNotIn("ConditionPathExists", self.text)
+        self.assertNotIn("Condition", self.text)
 
     def test_unit_hardening_and_private_directories(self):
         for directive in ("NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",

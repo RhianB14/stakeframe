@@ -7,6 +7,12 @@ independent commands and never as a full-ruleset capture/restore: IPv4, IPv6
 OUTPUT, NAT, Docker, Fail2Ban and foreign rules are never captured for
 rewriting, flushed, reordered or removed.
 
+The state machine treats EVERY step after the firewall commit as recoverable:
+the pre-transaction journal is durable, the readback, the acquisition journal
+and the terminal receipt are all inside the recovery path, and the receipt is
+the last marker of success. A failure or a crash after the commit rolls back
+only the owned delta; external drift refuses without overwriting anything.
+
 Linux execution requires root plus the explicit ``--execute-reviewed-linux``
 flag. Tests inject a deterministic in-memory backend and never spawn a real
 firewall, systemd or shell command.
@@ -38,6 +44,13 @@ PROTECTED_PERSISTENCE_FILES = ("/etc/iptables/rules.v4", "/etc/iptables/rules.v6
                                "/etc/default/netfilter-persistent", "/etc/default/iptables")
 BUILTIN_CHAINS = ("INPUT", "FORWARD", "OUTPUT")
 OWNERSHIP_PREFIX = "STK6"
+REFERENCE_TOKENS = ("-j", "--jump", "-g", "--goto")
+HEX64 = re.compile(r"[0-9a-f]{64}")
+# The receipt is the terminal success/rollback marker; the journal narrates the
+# attempt and may legitimately stay in a non-terminal phase after a crash.
+RECEIPT_PHASES = ("applied", "rolled_back")
+JOURNAL_PHASES = ("applying", "acquired", "failed", "failed_rolled_back", "rollback_required",
+                  "interrupted_rolled_back", "rolled_back_unrecorded")
 
 
 class PersistenceError(RuntimeError):
@@ -178,6 +191,37 @@ def parse_filter(text):
     return snapshot
 
 
+def references_to_owned_chain(snapshot):
+    """Every jump/goto that targets the owned chain, in deterministic order.
+
+    Counting only the exact owned rule inside INPUT would miss a second
+    reference with another comment, a reference in FORWARD, a reference in a
+    foreign chain or a ``--goto``. All of them are inventoried here.
+    """
+    found = []
+    for name, rules in snapshot["chains"].items():
+        for index, rule in enumerate(rules):
+            tokens = list(rule)
+            for position, token in enumerate(tokens):
+                if token in REFERENCE_TOKENS and position + 1 < len(tokens) and tokens[position + 1] == CHAIN:
+                    found.append((name, index, list(rule)))
+                    break
+    return found
+
+
+def verify_owned_reference(snapshot, tag=TAG):
+    """The only acceptable reference state: exactly one, INPUT, index 0, reviewed spec."""
+    references = references_to_owned_chain(snapshot)
+    if len(references) != 1:
+        raise PersistenceError("owned chain must be referenced exactly once in the filter table")
+    name, index, rule = references[0]
+    if name != "INPUT" or index != 0:
+        raise PersistenceError("owned INPUT reference is not in the reviewed position")
+    if rule != owned_jump(tag):
+        raise PersistenceError("owned reference specification diverges from the reviewed jump")
+    return references[0]
+
+
 def classify(snapshot, tag=TAG):
     """Return {"state": "clean"|"applied", "reason": "..."} or raise PersistenceError."""
     chains, policies = snapshot["chains"], snapshot["policies"]
@@ -188,19 +232,15 @@ def classify(snapshot, tag=TAG):
         if policies.get(name) not in ("ACCEPT", "DROP"):
             raise PersistenceError("unsupported IPv6 policy on " + name)
     ours = chains.get(CHAIN)
-    jumps = [rule for rule in chains.get("INPUT", []) if rule == owned_jump(tag)]
     if ours is None:
-        if jumps:
-            raise PersistenceError("owned INPUT reference without its chain")
+        if references_to_owned_chain(snapshot):
+            raise PersistenceError("owned reference without its chain")
         if policies["INPUT"] != "ACCEPT" or policies["FORWARD"] != "ACCEPT":
             raise PersistenceError("divergent policy without an owned chain")
         return {"state": "clean", "reason": "expected pre-application state"}
     if ours != policy_rules(tag):
         raise PersistenceError("owned chain exists with partial or foreign content")
-    if len(jumps) != 1:
-        raise PersistenceError("owned chain must be referenced exactly once in INPUT")
-    if chains["INPUT"].index(jumps[0]) != 0:
-        raise PersistenceError("owned INPUT reference is not in the reviewed position")
+    verify_owned_reference(snapshot, tag)
     if policies["INPUT"] != "DROP" or policies["FORWARD"] != "DROP":
         raise PersistenceError("owned chain present with divergent policies")
     return {"state": "applied", "reason": "exactly the reviewed delta"}
@@ -215,6 +255,43 @@ def is_delta_persisted(files, tag=TAG):
         if CHAIN in blob or tag in blob:
             return name
     return None
+
+
+def validate_document(document, name):
+    """Structural validation before any field is used as proof of ownership."""
+    if not isinstance(document, dict):
+        raise PersistenceError("record is not a JSON object: " + name)
+    strings = ("boot_id", "controller_sha256", "policy_sha256", "chain", "tag", "phase")
+    for key in strings:
+        value = document.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise PersistenceError("record is missing a valid " + key + ": " + name)
+    for key in ("schema", "policy_version"):
+        value = document.get(key)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise PersistenceError("record is missing a valid " + key + ": " + name)
+    if document["schema"] != SCHEMA or document["policy_version"] != POLICY_VERSION:
+        raise PersistenceError("record schema/version is not the reviewed one: " + name)
+    if document["chain"] != CHAIN or document["tag"] != TAG:
+        raise PersistenceError("record describes a different owned resource: " + name)
+    if not HEX64.fullmatch(document["controller_sha256"]) or not HEX64.fullmatch(document["policy_sha256"]):
+        raise PersistenceError("record hashes are malformed: " + name)
+    policies = document.get("before_policies")
+    if not isinstance(policies, dict) or set(policies) != {"INPUT", "FORWARD"} \
+            or any(policies[key] not in ("ACCEPT", "DROP") for key in policies):
+        raise PersistenceError("record previous policies are invalid: " + name)
+    phases = RECEIPT_PHASES if name.startswith("receipt") else JOURNAL_PHASES
+    if document["phase"] not in phases:
+        raise PersistenceError("record phase is not valid for this record: " + name)
+    return document
+
+
+def validate_receipt(document):
+    return validate_document(document, "receipt.json")
+
+
+def validate_journal(document):
+    return validate_document(document, "journal.json")
 
 
 class Store:
@@ -276,10 +353,28 @@ class Store:
         if not path.exists():
             return None
         data = private_read(path)
-        sidecar = private_read(self.root / (name + ".sha256"))
+        try:
+            sidecar = private_read(self.root / (name + ".sha256"))
+        except (FileNotFoundError, PersistenceError) as exc:
+            raise PersistenceError("truncated or tampered record: " + name) from exc
         if sidecar.decode("ascii", "replace").strip() != digest(data):
             raise PersistenceError("truncated or tampered record: " + name)
-        return json.loads(data)
+        document = json.loads(data)
+        if not isinstance(document, dict):
+            raise PersistenceError("record is not a JSON object: " + name)
+        return document
+
+    def discard_record(self, name):
+        """Best-effort removal so no stale receipt survives a rollback."""
+        removed = []
+        for target in (self.root / name, self.root / (name + ".sha256")):
+            try:
+                if target.exists() and not target.is_symlink():
+                    target.unlink()
+                    removed.append(target.name)
+            except OSError:
+                pass
+        return removed
 
     def receipt(self):
         return self.read_record("receipt.json")
@@ -325,37 +420,93 @@ class Controller:
             raise PersistenceError("delta already present in a persistence file; refuse double application")
         return files
 
-    def _refuse_unproven_receipt(self, receipt, boot_id, controller_hash):
-        if receipt is None:
-            raise PersistenceError("applied state without a durable receipt; refuse adoption")
-        if receipt.get("phase") != "applied":
-            raise PersistenceError("receipt is not a terminal applied receipt")
-        if receipt.get("boot_id") != boot_id:
-            raise PersistenceError("receipt belongs to another boot; reconcile manually")
-        if receipt.get("controller_sha256") != controller_hash:
-            raise PersistenceError("receipt controller hash differs from the running controller")
-        if receipt.get("policy_sha256") != policy_sha256():
-            raise PersistenceError("receipt policy hash differs from the reviewed policy")
+    def _record_phase(self, record, phase, error=None, note=None):
+        """Best-effort journal update.
+
+        A failure to persist recovery metadata must never hide the firewall
+        result nor turn a failed attempt into an apparent success, so this
+        never raises: the caller keeps its primary, visible failure.
+        """
+        document = {**record, "phase": phase}
+        if error is not None:
+            document["error"] = type(error).__name__
+        if note is not None:
+            document["note"] = note
+        try:
+            self.store.write_record("journal.json", document)
+            return True
+        except BaseException:
+            return False
+
+    def _attempt_identity_matches(self, document, boot_id, controller_hash):
+        return (document.get("boot_id") == boot_id
+                and document.get("controller_sha256") == controller_hash
+                and document.get("policy_sha256") == policy_sha256())
 
     def _rollback_delta(self, before_policies):
-        """Remove ONLY the owned delta and restore the recorded previous policies."""
+        """Remove ONLY the owned delta and restore the recorded previous policies.
+
+        The rollback refuses BEFORE any transaction when the live state is not
+        provably the owned delta: diverging chain content, any additional or
+        divergent reference and drifted INPUT/FORWARD policies are all refusals.
+        """
         snapshot = self.backend.snapshot()
-        chains = snapshot["chains"]
-        jumps = [rule for rule in chains.get("INPUT", []) if rule == owned_jump()]
+        chains, policies = snapshot["chains"], snapshot["policies"]
         present = CHAIN in chains
-        if not present and not jumps:
+        references = references_to_owned_chain(snapshot)
+        if not present and not references:
             return {"state": "no-op"}
-        if present and chains[CHAIN] != policy_rules():
-            raise PersistenceError("owned chain content diverged; refuse destructive rollback")
-        if len(jumps) > 1 or (jumps and chains["INPUT"].index(jumps[0]) != 0):
-            raise PersistenceError("owned INPUT reference position diverged; refuse rollback")
         if not present:
             raise PersistenceError("owned reference without its chain; refuse rollback")
+        if chains[CHAIN] != policy_rules():
+            raise PersistenceError("owned chain content diverged; refuse destructive rollback")
+        verify_owned_reference(snapshot)
+        if policies["INPUT"] != "DROP" or policies["FORWARD"] != "DROP":
+            raise PersistenceError("IPv6 policies drifted while the owned delta is present; refuse rollback")
         self.backend.apply_transaction(rollback_transaction_text(before_policies))
         after = self.backend.snapshot()
-        if CHAIN in after["chains"] or any(rule == owned_jump() for rule in after["chains"].get("INPUT", [])):
+        if CHAIN in after["chains"] or references_to_owned_chain(after):
             raise PersistenceError("rollback readback still shows the owned delta")
         return {"state": "rolled_back"}
+
+    def _post_acquisition_failure(self, record, before, before_policies, error):
+        """Recover from any failure after the firewall commit. Always raises."""
+        current = self.backend.snapshot()
+        if current == before:
+            saved = self._record_phase(record, "failed", error)
+            suffix = "" if saved else " (recovery journal write also failed)"
+            raise PersistenceError("apply failed before any commit; no change was made" + suffix) from error
+        try:
+            self._rollback_delta(before_policies)
+        except BaseException as recovery:
+            saved = self._record_phase(record, "rollback_required", recovery,
+                                       note="external drift or lost proof; nothing was overwritten")
+            suffix = "" if saved else " (recovery journal write also failed)"
+            raise PersistenceError("apply failed after acquisition and the owned delta could not be proven; "
+                                  "rollback_required" + suffix) from recovery
+        self.store.discard_record("receipt.json")
+        saved = self._record_phase(record, "failed_rolled_back", error)
+        suffix = "" if saved else " (recovery journal write also failed)"
+        raise PersistenceError("apply failed after acquisition; only the owned delta was rolled back" + suffix) from error
+
+    def _recover_interrupted(self, journal, boot_id, controller_hash):
+        """Roll back a delta left by an interrupted attempt. Always raises."""
+        if journal is None:
+            raise PersistenceError("applied state without a durable receipt or journal; refuse adoption")
+        validate_journal(journal)
+        if not self._attempt_identity_matches(journal, boot_id, controller_hash):
+            raise PersistenceError("journal does not match this controller/policy/boot; refuse adoption")
+        if journal["phase"] not in ("applying", "acquired"):
+            raise PersistenceError("journal does not describe an interrupted attempt; refuse without mutation")
+        try:
+            self._rollback_delta(journal["before_policies"])
+        except BaseException as recovery:
+            self._record_phase(journal, "rollback_required", recovery,
+                               note="interrupted attempt with external drift; nothing was overwritten")
+            raise PersistenceError("interrupted attempt could not be proven; rollback_required") from recovery
+        self.store.discard_record("receipt.json")
+        self._record_phase(journal, "interrupted_rolled_back", note="crash after commit, before the receipt")
+        raise PersistenceError("interrupted attempt (commit without receipt) rolled back; no adoption; re-run to apply")
 
     def apply_on_boot(self):
         controller_hash = controller_sha256()
@@ -366,10 +517,26 @@ class Controller:
             before_policies = {"INPUT": before["policies"]["INPUT"], "FORWARD": before["policies"]["FORWARD"]}
             kind = classify(before)
             receipt = self.store.receipt()
+            if receipt is not None:
+                validate_receipt(receipt)
             if kind["state"] == "applied":
-                self._refuse_unproven_receipt(receipt, boot_id, controller_hash)
-                return {"schema": SCHEMA, "mode": "apply-on-boot", "phase": "no-op",
-                        "policy_version": POLICY_VERSION, "state": "applied", "writes": "none"}
+                if receipt is not None and receipt["phase"] == "applied":
+                    if receipt["boot_id"] != boot_id:
+                        raise PersistenceError("receipt belongs to another boot; reconcile manually")
+                    if receipt["controller_sha256"] != controller_hash:
+                        raise PersistenceError("receipt controller hash differs from the running controller")
+                    if receipt["policy_sha256"] != policy_sha256():
+                        raise PersistenceError("receipt policy hash differs from the reviewed policy")
+                    return {"schema": SCHEMA, "mode": "apply-on-boot", "phase": "no-op",
+                            "policy_version": POLICY_VERSION, "state": "applied", "writes": "none"}
+                # No applicable applied receipt: only a matching interrupted
+                # journal may authorize a conservative rollback of the delta.
+                journal = self.store.journal()
+                if journal is not None:
+                    self._recover_interrupted(journal, boot_id, controller_hash)
+                raise PersistenceError("applied state without a matching receipt/journal; refuse adoption")
+            # Clean state: nothing owned is present, so a durable journal that
+            # identifies this attempt is written before the firewall changes.
             record = {"schema": SCHEMA, "policy_version": POLICY_VERSION, "boot_id": boot_id,
                       "controller_sha256": controller_hash, "policy_sha256": policy_sha256(),
                       "chain": CHAIN, "tag": TAG, "before_policies": before_policies,
@@ -379,26 +546,13 @@ class Controller:
                 self.backend.apply_transaction(apply_transaction_text())
                 if classify(self.backend.snapshot())["state"] != "applied":
                     raise PersistenceError("readback after apply is not the reviewed delta")
+                self.store.write_record("journal.json", {**record, "phase": "acquired"})
+                receipt = {**record, "phase": "applied", "state": "applied",
+                           "applied_monotonic_ns": self.backend.monotonic_ns()}
+                # Terminal marker: nothing fallible runs after a successful receipt.
+                self.store.write_record("receipt.json", receipt)
             except BaseException as exc:
-                current = self.backend.snapshot()
-                if current == before:
-                    self.store.write_record("journal.json", {**record, "phase": "failed",
-                                                             "error": type(exc).__name__})
-                    raise PersistenceError("apply failed before any commit; no change was made") from exc
-                # Proven acquisition: roll back ONLY the owned delta.
-                try:
-                    outcome = self._rollback_delta(before_policies)
-                except BaseException as recovery:
-                    self.store.write_record("journal.json", {**record, "phase": "rollback_required",
-                                                             "error": type(exc).__name__})
-                    raise PersistenceError("apply failed and rollback is INCOMPLETE; inspect the journal") from recovery
-                self.store.write_record("journal.json", {**record, "phase": "failed_rolled_back",
-                                                         "error": type(exc).__name__})
-                raise PersistenceError("apply failed after acquisition; only the owned delta was rolled back") from exc
-            receipt = {**record, "phase": "applied", "state": "applied",
-                       "applied_monotonic_ns": self.backend.monotonic_ns()}
-            self.store.write_record("receipt.json", receipt)
-            self.store.write_record("journal.json", {**record, "phase": "applied"})
+                self._post_acquisition_failure(record, before, before_policies, exc)
             return {"schema": SCHEMA, "mode": "apply-on-boot", "phase": "applied",
                     "policy_version": POLICY_VERSION, "state": "applied", "writes": "owned-delta-only",
                     "controller_sha256": controller_hash, "policy_sha256": policy_sha256()}
@@ -406,11 +560,16 @@ class Controller:
     def status(self):
         receipt = self.store.receipt()
         journal = self.store.journal()
+        if receipt is not None:
+            validate_receipt(receipt)
+        if journal is not None:
+            validate_journal(journal)
         return {
             "schema": SCHEMA,
             "mode": "status",
             "policy_version": POLICY_VERSION,
-            "state": (receipt or {}).get("state", "never-applied"),
+            "state": receipt["state"] if isinstance(receipt, dict) and "state" in receipt else
+                     ("clean" if receipt is not None else "never-applied"),
             "phase": (receipt or journal or {}).get("phase", "absent"),
             "controller_sha256": (receipt or {}).get("controller_sha256"),
             "policy_sha256": (receipt or {}).get("policy_sha256"),
@@ -423,18 +582,24 @@ class Controller:
             receipt = self.store.receipt()
             if receipt is None:
                 raise PersistenceError("no durable receipt; nothing owned to roll back")
-            if receipt.get("controller_sha256") != controller_sha256():
+            validate_receipt(receipt)
+            if receipt["controller_sha256"] != controller_sha256():
                 raise PersistenceError("receipt controller hash differs from the running controller")
-            if receipt.get("phase") == "rolled_back":
-                snapshot = self.backend.snapshot()
-                if CHAIN not in snapshot["chains"] and not any(rule == owned_jump() for rule in snapshot["chains"].get("INPUT", [])):
+            snapshot = self.backend.snapshot()
+            if receipt["phase"] == "rolled_back":
+                if CHAIN not in snapshot["chains"] and not references_to_owned_chain(snapshot):
                     return {"schema": SCHEMA, "mode": "rollback", "phase": "no-op",
                             "policy_version": POLICY_VERSION, "writes": "none"}
                 raise PersistenceError("receipt says rolled back but the owned delta is still present")
-            if receipt.get("boot_id") != self.backend.boot_id():
+            if receipt["boot_id"] != self.backend.boot_id():
                 raise PersistenceError("receipt belongs to another boot; refuse stale rollback")
             outcome = self._rollback_delta(receipt["before_policies"])
-            self.store.write_record("receipt.json", {**receipt, "phase": "rolled_back", "state": "clean"})
+            try:
+                self.store.write_record("receipt.json", {**receipt, "phase": "rolled_back", "state": "clean"})
+            except BaseException as exc:
+                self._record_phase(receipt, "rolled_back_unrecorded", exc,
+                                   note="firewall already rolled back; terminal receipt could not be persisted")
+                raise PersistenceError("rollback executed but its terminal receipt could not be persisted") from exc
             return {"schema": SCHEMA, "mode": "rollback", "phase": outcome["state"],
                     "policy_version": POLICY_VERSION, "writes": "owned-delta-only"}
 
