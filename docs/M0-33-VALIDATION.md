@@ -5,7 +5,8 @@
 > real foi alterado e nenhum reboot foi feito. Os únicos testes executados
 > rodaram localmente e em containers descartáveis.
 
-Issue: [#91](https://github.com/RhianB14/stakeframe/issues/91) · Branch:
+Issue: [#91](https://github.com/RhianB14/stakeframe/issues/91) · PR:
+[#92](https://github.com/RhianB14/stakeframe/pull/92) · Branch:
 `hermes/m0-33-ipv6-persistence` · Base: `2604fbef637ec4c45a383d5c6c2d9fef4e1b59ec`.
 
 ## 1. Objetivo
