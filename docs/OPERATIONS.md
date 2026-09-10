@@ -141,14 +141,16 @@ bucket; uma poda concorrente pode interromper a leitura e o teste falha com
 segurança. Conferir esse incidente e repetir após o ciclo de backup. A conta
 de recuperação nunca recebe permissão de poda ou escrita para contornar a falha.
 
-O serviço e timer em `infra/production/stakeframe-restore.*` estão preparados
-para o dia 1 de cada mês às 03:26 UTC e execução posterior caso o host estivesse
-desligado. Antes de instalá-los, provisionar Node 24.20.0 em
-`/opt/stakeframe-tools/node/bin/node`, checkout revisado em `/opt/stakeframe`,
-configuração Docker privada em `/etc/stakeframe/docker` e o arquivo de deployment.
-A instalação/ativação do timer só ocorre na janela autorizada.
+O serviço e timer em `infra/production/stakeframe-restore.*` foram instalados e
+habilitados na [STK-M0-30](M0-30-VALIDATION.md). O timer está ativo para o dia 1
+de cada mês às 03:26 UTC, com `Persistent=true`; a execução inicial
+supervisionada passou e a próxima ocorrência observada é 01/10/2026. Node
+24.20.0, checkout revisado, configuração Docker privada e arquivo de deployment
+permanecem pré-requisitos para reinstalação ou recuperação do host. Qualquer
+mudança ou execução adicional fora do timer exige nova janela autorizada.
 
-O primeiro ensaio deve ser executado na ativação, sem esperar pelo próximo mês:
+O primeiro ensaio foi executado na ativação da STK-M0-30. Para uma futura
+reinstalação autorizada, a execução supervisionada equivalente usa:
 
 ```bash
 sudo env \

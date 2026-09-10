@@ -30,8 +30,13 @@ STK-M0-25 ([issue #67](https://github.com/RhianB14/stakeframe/issues/67))
 reconciliou o estado operacional: backup externo R2 ativo desde 07/09/2026,
 permissões do diretório de segredos corrigidas e cópia redundante aninhada
 removida ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
+STK-M0-29 concluiu o primeiro restore isolado com produção intacta; em seguida,
+STK-M0-30 ([issue #86](https://github.com/RhianB14/stakeframe/issues/86)) instalou
+e habilitou o timer mensal e validou uma execução inicial supervisionada. O
+timer está ativo para 01/10/2026 às 03:26 UTC; evidências em
+[M0-30-VALIDATION.md](M0-30-VALIDATION.md).
 O avanço ocorre por determinação
-do proprietário (D019), preservando operação integral, restauração, alertas,
+do proprietário (D019), preservando recuperação integral/failover, alertas,
 monitor e release como pendências. STK-M0-16 foi
 integrada pela [PR #33](https://github.com/RhianB14/stakeframe/pull/33), com
 cinco checks aprovados na `main` `f5e6a59`. STK-M0-15 foi
