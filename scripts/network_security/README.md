@@ -374,11 +374,14 @@ no-op/applied, e `rollback()`/`apply_on_boot()` recusam com delta, referência o
 políticas divergentes sem sobrescrever o journal. O registro terminal tem slot
 próprio (`terminal.json` + sidecar) e a finalização nunca sobrescreve a última
 prova válida antes de a nova estar íntegra; um JSON íntegro com sidecar stale é
-prova somente-leitura de reconciliação.
+prova somente-leitura de reconciliação. A reaplicação faz handoff durável:
+recibo completado como `rolled_back`/`clean` antes de remover os registros
+superados — nenhuma falha deixa o firewall limpo com o recibo `applied` stale
+como única prova.
 Referências jump/goto à chain própria são inventariadas em todas as chains e
 qualquer desvio é recusado antes de mutar; o rollback exige `INPUT`/`FORWARD` em
 `DROP` e identidade completa do recibo (`policy_sha256` incluído). Journal e
 recibo passam por validação estrutural (incluindo coerência `phase`/`state`)
 antes de serem usados como prova. A unit não usa `ConditionPathExists`:
-controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 127 testes; suíte
-completa: 257 testes, sem skips em Linux.
+controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 130 testes; suíte
+completa: 260 testes, sem skips em Linux.
