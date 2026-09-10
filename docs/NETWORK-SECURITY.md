@@ -578,3 +578,16 @@ sem estado parcial, com a falha visível no journal
 O delta atual continua não persistente, e a instalação, a ativação e qualquer
 reboot exigem autorização posterior do Codex. VPS, reboot e recuperação real não
 foram testados ([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
+
+Recuperação após o commit: todas as etapas posteriores à transação (readback,
+journal de aquisição, recibo, sidecar, `fsync`, `os.replace`) estão no caminho de
+recuperação; o recibo é o marcador final de sucesso. Falha pós-aquisição com o
+estado próprio comprovado ⇒ rollback automático só do delta próprio; deriva ou
+perda de prova ⇒ `rollback_required` sem sobrescrever nada; crash entre o commit e
+o recibo ⇒ rollback conservador na execução seguinte (`interrupted_rolled_back`),
+sem adoção do delta nem recibo sintetizado; controlador ausente no caminho
+instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
+Todas as referências jump/goto à `STK6_BOOT` em qualquer chain são inventariadas:
+fora de `INPUT` posição 1 com a especificação revisada, o estado é recusado antes
+de qualquer mutação; deriva de política durante o rollback também é recusada sem
+transação ([M0-33-VALIDATION.md](M0-33-VALIDATION.md) §5, §7 e §8).

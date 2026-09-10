@@ -349,3 +349,14 @@ restauração integral do ruleset, `nft flush ruleset` nem sequências de comand
 independentes. A ordenação exige `systemd-analyze verify`; detalhes e limitações em
 [docs/M0-33-VALIDATION.md](../../docs/M0-33-VALIDATION.md). O delta atual continua
 **não persistente** até a instalação autorizada.
+
+Recuperação pós-commit: falha depois do commit com o estado próprio comprovado ⇒
+rollback automático do delta próprio; deriva ⇒ `rollback_required` sem sobrescrever;
+crash entre commit e recibo ⇒ rollback conservador na execução seguinte
+(`interrupted_rolled_back`); o recibo é o marcador final de sucesso e nenhuma
+etapa falível roda depois dele. Referências jump/goto à chain própria são
+inventariadas em todas as chains e qualquer desvio é recusado antes de mutar; o
+rollback exige `INPUT`/`FORWARD` em `DROP`. Journal e recibo passam por validação
+estrutural antes de serem usados como prova. A unit não usa `ConditionPathExists`:
+controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 69 testes; suíte
+completa: 199 testes, sem skips em Linux.
