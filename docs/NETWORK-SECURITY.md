@@ -575,17 +575,33 @@ fornecido pela persistência preexistente (IPv6 `INPUT`/`FORWARD` permissivos),
 sem estado parcial, com a falha visível no journal
 (`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
 `rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
+Falha no boot **não** é fail-closed. O resultado depende do ponto exato:
+falha **antes do commit** preserva o estado da persistência preexistente (IPv6
+`INPUT`/`FORWARD` permissivos), sem estado parcial; falha **pós-commit** com o
+delta exato comprovado gera rollback automático apenas do delta próprio; **deriva
+ou readback indisponível** deixa o estado **não declarado** como restaurado
+(`rollback_required`, sem sobrescrever nada); **crash** entre o commit e o recibo
+é recuperado na execução seguinte por rollback conservador; **crash sem prova
+válida** é recusado sem mutação. Em todos os casos a falha é visível no journal
+(`SyslogIdentifier=stk6-ipv6-boot`). A persistência via unit **não modifica**
+`rules.v4`/`rules.v6`; a presença do delta nesses arquivos bloqueia a aplicação.
 O delta atual continua não persistente, e a instalação, a ativação e qualquer
 reboot exigem autorização posterior do Codex. VPS, reboot e recuperação real não
 foram testados ([M0-33-VALIDATION.md](M0-33-VALIDATION.md)).
 
 Recuperação após o commit: todas as etapas posteriores à transação (readback,
-journal de aquisição, recibo, sidecar, `fsync`, `os.replace`) estão no caminho de
-recuperação; o recibo é o marcador final de sucesso. Falha pós-aquisição com o
+recibo, sidecar, `fsync`, `os.replace`) estão no caminho de recuperação; o
+recibo é o marcador final de sucesso e o journal pré-transação nunca é
+reescrito entre o commit e o evento terminal. Falha pós-aquisição com o
 estado próprio comprovado ⇒ rollback automático só do delta próprio; deriva ou
 perda de prova ⇒ `rollback_required` sem sobrescrever nada; crash entre o commit e
 o recibo ⇒ rollback conservador na execução seguinte (`interrupted_rolled_back`),
-sem adoção do delta nem recibo sintetizado; controlador ausente no caminho
+sem adoção do delta nem recibo sintetizado; recibo ilegível (truncado, sem
+sidecar, sidecar divergente, JSON não-objeto) nunca é sucesso e nunca bloqueia a
+recuperação por journal; recibo coerente exige `phase`/`state` consistentes e
+`policy_sha256` atual antes de qualquer rollback; após um rollback comprovado o
+recibo antigo é descartado duravelmente e `status()` prioriza o journal de
+recuperação, nunca declarando `applied` depois do rollback; controlador ausente no caminho
 instalado ⇒ unit `failed` (a unit não usa `ConditionPathExists`), nunca skip.
 Todas as referências jump/goto à `STK6_BOOT` em qualquer chain são inventariadas:
 fora de `INPUT` posição 1 com a especificação revisada, o estado é recusado antes

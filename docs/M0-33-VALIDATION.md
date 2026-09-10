@@ -88,24 +88,28 @@ silenciosamente ignorada.
 
 ## 5. Comportamento de falha no boot
 
-**Não** é fail-closed e não é declarado como tal. Quatro situações distintas:
+**Não** é fail-closed e não é declarado como tal. O estado final depende do
+ponto exato da falha:
 
-| Situação                                                      | Comportamento                                                                                                                                                                                               |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Falha **antes** do commit do firewall                         | transação atômica não altera nada; o host permanece no estado da persistência preexistente; journal registra `failed`; falha visível                                                                        |
-| Falha **pós-aquisição** com o estado próprio ainda comprovado | rollback automático **apenas** do delta próprio e restauração das políticas anteriores comprovadas; recibo `applied` é descartado; falha visível                                                            |
-| **Deriva externa** ou perda de prova                          | nada é sobrescrito: journal registra `rollback_required` e a execução falha de forma visível                                                                                                                |
-| **Crash** entre o commit e o recibo                           | nova execução no mesmo boot usa o journal (`applying`/`acquired`) correspondente para fazer rollback conservador e registrar `interrupted_rolled_back`; nunca adota o delta nem sintetiza recibo de sucesso |
+| Ponto de falha                                      | Estado final declarado                                                                                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Antes do commit do firewall                         | estado preexistente **preservado** (persistência `rules.v6` anterior); journal `failed`                                                            |
+| Pós-commit com delta próprio **exato e comprovado** | rollback automático **apenas** do delta próprio; políticas anteriores restauradas; journal `failed_rolled_back` ou `interrupted_rolled_back`       |
+| Deriva do delta ou readback **indisponível**        | estado final **não declarado** como restaurado; nada sobrescrito; journal `rollback_required` com `state=unknown`; intervenção necessária          |
+| Crash após o commit com **journal válido**          | rollback conservador na execução seguinte (`interrupted_rolled_back`); execução termina em falha visível; nunca adota o delta nem sintetiza recibo |
+| Crash após o commit **sem prova válida**            | recusa sem mutação; estado **não declarado** como limpo                                                                                            |
 
-Se a unit falhar, o boot continua; o host fica no estado fornecido pela
-persistência preexistente (`netfilter-persistent` → `rules.v6`), tipicamente
-IPv6 `INPUT`/`FORWARD` permissivos, **sem estado parcial**, com a falha visível
-no `systemctl status` e no journal (`SyslogIdentifier=stk6-ipv6-boot`).
-`Restart=no` evita repetição cega.
+Uma falha **antes** do commit preserva o estado fornecido pela persistência
+preexistente (`netfilter-persistent` → `rules.v6`), tipicamente IPv6
+`INPUT`/`FORWARD` permissivos, **sem estado parcial**. Uma falha **após** o
+commit pode deixar o delta ativo quando a prova se perde (`rollback_required`);
+nesse caso o host **não** está no estado preexistente, o estado não é declarado
+restaurado e a falha é visível no journal
+(`SyslogIdentifier=stk6-ipv6-boot`). `Restart=no` evita repetição cega.
 
-Como a persistência via unit **não modifica `rules.v4`/`rules.v6`**, um boot que
-falhe deixa o IPv6 como o host já subia antes da STK-M0-33 — o delta deixa de
-existir, não vira estado parcial.
+Como a persistência via unit **não modifica `rules.v4`/`rules.v6`**, um boot
+que falhe **antes do commit** deixa o IPv6 como o host já subia antes da
+STK-M0-33 — o delta deixa de existir, não vira estado parcial.
 
 ## 6. Interface do controlador
 
@@ -116,7 +120,7 @@ padrão, adaptador Linux injetável).
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `plan`                                   | somente leitura; contrato offline em JSON sanitizado; não cria diretório, não escreve, não acessa a rede |
 | `apply-on-boot --execute-reviewed-linux` | aplicação real usada pela unit; transação atômica única                                                  |
-| `status`                                 | somente leitura; recibo durável                                                                          |
+| `status`                                 | somente leitura; recibo durável e/ou journal de recuperação                                              |
 | `rollback --execute-reviewed-linux`      | remove exclusivamente o delta adquirido e restaura as políticas anteriores comprovadas                   |
 
 Contratos implementados: lock global exclusivo; caminhos e executáveis
@@ -129,25 +133,28 @@ sem host, endereço ou ruleset integral.
 
 ## 7. Máquina de estados e invariantes
 
-| Situação                                                                                       | Resultado                          |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Estado limpo esperado                                                                          | aplica atomicamente                |
-| Já exatamente aplicado, com recibo `applied` do próprio boot                                   | no-op                              |
-| Chain `STK6_*` desconhecida                                                                    | recusa (nunca adota)               |
-| Chain própria parcial ou com conteúdo divergente                                               | recusa                             |
-| Salto ausente, duplicado ou em posição inválida                                                | recusa                             |
-| Referência adicional por `-j`/`-g`, com outro comentário, em `FORWARD` ou em chain estrangeira | recusa antes de mutar              |
-| Política divergente/inesperada                                                                 | recusa                             |
-| Deriva de política **durante o rollback**                                                      | recusa antes de qualquer transação |
-| Recibo de outro boot, hash divergente ou adulterado                                            | recusa                             |
-| Journal ausente, adulterado, de outro boot ou com hash divergente, com o delta presente        | recusa sem mutação                 |
-| Lock ocupado ou diretório de estado inseguro                                                   | recusa                             |
-| Backend/ferramenta incompatível                                                                | recusa                             |
-| Delta já presente em `rules.v4`/`rules.v6`                                                     | recusa                             |
-| Falha antes do commit                                                                          | nenhuma alteração                  |
-| Falha após aquisição comprovada                                                                | rollback apenas do delta próprio   |
-| Rollback repetido após sucesso                                                                 | no-op comprovado                   |
-| Regras estrangeiras                                                                            | nunca removidas nem reordenadas    |
+| Situação                                                                                                            | Resultado                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Estado limpo esperado                                                                                               | aplica atomicamente                                                                                                |
+| Já exatamente aplicado, com recibo `applied`/`applied` do próprio boot                                              | no-op                                                                                                              |
+| Chain `STK6_*` desconhecida                                                                                         | recusa (nunca adota)                                                                                               |
+| Chain própria parcial ou com conteúdo divergente                                                                    | recusa                                                                                                             |
+| Salto ausente, duplicado ou em posição inválida                                                                     | recusa                                                                                                             |
+| Referência adicional por `-j`/`-g`, outro comentário, `FORWARD` ou chain estrangeira                                | recusa antes de mutar                                                                                              |
+| Política divergente/inesperada                                                                                      | recusa                                                                                                             |
+| Deriva de política **durante o rollback**                                                                           | recusa antes de qualquer transação                                                                                 |
+| Recibo de outro boot, hash divergente (controlador ou política), `phase`/`state` contraditórios, ou `state` ausente | recusa                                                                                                             |
+| Recibo ausente, truncado, sem sidecar, com sidecar divergente ou JSON não-objeto                                    | nunca é sucesso; com journal `applying`/`acquired` válido ⇒ rollback conservador; sem journal ⇒ recusa sem mutação |
+| Journal ausente, adulterado, de outro boot ou com hash divergente, com o delta presente                             | recusa sem mutação                                                                                                 |
+| Escrita do journal ou do recibo **entre o commit e o recibo**                                                       | dentro do caminho de recuperação; recibo é o último marcador                                                       |
+| Lock ocupado ou diretório de estado inseguro                                                                        | recusa                                                                                                             |
+| Backend/ferramenta incompatível                                                                                     | recusa                                                                                                             |
+| Delta já presente em `rules.v4`/`rules.v6`                                                                          | recusa                                                                                                             |
+| Falha antes do commit                                                                                               | nenhuma alteração                                                                                                  |
+| Falha após aquisição comprovada                                                                                     | rollback apenas do delta próprio                                                                                   |
+| Snapshot pós-commit persistente indisponível                                                                        | `rollback_required` (sem rollback cego), estado `unknown`                                                          |
+| Rollback repetido após sucesso                                                                                      | no-op comprovado                                                                                                   |
+| Regras estrangeiras                                                                                                 | nunca removidas nem reordenadas                                                                                    |
 
 **Inventário de referências.** Todas as referências jump/goto à chain própria,
 em todas as chains da tabela `filter`, são inventariadas
@@ -157,7 +164,9 @@ salto revisado. O mesmo predicado é usado na classificação, no no-op e antes 
 rollback.
 
 **Rollback conservador.** Antes de qualquer transação de remoção, o rollback
-exige: conteúdo exato da chain própria, referência própria exata e políticas
+exige, com identidade completa do recibo (schema, versão, `boot_id`, hashes do
+controlador e da política, chain, tag, `phase`/`state`, `before_policies`):
+conteúdo exato da chain própria, referência própria exata e políticas
 `INPUT=DROP`/`FORWARD=DROP`. Qualquer deriva é recusada sem mutação.
 
 ## 8. Registros duráveis e recuperação após o commit
@@ -165,58 +174,68 @@ exige: conteúdo exato da chain própria, referência própria exata e política
 - Um journal durável é gravado **antes** da transação, identificando a
   tentativa: `schema`, `policy_version`, `boot_id`, hashes do controlador e da
   política, `chain`, `tag`, políticas anteriores e fase.
-- Todas as etapas posteriores ao commit — readback, journal de aquisição,
-  recibo, sidecar, `fsync` e `os.replace` — estão dentro do caminho de
-  recuperação.
+- O journal **nunca é reescrito entre o commit e o evento terminal** (não há
+  fase `acquired` reescrita): o par `journal.json`/`.sha256` permanece o
+  registrado antes da transação, eliminando a janela de destruição de prova por
+  crash durante uma regravação.
+- Todas as etapas posteriores ao commit — readback, recibo, sidecar, `fsync` e
+  `os.replace` — estão dentro do caminho de recuperação.
 - O **recibo terminal é o marcador final de sucesso**: nenhuma operação falível
   necessária roda depois dele.
+- Um recibo ilegível (truncado, sem sidecar, sidecar divergente, JSON
+  não-objeto) nunca é aceito como sucesso e nunca bloqueia a recuperação por
+  journal: com delta exato e journal `applying`/`acquired` válido, o journal
+  autoriza apenas o rollback conservador; sem journal, recusa sem mutação.
+- Um recibo legível deve ser **coerente**: `phase="applied"` somente com
+  `state="applied"` e `phase="rolled_back"` somente com `state="clean"`;
+  `state` é obrigatório e qualquer combinação contraditória é recusada antes de
+  mutação.
 - Falha ao gravar metadados de recuperação nunca oculta o resultado do firewall
   nem produz alegação falsa de sucesso (o journal é atualizado em regime
   _best-effort_ e a falha primária permanece visível).
-- Um recibo `applied` válido **não** sobrevive a um rollback executado por falha
-  de persistência (o recibo e seu sidecar são descartados).
-- Journal e recibo passam por **validação estrutural explícita** (objeto JSON,
-  schema, versão, identidade, chain/tag, fase e políticas anteriores) antes de
-  qualquer campo ser usado como prova de propriedade.
+- Após um rollback comprovado, o recibo antigo é **descartado e removido
+  duravelmente** (com `fsync` do diretório quando aplicável); um recibo
+  `applied` válido não sobrevive ao rollback. `status()` prioriza o journal de
+  recuperação (`failed_rolled_back`, `rollback_required`,
+  `interrupted_rolled_back`, `rolled_back_unrecorded`, `rolled_back`) sobre
+  qualquer recibo antigo: o sistema nunca declara `applied` depois de ter
+  comprovado o rollback.
+- O snapshot pós-commit é adquirido dentro do próprio caminho de recuperação:
+  se o estado ativo não puder ser provado, não há rollback cego — registra-se
+  `rollback_required` (`state=unknown`) e a falha permanece visível.
 
 ## 9. Testes e evidências
 
-- `scripts/network_security/test_ipv6_persistence.py`: **69 testes**, com
+- `scripts/network_security/test_ipv6_persistence.py`: **90 testes**, com
   backend falso determinístico que reproduz a semântica atômica validada.
-- Suíte completa de `network_security`: **199 testes**, `OK` (0 skips em Linux;
-  5 skips no Windows, por semântica POSIX de symlink/permissão e ausência do
-  `systemd-analyze`).
-- **Injeções de falha comprovadamente após o commit**, cada uma separada:
-  gravação de `receipt.json`; gravação do sidecar; `fsync`; `os.replace`;
-  gravação do journal de aquisição. Em todas, o delta próprio é removido, as
-  políticas anteriores são restauradas, nenhum recibo `applied` permanece e o
-  journal termina em `failed_rolled_back`.
-- **Deriva externa** após o commit (regra estrangeira adicionada à chain
-  própria): recusa com `rollback_required`, sem sobrescrever nada.
-- **Crash entre o commit e o recibo**, coberto por reinício com journal
-  `applying` e com journal `acquired`: rollback conservador, journal em
-  `interrupted_rolled_back`, sem recibo, e uma execução seguinte sobre o estado
-  limpo aplica novamente com segurança.
-- **Delta aplicado sem journal de recuperação correspondente**, journal de outro
-  boot, journal com hash divergente, journal adulterado e journal em fase
-  terminal: recusa sem mutação, com snapshot completo comparado antes/depois.
-- **Registros inválidos**: JSON que não é objeto, `schema`/`policy_version`
-  divergentes, identidade inválida, `boot_id` vazio, hashes malformados,
-  `chain`/`tag` de outro recurso, fase inválida para o tipo de registro e
-  sidecar ausente.
-- **Deriva de política no rollback**: testes independentes para `INPUT` e
-  `FORWARD`, cada um provando que o snapshot inteiro permanece idêntico após a
-  recusa.
-- **Referências estrangeiras**: comentário/tag estranho em `INPUT`, segunda
-  referência em `INPUT`, referência em `FORWARD`, referência em
-  `DOCKER-FORWARD`, referência por `-g` e referência residual sem a chain —
-  todos recusados em apply e em rollback, sem mutação.
+- Suíte completa de `network_security`: **220 testes**, `OK` (0 skips em Linux;
+  6 skips no Windows, por semântica POSIX de symlink/permissão, `fsync` de
+  diretório e ausência do `systemd-analyze`).
+- **Janelas de crash da escrita do recibo** (cada uma com teste dedicado):
+  depois do replace de `receipt.json` e antes do sidecar; depois do replace do
+  sidecar (no-op durável); sidecar ausente; sidecar antigo/divergente; recibo
+  JSON não-objeto — todas com journal válido ⇒ rollback conservador
+  (`interrupted_rolled_back`), e sem journal ⇒ recusa sem mutação com snapshot
+  integral comparado antes/depois.
+- **Coerência de recibo**: `state` ausente e combinações
+  `phase`/`state` contraditórias recusadas; combinação válida aceita.
+- **Rollback com `policy_sha256` divergente**: recusa antes de mutação, com
+  sidecar recalculado e snapshot integral idêntico após a recusa.
+- **Snapshot pós-commit**: falha persistente ⇒ `rollback_required` com
+  `state=unknown`, sem rollback cego e sem overwrite; falha transitória ⇒
+  rollback normal (`failed_rolled_back`).
+- **Falhas terminais do rollback** (JSON, sidecar, `fsync` de arquivo,
+  `fsync` de diretório, `replace`, remoção do recibo): o firewall já está
+  rollbacked, `status()` nunca declara `applied` (prioriza o journal
+  `rolled_back_unrecorded`/`rolled_back` com `state=clean`), e a execução
+  seguinte consolida o estado.
 - **Container descartável (Ubuntu 24.04, `ip6tables v1.8.10 (nf_tables)`)**:
-  controlador real executando `apply-on-boot` → `no-op` → `rollback` → `no-op`,
-  depois um **E2E de recuperação após commit sem recibo** (delta removido,
+  E2E real com `apply-on-boot` → `no-op` → `rollback` → `no-op` (com
+  `DOCKER-FORWARD`/`f2b-sshd`, regra estrangeira em `INPUT` e regra em `OUTPUT`
+  preservadas); **E2E de crash durante a escrita do recibo** (delta removido,
   políticas restauradas, journal `interrupted_rolled_back`, recibo ausente,
-  reaplicação segura e rollback final), com `DOCKER-FORWARD`/`f2b-sshd`,
-  regra estrangeira em `INPUT` e regra em `OUTPUT` preservadas e arquivos de
+  reaplicação segura); **E2E de snapshot indisponível após o commit**
+  (`rollback_required`, delta não sobrescrito, `state=unknown`); arquivos de
   persistência byte-idênticos antes/depois.
 - **Unit**: `systemd-analyze verify` rc 0; ausência de `ConditionPathExists`;
   controlador ausente ⇒ `ExecStart` falha com código não-zero.
@@ -228,7 +247,7 @@ exige: conteúdo exato da chain própria, referência própria exata e política
 Procedimento previsto, **dependente de autorização posterior do Codex**:
 
 1. instalar `ipv6_persistence.py` e a unit por staging + conferência de hashes
-   (`9fc87d3ddb17fd008dd27fab803ee64efe7217523abf04c16ce2211b7f2c70f3` para o
+   (`789422da18e96c90a8840f2a182b1f0a49ee905a0d5de544d83259a88b020b10` para o
    controlador; `bb448b8cd42b2654baee89892b28382907db0a92de6b8bafb3b89d6fbc45febd`
    para a unit);
 2. manter backup privado dos artefatos substituídos;
@@ -256,5 +275,7 @@ Procedimento previsto, **dependente de autorização posterior do Codex**:
 - Instalação, ativação e reboot exigem **autorização posterior**.
 - A persistência via unit **não modifica `rules.v4`/`rules.v6`**; a ausência do
   delta nesses arquivos é verificada em leitura e bloqueia a aplicação.
-- A falha da unit pode deixar o host no estado fornecido pela persistência
-  preexistente (IPv6 `INPUT`/`FORWARD` permissivos), sem estado parcial.
+- A falha da unit antes do commit preserva o estado fornecido pela persistência
+  preexistente (IPv6 `INPUT`/`FORWARD` permissivos), sem estado parcial; uma
+  falha após o commit com deriva ou perda de prova deixa o estado **não
+  declarado** como restaurado (`rollback_required`), exigindo intervenção.

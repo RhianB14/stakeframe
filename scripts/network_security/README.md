@@ -351,12 +351,17 @@ independentes. A ordenação exige `systemd-analyze verify`; detalhes e limitaç
 **não persistente** até a instalação autorizada.
 
 Recuperação pós-commit: falha depois do commit com o estado próprio comprovado ⇒
-rollback automático do delta próprio; deriva ⇒ `rollback_required` sem sobrescrever;
-crash entre commit e recibo ⇒ rollback conservador na execução seguinte
-(`interrupted_rolled_back`); o recibo é o marcador final de sucesso e nenhuma
-etapa falível roda depois dele. Referências jump/goto à chain própria são
-inventariadas em todas as chains e qualquer desvio é recusado antes de mutar; o
-rollback exige `INPUT`/`FORWARD` em `DROP`. Journal e recibo passam por validação
-estrutural antes de serem usados como prova. A unit não usa `ConditionPathExists`:
-controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 69 testes; suíte
-completa: 199 testes, sem skips em Linux.
+rollback automático do delta próprio; deriva ou readback indisponível ⇒
+`rollback_required` sem sobrescrever (estado `unknown`); crash entre commit e
+recibo ⇒ rollback conservador na execução seguinte (`interrupted_rolled_back`);
+recibo ilegível nunca bloqueia a recuperação por journal nem é sucesso; o
+recibo é o marcador final de sucesso e o journal pré-transação nunca é
+reescrito entre o commit e o evento terminal. Após um rollback comprovado o
+recibo antigo é descartado duravelmente e `status()` nunca declara `applied`.
+Referências jump/goto à chain própria são inventariadas em todas as chains e
+qualquer desvio é recusado antes de mutar; o rollback exige `INPUT`/`FORWARD` em
+`DROP` e identidade completa do recibo (`policy_sha256` incluído). Journal e
+recibo passam por validação estrutural (incluindo coerência `phase`/`state`)
+antes de serem usados como prova. A unit não usa `ConditionPathExists`:
+controlador ausente ⇒ unit `failed`, não skip. Suíte do módulo: 90 testes; suíte
+completa: 220 testes, sem skips em Linux.
