@@ -99,7 +99,18 @@ falha localmente; a CI executa em checkout LF e passa. Os três arquivos
 modificados foram validados no Prettier em forma LF (idêntica à indexada pelo
 git), conforme prática já registrada no repositório.
 
-## Escopo e garantias
+## Rodadas de correção pós-primeiro push
+
+A primeira rodada (head `a03e23a…`) falhou na CI: `format-check` (Prettier do
+repo, `printWidth 100`, acusou o arquivo de testes — a validação local havia
+usado o Prettier de outro diretório, sem o `.prettierrc.json` do repo) e
+`application-check`/`application-arm64-check` (o teste POSIX-only
+`refuses an insecure runtime root mode` quebrou porque o spread de um `Stats`
+real descarta os métodos de protótipo `isDirectory`/`isSymbolicLink` — o teste
+é pulado no Windows, o que mascarou a regressão localmente). O commit
+`5e534963…` restaura a delegação explícita no `Stats` real (uid/gid bigint) e
+aplica a formatação do repo. Mesma tarefa, correção documentada — sem reescrita
+de histórico.
 
 - **Nenhuma operação em produção:** sem deploy Cloudflare, sem instalação ou
   leitura de segredos, sem mensagens Telegram, sem operação na VPS, sem
