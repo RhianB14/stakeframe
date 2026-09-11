@@ -36,19 +36,29 @@ consumir a janela de observação de 40 minutos.
 
 ## Configuração publicada × execução observada
 
-- Nesta tentativa, **nenhuma das duas pôde ser verificada**: sem sessão
-  autenticada, "não publicado" e "publicado e não executando" são
-  indistinguíveis desta máquina.
-- A última configuração publicada **conhecida** permanece a registrada no
-  preflight M0-35: nenhum recurso Cloudflare criado naquele momento (gate 7
-  BLOQUEADO pela mesma ausência de credencial). O resultado de uma eventual
-  janela de ativação executada fora desta máquina não é observável daqui.
+Separação explícita entre o registro externo (M0-37) e o que esta tentativa
+conseguiu verificar:
+
+- **Nesta tentativa M0-38, a sessão local estava sem autenticação Cloudflare:**
+  deployment ativo, versão, cron `*/5 * * * *` do recurso, binding Durable
+  Object, `MONITOR_ENABLED` da versão ativa, nomes/tipos dos quatro segredos,
+  `/status` autenticado e janelas do cron **não foram verificáveis** desta
+  máquina.
+- **A ativação M0-37 foi executada anteriormente, fora desta sessão**, e já
+  registrou (relatório privado do M0-37): Worker habilitado, cron
+  `*/5 * * * *`, binding Durable Object, quatro segredos instalados e
+  `MONITOR_ENABLED=true`. **Essa evidência não foi revalidada pelo Hermes
+  nesta tentativa.**
+- **O fato comprovado pelo M0-38 é somente o bloqueio local no gate de
+  autenticação** — não a ausência do Worker nem a ausência de execução.
 - Nenhuma inferência por DNS, domínio ou disponibilidade pública: a rota
   pública da aplicação em `stakeframe.com.br` não é o `/status` do Worker
   (M0-35 §7), e ausência de resposta pública não comprova ausência de recurso.
 - Probe workers.dev sem autenticação: não executado — o subdomínio não é
   verificável sem sessão, e o resultado seria indistinguível entre "Worker
   inexistente" e "Worker existente recusando sem bearer".
+- **Limitação preservada:** a primeira execução do cron continua **não
+  observada** e o monitor permanece **não validado**.
 
 ## Garantias desta tentativa
 
@@ -69,10 +79,10 @@ consumir a janela de observação de 40 minutos.
    com permissão mínima de leitura.
 2. Bearer do `/status` por procedimento privado (memória de sessão; nunca em
    log, arquivo do repositório ou Git).
-3. Confirmar o estado da janela de ativação (deploy inerte → 4 segredos →
-   enable). Sem credencial, não é possível afirmar se o monitor chegou a ser
-   publicado; a retomada deve repetir o gate de autenticação antes de qualquer
-   observação.
+3. Revalidar, com leitura autenticada, o estado já registrado pela ativação
+   M0-37 (Worker habilitado, cron, binding, quatro segredos,
+   `MONITOR_ENABLED=true`); a retomada deve repetir o gate de autenticação
+   antes de qualquer observação.
 
 ## Limitações deste registro
 

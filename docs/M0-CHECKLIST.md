@@ -472,8 +472,8 @@ ou janela de rede; cada item exige a evidência descrita.
       07/09/2026, 36 ciclos verificados, retenção ativa e estado `ready`
       ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
 - [ ] Alerta de atraso de backup ativo — **pendente**; preflight do monitor
-      externo concluído na STK-M0-35 (deploy e ativação dependem de janela
-      autorizada).
+      externo concluído na STK-M0-35 e ativação executada na M0-37 (validação
+      do alerta ainda pendente).
 - [ ] Teste de restauração demonstrado com dados de produção e RPO 1h / RTO 4h
       medidos.
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
@@ -487,10 +487,12 @@ ou janela de rede; cada item exige a evidência descrita.
       [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Não ativa backups reais.
 - [ ] Monitoramento externo de disponibilidade e alertas deduplicados —
       **pendente**; Worker e testes prontos e pré-checados na STK-M0-35
-      ([M0-35-MONITOR-PREFLIGHT.md](M0-35-MONITOR-PREFLIGHT.md)), aguardando
-      janela autorizada para deploy, segredos e ativação. Primeira tentativa
-      de execução (STK-M0-38) bloqueada no gate de autenticação Cloudflare —
-      nenhuma janela do cron observada
+      ([M0-35-MONITOR-PREFLIGHT.md](M0-35-MONITOR-PREFLIGHT.md)) e ativação
+      executada na M0-37 — Worker habilitado, cron `*/5 * * * *`, binding
+      Durable Object, quatro segredos instalados, `MONITOR_ENABLED=true`
+      (registro privado do M0-37). Primeira observação do cron bloqueada na
+      M0-38 por falta de sessão Cloudflare local; alerta/recuperação e
+      validação operacional continuam pendentes
       ([M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md)).
 - [x] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12 e
