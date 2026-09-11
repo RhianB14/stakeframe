@@ -406,8 +406,10 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] STK-M0-14: projeto e cliente web de produção separados, callback HTTPS
       cadastrado, três escopos básicos e credenciais privadas fora do Git,
       após autorização específica. [M0-14-VALIDATION.md](M0-14-VALIDATION.md).
-- [ ] Validar login Google real de produção após implantação autorizada;
-      configuração do cliente não comprova o fluxo em HTTPS público.
+- [x] Login Google real de produção validado na STK-M0-39: origem e callback
+      HTTPS exatos, Google oficial, `state` e PKCE, identidade autorizada,
+      sessão após recarga, logout e recusa após recarga/navegação anterior
+      ([M0-39-PRODUCTION-OAUTH-VALIDATION.md](M0-39-PRODUCTION-OAUTH-VALIDATION.md)).
 - [x] STK-M0-15: bot Telegram criado, grupos bloqueados, token privado,
       associação do chat/usuário por desafio e resposta de teste ao proprietário.
       [TELEGRAM.md](TELEGRAM.md) e [M0-15-VALIDATION.md](M0-15-VALIDATION.md).

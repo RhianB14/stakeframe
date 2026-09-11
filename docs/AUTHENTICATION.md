@@ -7,8 +7,10 @@ A configuração padrão mantém `AUTH_ENABLED=false`: login e `/api/v1/me`
 respondem 503, sem conceder acesso. Em 2026-09-06, após autorização específica
 do proprietário, o Google Cloud foi configurado e o login real foi ativado e
 validado no ambiente local. A STK-M0-14 preparou projeto e cliente separados
-para produção, com credenciais privadas; implantação e login real de produção
-continuam pendentes. [M0-14-VALIDATION.md](M0-14-VALIDATION.md).
+para produção, com credenciais privadas; a implantação ocorreu no piloto
+M0-24 e o fluxo Google real de produção foi validado na STK-M0-39.
+[M0-14-VALIDATION.md](M0-14-VALIDATION.md) e
+[M0-39-PRODUCTION-OAUTH-VALIDATION.md](M0-39-PRODUCTION-OAUTH-VALIDATION.md).
 
 ## Política de acesso
 
@@ -113,8 +115,8 @@ A STK-M0-12 acrescenta a configuração de produção com origem HTTPS obrigató
 segredos por arquivo e migração explícita em perfil separado. O Compose de
 produção não aplica migrações no startup normal. Consulte
 [PRODUCTION-CONFIGURATION.md](PRODUCTION-CONFIGURATION.md). O callback Google
-de produção foi cadastrado na STK-M0-14; a implantação e o login real nesse
-callback continuam pendentes.
+de produção foi cadastrado na STK-M0-14, implantado no piloto M0-24 e validado
+com o login real do proprietário na STK-M0-39.
 
 ## Evidência e limites
 
