@@ -501,9 +501,13 @@ ou janela de rede; cada item exige a evidência descrita.
       executada na M0-37 — Worker habilitado, cron `*/5 * * * *`, binding
       Durable Object, quatro segredos instalados, `MONITOR_ENABLED=true`
       (registro privado do M0-37). Primeira observação do cron bloqueada na
-      M0-38 por falta de sessão Cloudflare local; alerta/recuperação e
-      validação operacional continuam pendentes
-      ([M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md)).
+      M0-38 por falta de sessão Cloudflare local. Retomada na STK-M0-42
+      **revalidou toda a configuração por leitura autenticada**, mas a
+      observação de execuções seguiu bloqueada (estação de trabalho
+      bloqueada) — classificação **PARCIAL**; alerta/recuperação e validação
+      operacional continuam pendentes
+      ([M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
+      [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md)).
 - [x] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12 e
       exercitados no piloto M0-24; a reversão real ainda não foi executada).

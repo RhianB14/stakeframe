@@ -90,3 +90,21 @@ conseguiu verificar:
   refutada: apenas registra que a verificação ficou bloqueada antes de
   qualquer observação.
 - Nenhuma evidência anterior foi removida ou reinterpretada.
+
+## Retomada — STK-M0-42 (2026-09-11)
+
+- A retomada autorizada usou a **sessão Cloudflare autenticada do navegador
+  do proprietário** (somente leitura) e **revalidou a implantação** que este
+  registro não pôde verificar: conta correta; Worker `stakeframe-monitor`;
+  versão ativa `026b0662…` (100%, 13:48:24Z); cron `*/5 * * * *` (criado
+  13:58:51Z); binding Durable Object `STAKEFRAME_MONITOR`/classe
+  `StakeframeMonitor` (SQLite); `MONITOR_ENABLED=true`; `APP_ORIGIN`
+  esperado; quatro segredos por nome/tipo (nenhum valor lido).
+- **A observação das janelas do cron permaneceu não realizada**: a estação
+  de trabalho estava **bloqueada** durante toda a janela de tentativa
+  (≈18:38Z–19:00Z), impedindo a hidratação da aplicação do painel e os POSTs
+  autenticados de métricas/observabilidade; `/status` seguiu sem bearer
+  disponível.
+- O bloqueio original deste registro é **preservado sem reescrita**. Gates,
+  classificação e limitações da retomada estão em
+  [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md).
