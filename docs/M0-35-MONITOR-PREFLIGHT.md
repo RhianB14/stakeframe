@@ -10,15 +10,21 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
 - Testes: `tests/operations/monitor.test.mjs` (4 pass), dry-run do Wrangler OK.
   `pnpm operations:test` concluiu **37 pass / 0 fail** (rodadas 3–5), **após duas
   falhas locais transitórias** em `tests/operations/restore-runtime-root.test.mjs`
-  ("Missing expected rejection", testes 21 e 25 — identidade de inode NTFS): o
-  arquivo isolado passou 27/27 no estado base e com o diff, nenhum teste referencia
-  os documentos alterados (diff documental), e as rodadas subsequentes passaram
-  3× consecutivas. As falhas foram **flaky de ambiente** (Windows NTFS/Node 22,
-  local v22.23.2 — fluxo de identidade de inode sob concorrência), não causadas
-  pelas alterações; a **CI** (runtime fixado) passou 5/5. Investigação registrada
-  separadamente na issue [#97](https://github.com/RhianB14/stakeframe/issues/97)
-  (com nomes exatos dos testes, ambiente, sintoma sanitizado e repetições); o
-  teste **não é alterado** nesta PR documental.
+  ("Missing expected rejection", testes 21 e 25): o arquivo isolado passou 27/27 no
+  estado base e com o diff, nenhum teste referencia os documentos alterados (diff
+  documental), e as rodadas subsequentes passaram 3× consecutivas. A **causa não
+  está confirmada** — **hipótese principal: perda de precisão numérica em file ID
+  NTFS** (file IDs podem exceder `Number.MAX_SAFE_INTEGER`; nesse caso
+  `ino + 1 === ino` pode ser verdadeiro por imprecisão de float64, e a asserção
+  aceitaria a identidade que deveria ser divergente — os testes capturam `real.ino`
+  e passam `real.ino + 1` para o mesmo diretório); **hipótese secundária (sem
+  evidência coletada): concorrência/reutilização de inode** (Windows NTFS/Node 22,
+  local v22.23.2). Instrumentação para a investigação (na **issue
+  [#97](https://github.com/RhianB14/stakeframe/issues/97)** — teste **não alterado**
+  nesta PR): `Number.isSafeInteger(info.ino)`, `info.ino + 1 === info.ino`,
+  comparação com `lstat(path, { bigint: true })`, uso da identidade de outro objeto
+  real no lugar de `ino + 1` e, se file IDs inseguros forem confirmados, avaliar
+  `bigint` no código de produção. A **CI** (runtime fixado) passou 5/5.
 - Probes HTTPS sem autenticação: `https://stakeframe.com.br/status` → HTTP 200, que é **HTML público da aplicação** — **não é o `/status` do Worker** e não comprova sua proteção. O `/status` do monitor **não foi testado remotamente** porque o Worker ainda não existe (ver §7).
 
 ## 2. Matriz de gates
@@ -54,7 +60,11 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
 - Vars: `APP_ORIGIN`, `MONITOR_ENABLED` (atualmente `"false"`).
 - Cron: `*/5 * * * *`.
 - Segredos exigidos (apenas nomes, nunca valores): `MONITOR_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_USER_ID`, `TELEGRAM_OWNER_CHAT_ID` (deve ser igual ao user id).
-- `/status` (handler externo) **não consulta `MONITOR_ENABLED`**: exige `Authorization: Bearer <MONITOR_TOKEN>` com token de formato válido (`^[a-f0-9]{64}$`) — sem token válido/bearer correspondente → **404**. Com os segredos instalados e `MONITOR_ENABLED=false`, `/status` autenticado pode responder enquanto o cron permanece inerte; após instalar os quatro segredos, usar essa leitura autenticada para confirmar o estado inicial `unknown` antes do enable. Nenhuma rota pública permite disparar `/check`. Falha de configuração retorna cedo, sem consulta externa e sem alerta.
+- `/status` (handler externo) **não consulta `MONITOR_ENABLED`**: exige `Authorization: Bearer <MONITOR_TOKEN>` com token de formato válido (`^[a-f0-9]{64}$`) — sem token válido/bearer correspondente → **404**. Com os segredos instalados e `MONITOR_ENABLED=false`, `/status` autenticado pode responder enquanto o cron permanece inerte; após instalar os quatro segredos, usar essa leitura autenticada para confirmar o estado inicial `unknown` antes do enable. Nenhuma rota pública permite disparar `/check`. Payload exposto: **somente**
+  `lastCheckedAt`, `state` e `delivery` (worker.mjs L84-87) — a assinatura interna
+  (`application:failed`, `ready`…) **não é exposta**; `state` é derivado da assinatura
+  armazenada (`ready` → `ready`; assinatura ≠ vazio e ≠ `ready` → `attention`; vazio →
+  `unknown`). Falha de configuração retorna cedo, sem consulta externa e sem alerta.
 
 ## 5. Decisão técnica: exports vs migrations
 
@@ -90,8 +100,9 @@ em argumentos, logs gravados ou Git. **Cada `secret put` cria uma nova versão e
 a implanta imediatamente** — são **quatro mutações/deployments**, que permanecem
 inertes porque `MONITOR_ENABLED=false` (o cron retorna cedo e nenhuma mensagem
 é enviada).
-f. **Presença:** confirmar apenas a presença dos nomes (readback do provedor: nome +
-timestamp/versão).
+f. **Presença:** confirmar apenas nomes/tipos via `wrangler secret list` da versão
+ativa — sem prometer campos que o provedor não retorna (ex.: timestamps, se
+ausentes na saída).
 g. **Validação privada dos valores:** conferir formato (regexes do worker) e
 igualdade (`TELEGRAM_OWNER_CHAT_ID == TELEGRAM_OWNER_USER_ID`) por leitura
 privada, emitindo **somente PASS/FAIL**. Ler as regexes do código não valida
@@ -155,10 +166,15 @@ infra/monitor/wrangler.jsonc`.
   existindo), **mas a versão ativa passa a ter os bindings capturados naquela
   versão** — por isso o alvo deve ser a versão inerte pós-segredos, e não o
   bootstrap.
-- **Pós-rollback (obrigatório):** confirmar na versão ativa tanto
-  `MONITOR_ENABLED=false` **quanto a presença dos quatro bindings secretos**
-  (`wrangler deployments list`); probe sem auth → recusa; zero mensagens durante um
-  ciclo observado.
+- **Pós-rollback (obrigatório — cada item com a ferramenta que o comprova):**
+  1. **deployment/version ID ativo** = versão inerte pós-segredos (`wrangler
+deployments list`);
+  2. os **quatro nomes/tipos** presentes na versão ativa (`wrangler secret list`) —
+     `deployments list` sozinho **não comprova bindings secretos**;
+  3. `MONITOR_ENABLED=false` na config ativa;
+  4. probe do `/status` **sem bearer** → 404;
+  5. probe **autenticado** → estado acessível (`state` no payload);
+  6. cron inerte durante um ciclo observado (zero mensagens).
 - **Reconciliação do Git:** após o rollback remoto, abrir **PR própria** revertendo
   `MONITOR_ENABLED` (ou o ajuste necessário), com CI e revisão; o Git volta a ser a
   fonte da verdade.
@@ -189,9 +205,11 @@ teste automatizado**. Sequência com autorização específica:
 2. Aguardar **dois ciclos**: no primeiro, incidente gravado e **1 mensagem**
    (falha de verificação contra a API); no segundo, **nenhuma mensagem adicional**
    (deduplicação). O Worker atual valida a resposta de `sendMessage` mas **não
-   persiste nem expõe `result.message_id`** — a evidência de mensagem é:
-   `delivery=confirmed` no estado protegido do monitor, timestamp do ciclo,
-   assinatura do incidente e **confirmação visual do proprietário no chat**.
+   persiste nem expõe `result.message_id`**, e o `/status` **não expõe a assinatura
+   interna** — a evidência são os campos realmente disponíveis: **`state=attention`
+   durante o incidente** e **`state=ready` após a recuperação** (leitura autenticada
+   do `/status`), **`delivery=confirmed`**, **`lastCheckedAt`** e **confirmação
+   visual do proprietário no chat**.
 3. Restaurar o valor correto por **nova mutação autorizada** (`secret put`).
 4. Aguardar um ciclo: **1 mensagem** de recuperação; estado volta a "quiet while
    healthy".
@@ -219,14 +237,19 @@ A evidência privada guarda **apenas metadados e resultados — nunca valores de
 segredos** (estes permanecem somente nos locais de custódia aprovados e nos secret
 stores necessários):
 
-- Nomes dos segredos; presença, timestamps e versões retornados pelo provedor.
+- Nomes/tipos dos segredos da versão ativa conforme retornados por
+  `wrangler secret list`; **não registrar timestamps que o provedor não retorne**
+  (p.ex., se a saída for só nome/tipo). **`wrangler deployments list`** →
+  deployment/version ID ativo; **não comprova sozinho** a presença dos bindings
+  secretos — a prova de bindings é o `secret list`.
 - Identidade sanitizada da conta e do Worker; subdomínio real do Worker; IDs.
 - Version IDs e logs sanitizados; hashes dos artefatos deployados.
 - Resultados PASS/FAIL das validações da §6-g.
 - Message IDs não são prometidos: o Worker atual **não persiste nem expõe**
-  `result.message_id`; a evidência de mensagens autorizadas é `delivery=confirmed`
-  no estado protegido, timestamp/assinatura do ciclo e confirmação visual do
-  proprietário (ver §10). Sem tokens ou conteúdo privado.
+  `result.message_id`; o `/status` expõe **somente** `lastCheckedAt`, `state` e
+  `delivery` — a evidência de mensagens autorizadas são os campos reais:
+  `state=attention` → `state=ready`, `delivery=confirmed`, `lastCheckedAt` e
+  confirmação visual do proprietário (ver §10). Sem tokens ou conteúdo privado.
 - Destino: diretório privado na máquina do proprietário + `SHA256SUMS` (padrão já
   usado nas evidências da M0-33/M0-34). **Nunca** no repositório, PRs, issues ou
   comentários.
