@@ -71,9 +71,10 @@ Telegram e a operação contínua das integrações. O comando exato da janela q
 produziu essa configuração não pôde ser recuperado; **não há evidência para
 atribuir a ativação ao Hermes**. Na descoberta, o consumidor seguia ativo
 (advisory lock retido; cursor avançado com consumo de updates comprovado),
-com zero itens persistidos e nenhuma chamada de IA registrada na base;
-contenção reversível e reativação autorizada permanecem
-pendentes de decisão. Evidência, matriz e planos em
+com zero itens persistidos e nenhuma chamada de IA registrada na base. A
+contenção foi executada em 11/09/2026 (worker parado — ver M0-41); a
+reativação autorizada permanece pendente de decisão. Evidência, matriz e
+planos em
 [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
 Esta reconciliação não transforma retroativamente a ativação em ação
 previamente autorizada.

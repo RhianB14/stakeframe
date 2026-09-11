@@ -13,9 +13,11 @@ não autorizado) está no destaque abaixo. Evidência da STK-M0-15 em
 > consumidor contínuo foi encontrado **ativo** em produção — ao contrário do
 > que este documento registrava — com `TELEGRAM_ENABLED=true` desde a criação
 > do worker (07/09/2026), advisory lock retido e cursor avançado, sem
-> autorização prévia e sem validação operacional. Contenção e reativação
-> autorizada pendentes; evidência em
-> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
+> autorização prévia e sem validação operacional. Contenção executada em
+> 11/09/2026 (worker parado — ver M0-41); reativação autorizada pendente;
+> evidência em
+> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md) e
+> [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md).
 
 ## Configuração e fronteira de acesso
 

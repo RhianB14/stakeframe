@@ -58,14 +58,18 @@ fictícias: a validação falha e o worker não inicia.
 
 Os Composes padrão mantêm integrações desativadas e worker sem saída externa.
 
-> **Estado real observado em 11/09/2026 (divergente, não autorizado):** a
-> produção usa `compose.integrations.yml` junto aos composes de produção e
-> operações desde 07/09/2026, e o consumidor Telegram está **ativo**
-> (`TELEGRAM_ENABLED=true`; `AI_ENABLED=true`), sem autorização registrada e
-> sem validação operacional. A descrição de configuração padrão acima
-> permanece válida para o conjunto sem overlays; a divergência, os riscos e
-> os planos de contenção e reativação estão em
-> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
+> **Estado do consumidor Telegram (divergente):** a produção passou a usar
+> `compose.integrations.yml` junto aos composes de produção e operações em
+> 07/09/2026, e o consumidor Telegram **esteve ativo, sem autorização
+> registrada e sem validação operacional, desde 07/09/2026**
+> (`TELEGRAM_ENABLED=true`; `AI_ENABLED=true`); foi **encontrado ativo** na
+> STK-M0-40 (preflight somente leitura de 11/09/2026) e **o worker foi parado
+> pela STK-M0-41 em 11/09/2026** — a reativação continua pendente de
+> autorização separada. A descrição de configuração padrão acima permanece
+> válida para o conjunto sem overlays; a divergência, os riscos, a contenção
+> e o plano de reativação estão em
+> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md) e
+> [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md).
 > Para qualquer reativação autorizada futura: conferir backlog do lado
 > Telegram e identidade por procedimento privado (valores reais de produção);
 > R2 (bucket/credenciais); política de IA (cota/custo); e preparar a montagem
