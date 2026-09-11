@@ -127,6 +127,12 @@ identidade privada autorizada na STK-M0-15** (ver gate 5).
 
 ## 5. Plano de contenção reversível (NÃO EXECUTADO — exige autorização)
 
+**Atualização (11/09/2026, STK-M0-41):** a contenção foi **executada** — o
+contêiner `worker` foi parado às 17:43:02–03 UTC, com preflight fail-closed e
+verificações posteriores limpas (ver
+[M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md)).
+O plano abaixo é mantido como redigido originalmente (evidência histórica).
+
 Primeira opção: **parar somente o contêiner `worker`**, preservando banco,
 volumes, configuração, cursor e demais serviços.
 

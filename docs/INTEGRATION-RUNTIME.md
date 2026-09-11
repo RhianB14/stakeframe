@@ -63,9 +63,11 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > operações desde 07/09/2026, e o consumidor Telegram está **ativo**
 > (`TELEGRAM_ENABLED=true`; `AI_ENABLED=true`), sem autorização registrada e
 > sem validação operacional. A descrição de configuração padrão acima
-> permanece válida para o conjunto sem overlays; a divergência, os riscos e
-> os planos de contenção e reativação estão em
-> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
+> permanece válida para o conjunto sem overlays; a divergência, os riscos, a
+> contenção executada em 11/09/2026 (worker parado) e o plano de reativação
+> estão em
+> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md) e
+> [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md).
 > Para qualquer reativação autorizada futura: conferir backlog do lado
 > Telegram e identidade por procedimento privado (valores reais de produção);
 > R2 (bucket/credenciais); política de IA (cota/custo); e preparar a montagem

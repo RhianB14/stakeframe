@@ -421,8 +421,10 @@ ou janela de rede; cada item exige a evidência descrita.
       operacional** (worker criado em 07/09/2026 com o overlay de integrações;
       advisory lock retido; cursor avançado com consumo de updates comprovado;
       zero itens persistidos e zero chamadas de IA registradas na base até a
-      leitura). Contenção reversível e reativação autorizada pendentes
-      ([M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md)).
+      leitura). Contenção executada em 11/09/2026 (worker parado; ver M0-41);
+      reativação autorizada pendente
+      ([M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md),
+      [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md)).
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
       30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.
