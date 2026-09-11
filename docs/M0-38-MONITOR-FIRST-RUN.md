@@ -100,11 +100,14 @@ conseguiu verificar:
   13:58:51Z); binding Durable Object `STAKEFRAME_MONITOR`/classe
   `StakeframeMonitor` (SQLite); `MONITOR_ENABLED=true`; `APP_ORIGIN`
   esperado; quatro segredos por nome/tipo (nenhum valor lido).
-- **A observação das janelas do cron permaneceu não realizada**: a estação
-  de trabalho estava **bloqueada** durante toda a janela de tentativa
-  (≈18:38Z–19:00Z), impedindo a hidratação da aplicação do painel e os POSTs
-  autenticados de métricas/observabilidade; `/status` seguiu sem bearer
-  disponível.
+- **A observação das janelas do cron permaneceu não realizada** e não houve
+  evidência suficiente para determinar o cenário (disparo sem logs
+  acessíveis; não disparo; execução com erro). Contexto observado: a estação
+  de trabalho permaneceu **bloqueada** durante toda a janela de tentativa
+  (≈18:38Z–19:00Z); a aplicação dinâmica do painel foi observada em branco/
+  não hidratada; os POSTs autenticados de métricas/observabilidade não
+  puderam ser executados pelos meios disponíveis; `/status` seguiu sem
+  bearer disponível.
 - O bloqueio original deste registro é **preservado sem reescrita**. Gates,
   classificação e limitações da retomada estão em
   [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md).

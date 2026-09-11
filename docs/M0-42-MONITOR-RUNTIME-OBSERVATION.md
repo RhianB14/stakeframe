@@ -7,9 +7,11 @@ vinculada).
 
 **Resultado em uma linha:** a implantação e a configuração do monitor foram
 **revalidadas por leitura autenticada** (todos os gates de recurso
-confirmados); a **execução do cron não foi observada** porque a estação de
-trabalho do proprietário permaneceu **bloqueada** durante toda a janela de
-tentativa — classificação **PARCIAL**, com o monitor **não** declarado
+confirmados); a **execução do cron não foi observada**: a estação de trabalho
+permaneceu **bloqueada** durante toda a janela de tentativa; a aplicação
+dinâmica do painel foi observada em branco/não hidratada; os POSTs
+autenticados de métricas/observabilidade não puderam ser executados pelos
+meios disponíveis — classificação **PARCIAL**, com o monitor **não** declarado
 operacionalmente validado.
 
 ## 1. Relação com STK-M0-35, M0-37 e M0-38
@@ -31,12 +33,13 @@ operacionalmente validado.
 - As leituras usaram navegação direta a rotas internas do painel
   (`/api/v4/...`), cujo retorno é JSON textual, lido pela árvore de
   acessibilidade — nenhum valor secreto, cookie ou credencial foi lido.
-- A interação por teclado/mouse não estava disponível (estação bloqueada,
-  §6); as leituras por URL direta funcionaram por não dependerem de
-  interação.
-- Observação de execução (Cron Events / métricas / observabilidade) exigiria
-  (a) a aplicação dinâmica do painel **hidratada**, ou (b) POST autenticado
-  (GraphQL/telemetria) — ambos indisponíveis sob bloqueio (§6).
+- A interação por teclado/mouse não esteve disponível nesta sessão (a
+  estação permaneceu bloqueada — §4); as leituras por URL direta foram
+  realizadas sem interação.
+- A observação de execução (Cron Events / métricas / observabilidade) não foi
+  alcançada pelos meios disponíveis nesta sessão: a aplicação dinâmica do
+  painel foi observada em branco/não hidratada e os POSTs autenticados
+  (GraphQL/telemetria) não puderam ser executados.
 
 ## 3. Gate inicial autenticado (resultado)
 
@@ -59,27 +62,22 @@ fail-closed neste ponto.
 
 ## 4. Janelas do cron (execuções agendadas)
 
-**0 janelas obtidas.** Motivo preciso: a estação de trabalho permaneceu
-**bloqueada (tela de bloqueio do Windows)** durante toda a janela de
-tentativa (≈18:38Z–19:00Z), o que:
+**0 janelas obtidas — não houve evidência suficiente para determinar qual
+cenário ocorreu:** (a) cron disparado sem logs acessíveis; (b) cron não
+disparado; (c) execução com erro.
 
-1. impede a entrada de teclado/foreground na sessão do navegador;
-2. mantém a aplicação dinâmica do painel **sem hidratar** (a página renderiza
-   em branco — a inicialização aguarda estado visível);
-3. torna impossíveis os POSTs autenticados que o painel usa para métricas
-   (GraphQL) e eventos de observabilidade.
+Contexto observado durante a janela de tentativa (≈18:38Z–19:00Z): a estação
+de trabalho permaneceu **bloqueada (tela de bloqueio do Windows)**; a
+aplicação dinâmica do painel foi observada **em branco/não hidratada**; os
+POSTs autenticados de métricas/observabilidade **não puderam ser executados
+pelos meios disponíveis nesta sessão**. O orçamento de observação de 40
+minutos não foi consumido em espera ativa nesta janela.
 
-Diferenciação exigida pela tarefa: **não** é "cron não disparado"; **não** é
-"execução com erro". É **evidência insuficiente por bloqueio ambiental** —
-equivalente a "cron disparado sem logs disponíveis à leitura". O orçamento de
-observação de 40 minutos não foi consumido em espera ativa por inexistir canal
-de leitura durante o bloqueio.
-
-Tentativas registradas: leitura direta de rotas JSON (funcionou para
-configuração); abertura de janelas na rota do serviço e de
-observabilidade/eventos (aplicação dinâmica permaneceu em branco);
-GraphQL por GET (recusado pelo provedor: "request must be a POST"); POST por
-interação (inalcançável sem teclado).
+Leituras realizadas (registro): rotas JSON internas do painel (usadas para a
+configuração do §3); abertura de janelas da rota do serviço e de
+observabilidade/eventos (aplicação dinâmica em branco); GraphQL por GET
+(recusado pelo provedor: "request must be a POST"); POST autenticado por
+interação: não executável pelos meios disponíveis.
 
 ## 5. Estado persistido e `/status`
 
@@ -109,7 +107,7 @@ monitor.
 | ----------------------------------- | ---------------------------------------------------------- |
 | Implantação ativa                   | **COMPROVADA** (leitura autenticada)                       |
 | Cron registrado                     | **COMPROVADO** (leitura autenticada)                       |
-| Execuções agendadas observadas      | **NÃO OBSERVADAS** — bloqueio ambiental (§4)               |
+| Execuções agendadas observadas      | **NÃO OBSERVADAS** — sem evidência suficiente (§4)         |
 | Consulta da aplicação comprovada    | **NÃO COMPROVADA** — dependente da execução                |
 | Estado do Durable Object comprovado | **NÃO COMPROVADO** — sem `/status`/bearer                  |
 | Silêncio saudável comprovado        | **NÃO COMPROVADO**                                         |
@@ -123,11 +121,13 @@ da evidência.
 
 ## 8. Limitações
 
-- A estação bloqueada inviabilizou os canais de leitura de execução nesta
-  janela; uma retomada exige a estação desbloqueada (e/ou as condições de
-  desbloqueio já registradas na M0-38).
-- "0 janelas" **não** significa ausência de execução — apenas ausência de
-  leitura (distinção exigida pela tarefa).
+- Nesta janela não houve leitura de execuções do cron pelos meios
+  disponíveis; a retomada da observação permanece pendente e pode ser
+  tentada com a estação desbloqueada e/ou conforme as condições de
+  desbloqueio já registradas na M0-38.
+- "0 janelas" **não** significa ausência de execução: não houve evidência
+  suficiente para distinguir os cenários do §4 (disparo sem logs acessíveis;
+  não disparo; execução com erro).
 - O histórico do provedor não é inferível pelas rotas públicas da aplicação.
 - Sem bearer do `/status`, o estado persistido permanece desconhecido.
 
@@ -137,8 +137,10 @@ da evidência.
   rollback ou edição; nenhum trigger, binding, variável, observabilidade ou
   segredo criado/alterado; nenhum valor secreto revelado, copiado ou
   registrado.
-- **VPS/worker:** nenhuma interação; o `worker` da aplicação segue parado
-  desde a STK-M0-41 e **não** foi iniciado.
+- **VPS/worker:** nenhuma interação nesta tarefa (a VPS não foi consultada);
+  não houve operação de reativação do `worker`; o último estado comprovado
+  (STK-M0-41) era `stopped`, e o estado atual da VPS/worker **não foi
+  revalidado** nesta tarefa.
 - **Telegram/OpenRouter:** nenhuma mensagem; nenhuma chamada.
 - **Local:** as janelas de navegador abertas exclusivamente para leitura
   foram fechadas ao final da verificação; nenhum login novo, nenhum token
