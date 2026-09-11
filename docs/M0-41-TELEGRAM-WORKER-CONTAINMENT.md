@@ -134,8 +134,11 @@ Esta tarefa **não** reativa o worker.
   deve ocorrer na janela de reativação, por procedimento privado.
 - R2 (bucket/credenciais) e política de IA (cota/custo) devem ser conferidos
   na janela de reativação.
-- Não há monitoramento específico do consumidor enquanto parado; a aplicação
-  segue coberta pelo monitoramento externo.
+- Não existe monitoramento específico do consumidor parado. O Worker de
+  monitoramento externo foi ativado na STK-M0-37, mas sua execução
+  operacional, alerta e recuperação continuam **sem validação** (STK-M0-38);
+  portanto ele **não** deve ser apresentado como cobertura operacional
+  comprovada.
 
 ## 10. Confirmações
 
