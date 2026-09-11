@@ -150,7 +150,19 @@ test('refuses an insecure runtime root mode', { skip: !posix }, async (t) => {
   await assert.rejects(
     prepareRuntimeRoot({
       rootPath: root,
-      policy: (info, code) => assertRootOwnedDirectory({ ...info, uid: 0n, gid: 0n }, code),
+      // Delegate on the real Stats object: spreading it would drop the
+      // prototype methods the shape policy depends on.
+      policy: (info, code) =>
+        assertRootOwnedDirectory(
+          {
+            isDirectory: () => info.isDirectory(),
+            isSymbolicLink: () => info.isSymbolicLink(),
+            mode: info.mode,
+            uid: 0n,
+            gid: 0n,
+          },
+          code,
+        ),
     }),
     (error) => error.message === RESTORE_RUNTIME_ROOT_REFUSED,
   );
@@ -261,11 +273,13 @@ test('assertSameIdentity anchors every revalidation read to the captured object'
     assertSameIdentity({ ino: 11n, dev: 22n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
   );
   assert.throws(
-    () => assertSameIdentity({ ino: 12n, dev: 22n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    () =>
+      assertSameIdentity({ ino: 12n, dev: 22n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
   assert.throws(
-    () => assertSameIdentity({ ino: 11n, dev: 23n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    () =>
+      assertSameIdentity({ ino: 11n, dev: 23n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
 });
