@@ -189,6 +189,21 @@ desabilitada. A ativação exige deployment Cloudflare e segredos privados
 `TELEGRAM_OWNER_CHAT_ID`, conferidos com o proprietário. Não há trigger público.
 O estado privado do monitor exige o mesmo bearer e informa falhas de entrega.
 
+O Durable Object registra a trilha do cron: `fired_at` (último disparo
+recebido), `started_at` (início da execução), `completed_at`/`result`
+(conclusão ou falha) e `error` (categoria sanitizada: `configuration` ou
+`health_check` — nunca valores privados). O `/status` autenticado expõe esses
+campos de forma aditiva (`lastFiredAt`, `lastStartedAt`, `lastCompletedAt`,
+`lastResult`, `lastError`), preservando `lastCheckedAt`, `state` e `delivery`.
+Leitura: `lastFiredAt` nulo indica nenhum disparo registrado desde a migração;
+`lastFiredAt` posterior a `lastCompletedAt` indica disparo recebido sem
+conclusão (em andamento, interrompido ou bloqueado por lease ativo);
+`lastResult` `ready`/`attention` indica verificação concluída e `failed`
+indica conclusão com falha do próprio check. Para comprovar uma execução
+real, ler o `/status` com o bearer (procedimento privado aprovado) e conferir
+o avanço de `lastFiredAt`/`lastCompletedAt` entre leituras separadas por ao
+menos um ciclo de cinco minutos — sem depender dos painéis do provedor.
+
 O endpoint HTTPS `/api/v1/operations/health` exige token próprio e retorna apenas
 estados e horário. O token não autentica acesso financeiro. São monitorados banco,
 worker, backup, retenção, disco, filas, anexos, cota e orçamento de IA, quarentena
@@ -225,6 +240,9 @@ sanitizados ficam em `.cache/operations-reports`. O armazenamento remoto do
 ensaio é um adaptador fictício; não demonstra a permissão real do R2.
 
 `pnpm deployment:rehearse` valida também os overlays e as fronteiras do Compose
-de recuperação. `pnpm monitor:check` empacota o Worker em dry run. A CI executa
+de recuperação. `pnpm monitor:check` empacota o Worker em dry run. Os testes do
+monitor cobrem disparo agendado, execução saudável, falha do health check,
+entrega incerta, concorrência/lease, configuração recusada ou desabilitada,
+autenticação do `/status` e migração do estado persistido. A CI executa
 os ensaios em AMD64 e ARM64. Credenciais reais, emissão ACME, operação contínua,
 mensagem de alerta e volume representativo são gates do piloto de produção.

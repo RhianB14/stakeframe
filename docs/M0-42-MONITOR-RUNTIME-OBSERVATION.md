@@ -124,7 +124,12 @@ da evidência.
 - Nesta janela não houve leitura de execuções do cron pelos meios
   disponíveis; a retomada da observação permanece pendente e pode ser
   tentada com a estação desbloqueada e/ou conforme as condições de
-  desbloqueio já registradas na M0-38.
+  desbloqueio já registradas na M0-38. A STK-M0-43 ampliou a trilha do cron
+  no Durable Object e no `/status` autenticado (disparo, início,
+  conclusão/falha e categoria sanitizada) para permitir a prova por leitura
+  única — a classificação **PARCIAL** desta janela permanece preservada e a
+  nova observação segue pendente
+  ([M0-43](M0-43-MONITOR-CRON-OBSERVABILITY.md)).
 - "0 janelas" **não** significa ausência de execução: não houve evidência
   suficiente para distinguir os cenários do §4 (disparo sem logs acessíveis;
   não disparo; execução com erro).
