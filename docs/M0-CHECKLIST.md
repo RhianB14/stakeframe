@@ -488,7 +488,10 @@ ou janela de rede; cada item exige a evidência descrita.
 - [ ] Monitoramento externo de disponibilidade e alertas deduplicados —
       **pendente**; Worker e testes prontos e pré-checados na STK-M0-35
       ([M0-35-MONITOR-PREFLIGHT.md](M0-35-MONITOR-PREFLIGHT.md)), aguardando
-      janela autorizada para deploy, segredos e ativação.
+      janela autorizada para deploy, segredos e ativação. Primeira tentativa
+      de execução (STK-M0-38) bloqueada no gate de autenticação Cloudflare —
+      nenhuma janela do cron observada
+      ([M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md)).
 - [x] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12 e
       exercitados no piloto M0-24; a reversão real ainda não foi executada).
