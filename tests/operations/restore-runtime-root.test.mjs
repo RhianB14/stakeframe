@@ -35,6 +35,30 @@ const project = `stk-restore-${'ab'.repeat(16)}`;
 const posix = process.platform !== 'win32';
 const relaxedPolicy = (info, code) => assert.ok(info.isDirectory() && !info.isSymbolicLink(), code);
 
+// Deterministic identities above Number.MAX_SAFE_INTEGER: exactly
+// representable as bigint, yet adjacent values collapse into the same Number
+// (Number(M) === Number(M + 1)) — the precision loss behind the historical
+// flaky. Synthetic fixtures mirror the production lstat({ bigint: true })
+// shape: mode, uid and gid are bigints too.
+const M = BigInt(Number.MAX_SAFE_INTEGER);
+const MODE = 0o40700n;
+const D1 = M + 1n;
+const D2 = M + 2n;
+
+const stat = (ino = D1, dev = 2n, mode = MODE, uid = 0n, gid = 0n) => ({
+  isDirectory: () => true,
+  isSymbolicLink: () => false,
+  mode,
+  uid,
+  gid,
+  ino,
+  dev,
+});
+
+// Deterministic divergent bigint for a real captured identity: distinct by
+// construction, never produced by fragile Number arithmetic.
+const divergentOf = (ino) => (ino === D2 ? D1 : D2);
+
 async function tempBase(t) {
   const base = await mkdtemp(join(tmpdir(), 'restore-runtime-root-'));
   t.after(() => rm(base, { recursive: true, force: true }));
@@ -121,18 +145,21 @@ test('refuses an insecure runtime root mode', { skip: !posix }, async (t) => {
   await mkdir(root, { recursive: true, mode: 0o755 });
   await chmod(root, 0o755);
   // Production mode enforcement against the real filesystem; identity stays
-  // neutralized because the test cannot run as root (mode is what is under test).
+  // neutralized because the test cannot run as root (mode is what is under
+  // test). The stat from prepareRuntimeRoot is already bigint-shaped.
   await assert.rejects(
     prepareRuntimeRoot({
       rootPath: root,
+      // Delegate on the real Stats object: spreading it would drop the
+      // prototype methods the shape policy depends on.
       policy: (info, code) =>
         assertRootOwnedDirectory(
           {
             isDirectory: () => info.isDirectory(),
             isSymbolicLink: () => info.isSymbolicLink(),
             mode: info.mode,
-            uid: 0,
-            gid: 0,
+            uid: 0n,
+            gid: 0n,
           },
           code,
         ),
@@ -142,21 +169,15 @@ test('refuses an insecure runtime root mode', { skip: !posix }, async (t) => {
 });
 
 test('root:root 0700 policy rejects divergent owner, group, mode and type deterministically', () => {
-  const safe = {
-    isDirectory: () => true,
-    isSymbolicLink: () => false,
-    mode: 0o40700,
-    uid: 0,
-    gid: 0,
-  };
+  const safe = stat();
   assert.doesNotThrow(() => assertRootOwnedDirectory(safe, RESTORE_RUNTIME_ROOT_REFUSED));
   const divergent = [
-    { ...safe, uid: 1000 },
-    { ...safe, gid: 1000 },
-    { ...safe, mode: 0o40755 },
-    { ...safe, mode: 0o41700 },
-    { ...safe, isSymbolicLink: () => true },
-    { ...safe, isDirectory: () => false },
+    stat(D1, 2n, MODE, 1000n),
+    stat(D1, 2n, MODE, 0n, 1000n),
+    stat(D1, 2n, 0o40755n),
+    stat(D1, 2n, 0o41700n),
+    { ...stat(), isSymbolicLink: () => true },
+    { ...stat(), isDirectory: () => false },
   ];
   for (const info of divergent)
     assert.throws(
@@ -204,12 +225,14 @@ test('cleanup refuses a divergent identity and keeps the root', async (t) => {
   const base = await tempBase(t);
   const root = join(base, 'stakeframe-restore');
   await mkdir(root, { recursive: true, mode: 0o700 });
-  const real = await lstat(root);
+  // Divergence must come from an exact, deterministic bigint — never from
+  // ino + 1, which collapses under Number precision for large NTFS file IDs.
+  const real = await lstat(root, { bigint: true });
   await assert.rejects(
     removeRuntimeRoot({
       rootPath: root,
       createdRoot: true,
-      ino: real.ino + 1,
+      ino: divergentOf(real.ino),
       dev: real.dev,
       policy: relaxedPolicy,
     }),
@@ -237,7 +260,7 @@ test('cleanup refuses a non-empty runtime root and keeps the root', async (t) =>
 
 test('cleanup without the captured ino or dev refuses before touching the filesystem', async () => {
   const rootPath = join('restore-runtime-root-untouched', 'stakeframe-restore');
-  for (const identity of [{ dev: 2 }, { ino: 1 }, {}])
+  for (const identity of [{ dev: 2n }, { ino: 1n }, {}])
     await assert.rejects(
       removeRuntimeRoot({ rootPath, createdRoot: true, ...identity }),
       (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
@@ -245,16 +268,57 @@ test('cleanup without the captured ino or dev refuses before touching the filesy
 });
 
 test('assertSameIdentity anchors every revalidation read to the captured object', () => {
-  const identity = { ino: 11, dev: 22 };
+  const identity = { ino: 11n, dev: 22n };
   assert.doesNotThrow(() =>
-    assertSameIdentity({ ino: 11, dev: 22 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    assertSameIdentity({ ino: 11n, dev: 22n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
   );
   assert.throws(
-    () => assertSameIdentity({ ino: 12, dev: 22 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    () =>
+      assertSameIdentity({ ino: 12n, dev: 22n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
   assert.throws(
-    () => assertSameIdentity({ ino: 11, dev: 23 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    () =>
+      assertSameIdentity({ ino: 11n, dev: 23n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+});
+
+// Incompatible representations are never the same identity, even when a lossy
+// Number conversion would collide: the bigint production values reject numeric
+// fixtures instead of silently comparing across types.
+test('assertSameIdentity refuses mixed numeric and bigint representations', () => {
+  const identity = { ino: 11n, dev: 22n };
+  assert.throws(
+    () => assertSameIdentity({ ino: 11, dev: 22 }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.throws(
+    () => assertSameIdentity(identity, { ino: 11, dev: 22 }, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+});
+
+// Deterministic proof of the fixed mechanism: two distinct bigint IDs above
+// Number.MAX_SAFE_INTEGER stay distinct in the bigint production path, while
+// the same values converted to Number collapse into one — which is exactly the
+// precision loss that made the historical identity test accept a divergent
+// object on NTFS.
+test('bigint identity refuses distinct IDs above Number.MAX_SAFE_INTEGER even when Number collapses them', () => {
+  const identity = { ino: D1, dev: 22n };
+  const adjacent = { ino: D2, dev: 22n };
+  // The collapse that produced the historical flaky, proven on the Number path:
+  assert.equal(Number(D1), Number(D2));
+  assert.notEqual(D1, D2);
+  assert.doesNotThrow(() =>
+    assertSameIdentity({ ino: D1, dev: 22n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+  );
+  assert.throws(
+    () => assertSameIdentity(adjacent, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  assert.throws(
+    () => assertSameIdentity({ ino: D1, dev: 23n }, identity, RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED),
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
 });
@@ -268,7 +332,7 @@ test('assertRootStillSafe runs the production order: shape, policy, realpath, id
     calls.push('policy');
     relaxedPolicy(info, code);
   };
-  const info = await lstat(root);
+  const info = await lstat(root, { bigint: true });
   await assertRootStillSafe(
     root,
     info,
@@ -277,12 +341,13 @@ test('assertRootStillSafe runs the production order: shape, policy, realpath, id
     RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
   assert.deepEqual(calls, ['policy']);
-  // Identity anchored: a same-shape object with a different ino is refused.
+  // Identity anchored: a same-shape object with a deterministic, exactly
+  // representable divergent ino is refused.
   await assert.rejects(
     assertRootStillSafe(
       root,
       info,
-      { ino: info.ino + 1, dev: info.dev },
+      { ino: divergentOf(info.ino), dev: info.dev },
       trackingPolicy,
       RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
     ),
@@ -329,7 +394,7 @@ test('final pre-rmdir read runs the full validation and refuses late drift', asy
     (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
   );
   assert.equal(calls, 2);
-  const kept = await lstat(root);
+  const kept = await lstat(root, { bigint: true });
   assert.ok(kept.isDirectory());
   assert.equal(kept.ino, prepared.ino);
 });
@@ -337,68 +402,21 @@ test('final pre-rmdir read runs the full validation and refuses late drift', asy
 // Owner, mode, group and type drift observed on any revalidation read is
 // refused by the same helper the final read uses (synthetic stats, no race).
 for (const [label, info, policy] of [
-  [
-    'mode drift',
-    {
-      isDirectory: () => true,
-      isSymbolicLink: () => false,
-      mode: 0o40600,
-      uid: 0,
-      gid: 0,
-      ino: 1,
-      dev: 2,
-    },
-    (info, code) => assertSafeDirectoryMode(info, code),
-  ],
-  [
-    'owner drift',
-    {
-      isDirectory: () => true,
-      isSymbolicLink: () => false,
-      mode: 0o40700,
-      uid: 1000,
-      gid: 0,
-      ino: 1,
-      dev: 2,
-    },
-    assertRootOwnedDirectory,
-  ],
-  [
-    'group drift',
-    {
-      isDirectory: () => true,
-      isSymbolicLink: () => false,
-      mode: 0o40700,
-      uid: 0,
-      gid: 1000,
-      ino: 1,
-      dev: 2,
-    },
-    assertRootOwnedDirectory,
-  ],
-  [
-    'type drift',
-    {
-      isDirectory: () => false,
-      isSymbolicLink: () => false,
-      mode: 0o40700,
-      uid: 0,
-      gid: 0,
-      ino: 1,
-      dev: 2,
-    },
-    assertRootOwnedDirectory,
-  ],
+  ['mode drift', stat(D1, 2n, 0o40600n), (info, code) => assertSafeDirectoryMode(info, code)],
+  ['owner drift', stat(D1, 2n, MODE, 1000n), assertRootOwnedDirectory],
+  ['group drift', stat(D1, 2n, MODE, 0n, 1000n), assertRootOwnedDirectory],
+  ['type drift', { ...stat(), isDirectory: () => false }, assertRootOwnedDirectory],
 ]) {
   test(`revalidation refuses ${label}`, async () => {
     // A real existing path so the realpath step itself cannot be the reason:
     // the synthetic stat is what must be refused by the policy category.
+    // The identity matches, so only the policy category can refuse here.
     const existing = await realpath(tmpdir());
     await assert.rejects(
       assertRootStillSafe(
         existing,
         info,
-        { ino: 1, dev: 2 },
+        { ino: D1, dev: 2n },
         policy,
         RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
       ),
@@ -412,16 +430,8 @@ test('revalidation accepts the unchanged safe stat', async () => {
   await assert.doesNotReject(
     assertRootStillSafe(
       existing,
-      {
-        isDirectory: () => true,
-        isSymbolicLink: () => false,
-        mode: 0o40700,
-        uid: 0,
-        gid: 0,
-        ino: 1,
-        dev: 2,
-      },
-      { ino: 1, dev: 2 },
+      stat(),
+      { ino: D1, dev: 2n },
       assertRootOwnedDirectory,
       RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
     ),
@@ -440,7 +450,7 @@ test('cleanup refuses a redirected path and keeps the target intact', async (t) 
   } catch {
     return t.skip('symlink/junction creation unavailable on this platform');
   }
-  const fresh = await lstat(root);
+  const fresh = await lstat(root, { bigint: true });
   if (!fresh.isSymbolicLink()) return t.skip('junction not reported as a symlink');
   await assert.rejects(
     removeRuntimeRoot({
@@ -463,6 +473,8 @@ test(
     const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
     // Probe the privilege with a round trip first: without it the drift
     // cannot be produced and the test must skip instead of passing vacuously.
+    // This read stays a Number because chown itself requires Numbers; it is
+    // not an identity anchor.
     const original = await lstat(root);
     try {
       await chown(root, 65534, 65534);
@@ -477,8 +489,10 @@ test(
       // The drift happens inside the cleanup window, between the first read
       // and the final read — the real chown is injected at the second policy
       // call, so the divergence only exists for the pre-rmdir validation.
+      // The drift check reads bigint so the comparison against the bigint
+      // stat of the anchored read stays exact, never cross-type.
       await chown(root, 65534, 65534);
-      const drifted = await lstat(root);
+      const drifted = await lstat(root, { bigint: true });
       if (drifted.uid === info.uid && drifted.gid === info.gid) return relaxedPolicy(info, code); // chown silently ineffective
       throw new Error(code);
     };
@@ -502,7 +516,7 @@ test('cleanup refuses a replaced directory whose later read diverges', async (t)
   const prepared = await prepareRuntimeRoot({ rootPath: root, policy: relaxedPolicy });
   await rmdir(root);
   await mkdir(root, { mode: 0o700 });
-  const fresh = await lstat(root);
+  const fresh = await lstat(root, { bigint: true });
   if (fresh.ino === prepared.ino && fresh.dev === prepared.dev) return;
   // The replacement got a different object identity: cleanup must refuse and
   // keep whatever object now sits at the path.
@@ -519,6 +533,11 @@ test('cleanup refuses a replaced directory whose later read diverges', async (t)
   assert.ok((await lstat(root)).isDirectory());
 });
 
+// The rollback of a just-created root whose validation failed uses the exact
+// bigint identity captured right after creation: the directory disappears only
+// when the rollback reads prove the same object (shape, emptiness and the
+// captured dev/ino). A collapsed or wrong identity would keep the root and
+// fail this test, so it proves the rollback path runs on exact identity too.
 test('a freshly created root failing validation is rolled back without traces', async (t) => {
   const root = join(await tempBase(t), 'stakeframe-restore');
   await assert.rejects(
@@ -531,6 +550,29 @@ test('a freshly created root failing validation is rolled back without traces', 
     (error) => error.message === RESTORE_RUNTIME_ROOT_REFUSED,
   );
   await assert.rejects(lstat(root), { code: 'ENOENT' });
+});
+
+// Deterministic e2e refusal with an exactly representable divergent identity
+// above Number.MAX_SAFE_INTEGER — the same magnitude class NTFS issues, whose
+// adjacent values Number arithmetic cannot separate.
+test('cleanup refuses an exact divergent identity above Number.MAX_SAFE_INTEGER and keeps the root', async (t) => {
+  const base = await tempBase(t);
+  const root = join(base, 'stakeframe-restore');
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const real = await lstat(root, { bigint: true });
+  await assert.rejects(
+    removeRuntimeRoot({
+      rootPath: root,
+      createdRoot: true,
+      ino: divergentOf(real.ino),
+      dev: real.dev,
+      policy: relaxedPolicy,
+    }),
+    (error) => error.message === RESTORE_RUNTIME_ROOT_CLEANUP_REFUSED,
+  );
+  const kept = await lstat(root, { bigint: true });
+  assert.ok(kept.isDirectory());
+  assert.equal(kept.ino, real.ino);
 });
 
 test('cleanup failure composes its own sanitized code without overwriting the main one', () => {
