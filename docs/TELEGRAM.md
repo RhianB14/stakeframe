@@ -2,9 +2,12 @@
 
 A STK-M0-15 criou `@stakeframe_rhian_bot`, nome Stakeframe, após autorização
 específica do proprietário. O token e a associação do usuário/chat ficam fora
-do Git. Uma resposta de teste foi entregue ao chat do proprietário. Ainda não
-consumidor contínuo, webhook público, importação de bilhetes ou processamento
-de apostas. Evidência em [M0-15-VALIDATION.md](M0-15-VALIDATION.md).
+do Git. Uma resposta de teste foi entregue ao chat do proprietário. Na
+conclusão da STK-M0-15, ainda não havia consumidor contínuo, webhook público,
+importação de bilhetes ou processamento de apostas; este parágrafo registra
+aquele estado histórico. O estado real descoberto no M0-40 (consumidor ativo,
+não autorizado) está no destaque abaixo. Evidência da STK-M0-15 em
+[M0-15-VALIDATION.md](M0-15-VALIDATION.md).
 
 > **Estado observado em 11/09/2026 (divergente, não autorizado):** o
 > consumidor contínuo foi encontrado **ativo** em produção — ao contrário do
@@ -31,9 +34,11 @@ contato ou texto de mensagem não autorizam acesso.
 O módulo preparatório `scripts/telegram/owner.mjs` aceita somente mensagens
 novas desse par. Recusa grupos/canais, bots, remetentes em nome de chat,
 encaminhamentos, mensagens via outro bot ou business connection, edições e
-callback queries. O consumidor futuro deve usar uma fronteira equivalente
-antes de persistir conteúdo, baixar anexos, enfileirar jobs ou responder.
-Esta tarefa não instalou esse consumidor na aplicação.
+callback queries. O consumidor contínuo implementado depois (STK-M0-17) usa
+uma fronteira equivalente antes de persistir conteúdo, baixar anexos,
+enfileirar jobs ou responder. A STK-M0-15 não instalou esse consumidor na
+aplicação; a implantação do worker com o consumidor configurado ocorreu em
+07/09/2026 sem autorização registrada (ver M0-40).
 
 ## Custódia privada
 
@@ -89,10 +94,14 @@ Um desafio expirado não autoriza associação. A renovação ou remoção dos
 arquivos de associação/intenção é uma operação separada e não é feita pelo
 utilitário. O token só deve ser revogado ou substituído com autorização própria.
 
-## Próxima integração
+## Integração contínua — plano e estado
 
-Antes de ativar um consumidor na VPS, implementar a mesma checagem de
-identidade, deduplicação por `update_id`, limites de arquivos e filas, retenção
-e descarte de anexos conforme [PLAN.md](PLAN.md). Definir polling ou webhook
+Plano original (STK-M0-15): antes de ativar um consumidor na VPS, implementar
+a mesma checagem de identidade, deduplicação por `update_id`, limites de
+arquivos e filas, retenção e descarte de anexos conforme [PLAN.md](PLAN.md).
+Estado real descoberto no M0-40 (11/09/2026): um consumidor contínuo **já está
+ativo** em produção, sem autorização registrada e sem validação operacional;
+qualquer reativação autorizada futura deve seguir o plano de reativação do
+M0-40 (backlog, identidade, R2 e política de IA). Definir polling ou webhook
 em tarefa própria, com testes e autorização de implantação. Nenhuma mensagem
 não autorizada deve gerar resposta, download ou operação financeira.

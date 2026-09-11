@@ -66,9 +66,12 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > permanece válida para o conjunto sem overlays; a divergência, os riscos e
 > os planos de contenção e reativação estão em
 > [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
-> Para ativação futura, preparar montagem dos arquivos privados, saída HTTPS,
-> migrações até `0004_event_calendar` e o ambiente explícito antes de iniciar o worker.
-> O runtime local aguarda o migrador; produção segue seu runbook de migração prévia.
+> Para qualquer reativação autorizada futura: conferir backlog do lado
+> Telegram e identidade por procedimento privado (valores reais de produção);
+> R2 (bucket/credenciais); política de IA (cota/custo); e preparar a montagem
+> dos arquivos privados, a saída HTTPS e o ambiente explícito antes de
+> iniciar o worker. O runtime local aguarda o migrador; produção segue seu
+> runbook de migração prévia.
 > Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
 > provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.
 

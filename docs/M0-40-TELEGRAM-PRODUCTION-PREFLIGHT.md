@@ -8,20 +8,21 @@ conhecida); nenhuma mutação, nenhum segredo lido, nenhum `getUpdates`.
 **mecanicamente presente** em produção, mas **não era previamente autorizada**
 (o registro do [M0-24](M0-24-VALIDATION.md) exclui expressamente ativação do
 Telegram e operação contínua das integrações) e **não foi operacionalmente
-validada** (nenhum item persistido e nenhuma chamada de IA registrados).
-Esta reconciliação não transforma retroativamente a ativação em ação
-autorizada.
+validada** (zero persistência; nenhuma chamada de IA registrada na base até a
+leitura; consumo de updates comprovado apenas pelo avanço de cursor, cuja
+natureza é desconhecida). Esta reconciliação não transforma retroativamente a
+ativação em ação autorizada.
 
 ## 1. Cronologia sanitizada
 
-| Momento (UTC)          | Evento observado                                                                                                                                                                                                                                   |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 07/09/2026 15:35       | Container PostgreSQL criado (janela do piloto M0-24).                                                                                                                                                                                              |
-| 07/09/2026 19:09       | API, worker, web e operações criados **com `compose.integrations.yml` em uso** (label `com.docker.compose.project.config_files`), com `TELEGRAM_ENABLED=true`, `AI_ENABLED=true` e os segredos de Telegram/OpenRouter/R2 montados desde a criação. |
-| 07/09/2026             | Migração aplicada (5 entradas no journal; até `0004_event_calendar`).                                                                                                                                                                              |
-| 09/09/2026 ~17:30      | Checkout de `/opt/stakeframe` trocado; marcador `.stakeframe-revision` (0444) aponta `36c0e638…` — STK-M0-28 (#84). O diretório não contém `.git`; a revisão não é pinável por git no host.                                                        |
-| 10/09/2026 21:41       | Contêineres **reiniciados** (mesma janela do reboot da STK-M0-33); worker voltou `healthy` e registrou apenas `WORKER_READY` desde então (sem códigos de falha).                                                                                   |
-| 11/09/2026 16:47–17:05 | Preflight M0-40 somente leitura: consumidor **ativo** descoberto (lock e cursor). Nenhuma mensagem consumida nem chamada de IA durante a observação.                                                                                               |
+| Momento (UTC)          | Evento observado                                                                                                                                                                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 07/09/2026 15:35       | Container PostgreSQL criado (janela do piloto M0-24).                                                                                                                                                                                                                               |
+| 07/09/2026 19:09       | API, worker, web e operações criados **com `compose.integrations.yml` em uso** (label `com.docker.compose.project.config_files`), com `TELEGRAM_ENABLED=true`, `AI_ENABLED=true` e os segredos de Telegram/OpenRouter/R2 montados desde a criação.                                  |
+| 07/09/2026             | Migração aplicada (5 entradas no journal; até `0004_event_calendar`).                                                                                                                                                                                                               |
+| 09/09/2026 ~17:30      | Checkout de `/opt/stakeframe` trocado; marcador `.stakeframe-revision` (0444) aponta `36c0e638…` — STK-M0-28 (#84). O diretório não contém `.git`; a revisão não é pinável por git no host.                                                                                         |
+| 10/09/2026 21:41       | Contêineres **reiniciados** (mesma janela do reboot da STK-M0-33); worker voltou `healthy` e registrou apenas `WORKER_READY` desde então (sem códigos de falha).                                                                                                                    |
+| 11/09/2026 16:47–17:05 | Preflight M0-40 somente leitura: consumidor **ativo** descoberto (lock e cursor). Nenhuma nova persistência ou chamada de IA foi observada; **não foi possível determinar, sem consumir ou expor updates, se o cursor avançou durante todo o intervalo** (única leitura do cursor). |
 
 ## 2. Evidência observada (sanitizada)
 
@@ -40,9 +41,11 @@ Readiness do worker: HTTP `200` `{"status":"ready"}`.
 
 ### 2.2 Lock e cursor
 
-- **Advisory lock do consumidor presente** (`pg_try_advisory_lock(782341094)`
-  retido; único lock advisory no cluster no momento da leitura) — é o lock
-  exclusivo que somente o ramo do consumidor Telegram adquire.
+- **Advisory lock do consumidor presente:** consulta **somente leitura** a
+  `pg_locks` (`locktype='advisory'`, `classid=0`, `objid=782341094`) mostrou o
+  advisory lock `782341094` mantido por outro backend (a sessão do worker) —
+  era a única entrada de lock advisory no cluster na leitura; nenhuma função
+  de aquisição de lock foi chamada pelo preflight.
 - **Cursor `integration.cursor` (`name='telegram'`) presente e `nonzero`** —
   updates já foram consumidos em algum momento; rejeições avançam o cursor sem
   persistir conteúdo (contrato do código).
@@ -50,15 +53,15 @@ Readiness do worker: HTTP `200` `{"status":"ready"}`.
 
 ### 2.3 Contagens sanitizadas (somente `SELECT`)
 
-| Item                                       | Valor                                                              |
-| ------------------------------------------ | ------------------------------------------------------------------ |
-| `integration.inbox`                        | 0 linhas                                                           |
-| `integration.extraction_request`           | 0 linhas                                                           |
-| `integration.attachment`                   | 0 linhas                                                           |
-| `pgboss.job` por estado                    | vazio (nenhum job em qualquer estado)                              |
-| Filas `pgboss.queue`                       | `system-probe`, `ticket-extraction`, `__pgboss__send-it`           |
-| `integration.ai_usage_day`                 | 0 linhas / 0 requisições (nenhuma chamada de IA jamais registrada) |
-| Migrações (`drizzle.__drizzle_migrations`) | 5 aplicadas; data da última: 07/09/2026                            |
+| Item                                       | Valor                                                                                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `integration.inbox`                        | 0 linhas                                                                                                                                           |
+| `integration.extraction_request`           | 0 linhas                                                                                                                                           |
+| `integration.attachment`                   | 0 linhas                                                                                                                                           |
+| `pgboss.job` por estado                    | vazio (nenhum job em qualquer estado)                                                                                                              |
+| Filas `pgboss.queue`                       | `system-probe`, `ticket-extraction`, `__pgboss__send-it`                                                                                           |
+| `integration.ai_usage_day`                 | 0 linhas / 0 requisições — nenhuma chamada registrada **nesta base** até a leitura; o histórico do provedor não é inferível apenas por esta tabela |
+| Migrações (`drizzle.__drizzle_migrations`) | 5 aplicadas; data da última: 07/09/2026                                                                                                            |
 
 ### 2.4 Artefatos de produção
 
@@ -81,27 +84,28 @@ Os oito arquivos exigidos estão **presentes**, como arquivos regulares
 Permissões: diretório `root:root 0700`; arquivos `0640` com proprietário
 operacional (não-root); `deployment.env` `root:root 0600`. Nenhum conteúdo foi
 lido, copiado, hasheado ou registrado. A existência do arquivo **não** foi
-usada para inferir validade de credencial: a evidência de configuração válida
-é o worker em execução que aceitou o contrato de startup (regexes e coerência
-`chat == user` no código).
+usada para inferir validade de credencial; o worker em execução aceitou o
+contrato de startup (formato, igualdade configurada entre user ID e chat ID e
+presença dos arquivos), mas isso **não confere os valores instalados contra a
+identidade privada autorizada na STK-M0-15** (ver gate 5).
 
 ## 3. Matriz dos gates
 
-| #   | Gate                                          | Estado                | Observação                                                                                                                   |
-| --- | --------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Base e artefatos de produção identificados    | PASS                  | Revisão `36c0e638…`, digests por prefixo e label de implantação; sem `.git` no host.                                         |
-| 2   | Worker e overlays efetivamente usados         | PASS                  | Três composes nos labels de criação; rede `provider-egress` existente.                                                       |
-| 3   | Migrações exigidas presentes                  | PASS                  | 5 aplicadas (até `0004`), em 07/09.                                                                                          |
-| 4   | Segredos presentes com permissões corretas    | PASS                  | Metadados apenas; dentro do canônico (dir 0700; arquivos 0640; sem symlink).                                                 |
-| 5   | Identidade Telegram configurada e coerente    | PASS (runtime)        | Worker em execução aceitou o contrato de startup; valores não lidos.                                                         |
-| 6   | Estado atual de `TELEGRAM_ENABLED`            | PASS                  | Conhecido: **ativo** (`true`).                                                                                               |
-| 7   | Estado atual de `AI_ENABLED`                  | PASS                  | Conhecido: **ativo** (`true`).                                                                                               |
-| 8   | Credenciais R2 de anexos presentes            | PASS                  | Reader/writer/backup presentes e montados onde esperado.                                                                     |
-| 9   | Cursor e backlog avaliados sem consumo        | PENDENTE              | Cursor avaliado; backlog local = 0; **backlog do lado Telegram não é observável sem `getUpdates`**, excluído da autorização. |
-| 10  | Filas e inbox em estado seguro para ativação  | PASS (reinterpretado) | Inbox/filas vazios e estáveis; a pergunta "seguro para ativação" perdeu sentido — a ativação já ocorreu sem autorização.     |
-| 11  | Capacidade de interrupção e rollback definida | PASS (documento)      | Plano de contenção (§5) e reativação (§6); execução exige autorização própria.                                               |
-| 12  | Efeitos externos discriminados                | PASS (reclassificado) | Efeitos **já habilitados** (§4); nenhum efeito registrado até a descoberta.                                                  |
-| 13  | Nenhum segredo ou conteúdo privado exposto    | PASS                  | Apenas metadados, booleanos, contagens e digests truncados.                                                                  |
+| #   | Gate                                          | Estado                | Observação                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Base e artefatos de produção identificados    | PASS                  | Revisão `36c0e638…`, digests por prefixo e label de implantação; sem `.git` no host.                                                                                                                                                                                                                                               |
+| 2   | Worker e overlays efetivamente usados         | PASS                  | Três composes nos labels de criação; rede `provider-egress` existente.                                                                                                                                                                                                                                                             |
+| 3   | Migrações exigidas presentes                  | PASS                  | 5 aplicadas (até `0004`), em 07/09.                                                                                                                                                                                                                                                                                                |
+| 4   | Segredos presentes com permissões corretas    | PASS                  | Metadados apenas; dentro do canônico (dir 0700; arquivos 0640; sem symlink).                                                                                                                                                                                                                                                       |
+| 5   | Identidade Telegram configurada e coerente    | PARCIAL               | O startup comprova apenas formato aceito, igualdade configurada entre user ID e chat ID e presença dos arquivos; **não comprova que os valores instalados correspondem à identidade privada autorizada na STK-M0-15** — a conferência privada dos valores de produção continua necessária antes de qualquer reativação autorizada. |
+| 6   | Estado atual de `TELEGRAM_ENABLED`            | PASS                  | Conhecido: **ativo** (`true`).                                                                                                                                                                                                                                                                                                     |
+| 7   | Estado atual de `AI_ENABLED`                  | PASS                  | Conhecido: **ativo** (`true`).                                                                                                                                                                                                                                                                                                     |
+| 8   | Credenciais R2 de anexos presentes            | PASS                  | Reader/writer/backup presentes e montados onde esperado.                                                                                                                                                                                                                                                                           |
+| 9   | Cursor e backlog avaliados sem consumo        | PENDENTE              | Cursor avaliado; backlog local = 0; **backlog do lado Telegram não é observável sem `getUpdates`**, excluído da autorização.                                                                                                                                                                                                       |
+| 10  | Filas e inbox em estado seguro para ativação  | PASS (reinterpretado) | Inbox/filas vazios e estáveis; a pergunta "seguro para ativação" perdeu sentido — a ativação já ocorreu sem autorização.                                                                                                                                                                                                           |
+| 11  | Capacidade de interrupção e rollback definida | PASS (documento)      | Plano de contenção (§5) e reativação (§6); execução exige autorização própria.                                                                                                                                                                                                                                                     |
+| 12  | Efeitos externos discriminados                | PASS (reclassificado) | Efeitos **já habilitados**: consumo/avanço de cursor comprovado; zero mensagens ou anexos persistidos na base; zero chamadas de IA registradas na base; **conteúdo e natureza dos updates consumidos desconhecidos**.                                                                                                              |
+| 13  | Nenhum segredo ou conteúdo privado exposto    | PASS                  | Apenas metadados, booleanos, contagens e digests truncados.                                                                                                                                                                                                                                                                        |
 
 ## 4. Riscos atuais
 
@@ -111,7 +115,8 @@ usada para inferir validade de credencial: a evidência de configuração válid
    por imagem; capacidade 2.000 entradas/1 GiB) e ficam candidatas à revisão.
 3. **Chamada paga de IA:** com `AI_ENABLED=true`, uma imagem admitida pode
    gerar extração OpenRouter (cota 60/dia, 1.500/mês; teto USD 5) — **zero
-   chamadas até a data**.
+   chamadas registradas nesta base até a leitura**; o histórico do provedor
+   não é inferível apenas pela tabela local.
 4. **Divergência documental:** `TELEGRAM.md` e `INTEGRATION-RUNTIME.md`
    registravam produção desativada; corrigidos para distinguir configuração
    padrão do estado observado.
@@ -178,9 +183,13 @@ autorizada separada (§6).
 
 - O backlog do lado Telegram não é observável sem `getUpdates` (excluído da
   autorização); a retenção do Telegram também limita a janela (≈24 h).
-- A coerência dos valores de identidade não foi verificada diretamente
-  (valores não lidos); a evidência é o contrato de startup aceito pelo worker
-  em execução.
+- A conferência dos valores de identidade contra a identidade privada
+  autorizada não foi feita (valores não lidos); o contrato de startup aceito
+  pelo worker comprova apenas formato, igualdade configurada user/chat e
+  presença dos arquivos — a conferência privada segue necessária antes de
+  qualquer reativação autorizada (gate 5).
+- Não houve segunda leitura do cursor em horário distinto que comprovasse
+  ausência de avanço durante o intervalo de observação.
 - O checkout do host não tem `.git`; a revisão é registrada pelo marcador
   `.stakeframe-revision`.
 
