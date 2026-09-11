@@ -3,8 +3,16 @@
 A STK-M0-15 criou `@stakeframe_rhian_bot`, nome Stakeframe, após autorização
 específica do proprietário. O token e a associação do usuário/chat ficam fora
 do Git. Uma resposta de teste foi entregue ao chat do proprietário. Ainda não
-há consumidor contínuo, webhook público, importação de bilhetes ou processamento
+consumidor contínuo, webhook público, importação de bilhetes ou processamento
 de apostas. Evidência em [M0-15-VALIDATION.md](M0-15-VALIDATION.md).
+
+> **Estado observado em 11/09/2026 (divergente, não autorizado):** o
+> consumidor contínuo foi encontrado **ativo** em produção — ao contrário do
+> que este documento registrava — com `TELEGRAM_ENABLED=true` desde a criação
+> do worker (07/09/2026), advisory lock retido e cursor avançado, sem
+> autorização prévia e sem validação operacional. Contenção e reativação
+> autorizada pendentes; evidência em
+> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
 
 ## Configuração e fronteira de acesso
 

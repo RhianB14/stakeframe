@@ -61,6 +61,22 @@ daemon de backup foram ativados nesta mesma janela. A divergência foi
 descoberta em 08/09/2026; cronologia e evidência em
 [M0-25-VALIDATION.md](M0-25-VALIDATION.md).
 
+**Segunda divergência operacional (registrada em 11/09/2026):** o
+levantamento somente leitura da STK-M0-40 encontrou o consumidor Telegram
+contínuo **ativo** em produção: o worker foi criado nesta janela (07/09/2026
+19:09 UTC) com o overlay `compose.integrations.yml` em uso — `TELEGRAM_ENABLED=true`,
+`AI_ENABLED=true` e segredos de Telegram/OpenRouter/R2 montados desde a
+criação — apesar de a autorização acima excluir expressamente a ativação do
+Telegram e a operação contínua das integrações. O comando exato da janela que
+produziu essa configuração não pôde ser recuperado; **não há evidência para
+atribuir a ativação ao Hermes**. Na descoberta, o consumidor seguia ativo
+(advisory lock retido, cursor avançado), sem itens persistidos e sem chamadas
+de IA registradas; contenção reversível e reativação autorizada permanecem
+pendentes de decisão. Evidência, matriz e planos em
+[M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
+Esta reconciliação não transforma retroativamente a ativação em ação
+previamente autorizada.
+
 ## Pendência operacional
 
 As verificações somente leitura encontraram todos os cinco containers saudáveis
