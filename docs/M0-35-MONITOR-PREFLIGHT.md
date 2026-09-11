@@ -13,8 +13,12 @@ Data: 2026-09-10 · Base: `59d8435a2eacee8b85605ab85252b02dc06ffa22` · Branch: 
   ("Missing expected rejection", testes 21 e 25 — identidade de inode NTFS): o
   arquivo isolado passou 27/27 no estado base e com o diff, nenhum teste referencia
   os documentos alterados (diff documental), e as rodadas subsequentes passaram
-  3× consecutivas. As falhas foram **flaky de ambiente** (filesystem Windows), não
-  causadas pelas alterações; a **CI** (runtime fixado) passou 5/5.
+  3× consecutivas. As falhas foram **flaky de ambiente** (Windows NTFS/Node 22,
+  local v22.23.2 — fluxo de identidade de inode sob concorrência), não causadas
+  pelas alterações; a **CI** (runtime fixado) passou 5/5. Investigação registrada
+  separadamente na issue [#97](https://github.com/RhianB14/stakeframe/issues/97)
+  (com nomes exatos dos testes, ambiente, sintoma sanitizado e repetições); o
+  teste **não é alterado** nesta PR documental.
 - Probes HTTPS sem autenticação: `https://stakeframe.com.br/status` → HTTP 200, que é **HTML público da aplicação** — **não é o `/status` do Worker** e não comprova sua proteção. O `/status` do monitor **não foi testado remotamente** porque o Worker ainda não existe (ver §7).
 
 ## 2. Matriz de gates
@@ -193,7 +197,10 @@ teste automatizado**. Sequência com autorização específica:
    healthy".
 5. Confirmar silêncio posterior: estado do DO + logs do ciclo + observação do chat.
    **Nunca publicar nem comparar os valores no relatório** — evidência guarda
-   apenas estados/timestamps/versões.
+   apenas estados/timestamps/versões. **O teste em si não é alterado nesta PR
+   documental** — a investigação do flaky de `restore-runtime-root` segue
+   separadamente na issue
+   [#97](https://github.com/RhianB14/stakeframe/issues/97).
 
 ## 11. Custos e cotas: comprovados vs não comprovados
 
