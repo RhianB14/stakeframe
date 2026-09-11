@@ -44,7 +44,7 @@ rollback do checkout retido pela STK-M0-29 sob autorização destrutiva específ
 do proprietário, após conferir identidade, ausência de uso e integridade do
 checkout ativo ([M0-32-VALIDATION.md](M0-32-VALIDATION.md)).
 STK-M0-33 ([issue #91](https://github.com/RhianB14/stakeframe/issues/91))
-prepara a persistência segura do hardening IPv6 no boot: aplicador próprio com
+implementou a persistência segura do hardening IPv6 no boot: aplicador próprio com
 transação atômica única, unit systemd versionada com ordenação verificada e
 suíte dedicada. A unit foi instalada e habilitada em 10/09/2026 (staging com
 hashes conferidos, `ip6tables-restore --test` sem mutação, `systemd-analyze
@@ -221,8 +221,13 @@ ou janela de rede; cada item exige a evidência descrita.
       somente IPv6 INPUT/FORWARD ativo, sem persistência nesta janela, em
       [docs/NETWORK-SECURITY.md](NETWORK-SECURITY.md). IPv4, OUTPUT, Docker,
       Fail2Ban, SSH, rpcbind e OCI preservados.
-- [ ] Concluir preparação para execução: revisão do Codex, recuperação
+- [x] Concluir preparação para execução: revisão do Codex, recuperação
       demonstrada e gates reais de janela; simulação não é teste na VPS.
+      **Executada e concluída** — a preparação histórica e a janela IPv6 foram
+      executadas (STK-M0-04/05/33/34). O gate OOB foi **apenas parcialmente
+      validado** (verificação sem sessão OCI mantida, [M0-33-VALIDATION.md
+      §10](M0-33-VALIDATION.md)); a disponibilidade OOB **continua não comprovada
+      para futuras janelas críticas**.
 - [x] Preparar implementação única em `scripts/network_security/ipv6_guard.py`,
       com runbook referenciado, sintaxe/CLI offline e 51 testes simulados
       aprovados localmente. CI inclui job separado de simulação, sem comandos
@@ -320,8 +325,17 @@ ou janela de rede; cada item exige a evidência descrita.
       `prior_ipv4_preservation_proven: false`, e esse encerramento **não** aplicou
       hardening nem alterou firewall, persistência, DNS, OCI, SSH ou credenciais
       ([M0-22-VALIDATION.md](M0-22-VALIDATION.md)).
-- [ ] Persistir o delta IPv6 — **fora do escopo aprovado**: a mudança é ativa e
-      não durável; exige tarefa própria com backup/restore de persistência.
+- [x] Persistir o delta IPv6 — **concluído e comprovado**: STK-M0-33/STK-M0-34
+      instalaram a unit systemd de persistência, habilitaram-na e validaram um
+      reboot controlado único com primeira aplicação real pelo boot
+      (`active/exited`, `Result=success`), idempotência `no-op` e **unit
+      habilitada** com delta aplicado **no único boot validado**; a reaplicação
+      futura decorre da configuração instalada, **sem segundo reboot observado**
+      ([M0-33-VALIDATION.md](M0-33-VALIDATION.md) §10, atualizado pela
+      [PR #94](https://github.com/RhianB14/stakeframe/pull/94)). A recuperação
+      fora de banda (OOB) **continua não comprovada** para futuras janelas
+      críticas: o gate foi apenas parcialmente validado (lado guest preparado;
+      nenhuma sessão OCI independente estabelecida ou mantida durante o reboot).
 - [ ] Descarte da chave temporária da integração serial — **não comprovado**
       (pendência herdada da STK-M0-05); não é resolvido pela janela executada.
 
@@ -452,7 +466,9 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Backups externos criptografados (R2) a cada 30 min: ativos desde
       07/09/2026, 36 ciclos verificados, retenção ativa e estado `ready`
       ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
-- [ ] Alerta de atraso de backup ativo.
+- [ ] Alerta de atraso de backup ativo — **pendente**; preflight do monitor
+      externo concluído na STK-M0-35 (deploy e ativação dependem de janela
+      autorizada).
 - [ ] Teste de restauração demonstrado com dados de produção e RPO 1h / RTO 4h
       medidos.
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
@@ -464,7 +480,10 @@ ou janela de rede; cada item exige a evidência descrita.
       cluster novo com a origem parada; acesso ao bucket de anexos recusado,
       dados/ACLs conferidos e chave preservada fora da VPS.
       [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Não ativa backups reais.
-- [ ] Monitoramento externo de disponibilidade e alertas deduplicados.
+- [ ] Monitoramento externo de disponibilidade e alertas deduplicados —
+      **pendente**; Worker e testes prontos e pré-checados na STK-M0-35
+      ([M0-35-MONITOR-PREFLIGHT.md](M0-35-MONITOR-PREFLIGHT.md)), aguardando
+      janela autorizada para deploy, segredos e ativação.
 - [x] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12 e
       exercitados no piloto M0-24; a reversão real ainda não foi executada).
