@@ -417,6 +417,12 @@ ou janela de rede; cada item exige a evidência descrita.
       de baixar anexos, persistir mensagens ou enfileirar processamento.
       Inbox/enqueue transacional e testes em [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
 - [ ] Ativar e validar o consumidor contínuo com configuração privada na VPS.
+      **Encontrado ativo em 11/09/2026 sem autorização prévia e sem validação
+      operacional** (worker criado em 07/09/2026 com o overlay de integrações;
+      advisory lock retido; cursor avançado com consumo de updates comprovado;
+      zero itens persistidos e zero chamadas de IA registradas na base até a
+      leitura). Contenção reversível e reativação autorizada pendentes
+      ([M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md)).
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
       30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.

@@ -57,11 +57,23 @@ com caminho absoluto, seguindo `readSecret`. Não ativar ambos sobre credenciais
 fictícias: a validação falha e o worker não inicia.
 
 Os Composes padrão mantêm integrações desativadas e worker sem saída externa.
-Para ativação futura, preparar montagem dos arquivos privados, saída HTTPS,
-migrações até `0004_event_calendar` e o ambiente explícito antes de iniciar o worker.
-O runtime local aguarda o migrador; produção segue seu runbook de migração prévia.
-Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
-provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.
+
+> **Estado real observado em 11/09/2026 (divergente, não autorizado):** a
+> produção usa `compose.integrations.yml` junto aos composes de produção e
+> operações desde 07/09/2026, e o consumidor Telegram está **ativo**
+> (`TELEGRAM_ENABLED=true`; `AI_ENABLED=true`), sem autorização registrada e
+> sem validação operacional. A descrição de configuração padrão acima
+> permanece válida para o conjunto sem overlays; a divergência, os riscos e
+> os planos de contenção e reativação estão em
+> [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md).
+> Para qualquer reativação autorizada futura: conferir backlog do lado
+> Telegram e identidade por procedimento privado (valores reais de produção);
+> R2 (bucket/credenciais); política de IA (cota/custo); e preparar a montagem
+> dos arquivos privados, a saída HTTPS e o ambiente explícito antes de
+> iniciar o worker. O runtime local aguarda o migrador; produção segue seu
+> runbook de migração prévia.
+> Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
+> provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.
 
 Verificação: `pnpm typecheck`, `pnpm test`, `pnpm local:test-db`, `pnpm lint`.
 Os testes de integração conferem atomicidade, rollback de enqueue, concorrência,
