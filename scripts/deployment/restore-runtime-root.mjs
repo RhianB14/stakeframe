@@ -37,24 +37,39 @@ export function sanitizeFailureCode(error) {
 }
 
 // Pure mode enforcement shared by the production policy and tests: exactly
-// 0700 effective, rejecting setuid/setgid/sticky and wider permissions.
+// 0700 effective, rejecting setuid/setgid/sticky and wider permissions. Stats
+// are captured with { bigint: true }, so mode, uid and gid are bigints and
+// every comparison stays exact for values of any magnitude.
 export function assertSafeDirectoryMode(info, code) {
-  if ((info.mode & 0o7777) !== 0o700) throw new Error(code);
+  if ((info.mode & 0o7777n) !== 0o700n) throw new Error(code);
 }
 
 // Production policy, pure so tests exercise it deterministically with synthetic
 // stat objects, without root and on any platform: a real directory (never a
-// symlink), exactly 0700, owned by root:root (UID/GID 0).
+// symlink), exactly 0700, owned by root:root (bigint 0n).
 export function assertRootOwnedDirectory(info, code) {
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error(code);
   assertSafeDirectoryMode(info, code);
-  if (info.uid !== 0 || info.gid !== 0) throw new Error(code);
+  if (info.uid !== 0n || info.gid !== 0n) throw new Error(code);
 }
 
 // Pure identity comparison anchored to the stat captured when the run created
-// the root: every revalidation read must describe that same object.
+// the root: every revalidation read must describe that same object. dev and
+// ino are bigint-only. File IDs above Number.MAX_SAFE_INTEGER (NTFS issues
+// them) collapse under Number arithmetic — ino + 1 === ino — so a numeric
+// value is an incompatible representation, never equal to a bigint, and the
+// type checks keep the comparison strict even when synthetic fixtures mix
+// representations.
 export function assertSameIdentity(info, identity, code) {
-  if (info.ino !== identity.ino || info.dev !== identity.dev) throw new Error(code);
+  if (
+    typeof info.ino !== 'bigint' ||
+    typeof info.dev !== 'bigint' ||
+    typeof identity.ino !== 'bigint' ||
+    typeof identity.dev !== 'bigint' ||
+    info.ino !== identity.ino ||
+    info.dev !== identity.dev
+  )
+    throw new Error(code);
 }
 
 // Structural-only policy for the internal rollback of a just-created root
@@ -62,6 +77,16 @@ export function assertSameIdentity(info, identity, code) {
 // definition, so the rollback proves bare structure, emptiness and identity.
 export function assertStructuralDirectory(info, code) {
   assertDirectoryShape(info, code);
+}
+
+// The captured identity must be exact: bigint in, bigint out. Every production
+// capture reads the filesystem with { bigint: true }, so file IDs above
+// Number.MAX_SAFE_INTEGER stay exact and adjacent identities stay distinct —
+// a Number capture would make ino + 1 === ino and accept a swapped root.
+function captureIdentity(info) {
+  if (typeof info.ino !== 'bigint' || typeof info.dev !== 'bigint')
+    throw new TypeError('runtime root identity must be captured as bigint');
+  return { ino: info.ino, dev: info.dev };
 }
 
 // Compose a cleanup failure into the private report: the cleanup gets its own
@@ -99,7 +124,7 @@ async function prepareProjectDirectory({ rootPath, project, policy }) {
   const directory = join(rootPath, project);
   let existing;
   try {
-    existing = await lstat(directory);
+    existing = await lstat(directory, { bigint: true });
   } catch (error) {
     if (error?.code !== 'ENOENT') throw new Error(code, { cause: error });
     existing = undefined;
@@ -110,7 +135,7 @@ async function prepareProjectDirectory({ rootPath, project, policy }) {
   } catch {
     throw new Error(code);
   }
-  const info = await lstat(directory);
+  const info = await lstat(directory, { bigint: true });
   assertDirectoryShape(info, code);
   policy(info, code);
   await assertExactRealpath(directory, code);
@@ -126,7 +151,7 @@ export async function prepareRuntimeRoot({
   const code = RESTORE_RUNTIME_ROOT_REFUSED;
   let info;
   try {
-    info = await lstat(rootPath);
+    info = await lstat(rootPath, { bigint: true });
   } catch (error) {
     if (error?.code !== 'ENOENT') throw new Error(code, { cause: error });
     info = undefined;
@@ -143,8 +168,8 @@ export async function prepareRuntimeRoot({
     }
     createdRoot = true;
     try {
-      info = await lstat(rootPath);
-      initialIdentity = { ino: info.ino, dev: info.dev };
+      info = await lstat(rootPath, { bigint: true });
+      initialIdentity = captureIdentity(info);
       assertDirectoryShape(info, code);
       policy(info, code);
       await assertExactRealpath(rootPath, code);
@@ -165,7 +190,7 @@ export async function prepareRuntimeRoot({
     policy(info, code);
     await assertExactRealpath(rootPath, code);
   }
-  const root = { createdRoot, ino: info.ino, dev: info.dev };
+  const root = { createdRoot, ...captureIdentity(info) };
   if (project === undefined) return { ...root, directory: undefined };
   return { ...root, ...(await prepareProjectDirectory({ rootPath, project, policy })) };
 }
@@ -199,7 +224,7 @@ export async function removeRuntimeRoot({
   const identity = { ino, dev };
   let info;
   try {
-    info = await lstat(rootPath);
+    info = await lstat(rootPath, { bigint: true });
   } catch {
     throw new Error(code);
   }
@@ -220,7 +245,7 @@ export async function removeRuntimeRoot({
   // guarantee actually implemented, no more.
   let before;
   try {
-    before = await lstat(rootPath);
+    before = await lstat(rootPath, { bigint: true });
   } catch {
     throw new Error(code);
   }

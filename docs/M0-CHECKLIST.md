@@ -57,6 +57,11 @@ sessão OCI independente estabelecida ou mantida) e a disponibilidade de
 recuperação continua não comprovada para futuras janelas críticas
 ([M0-33-VALIDATION.md](M0-33-VALIDATION.md)). O registro documental é a
 STK-M0-34 ([issue #93](https://github.com/RhianB14/stakeframe/issues/93)).
+STK-M0-36 ([issue #97](https://github.com/RhianB14/stakeframe/issues/97))
+corrigiu a identidade inexata do runtime root: dev e ino são capturados e
+comparados com precisão exata (bigint) em todos os caminhos, eliminando a
+aritmética Number que colapsava file IDs grandes; evidências em
+[M0-36-VALIDATION.md](M0-36-VALIDATION.md).
 O avanço ocorre por determinação
 do proprietário (D019), preservando recuperação integral/failover, alertas,
 monitor e release como pendências. STK-M0-16 foi

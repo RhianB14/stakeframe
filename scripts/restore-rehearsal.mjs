@@ -102,6 +102,8 @@ try {
     });
   // Root provisioning is recorded before the individual directory is prepared,
   // so a later failure still removes a root created by this run in the cleanup.
+  // Identity fields are bigint end to end (exact dev/ino capture); they stay
+  // in memory only and never reach the report or any serialized output.
   const rootInfo = await prepareRuntimeRoot({ rootPath: RESTORE_RUNTIME_ROOT });
   runtimeRoot = { createdRoot: rootInfo.createdRoot, ino: rootInfo.ino, dev: rootInfo.dev };
   report.runtimeRoot = rootInfo.createdRoot ? 'created' : 'preexisting';
