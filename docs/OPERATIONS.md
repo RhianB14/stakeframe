@@ -191,10 +191,16 @@ O estado privado do monitor exige o mesmo bearer e informa falhas de entrega.
 
 O Durable Object registra a trilha do cron: `fired_at` (último disparo
 recebido), `started_at` (início da execução), `completed_at`/`result`
-(conclusão ou falha) e `error` (categoria sanitizada: `configuration` ou
-`health_check` — nunca valores privados). O `/status` autenticado expõe esses
-campos de forma aditiva (`lastFiredAt`, `lastStartedAt`, `lastCompletedAt`,
-`lastResult`, `lastError`), preservando `lastCheckedAt`, `state` e `delivery`.
+(conclusão ou falha) e `error` (categoria sanitizada: `configuration` ou a
+classe do health check — `health_check`, `health_check_timeout`,
+`health_check_network`, `health_check_http`, `health_check_payload` — nunca
+valores privados). O `/status` autenticado expõe esses campos de forma aditiva
+(`lastFiredAt`, `lastStartedAt`, `lastCompletedAt`, `lastResult`, `lastError`,
+`lastHttpStatus`, `lastSignature`), preservando `lastCheckedAt`, `state` e
+`delivery`. `lastHttpStatus` registra o código HTTP visto no endpoint de saúde
+(nulo quando não houve resposta) e `lastSignature` expõe o conjunto sanitizado
+de checks degradados (`nome:estado`, separados por vírgula, ou
+`application:failed`), sem valores privados.
 Leitura: `lastFiredAt` nulo indica nenhum disparo registrado desde a migração;
 `lastFiredAt` posterior a `lastCompletedAt` indica disparo recebido sem
 conclusão (em andamento, interrompido ou bloqueado por lease ativo);
@@ -205,7 +211,9 @@ o avanço de `lastFiredAt`/`lastCompletedAt` entre leituras separadas por ao
 menos um ciclo de cinco minutos — sem depender dos painéis do provedor.
 
 O endpoint HTTPS `/api/v1/operations/health` exige token próprio e retorna apenas
-estados e horário. O token não autentica acesso financeiro. São monitorados banco,
+estados e horário. O token não autentica acesso financeiro. A leitura tem limite
+total de tempo: um check interno que não responde dentro do orçamento permanece
+`failed` em vez de segurar a resposta. São monitorados banco,
 worker, backup, retenção, disco, filas, anexos, cota e orçamento de IA, quarentena
 e ensaio mensal. Backup com cutoff de uma hora falha; teste mensal avisa aos 32
 dias e falha aos 35, ou imediatamente em caso de execução/limpeza malsucedida.

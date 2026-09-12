@@ -88,6 +88,7 @@ export class StakeframeMonitor {
       ['completed_at', 'INTEGER'],
       ['result', 'TEXT'],
       ['error', 'TEXT'],
+      ['http_status', 'INTEGER'],
     ]) {
       if (!columns.has(name))
         this.storage.sql.exec(`ALTER TABLE monitor ADD COLUMN ${name} ${type}`);
@@ -99,7 +100,7 @@ export class StakeframeMonitor {
     if (path === '/status' && request.method === 'GET') {
       const row = this.storage.sql
         .exec(
-          'SELECT checked_at,signature,delivery,fired_at,started_at,completed_at,result,error FROM monitor WHERE id=1',
+          'SELECT checked_at,signature,delivery,fired_at,started_at,completed_at,result,error,http_status FROM monitor WHERE id=1',
         )
         .toArray()[0];
       return Response.json({
@@ -111,6 +112,8 @@ export class StakeframeMonitor {
         lastCompletedAt: row.completed_at,
         lastResult: row.result,
         lastError: row.error,
+        lastHttpStatus: row.http_status,
+        lastSignature: row.signature,
       });
     }
     if (path !== '/check' || request.method !== 'POST') return new Response(null, { status: 404 });
@@ -124,7 +127,7 @@ export class StakeframeMonitor {
       env = configuration(this.env);
     } catch {
       this.storage.sql.exec(
-        "UPDATE monitor SET started_at=?,completed_at=?,result='failed',error='configuration' WHERE id=1",
+        "UPDATE monitor SET started_at=?,completed_at=?,result='failed',error='configuration',http_status=NULL WHERE id=1",
         now,
         now,
       );
@@ -143,17 +146,36 @@ export class StakeframeMonitor {
     });
     if (!claimed) return new Response(null, { status: 204 });
     let signature = 'application:failed';
+    let failure = 'health_check';
+    let httpStatus = null;
     try {
-      const response = await this.fetchImpl(`${env.APP_ORIGIN}/api/v1/operations/health`, {
-        headers: { authorization: `Bearer ${env.MONITOR_TOKEN}` },
-        redirect: 'error',
-        signal: AbortSignal.timeout(10_000),
-      });
+      let response;
+      try {
+        response = await this.fetchImpl(`${env.APP_ORIGIN}/api/v1/operations/health`, {
+          headers: { authorization: `Bearer ${env.MONITOR_TOKEN}` },
+          redirect: 'error',
+          signal: AbortSignal.timeout(10_000),
+        });
+      } catch (error) {
+        failure =
+          error?.name === 'TimeoutError' || error?.name === 'AbortError'
+            ? 'health_check_timeout'
+            : 'health_check_network';
+        throw error;
+      }
+      httpStatus = response.status;
       if (!response.ok) {
+        failure = 'health_check_http';
         await response.body?.cancel();
         throw new Error();
       }
-      const status = await json(response);
+      let status;
+      try {
+        status = await json(response);
+      } catch {
+        failure = 'health_check_payload';
+        throw new Error();
+      }
       const checkedAt = Date.parse(status.checkedAt);
       if (
         !Number.isFinite(checkedAt) ||
@@ -165,14 +187,20 @@ export class StakeframeMonitor {
         Object.values(status.checks).some(
           (value) => !['ready', 'warning', 'failed', 'disabled'].includes(value),
         )
-      )
+      ) {
+        failure = 'health_check_payload';
         throw new Error();
+      }
       signature =
         names
           .filter((name) => ['warning', 'failed'].includes(status.checks[name]))
           .map((name) => `${name}:${status.checks[name]}`)
           .join(',') || 'ready';
-      if ((signature === 'ready') !== (status.status === 'ready')) throw new Error();
+      if ((signature === 'ready') !== (status.status === 'ready')) {
+        failure = 'health_check_payload';
+        throw new Error();
+      }
+      failure = null;
     } catch {
       signature = 'application:failed';
     }
@@ -184,14 +212,15 @@ export class StakeframeMonitor {
       // Persist the delivery claim BEFORE sending; a timeout never causes a retry
       // of an external message whose result may already have been accepted.
       this.storage.sql.exec(
-        'UPDATE monitor SET checked_at=?,signature=?,delivery=CASE WHEN ? THEN ? ELSE delivery END,completed_at=?,result=?,error=? WHERE id=1',
+        'UPDATE monitor SET checked_at=?,signature=?,delivery=CASE WHEN ? THEN ? ELSE delivery END,completed_at=?,result=?,error=?,http_status=? WHERE id=1',
         now,
         signature,
         changed ? 1 : 0,
         'uncertain',
         now,
         failed ? 'failed' : signature === 'ready' ? 'ready' : 'attention',
-        failed ? 'health_check' : null,
+        failed ? failure : null,
+        httpStatus,
       );
       return { changed };
     });

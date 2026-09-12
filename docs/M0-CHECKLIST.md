@@ -510,8 +510,16 @@ ou janela de rede; cada item exige a evidência descrita.
       pendentes. A STK-M0-43 ampliou a trilha do cron no Durable Object e no
       `/status` autenticado (disparo, início, conclusão/falha e categoria
       sanitizada) para permitir a prova de execução por leitura única; a
-      observação real segue pendente
-      ([M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
+      observação real segue pendente. A STK-M0-46 (12/09/2026) investigou a
+      falha `health_check`: o check atinge o teto de 10 s do monitor enquanto
+      aplicação, rota e banco respondem rápido nas leituras externas; a
+      distinção exata entre latência interna e caminho de entrega permanece
+      pendente de ação operacional autorizada. O `/status` ganhou classes
+      sanitizadas (`health_check_timeout`, `_network`, `_http`, `_payload`,
+      `lastHttpStatus`, `lastSignature`) e o endpoint ganhou limite total de
+      tempo; deploy pendente de autorização
+      ([M0-46-MONITOR-HEALTH-CHECK.md](M0-46-MONITOR-HEALTH-CHECK.md),
+      [M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
       [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md),
       [M0-43-MONITOR-CRON-OBSERVABILITY.md](M0-43-MONITOR-CRON-OBSERVABILITY.md)).
 - [x] Procedimentos documentados de deploy, migração e rollback
