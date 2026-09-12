@@ -60,11 +60,16 @@ function setup(options = {}) {
   let issue = null;
   let deliveryFailure = false;
   let malformed = false;
+  let healthFailure = null;
   const requests = [];
   const fetchImpl = async (url, options) => {
     requests.push({ url, options });
     assert.equal(options.redirect, 'error');
     if (url.startsWith('https://stakeframe.com.br/')) {
+      if (healthFailure === 'timeout')
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      if (healthFailure === 'network') throw new TypeError('fetch failed');
+      if (healthFailure === 'http') return new Response('indisponível', { status: 503 });
       const checks = Object.fromEntries(
         names.map((name) => [name, name === issue ? 'failed' : 'ready']),
       );
@@ -111,6 +116,9 @@ function setup(options = {}) {
     },
     malformed() {
       malformed = true;
+    },
+    failHealth(value) {
+      healthFailure = value;
     },
   };
 }
@@ -160,6 +168,8 @@ test('records fire, start and conclusion of a healthy check', async () => {
       lastCompletedAt: fixture.time(),
       lastResult: 'ready',
       lastError: null,
+      lastHttpStatus: 200,
+      lastSignature: 'ready',
     });
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 0);
     assert.ok(!JSON.stringify(status).includes(env.MONITOR_TOKEN));
@@ -182,6 +192,9 @@ test('stays quiet while healthy, reports a backup incident once, then recovery',
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
     assert.equal(fixture.read().result, 'attention');
     assert.equal(fixture.read().error, null);
+    const incident = await statusOf(monitor);
+    assert.equal(incident.lastSignature, 'backup:failed');
+    assert.equal(incident.lastHttpStatus, 200);
     fixture.step();
     await fixture.check(fixture.instance());
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
@@ -190,6 +203,7 @@ test('stays quiet while healthy, reports a backup incident once, then recovery',
     await fixture.check(monitor);
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 2);
     assert.equal(fixture.read().result, 'ready');
+    assert.equal((await statusOf(monitor)).lastSignature, 'ready');
   } finally {
     fixture.db.close();
   }
@@ -229,10 +243,60 @@ test('serializes overlapping probes and treats malformed private output as an in
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
     const status = await statusOf(monitor);
     assert.equal(status.lastResult, 'failed');
-    assert.equal(status.lastError, 'health_check');
+    assert.equal(status.lastError, 'health_check_payload');
+    assert.equal(status.lastHttpStatus, 200);
+    assert.equal(status.lastSignature, 'application:failed');
     assert.equal(status.state, 'attention');
     assert.equal(status.lastFiredAt, fixture.time());
     assert.equal(status.lastCompletedAt, fixture.time());
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('classifies a timed out health request and keeps the sanitized signature', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('timeout');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_timeout');
+    assert.equal(status.lastHttpStatus, null);
+    assert.equal(status.lastSignature, 'application:failed');
+    assert.equal(status.state, 'attention');
+    assert.equal(fixture.read().completed_at, fixture.time());
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('classifies a network failure of the health request', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('network');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_network');
+    assert.equal(status.lastHttpStatus, null);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('records the HTTP status when the health endpoint refuses the request', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('http');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_http');
+    assert.equal(status.lastHttpStatus, 503);
   } finally {
     fixture.db.close();
   }
@@ -397,7 +461,14 @@ test('migrates a legacy monitor database without losing the stored trail', async
       .prepare('PRAGMA table_info(monitor)')
       .all()
       .map((row) => row.name);
-    for (const name of ['fired_at', 'started_at', 'completed_at', 'result', 'error']) {
+    for (const name of [
+      'fired_at',
+      'started_at',
+      'completed_at',
+      'result',
+      'error',
+      'http_status',
+    ]) {
       assert.ok(columns.includes(name), `missing column ${name}`);
     }
     const migrated = await statusOf(monitor);
@@ -406,6 +477,8 @@ test('migrates a legacy monitor database without losing the stored trail', async
     assert.equal(migrated.delivery, 'confirmed');
     assert.equal(migrated.lastFiredAt, null);
     assert.equal(migrated.lastResult, null);
+    assert.equal(migrated.lastHttpStatus, null);
+    assert.equal(migrated.lastSignature, 'ready');
     await fixture.check(monitor);
     assert.equal(fixture.read().result, 'ready');
     assert.equal(fixture.read().fired_at, fixture.time());

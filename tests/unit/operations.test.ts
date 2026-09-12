@@ -143,6 +143,52 @@ describe('operational monitoring', () => {
     });
     expect(financial.statusCode).not.toBe(200);
   });
+  it('answers within the probe deadline when an internal probe hangs', async () => {
+    const database = createDatabase('postgresql://fixture:***@127.0.0.1/fixture');
+    databases.push(database);
+    vi.spyOn(database.pool, 'query').mockResolvedValue({
+      rows: [
+        {
+          imports_late: false,
+          attachments_late: false,
+          events_late: false,
+          quarantine: false,
+          daily: '0',
+          monthly: '0',
+        },
+      ],
+    } as never);
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const target = String(url);
+      if (target === 'http://worker:9091/') return new Promise<Response>(() => {});
+      if (target.endsWith('/status'))
+        return Response.json({
+          backup: 'ready',
+          restoreTest: 'ready',
+          retention: 'ready',
+          lastRun: 'ready',
+          disk: 'ready',
+        });
+      return Response.json({ status: 'ready' });
+    });
+    const service = createOperationsService(
+      database,
+      { MONITORING_ENABLED: 'true', MONITOR_TOKEN: 'a'.repeat(64) },
+      fetchImpl,
+      { probeDeadlineMs: 50 },
+    )!;
+    const app = createApp({ checkDatabase: async () => {}, operations: service });
+    apps.push(app);
+    const response = await app.inject({
+      url: '/api/v1/operations/health',
+      headers: { authorization: `Bearer ${service.token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const value = operationsHealthSchema.parse(response.json());
+    expect(value.status).toBe('attention');
+    expect(value.checks.worker).toBe('failed');
+    expect(value.checks.database).toBe('ready');
+  });
   it('does not expose the monitoring endpoint when disabled', async () => {
     const app = createApp({ checkDatabase: async () => {} });
     apps.push(app);

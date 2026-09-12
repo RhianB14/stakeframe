@@ -45,11 +45,15 @@ export function createOperationsService(
   database: Database,
   env: NodeJS.ProcessEnv,
   fetchImpl: typeof fetch = fetch,
+  options: { probeDeadlineMs?: number } = {},
 ): OperationsService | undefined {
   if (env.MONITORING_ENABLED === undefined || env.MONITORING_ENABLED === 'false') return undefined;
   if (env.MONITORING_ENABLED !== 'true') throw new Error('MONITORING_CONFIGURATION_INVALID');
   const token = readSecret(env, 'MONITOR_TOKEN');
   if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new Error('MONITORING_SECRET_INVALID');
+  const probeDeadlineMs = options.probeDeadlineMs ?? 6_500;
+  if (!Number.isInteger(probeDeadlineMs) || probeDeadlineMs < 1 || probeDeadlineMs > 30_000)
+    throw new Error('INVALID_MONITOR_DEADLINE');
   let cached: OperationsHealth | undefined;
   let inflight: Promise<OperationsHealth> | undefined;
   return {
@@ -72,7 +76,7 @@ export function createOperationsService(
           eventQueue: 'failed',
           recovery: 'failed',
         };
-        await Promise.allSettled([
+        const probes = Promise.allSettled([
           (async () => {
             const row = (
               await database.pool.query<{
@@ -121,6 +125,15 @@ export function createOperationsService(
             checks.disk = result.disk;
             checks.restoreTest = result.restoreTest;
           })(),
+        ]);
+        // A hung internal probe must not hold the authenticated route past the
+        // external monitor's own budget: unresolved checks stay 'failed' and the
+        // response is still produced within the deadline.
+        await Promise.race([
+          probes,
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, probeDeadlineMs).unref();
+          }),
         ]);
         const status = operationsHealthSchema.parse({
           checkedAt: new Date().toISOString(),
