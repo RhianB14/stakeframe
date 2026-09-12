@@ -206,3 +206,12 @@ criado/alterado/lido; `getUpdates`/`setWebhook`/`deleteWebhook` não
 executados; nenhuma mensagem Telegram; nenhuma chamada OpenRouter; cursor,
 filas e banco intocados (apenas `SELECT`). Nenhum valor de segredo, conteúdo
 privado, IP ou hostname registrado.
+
+## 9. Atualização (12/09/2026, STK-M0-60)
+
+A conferência privada da identidade (gate 5) foi executada pelo proprietário:
+`IDENTIDADE_CONFERE=true`. O preflight read-only de reativação da STK-M0-60
+concluiu a matriz de decisão (pronto para janela controlada; backlog do lado
+Telegram segue como decisão de janela) —
+[M0-60-WORKER-REACTIVATION-PREFLIGHT.md](M0-60-WORKER-REACTIVATION-PREFLIGHT.md).
+As evidências anteriores desta página permanecem como registradas.

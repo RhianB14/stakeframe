@@ -421,9 +421,13 @@ ou janela de rede; cada item exige a evidência descrita.
       operacional** (worker criado em 07/09/2026 com o overlay de integrações;
       advisory lock retido; cursor avançado com consumo de updates comprovado;
       zero itens persistidos e zero chamadas de IA registradas na base até a
-      leitura). Contenção executada em 11/09/2026 (worker parado; ver M0-41);
-      reativação autorizada pendente
-      ([M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md),
+      leitura). Contenção executada em 11/09/2026 (worker parado; ver M0-41).
+      A STK-M0-60 concluiu o preflight read-only de reativação (12/09/2026):
+      identidade conferida pelo proprietário (`IDENTIDADE_CONFERE=true`), fila
+      vazia, sem bloqueios técnicos — reativação pronta para janela controlada
+      autorizada
+      ([M0-60-WORKER-REACTIVATION-PREFLIGHT.md](M0-60-WORKER-REACTIVATION-PREFLIGHT.md),
+      [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md),
       [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md)).
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
