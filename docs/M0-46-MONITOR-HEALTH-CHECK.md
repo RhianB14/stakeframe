@@ -55,27 +55,24 @@ construção, "um check específico falhou sem afetar a resposta".
   `TELEGRAM_OWNER_USER_ID`, `TELEGRAM_OWNER_CHAT_ID`); observabilidade e logs
   habilitados. Nenhum valor de segredo lido.
 - Schedule implantado: **`*/5 * * * *`** (único).
-- `wrangler tail` ao vivo nesta janela (execução conectada durante os disparos):
-  - `12:50:01.457Z` — `scheduled` ok (~0,8 s) → `/check` no Durable Object com
-    **`wallTime=10000 ms`**, outcome ok, sem exceções nem logs;
-  - `12:55:01.457Z` — `scheduled` ok (~0,8 s) → `/check` com
-    **`wallTime=10000 ms`**;
-  - `12:55:37.000Z`, `13:00:01.457Z` e `13:00:37.000Z` — mesmos padrões
-    (`scheduled` ok em ≲0,4 s → `/check` com **`wallTime=10000 ms`**; a execução
-    de `13:00:01` mediu `10021 ms`);
-  - uma requisição pública `GET` no subdomínio `workers.dev` no mesmo intervalo
-    (resposta 404 esperada do handler sem bearer; sem efeito).
+- `wrangler tail` ao vivo nesta janela (execução conectada durante os disparos)
+  capturou **oito execuções do check em quatro marcas de cinco minutos**
+  (`12:50`, `12:55`, `13:00` e `13:05`), cada marca com duas entregas do
+  agendador (≈`:01,5` e ≈`:37`); em **todas**, `scheduled` ok em ≲0,8 s e a
+  invocação `/check` do Durable Object terminou com **`wallTime≈10000 ms`**
+  (única variação: `10021 ms` em `13:00:01`), outcome ok, sem exceções nem
+  logs; também apareceu uma requisição pública `GET` no subdomínio `workers.dev`
+  no intervalo (resposta 404 esperada do handler sem bearer; sem efeito).
 - Leitura do proprietário (evidência da tarefa): `lastResult=failed`,
   `lastError=health_check`, `state=attention`, `delivery=uncertain`,
   `lastCompletedAt` ≈ `12:34:34Z`.
 
-O `wallTime` de ~10.000 ms em **todas as cinco execuções do check** observadas
+O `wallTime` de ~10.000 ms em **todas as oito execuções do check** observadas
 coincide com o teto do `AbortSignal.timeout(10_000)` do próprio monitor: o
 fetch autenticado não completa dentro do orçamento — de forma persistente,
-não intermitente. Observou-se, em cada marca de cinco minutos, **duas entregas**
-do agendador (≈`:01,5` e ≈`:37`); o horário de entrega é comportamento do
-provedor, o Durable Object registra cada disparo com o mesmo resultado e o
-lease serializa sobreposições.
+não intermitente. O horário das duas entregas por marca é comportamento do
+agendador do provedor; o Durable Object registra cada disparo com o mesmo
+resultado e o lease evita execuções sobrepostas.
 
 ## 5. Sondas públicas (sem autenticação, 12:40Z)
 
