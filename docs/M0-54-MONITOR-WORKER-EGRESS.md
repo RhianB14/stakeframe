@@ -1,6 +1,6 @@
 # STK-M0-54 — egress do monitor no Worker agendado
 
-Data: 12/09/2026  
+Data: 12/09/2026
 Estado: implementação concluída; validação em produção pendente de autorização
 
 ## 1. Problema observado
