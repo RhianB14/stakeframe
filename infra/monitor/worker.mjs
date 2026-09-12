@@ -111,7 +111,9 @@ async function probeHealth(env, fetchImpl, now) {
     try {
       response = await fetchImpl(`${env.APP_ORIGIN}/api/v1/operations/health`, {
         headers: { authorization: `Bearer ${env.MONITOR_TOKEN}` },
-        redirect: 'error',
+        // 'manual' keeps redirects blocked while staying supported by the
+        // runtime; 'error' is rejected before any connection (docs/M0-58).
+        redirect: 'manual',
         signal: timeout,
       });
     } catch (error) {
@@ -180,7 +182,9 @@ async function deliverNotification(env, fetchImpl, text) {
       `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
         method: 'POST',
-        redirect: 'error',
+        // 'manual' keeps redirects blocked; a 3xx is not ok and never followed
+        // (docs/M0-58).
+        redirect: 'manual',
         signal: AbortSignal.timeout(5000),
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
