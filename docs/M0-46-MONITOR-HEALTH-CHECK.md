@@ -60,20 +60,22 @@ construção, "um check específico falhou sem afetar a resposta".
     **`wallTime=10000 ms`**, outcome ok, sem exceções nem logs;
   - `12:55:01.457Z` — `scheduled` ok (~0,8 s) → `/check` com
     **`wallTime=10000 ms`**;
-  - `12:55:37.000Z` — segundo disparo no mesmo minuto (`scheduled` ok ~0,2 s) →
-    `/check` com **`wallTime=10000 ms`**;
+  - `12:55:37.000Z`, `13:00:01.457Z` e `13:00:37.000Z` — mesmos padrões
+    (`scheduled` ok em ≲0,4 s → `/check` com **`wallTime=10000 ms`**; a execução
+    de `13:00:01` mediu `10021 ms`);
   - uma requisição pública `GET` no subdomínio `workers.dev` no mesmo intervalo
     (resposta 404 esperada do handler sem bearer; sem efeito).
 - Leitura do proprietário (evidência da tarefa): `lastResult=failed`,
   `lastError=health_check`, `state=attention`, `delivery=uncertain`,
   `lastCompletedAt` ≈ `12:34:34Z`.
 
-O `wallTime` de exatamente 10.000 ms em **todas** as execuções observadas
+O `wallTime` de ~10.000 ms em **todas as cinco execuções do check** observadas
 coincide com o teto do `AbortSignal.timeout(10_000)` do próprio monitor: o
 fetch autenticado não completa dentro do orçamento — de forma persistente,
-não intermitente. A variação de horário dos disparos (incluindo o segundo às
-`12:55:37`) é comportamento do agendador do provedor; o resultado do check é o
-mesmo em todos.
+não intermitente. Observou-se, em cada marca de cinco minutos, **duas entregas**
+do agendador (≈`:01,5` e ≈`:37`); o horário de entrega é comportamento do
+provedor, o Durable Object registra cada disparo com o mesmo resultado e o
+lease serializa sobreposições.
 
 ## 5. Sondas públicas (sem autenticação, 12:40Z)
 
