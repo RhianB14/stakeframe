@@ -68,6 +68,9 @@ function setup(options = {}) {
     if (url.startsWith('https://stakeframe.com.br/')) {
       if (healthFailure === 'timeout')
         throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      if (healthFailure === 'abort')
+        throw new DOMException('The operation was aborted', 'AbortError');
+      if (healthFailure === 'unclassified') throw new Error('Fictional unclassified failure');
       if (healthFailure === 'network') throw new TypeError('fetch failed');
       if (healthFailure === 'http') return new Response('indisponível', { status: 503 });
       const checks = Object.fromEntries(
@@ -282,6 +285,80 @@ test('classifies a network failure of the health request', async () => {
     assert.equal(status.lastResult, 'failed');
     assert.equal(status.lastError, 'health_check_network');
     assert.equal(status.lastHttpStatus, null);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('classifies an unclassified rejection as a network failure while the attempt signal is live', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('unclassified');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_network');
+    assert.equal(status.lastHttpStatus, null);
+    assert.equal(status.lastSignature, 'application:failed');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('classifies an unclassified rejection as a timeout when the attempt signal itself aborted', async () => {
+  const fixture = setup();
+  const controller = new AbortController();
+  const original = AbortSignal.timeout;
+  AbortSignal.timeout = () => controller.signal;
+  try {
+    fixture.failHealth('unclassified');
+    controller.abort();
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_timeout');
+    assert.equal(fixture.read().error, 'health_check_timeout');
+    assert.equal(status.lastHttpStatus, null);
+    assert.equal(status.lastSignature, 'application:failed');
+    assert.equal(status.state, 'attention');
+  } finally {
+    AbortSignal.timeout = original;
+    fixture.db.close();
+  }
+});
+
+test('classifies AbortError as a timeout', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('abort');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_timeout');
+    assert.equal(status.lastHttpStatus, null);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('clears the sanitized error and HTTP status after a timeout failure recovers', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('timeout');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    assert.equal((await statusOf(monitor)).lastError, 'health_check_timeout');
+    fixture.step();
+    fixture.failHealth(null);
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'ready');
+    assert.equal(status.lastError, null);
+    assert.equal(status.lastHttpStatus, 200);
+    assert.equal(status.lastSignature, 'ready');
   } finally {
     fixture.db.close();
   }

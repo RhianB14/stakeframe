@@ -149,16 +149,20 @@ export class StakeframeMonitor {
     let failure = 'health_check';
     let httpStatus = null;
     try {
+      const timeout = AbortSignal.timeout(10_000);
       let response;
       try {
         response = await this.fetchImpl(`${env.APP_ORIGIN}/api/v1/operations/health`, {
           headers: { authorization: `Bearer ${env.MONITOR_TOKEN}` },
           redirect: 'error',
-          signal: AbortSignal.timeout(10_000),
+          signal: timeout,
         });
       } catch (error) {
+        // The runtime does not always name our own 10s abort as
+        // TimeoutError/AbortError; an aborted attempt signal is proof that
+        // the ceiling fired, so it still classifies as a timeout.
         failure =
-          error?.name === 'TimeoutError' || error?.name === 'AbortError'
+          timeout.aborted || error?.name === 'TimeoutError' || error?.name === 'AbortError'
             ? 'health_check_timeout'
             : 'health_check_network';
         throw error;

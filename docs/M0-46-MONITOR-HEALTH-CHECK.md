@@ -179,3 +179,18 @@ indisponível para o esquema OAuth; painel dinâmico não utilizado.
    recebido (a primeira mudança para `application:failed` dispara tentativa).
 4. Não reenviar alerta manualmente; aguardar a próxima mudança natural de
    assinatura.
+
+## 12. Complemento STK-M0-53 — classificação do aborto do teto
+
+Em produção, o check seguia gastando ~10 s (teto do `AbortSignal.timeout`) e
+registrando `health_check_network`: o runtime não nomeia o aborto do próprio
+teto como `TimeoutError`/`AbortError`. Desde a STK-M0-53, o sinal do teto é
+guardado em variável e o seu estado (`signal.aborted`) entra na classificação:
+aborto do próprio teto ⇒ `health_check_timeout`; demais rejeições de rede ⇒
+`health_check_network`. `redirect:'error'`, `Authorization`, validação de
+payload, `lastHttpStatus`, `lastSignature` e a deduplicação permanecem
+inalterados; nada de mensagem, stack, URL completa, bearer ou segredo é
+registrado. Testes cobrem: nome de erro desconhecido com e sem aborto do
+sinal, `AbortError`, `TimeoutError`, falha de rede real, HTTP não-2xx, payload
+inválido, resposta válida e a persistência/limpeza de
+`lastError`/`lastHttpStatus`.
