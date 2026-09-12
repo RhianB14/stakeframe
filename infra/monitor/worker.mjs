@@ -63,11 +63,152 @@ async function json(response, max = 8192) {
   }
 }
 
+function validSignature(signature) {
+  if (signature === 'ready' || signature === 'application:failed') return true;
+  const parts = signature?.split(',') ?? [];
+  if (parts.length === 0 || new Set(parts).size !== parts.length) return false;
+  let previous = -1;
+  for (const part of parts) {
+    const [name, state, extra] = part.split(':');
+    const index = names.indexOf(name);
+    if (extra !== undefined || index <= previous || !['warning', 'failed'].includes(state))
+      return false;
+    previous = index;
+  }
+  return true;
+}
+
+function validCompletion(result) {
+  if (
+    !result ||
+    !Number.isSafeInteger(result.startedAt) ||
+    !validSignature(result.signature) ||
+    !(
+      result.httpStatus === null ||
+      (Number.isInteger(result.httpStatus) && result.httpStatus >= 100 && result.httpStatus <= 599)
+    )
+  )
+    return false;
+  if (result.signature === 'application:failed') {
+    if (['health_check', 'health_check_timeout', 'health_check_network'].includes(result.failure))
+      return result.httpStatus === null;
+    if (result.failure === 'health_check_http')
+      return result.httpStatus !== null && (result.httpStatus < 200 || result.httpStatus >= 300);
+    if (result.failure === 'health_check_payload')
+      return result.httpStatus !== null && result.httpStatus >= 200 && result.httpStatus < 300;
+    return false;
+  }
+  return result.failure === null && result.httpStatus === 200;
+}
+
+async function probeHealth(env, fetchImpl, now) {
+  let signature;
+  let failure = 'health_check';
+  let httpStatus = null;
+  try {
+    const timeout = AbortSignal.timeout(10_000);
+    let response;
+    try {
+      response = await fetchImpl(`${env.APP_ORIGIN}/api/v1/operations/health`, {
+        headers: { authorization: `Bearer ${env.MONITOR_TOKEN}` },
+        redirect: 'error',
+        signal: timeout,
+      });
+    } catch (error) {
+      failure =
+        timeout.aborted || error?.name === 'TimeoutError' || error?.name === 'AbortError'
+          ? 'health_check_timeout'
+          : 'health_check_network';
+      throw error;
+    }
+    httpStatus = response.status;
+    if (!response.ok) {
+      failure = 'health_check_http';
+      await response.body?.cancel();
+      throw new Error();
+    }
+    let status;
+    try {
+      status = await json(response);
+    } catch {
+      failure = 'health_check_payload';
+      throw new Error();
+    }
+    const checkedAt = Date.parse(status.checkedAt);
+    if (
+      !Number.isFinite(checkedAt) ||
+      checkedAt > now + 60_000 ||
+      now - checkedAt > 180_000 ||
+      !['ready', 'attention'].includes(status.status) ||
+      !status.checks ||
+      Object.keys(status.checks).sort().join(',') !== [...names].sort().join(',') ||
+      Object.values(status.checks).some(
+        (value) => !['ready', 'warning', 'failed', 'disabled'].includes(value),
+      )
+    ) {
+      failure = 'health_check_payload';
+      throw new Error();
+    }
+    signature =
+      names
+        .filter((name) => ['warning', 'failed'].includes(status.checks[name]))
+        .map((name) => `${name}:${status.checks[name]}`)
+        .join(',') || 'ready';
+    if ((signature === 'ready') !== (status.status === 'ready')) {
+      failure = 'health_check_payload';
+      throw new Error();
+    }
+    failure = null;
+  } catch {
+    signature = 'application:failed';
+  }
+  return { signature, failure, httpStatus };
+}
+
+function notificationText(signature) {
+  return signature === 'ready'
+    ? 'Stakeframe: os sinais operacionais voltaram ao normal.'
+    : `Stakeframe precisa de atenção: ${signature
+        .split(',')
+        .map((part) => labels[part.split(':')[0]])
+        .join(', ')}. Confira o procedimento operacional.`;
+}
+
+async function deliverNotification(env, fetchImpl, text) {
+  try {
+    const sent = await fetchImpl(
+      `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(5000),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: env.TELEGRAM_OWNER_CHAT_ID,
+          text,
+          disable_web_page_preview: true,
+        }),
+      },
+    );
+    if (!sent.ok) {
+      await sent.body?.cancel();
+      throw new Error();
+    }
+    const result = await json(sent);
+    return (
+      result.ok === true &&
+      result.result?.chat?.type === 'private' &&
+      String(result.result.chat.id) === env.TELEGRAM_OWNER_CHAT_ID
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class StakeframeMonitor {
   constructor(ctx, env, dependencies = {}) {
     this.storage = ctx.storage;
     this.env = env;
-    this.fetchImpl = dependencies.fetchImpl ?? fetch;
     this.now = dependencies.now ?? Date.now;
     this.storage.sql.exec(
       'CREATE TABLE IF NOT EXISTS monitor (id INTEGER PRIMARY KEY CHECK(id=1), lease_until INTEGER NOT NULL DEFAULT 0, checked_at INTEGER, signature TEXT, delivery TEXT, fired_at INTEGER, started_at INTEGER, completed_at INTEGER, result TEXT, error TEXT)',
@@ -116,191 +257,173 @@ export class StakeframeMonitor {
         lastSignature: row.signature,
       });
     }
-    if (path !== '/check' || request.method !== 'POST') return new Response(null, { status: 404 });
-    const now = this.now();
-    // Record the fire before evaluating anything else, so a scheduled trigger
-    // stays provable even when the configuration is refused or the monitor is
-    // disabled.
-    this.storage.sql.exec('UPDATE monitor SET fired_at=? WHERE id=1', now);
-    let env;
-    try {
-      env = configuration(this.env);
-    } catch {
-      this.storage.sql.exec(
-        "UPDATE monitor SET started_at=?,completed_at=?,result='failed',error='configuration',http_status=NULL WHERE id=1",
-        now,
-        now,
-      );
-      return new Response(null, { status: 500 });
-    }
-    if (!env) return new Response(null, { status: 204 });
-    const claimed = this.storage.transactionSync(() => {
-      const row = this.storage.sql.exec('SELECT lease_until FROM monitor WHERE id=1').toArray()[0];
-      if (row.lease_until > now) return false;
-      this.storage.sql.exec(
-        'UPDATE monitor SET lease_until=?,started_at=? WHERE id=1',
-        now + 60_000,
-        now,
-      );
-      return true;
-    });
-    if (!claimed) return new Response(null, { status: 204 });
-    let signature = 'application:failed';
-    let failure = 'health_check';
-    let httpStatus = null;
-    try {
-      const timeout = AbortSignal.timeout(10_000);
-      let response;
+    if (path === '/check/start' && request.method === 'POST') {
+      const now = this.now();
+      // Record every fire before configuration and lease checks so disabled,
+      // refused and overlapping executions remain distinguishable.
+      this.storage.sql.exec('UPDATE monitor SET fired_at=? WHERE id=1', now);
+      let env;
       try {
-        response = await this.fetchImpl(`${env.APP_ORIGIN}/api/v1/operations/health`, {
-          headers: { authorization: `Bearer ${env.MONITOR_TOKEN}` },
-          redirect: 'error',
-          signal: timeout,
-        });
-      } catch (error) {
-        // The runtime does not always name our own 10s abort as
-        // TimeoutError/AbortError; an aborted attempt signal is proof that
-        // the ceiling fired, so it still classifies as a timeout.
-        failure =
-          timeout.aborted || error?.name === 'TimeoutError' || error?.name === 'AbortError'
-            ? 'health_check_timeout'
-            : 'health_check_network';
-        throw error;
-      }
-      httpStatus = response.status;
-      if (!response.ok) {
-        failure = 'health_check_http';
-        await response.body?.cancel();
-        throw new Error();
-      }
-      let status;
-      try {
-        status = await json(response);
+        env = configuration(this.env);
       } catch {
-        failure = 'health_check_payload';
-        throw new Error();
-      }
-      const checkedAt = Date.parse(status.checkedAt);
-      if (
-        !Number.isFinite(checkedAt) ||
-        checkedAt > now + 60_000 ||
-        now - checkedAt > 180_000 ||
-        !['ready', 'attention'].includes(status.status) ||
-        !status.checks ||
-        Object.keys(status.checks).sort().join(',') !== [...names].sort().join(',') ||
-        Object.values(status.checks).some(
-          (value) => !['ready', 'warning', 'failed', 'disabled'].includes(value),
-        )
-      ) {
-        failure = 'health_check_payload';
-        throw new Error();
-      }
-      signature =
-        names
-          .filter((name) => ['warning', 'failed'].includes(status.checks[name]))
-          .map((name) => `${name}:${status.checks[name]}`)
-          .join(',') || 'ready';
-      if ((signature === 'ready') !== (status.status === 'ready')) {
-        failure = 'health_check_payload';
-        throw new Error();
-      }
-      failure = null;
-    } catch {
-      signature = 'application:failed';
-    }
-    const previous = this.storage.transactionSync(() => {
-      const row = this.storage.sql.exec('SELECT signature FROM monitor WHERE id=1').toArray()[0];
-      const changed =
-        row.signature !== signature && !(row.signature === null && signature === 'ready');
-      const failed = signature === 'application:failed';
-      // Persist the delivery claim BEFORE sending; a timeout never causes a retry
-      // of an external message whose result may already have been accepted.
-      this.storage.sql.exec(
-        'UPDATE monitor SET checked_at=?,signature=?,delivery=CASE WHEN ? THEN ? ELSE delivery END,completed_at=?,result=?,error=?,http_status=? WHERE id=1',
-        now,
-        signature,
-        changed ? 1 : 0,
-        'uncertain',
-        now,
-        failed ? 'failed' : signature === 'ready' ? 'ready' : 'attention',
-        failed ? failure : null,
-        httpStatus,
-      );
-      return { changed };
-    });
-    if (previous.changed) {
-      const text =
-        signature === 'ready'
-          ? 'Stakeframe: os sinais operacionais voltaram ao normal.'
-          : `Stakeframe precisa de atenção: ${signature
-              .split(',')
-              .map((part) => labels[part.split(':')[0]])
-              .join(', ')}. Confira o procedimento operacional.`;
-      try {
-        const sent = await this.fetchImpl(
-          `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-          {
-            method: 'POST',
-            redirect: 'error',
-            signal: AbortSignal.timeout(5000),
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: env.TELEGRAM_OWNER_CHAT_ID,
-              text,
-              disable_web_page_preview: true,
-            }),
-          },
+        this.storage.sql.exec(
+          "UPDATE monitor SET lease_until=0,started_at=?,completed_at=?,result='failed',error='configuration',http_status=NULL WHERE id=1",
+          now,
+          now,
         );
-        if (!sent.ok) {
-          await sent.body?.cancel();
-          throw new Error();
-        }
-        const result = await json(sent);
-        if (
-          result.ok !== true ||
-          result.result?.chat?.type !== 'private' ||
-          String(result.result.chat.id) !== env.TELEGRAM_OWNER_CHAT_ID
-        )
-          throw new Error();
-        this.storage.sql.exec("UPDATE monitor SET delivery='confirmed' WHERE id=1");
-      } catch {
-        /* Persisted uncertainty remains visible to the operator; no duplicate send. */
+        return new Response(null, { status: 500 });
       }
+      if (!env) return new Response(null, { status: 204 });
+      const claimed = this.storage.transactionSync(() => {
+        const row = this.storage.sql
+          .exec('SELECT lease_until FROM monitor WHERE id=1')
+          .toArray()[0];
+        if (row.lease_until > now) return false;
+        this.storage.sql.exec(
+          'UPDATE monitor SET lease_until=?,started_at=? WHERE id=1',
+          now + 60_000,
+          now,
+        );
+        return true;
+      });
+      return claimed ? Response.json({ startedAt: now }) : new Response(null, { status: 204 });
     }
-    this.storage.sql.exec('UPDATE monitor SET lease_until=0 WHERE id=1');
-    return new Response(null, { status: 204 });
+    if (path === '/check/complete' && request.method === 'POST') {
+      let result;
+      try {
+        result = await json(request, 2048);
+      } catch {
+        return new Response(null, { status: 400 });
+      }
+      if (!validCompletion(result)) return new Response(null, { status: 400 });
+      const completedAt = this.now();
+      const completion = this.storage.transactionSync(() => {
+        const row = this.storage.sql
+          .exec('SELECT lease_until,started_at,signature FROM monitor WHERE id=1')
+          .toArray()[0];
+        if (row.lease_until === 0 || row.started_at !== result.startedAt) return null;
+        const changed =
+          row.signature !== result.signature &&
+          !(row.signature === null && result.signature === 'ready');
+        const failed = result.signature === 'application:failed';
+        this.storage.sql.exec(
+          'UPDATE monitor SET lease_until=0,checked_at=?,signature=?,delivery=CASE WHEN ? THEN ? ELSE delivery END,completed_at=?,result=?,error=?,http_status=? WHERE id=1',
+          completedAt,
+          result.signature,
+          changed ? 1 : 0,
+          'uncertain',
+          completedAt,
+          failed ? 'failed' : result.signature === 'ready' ? 'ready' : 'attention',
+          failed ? result.failure : null,
+          result.httpStatus,
+        );
+        return { changed };
+      });
+      if (!completion) return new Response(null, { status: 409 });
+      return Response.json({
+        notification: completion.changed
+          ? {
+              startedAt: result.startedAt,
+              signature: result.signature,
+              text: notificationText(result.signature),
+            }
+          : null,
+      });
+    }
+    if (path === '/check/confirm-delivery' && request.method === 'POST') {
+      let confirmation;
+      try {
+        confirmation = await json(request, 1024);
+      } catch {
+        return new Response(null, { status: 400 });
+      }
+      if (
+        !Number.isSafeInteger(confirmation?.startedAt) ||
+        !validSignature(confirmation?.signature)
+      )
+        return new Response(null, { status: 400 });
+      const accepted = this.storage.transactionSync(() => {
+        const row = this.storage.sql
+          .exec('SELECT started_at,signature,delivery FROM monitor WHERE id=1')
+          .toArray()[0];
+        if (
+          row.started_at !== confirmation.startedAt ||
+          row.signature !== confirmation.signature ||
+          row.delivery !== 'uncertain'
+        )
+          return false;
+        this.storage.sql.exec("UPDATE monitor SET delivery='confirmed' WHERE id=1");
+        return true;
+      });
+      return new Response(null, { status: accepted ? 204 : 409 });
+    }
+    return new Response(null, { status: 404 });
   }
 }
 
-export default {
-  async scheduled(_event, env, ctx) {
-    // Every fire reaches the Durable Object — including when the monitor is
-    // disabled — so "cron not firing" stays distinguishable from "monitor off",
-    // and a refused check surfaces as a failed scheduled invocation for the
-    // provider's observability.
-    const stub = env.STAKEFRAME_MONITOR.get(env.STAKEFRAME_MONITOR.idFromName('production'));
-    ctx.waitUntil(
-      (async () => {
-        const response = await stub.fetch(
-          new Request('https://monitor.internal/check', { method: 'POST' }),
-        );
-        if (!response.ok) throw new Error('MONITOR_CHECK_FAILED');
-      })(),
-    );
-  },
-  async fetch(request, env) {
-    if (
-      new URL(request.url).pathname !== '/status' ||
-      request.method !== 'GET' ||
-      !/^[a-f0-9]{64}$/.test(env.MONITOR_TOKEN ?? '') ||
-      request.headers.get('authorization') !== `Bearer ${env.MONITOR_TOKEN}`
-    )
-      return new Response(null, { status: 404 });
-    const stub = env.STAKEFRAME_MONITOR.get(env.STAKEFRAME_MONITOR.idFromName('production'));
-    const result = await stub.fetch('https://monitor.internal/status');
-    return new Response(result.body, {
-      status: result.status,
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-    });
-  },
-};
+export function createWorker(dependencies = {}) {
+  return {
+    async scheduled(_event, env, ctx) {
+      const fetchImpl = dependencies.fetchImpl ?? fetch;
+      const now = dependencies.now ?? Date.now;
+      const stub = env.STAKEFRAME_MONITOR.get(env.STAKEFRAME_MONITOR.idFromName('production'));
+      ctx.waitUntil(
+        (async () => {
+          const started = await stub.fetch(
+            new Request('https://monitor.internal/check/start', { method: 'POST' }),
+          );
+          if (started.status === 204) return;
+          if (!started.ok) throw new Error('MONITOR_CHECK_FAILED');
+          const claim = await json(started, 1024);
+          if (!Number.isSafeInteger(claim?.startedAt)) throw new Error('MONITOR_CHECK_FAILED');
+
+          // External I/O deliberately runs in the stateless scheduled Worker.
+          // The Durable Object remains the coordination and persistence atom.
+          const result = await probeHealth(env, fetchImpl, now());
+          const completed = await stub.fetch(
+            new Request('https://monitor.internal/check/complete', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ startedAt: claim.startedAt, ...result }),
+            }),
+          );
+          if (!completed.ok) throw new Error('MONITOR_CHECK_FAILED');
+          const { notification } = await json(completed, 2048);
+          if (!notification) return;
+
+          // The DO claimed delivery as uncertain before returning the message;
+          // only an authenticated provider acknowledgement confirms it.
+          if (!(await deliverNotification(env, fetchImpl, notification.text))) return;
+          const confirmed = await stub.fetch(
+            new Request('https://monitor.internal/check/confirm-delivery', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                startedAt: notification.startedAt,
+                signature: notification.signature,
+              }),
+            }),
+          );
+          if (!confirmed.ok) throw new Error('MONITOR_CHECK_FAILED');
+        })(),
+      );
+    },
+    async fetch(request, env) {
+      if (
+        new URL(request.url).pathname !== '/status' ||
+        request.method !== 'GET' ||
+        !/^[a-f0-9]{64}$/.test(env.MONITOR_TOKEN ?? '') ||
+        request.headers.get('authorization') !== `Bearer ${env.MONITOR_TOKEN}`
+      )
+        return new Response(null, { status: 404 });
+      const stub = env.STAKEFRAME_MONITOR.get(env.STAKEFRAME_MONITOR.idFromName('production'));
+      const result = await stub.fetch('https://monitor.internal/status');
+      return new Response(result.body, {
+        status: result.status,
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+      });
+    },
+  };
+}
+
+export default createWorker();
