@@ -61,12 +61,20 @@ function setup(options = {}) {
   let deliveryFailure = false;
   let malformed = false;
   let healthFailure = null;
+  const flags = {};
+  const cancelable = (key) =>
+    new ReadableStream({
+      pull() {},
+      cancel() {
+        flags[key] = true;
+      },
+    });
   const requests = [];
   const durableRequests = [];
   const monitorEnvironments = new WeakMap();
   const fetchImpl = async (url, options) => {
     requests.push({ url, options });
-    assert.equal(options.redirect, 'error');
+    assert.equal(options.redirect, 'manual');
     if (url.startsWith('https://stakeframe.com.br/')) {
       if (healthFailure === 'timeout')
         throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
@@ -75,6 +83,11 @@ function setup(options = {}) {
       if (healthFailure === 'unclassified') throw new Error('Fictional unclassified failure');
       if (healthFailure === 'network') throw new TypeError('fetch failed');
       if (healthFailure === 'http') return new Response('indisponível', { status: 503 });
+      if (healthFailure === 'redirect302')
+        return new Response(cancelable('healthRedirectBody'), {
+          status: 302,
+          headers: { location: 'https://redirect.invalid/login' },
+        });
       const checks = Object.fromEntries(
         names.map((name) => [name, name === issue ? 'failed' : 'ready']),
       );
@@ -88,6 +101,11 @@ function setup(options = {}) {
             },
       );
     }
+    if (deliveryFailure === 'redirect302')
+      return new Response(cancelable('deliveryRedirectBody'), {
+        status: 302,
+        headers: { location: 'https://redirect.invalid/follow-me' },
+      });
     if (deliveryFailure) throw new Error('Fictional delivery uncertainty');
     const body = JSON.parse(options.body);
     assert.equal(body.chat_id, env.TELEGRAM_OWNER_CHAT_ID);
@@ -134,6 +152,7 @@ function setup(options = {}) {
     read,
     requests,
     durableRequests,
+    flags,
     time: () => now,
     step() {
       now += 300000;
@@ -141,8 +160,8 @@ function setup(options = {}) {
     issue(value) {
       issue = value;
     },
-    failDelivery() {
-      deliveryFailure = true;
+    failDelivery(value = true) {
+      deliveryFailure = value;
     },
     malformed() {
       malformed = true;
@@ -469,6 +488,73 @@ test('records the HTTP status when the health endpoint refuses the request', asy
     assert.equal(status.lastResult, 'failed');
     assert.equal(status.lastError, 'health_check_http');
     assert.equal(status.lastHttpStatus, 503);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('treats a health redirect as an HTTP failure without following it', async () => {
+  const fixture = setup();
+  try {
+    fixture.failHealth('redirect302');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const status = await statusOf(monitor);
+    assert.equal(status.lastResult, 'failed');
+    assert.equal(status.lastError, 'health_check_http');
+    assert.equal(status.lastHttpStatus, 302);
+    assert.equal(status.lastSignature, 'application:failed');
+    assert.equal(status.state, 'attention');
+    assert.equal(
+      fixture.requests.filter((entry) => entry.url.startsWith('https://stakeframe.com.br/')).length,
+      1,
+    );
+    assert.equal(
+      fixture.requests.filter((entry) => entry.url.includes('redirect.invalid')).length,
+      0,
+    );
+    assert.equal(fixture.flags.healthRedirectBody, true);
+    let row = fixture.read();
+    assert.equal(row.completed_at, fixture.time());
+    assert.equal(row.lease_until, 0);
+    fixture.step();
+    fixture.failHealth(null);
+    await fixture.check(monitor);
+    row = fixture.read();
+    assert.equal(row.result, 'ready');
+    assert.equal(row.lease_until, 0);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('does not follow a Telegram redirect and keeps the delivery uncertain', async () => {
+  const fixture = setup();
+  try {
+    fixture.issue('backup');
+    fixture.failDelivery('redirect302');
+    const monitor = fixture.instance();
+    await fixture.check(monitor);
+    const row = fixture.read();
+    assert.equal(row.delivery, 'uncertain');
+    assert.equal(row.result, 'attention');
+    assert.equal(row.error, null);
+    assert.equal(row.signature, 'backup:failed');
+    assert.equal(fixture.flags.deliveryRedirectBody, true);
+    assert.equal(
+      fixture.requests.filter((entry) => entry.url.includes('redirect.invalid')).length,
+      0,
+    );
+    assert.equal(
+      fixture.durableRequests.filter(
+        (request) => new URL(request.url).pathname === '/check/confirm-delivery',
+      ).length,
+      0,
+    );
+    const status = await statusOf(monitor);
+    assert.equal(status.lastSignature, 'backup:failed');
+    assert.equal(status.lastResult, 'attention');
+    assert.equal(status.delivery, 'uncertain');
   } finally {
     fixture.db.close();
   }

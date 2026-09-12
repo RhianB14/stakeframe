@@ -65,3 +65,12 @@ continuam pendentes de observação.
 
 Nenhum deploy, migração, alteração de segredo, trigger ou binding integra esta
 tarefa.
+
+## 6. Correção posterior — STK-M0-58
+
+A observação pós-deploy (STK-M0-56) mostrou que a sonda seguia falhando; a
+investigação STK-M0-57 comprovou a causa remanescente no modo `redirect:'error'`
+do runtime (rejeição imediata, sem conexão) e a correção (`redirect:'manual'`,
+fail-closed) está registrada em
+[M0-58-MONITOR-MANUAL-REDIRECT.md](M0-58-MONITOR-MANUAL-REDIRECT.md). As
+evidências anteriores desta página permanecem como registradas.

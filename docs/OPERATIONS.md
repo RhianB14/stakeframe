@@ -186,8 +186,12 @@ disponível e atuação do operador; o ensaio fictício não comprova o RTO real
 persistente em Durable Object SQLite. O handler agendado executa o I/O externo
 (consulta da API e envio ao Telegram); o Durable Object concede a lease,
 persiste o resultado sanitizado, deduplica mudanças e confirma a entrega. Essa
-separação impede que uma limitação observada no egress do Durable Object
-bloqueie a sonda, sem abrir endpoints públicos de coordenação. A configuração
+separação mantém a sonda executável no Worker agendado, sem abrir endpoints
+públicos de coordenação. Os dois fetches externos usam `redirect: 'manual'`:
+nenhum redirect é seguido; 3xx da saúde vira `health_check_http` com o código
+persistido e 3xx do Telegram mantém a entrega `uncertain`
+([M0-58-MONITOR-MANUAL-REDIRECT.md](M0-58-MONITOR-MANUAL-REDIRECT.md)). A
+configuração
 versionada permanece desabilitada. A ativação exige deployment Cloudflare e segredos privados
 `MONITOR_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_USER_ID` e
 `TELEGRAM_OWNER_CHAT_ID`, conferidos com o proprietário. Não há trigger público.

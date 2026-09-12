@@ -524,7 +524,15 @@ ou janela de rede; cada item exige a evidência descrita.
       merge, release, deploy e observação em produção seguem pendentes
       ([M0-54-MONITOR-WORKER-EGRESS.md](M0-54-MONITOR-WORKER-EGRESS.md)). A
       correção só poderá ser declarada operacional após avanço do `/status` em
-      dois ciclos e resposta HTTP persistida. Deploy pendente de autorização
+      dois ciclos e resposta HTTP persistida. As STK-M0-55/56 executaram a
+      integração e o deploy do monitor e a primeira validação operacional
+      (FALHOU): os ciclos concluíam sem o teto de 10 s, mas o fetch seguia
+      rejeitando; a STK-M0-57 comprovou a causa — `redirect: 'error'` é
+      recusado pelo runtime antes de qualquer conexão — e a STK-M0-58 troca os
+      dois fetches para `redirect: 'manual'` (fail-closed; 3xx nunca é
+      seguido), com validação de produção pendente
+      ([M0-58-MONITOR-MANUAL-REDIRECT.md](M0-58-MONITOR-MANUAL-REDIRECT.md)).
+      Deploy pendente de autorização
       ([M0-46-MONITOR-HEALTH-CHECK.md](M0-46-MONITOR-HEALTH-CHECK.md),
       [M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
       [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md),
