@@ -70,31 +70,75 @@ export class StakeframeMonitor {
     this.fetchImpl = dependencies.fetchImpl ?? fetch;
     this.now = dependencies.now ?? Date.now;
     this.storage.sql.exec(
-      'CREATE TABLE IF NOT EXISTS monitor (id INTEGER PRIMARY KEY CHECK(id=1), lease_until INTEGER NOT NULL DEFAULT 0, checked_at INTEGER, signature TEXT, delivery TEXT)',
+      'CREATE TABLE IF NOT EXISTS monitor (id INTEGER PRIMARY KEY CHECK(id=1), lease_until INTEGER NOT NULL DEFAULT 0, checked_at INTEGER, signature TEXT, delivery TEXT, fired_at INTEGER, started_at INTEGER, completed_at INTEGER, result TEXT, error TEXT)',
     );
     this.storage.sql.exec('INSERT OR IGNORE INTO monitor(id) VALUES(1)');
+    // Databases created before the cron trail existed carry only the legacy
+    // columns; add the missing ones in place so the stored state survives the
+    // upgrade.
+    const columns = new Set(
+      this.storage.sql
+        .exec('PRAGMA table_info(monitor)')
+        .toArray()
+        .map((row) => row.name),
+    );
+    for (const [name, type] of [
+      ['fired_at', 'INTEGER'],
+      ['started_at', 'INTEGER'],
+      ['completed_at', 'INTEGER'],
+      ['result', 'TEXT'],
+      ['error', 'TEXT'],
+    ]) {
+      if (!columns.has(name))
+        this.storage.sql.exec(`ALTER TABLE monitor ADD COLUMN ${name} ${type}`);
+    }
   }
 
   async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === '/status' && request.method === 'GET') {
       const row = this.storage.sql
-        .exec('SELECT checked_at,signature,delivery FROM monitor WHERE id=1')
+        .exec(
+          'SELECT checked_at,signature,delivery,fired_at,started_at,completed_at,result,error FROM monitor WHERE id=1',
+        )
         .toArray()[0];
       return Response.json({
         lastCheckedAt: row.checked_at,
         state: row.signature === 'ready' ? 'ready' : row.signature ? 'attention' : 'unknown',
         delivery: row.delivery,
+        lastFiredAt: row.fired_at,
+        lastStartedAt: row.started_at,
+        lastCompletedAt: row.completed_at,
+        lastResult: row.result,
+        lastError: row.error,
       });
     }
     if (path !== '/check' || request.method !== 'POST') return new Response(null, { status: 404 });
-    const env = configuration(this.env);
-    if (!env) return new Response(null, { status: 204 });
     const now = this.now();
+    // Record the fire before evaluating anything else, so a scheduled trigger
+    // stays provable even when the configuration is refused or the monitor is
+    // disabled.
+    this.storage.sql.exec('UPDATE monitor SET fired_at=? WHERE id=1', now);
+    let env;
+    try {
+      env = configuration(this.env);
+    } catch {
+      this.storage.sql.exec(
+        "UPDATE monitor SET started_at=?,completed_at=?,result='failed',error='configuration' WHERE id=1",
+        now,
+        now,
+      );
+      return new Response(null, { status: 500 });
+    }
+    if (!env) return new Response(null, { status: 204 });
     const claimed = this.storage.transactionSync(() => {
       const row = this.storage.sql.exec('SELECT lease_until FROM monitor WHERE id=1').toArray()[0];
       if (row.lease_until > now) return false;
-      this.storage.sql.exec('UPDATE monitor SET lease_until=? WHERE id=1', now + 60_000);
+      this.storage.sql.exec(
+        'UPDATE monitor SET lease_until=?,started_at=? WHERE id=1',
+        now + 60_000,
+        now,
+      );
       return true;
     });
     if (!claimed) return new Response(null, { status: 204 });
@@ -136,16 +180,20 @@ export class StakeframeMonitor {
       const row = this.storage.sql.exec('SELECT signature FROM monitor WHERE id=1').toArray()[0];
       const changed =
         row.signature !== signature && !(row.signature === null && signature === 'ready');
+      const failed = signature === 'application:failed';
       // Persist the delivery claim BEFORE sending; a timeout never causes a retry
       // of an external message whose result may already have been accepted.
       this.storage.sql.exec(
-        'UPDATE monitor SET checked_at=?,signature=?,delivery=CASE WHEN ? THEN ? ELSE delivery END WHERE id=1',
+        'UPDATE monitor SET checked_at=?,signature=?,delivery=CASE WHEN ? THEN ? ELSE delivery END,completed_at=?,result=?,error=? WHERE id=1',
         now,
         signature,
         changed ? 1 : 0,
         'uncertain',
+        now,
+        failed ? 'failed' : signature === 'ready' ? 'ready' : 'attention',
+        failed ? 'health_check' : null,
       );
-      return { changed, signature: row.signature };
+      return { changed };
     });
     if (previous.changed) {
       const text =
@@ -193,9 +241,19 @@ export class StakeframeMonitor {
 
 export default {
   async scheduled(_event, env, ctx) {
-    if (env.MONITOR_ENABLED !== 'true') return;
+    // Every fire reaches the Durable Object — including when the monitor is
+    // disabled — so "cron not firing" stays distinguishable from "monitor off",
+    // and a refused check surfaces as a failed scheduled invocation for the
+    // provider's observability.
     const stub = env.STAKEFRAME_MONITOR.get(env.STAKEFRAME_MONITOR.idFromName('production'));
-    ctx.waitUntil(stub.fetch(new Request('https://monitor.internal/check', { method: 'POST' })));
+    ctx.waitUntil(
+      (async () => {
+        const response = await stub.fetch(
+          new Request('https://monitor.internal/check', { method: 'POST' }),
+        );
+        if (!response.ok) throw new Error('MONITOR_CHECK_FAILED');
+      })(),
+    );
   },
   async fetch(request, env) {
     if (

@@ -507,9 +507,13 @@ ou janela de rede; cada item exige a evidência descrita.
       estação de trabalho bloqueada; painel dinâmico em branco; POSTs
       autenticados não executáveis pelos meios disponíveis) — classificação
       **PARCIAL**; alerta/recuperação e validação operacional continuam
-      pendentes
+      pendentes. A STK-M0-43 ampliou a trilha do cron no Durable Object e no
+      `/status` autenticado (disparo, início, conclusão/falha e categoria
+      sanitizada) para permitir a prova de execução por leitura única; a
+      observação real segue pendente
       ([M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
-      [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md)).
+      [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md),
+      [M0-43-MONITOR-CRON-OBSERVABILITY.md](M0-43-MONITOR-CRON-OBSERVABILITY.md)).
 - [x] Procedimentos documentados de deploy, migração e rollback
       ([docs/DEPLOYMENT.md](DEPLOYMENT.md) — preparados na STK-M0-12 e
       exercitados no piloto M0-24; a reversão real ainda não foi executada).
