@@ -183,8 +183,12 @@ disponível e atuação do operador; o ensaio fictício não comprova o RTO real
 ## Monitor externo e orçamento
 
 `infra/monitor/worker.mjs` roda fora da VPS, com cron de cinco minutos e estado
-persistente em Durable Object SQLite. A configuração versionada permanece
-desabilitada. A ativação exige deployment Cloudflare e segredos privados
+persistente em Durable Object SQLite. O handler agendado executa o I/O externo
+(consulta da API e envio ao Telegram); o Durable Object concede a lease,
+persiste o resultado sanitizado, deduplica mudanças e confirma a entrega. Essa
+separação impede que uma limitação observada no egress do Durable Object
+bloqueie a sonda, sem abrir endpoints públicos de coordenação. A configuração
+versionada permanece desabilitada. A ativação exige deployment Cloudflare e segredos privados
 `MONITOR_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_USER_ID` e
 `TELEGRAM_OWNER_CHAT_ID`, conferidos com o proprietário. Não há trigger público.
 O estado privado do monitor exige o mesmo bearer e informa falhas de entrega.
@@ -252,5 +256,8 @@ de recuperação. `pnpm monitor:check` empacota o Worker em dry run. Os testes d
 monitor cobrem disparo agendado, execução saudável, falha do health check,
 entrega incerta, concorrência/lease, configuração recusada ou desabilitada,
 autenticação do `/status` e migração do estado persistido. A CI executa
-os ensaios em AMD64 e ARM64. Credenciais reais, emissão ACME, operação contínua,
-mensagem de alerta e volume representativo são gates do piloto de produção.
+os ensaios em AMD64 e ARM64. A arquitetura e sua validação local estão
+registradas em
+[M0-54-MONITOR-WORKER-EGRESS.md](M0-54-MONITOR-WORKER-EGRESS.md). Credenciais
+reais, emissão ACME, operação contínua, mensagem de alerta e volume
+representativo são gates do piloto de produção.

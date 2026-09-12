@@ -517,7 +517,14 @@ ou janela de rede; cada item exige a evidência descrita.
       pendente de ação operacional autorizada. O `/status` ganhou classes
       sanitizadas (`health_check_timeout`, `_network`, `_http`, `_payload`,
       `lastHttpStatus`, `lastSignature`) e o endpoint ganhou limite total de
-      tempo; deploy pendente de autorização
+      tempo. A STK-M0-54 removeu o I/O externo do contexto do Durable Object:
+      o Worker agendado consulta a API e envia notificações, enquanto o objeto
+      mantém lease, estado, deduplicação e confirmação transacionais. Testes
+      locais cobrem mensagens antigas/inconsistentes e as garantias anteriores;
+      merge, release, deploy e observação em produção seguem pendentes
+      ([M0-54-MONITOR-WORKER-EGRESS.md](M0-54-MONITOR-WORKER-EGRESS.md)). A
+      correção só poderá ser declarada operacional após avanço do `/status` em
+      dois ciclos e resposta HTTP persistida. Deploy pendente de autorização
       ([M0-46-MONITOR-HEALTH-CHECK.md](M0-46-MONITOR-HEALTH-CHECK.md),
       [M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
       [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md),

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import worker, { StakeframeMonitor } from '../../infra/monitor/worker.mjs';
+import worker, { createWorker, StakeframeMonitor } from '../../infra/monitor/worker.mjs';
 
 const env = {
   MONITOR_ENABLED: 'true',
@@ -62,6 +62,8 @@ function setup(options = {}) {
   let malformed = false;
   let healthFailure = null;
   const requests = [];
+  const durableRequests = [];
+  const monitorEnvironments = new WeakMap();
   const fetchImpl = async (url, options) => {
     requests.push({ url, options });
     assert.equal(options.redirect, 'error');
@@ -95,10 +97,34 @@ function setup(options = {}) {
       result: { chat: { id: Number(env.TELEGRAM_OWNER_CHAT_ID), type: 'private' } },
     });
   };
-  const instance = (envOverride = env) =>
-    new StakeframeMonitor({ storage }, envOverride, { fetchImpl, now: () => now });
-  const check = (monitor) =>
-    monitor.fetch(new Request('https://monitor.internal/check', { method: 'POST' }));
+  const instance = (envOverride = env) => {
+    const monitor = new StakeframeMonitor({ storage }, envOverride, { now: () => now });
+    monitorEnvironments.set(monitor, envOverride);
+    return monitor;
+  };
+  const check = async (monitor) => {
+    const waits = [];
+    const monitorEnv = monitorEnvironments.get(monitor);
+    const scheduledWorker = createWorker({ fetchImpl, now: () => now });
+    await scheduledWorker.scheduled(
+      {},
+      {
+        ...monitorEnv,
+        STAKEFRAME_MONITOR: {
+          idFromName: (name) => `monitor-id:${name}`,
+          get: (id) => ({
+            async fetch(request) {
+              assert.equal(id, 'monitor-id:production');
+              durableRequests.push(request);
+              return monitor.fetch(new Request(request));
+            },
+          }),
+        },
+      },
+      { waitUntil: (promise) => waits.push(promise) },
+    );
+    await Promise.all(waits);
+  };
   const read = () => db.prepare('SELECT * FROM monitor WHERE id=1').get();
   return {
     db,
@@ -107,6 +133,7 @@ function setup(options = {}) {
     check,
     read,
     requests,
+    durableRequests,
     time: () => now,
     step() {
       now += 300000;
@@ -175,6 +202,10 @@ test('records fire, start and conclusion of a healthy check', async () => {
       lastSignature: 'ready',
     });
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 0);
+    assert.deepEqual(
+      fixture.durableRequests.map((request) => new URL(request.url).pathname),
+      ['/check/start', '/check/complete'],
+    );
     assert.ok(!JSON.stringify(status).includes(env.MONITOR_TOKEN));
   } finally {
     fixture.db.close();
@@ -207,6 +238,12 @@ test('stays quiet while healthy, reports a backup incident once, then recovery',
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 2);
     assert.equal(fixture.read().result, 'ready');
     assert.equal((await statusOf(monitor)).lastSignature, 'ready');
+    assert.equal(
+      fixture.durableRequests.filter(
+        (request) => new URL(request.url).pathname === '/check/confirm-delivery',
+      ).length,
+      2,
+    );
   } finally {
     fixture.db.close();
   }
@@ -252,6 +289,64 @@ test('serializes overlapping probes and treats malformed private output as an in
     assert.equal(status.state, 'attention');
     assert.equal(status.lastFiredAt, fixture.time());
     assert.equal(status.lastCompletedAt, fixture.time());
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('rejects stale or inconsistent completion and delivery messages', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    const started = await monitor.fetch(
+      new Request('https://monitor.internal/check/start', { method: 'POST' }),
+    );
+    const claim = await started.json();
+    const stale = await monitor.fetch(
+      new Request('https://monitor.internal/check/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          startedAt: claim.startedAt - 1,
+          signature: 'ready',
+          failure: null,
+          httpStatus: 200,
+        }),
+      }),
+    );
+    assert.equal(stale.status, 409);
+    const inconsistent = await monitor.fetch(
+      new Request('https://monitor.internal/check/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          startedAt: claim.startedAt,
+          signature: 'application:failed',
+          failure: 'health_check_network',
+          httpStatus: 503,
+        }),
+      }),
+    );
+    assert.equal(inconsistent.status, 400);
+    const completed = await monitor.fetch(
+      new Request('https://monitor.internal/check/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          startedAt: claim.startedAt,
+          signature: 'backup:failed',
+          failure: null,
+          httpStatus: 200,
+        }),
+      }),
+    );
+    assert.equal(completed.status, 200);
+    assert.equal(fixture.read().delivery, 'uncertain');
+    const wrongConfirmation = await monitor.fetch(
+      new Request('https://monitor.internal/check/confirm-delivery', {
+        method: 'POST',
+        body: JSON.stringify({ startedAt: claim.startedAt, signature: 'worker:failed' }),
+      }),
+    );
+    assert.equal(wrongConfirmation.status, 409);
+    assert.equal(fixture.read().delivery, 'uncertain');
   } finally {
     fixture.db.close();
   }
@@ -409,8 +504,7 @@ test('records a refused configuration as a sanitized failed execution', async ()
   const fixture = setup();
   try {
     const monitor = fixture.instance({ ...env, APP_ORIGIN: 'https://stakeframe.example' });
-    const response = await fixture.check(monitor);
-    assert.equal(response.status, 500);
+    await assert.rejects(fixture.check(monitor), /MONITOR_CHECK_FAILED/);
     assert.equal(fixture.requests.length, 0);
     const row = fixture.read();
     assert.equal(row.fired_at, fixture.time());
@@ -432,8 +526,7 @@ test('records fires while disabled without starting a check', async () => {
   const fixture = setup();
   try {
     const monitor = fixture.instance({ ...env, MONITOR_ENABLED: 'false' });
-    const response = await fixture.check(monitor);
-    assert.equal(response.status, 204);
+    await fixture.check(monitor);
     assert.equal(fixture.requests.length, 0);
     const row = fixture.read();
     assert.equal(row.fired_at, fixture.time());
@@ -449,14 +542,14 @@ test('records fires while disabled without starting a check', async () => {
   }
 });
 
-test('routes every scheduled fire to the Durable Object and surfaces check failures', async () => {
+test('routes every scheduled fire through the Durable Object claim and surfaces claim failures', async () => {
   const ok = scheduledEnv('true', async () => new Response(null, { status: 204 }));
   const waits = [];
   await worker.scheduled({}, ok.env, { waitUntil: (promise) => waits.push(promise) });
   await Promise.all(waits);
   assert.equal(ok.calls.length, 1);
   assert.equal(ok.calls[0].id, 'monitor-id:production');
-  assert.equal(new URL(ok.calls[0].request.url).pathname, '/check');
+  assert.equal(new URL(ok.calls[0].request.url).pathname, '/check/start');
   assert.equal(ok.calls[0].request.method, 'POST');
 
   const broken = scheduledEnv('true', async () => new Response(null, { status: 500 }));
