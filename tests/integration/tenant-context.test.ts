@@ -115,11 +115,14 @@ describe('organization context resolution with a real PostgreSQL', () => {
   it('fails closed without a membership and keeps the error sanitized', async () => {
     const tenant = await createFreshDatabase();
     await insertUser('tenant-user-1', 'Pessoa Um', 'tenant-user-1@example.test');
-    const failure = await tenant
-      .resolveOrganizationContext('tenant-user-1')
-      .catch((error: unknown) => error as Error);
+    let failure: unknown = null;
+    try {
+      await tenant.resolveOrganizationContext('tenant-user-1');
+    } catch (error) {
+      failure = error;
+    }
     expect(failure).toMatchObject({ name: 'TenantContextError', code: 'MEMBERSHIP_MISSING' });
-    expect(failure.message).toBe('MEMBERSHIP_MISSING');
+    expect((failure as Error).message).toBe('MEMBERSHIP_MISSING');
     expect(String(failure)).not.toMatch(/@|tenant-user-1|token|cookie|secret/i);
   });
 });
