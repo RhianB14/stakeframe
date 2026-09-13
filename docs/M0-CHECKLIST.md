@@ -434,8 +434,11 @@ ou janela de rede; cada item exige a evidência descrita.
       consumido — **R2 writer comprovado** (objeto privado gravado), **R2
       reader/interface comprovado** (`IMAGEM_VISIVEL=true`), uma única
       tentativa de IA (sem repetição) e **zero efeito financeiro**; a
-      extração não completou por indisponibilidade do provedor
-      (`AI_PROVIDER_UNAVAILABLE`) e o item permanece preservado em `failed`
+      extração não completou: a tentativa recebeu uma resposta HTTP não aceita,
+      classificada pelo código como `AI_PROVIDER_UNAVAILABLE`; o status HTTP não
+      foi persistido e a evidência não distingue erro de
+      requisição/modelo/parâmetros, endpoint inexistente, erro 5xx ou outra
+      resposta não allowlisted — e o item permanece preservado em `failed`
       para reprocessamento explícito (não autorizado até aqui)
       ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)). O backlog remoto do
       Telegram permaneceu **não observado** (`getUpdates` direto não
@@ -579,8 +582,8 @@ ou janela de rede; cada item exige a evidência descrita.
 - Desenvolvimento começou com Docker local na STK-M0-07; instalação do
   PostgreSQL na VPS será tratada junto à preparação de produção.
 - Flapping do monitor externo em 13/09/2026: pares de alertas
-  atenção→recuperação (~03:30/03:35Z e ~04:00/04:05Z) compatíveis com a janela
-  de backup de 30 min (`OPS_BACKUP_VERIFIED`; etiquetas dos checks não
-  registradas), recuperados sem ação e não relacionados ao bilhete da
-  STK-M0-63 — investigar a causa na borda de operações/backup em tarefa
-  própria.
+  atenção→recuperação (~03:30/03:35Z e ~04:00/04:05Z), com correlação temporal
+  compatível com a janela de backup de 30 min (`OPS_BACKUP_VERIFIED`; os checks
+  degradados não foram capturados; etiquetas não registradas), recuperados sem
+  ação; o par das 04:00Z antecede o processamento do bilhete da STK-M0-63
+  (04:03:40Z) — investigar a causa em tarefa própria.

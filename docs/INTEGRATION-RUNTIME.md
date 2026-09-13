@@ -69,7 +69,10 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > `ready` (validação de **runtime**); o ensaio funcional ponta a ponta foi
 > executado na **STK-M0-63** (13/09/2026, **PARCIAL**): um bilhete autorizado
 > consumido com R2 writer/reader comprovados, uma única tentativa de IA e item
-> preservado após `AI_PROVIDER_UNAVAILABLE`
+> preservado: a tentativa recebeu uma resposta HTTP não aceita, classificada
+> pelo código como `AI_PROVIDER_UNAVAILABLE`; o status HTTP não foi persistido
+> e a evidência não distingue erro de requisição/modelo/parâmetros, endpoint
+> inexistente, erro 5xx ou outra resposta não allowlisted
 > ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)); registros em
 > [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md). A descrição de configuração padrão acima permanece
 > válida para o conjunto sem overlays; a divergência, os riscos, a contenção

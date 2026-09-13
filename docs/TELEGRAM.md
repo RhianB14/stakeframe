@@ -114,8 +114,11 @@ validação de runtime** (worker ativo/healthy, filas locais estáveis, monitor
 `ready`) e a **STK-M0-63 (13/09/2026) executou o ensaio funcional ponta a
 ponta** com um bilhete autorizado — classificação **PARCIAL**: R2 writer e
 reader/interface (`IMAGEM_VISIVEL=true`), anexo único e uma única tentativa de
-IA comprovados; extração interrompida por `AI_PROVIDER_UNAVAILABLE` e item
-preservado para reprocessamento explícito
+IA comprovados; extração interrompida: a tentativa recebeu uma resposta HTTP
+não aceita, classificada pelo código como `AI_PROVIDER_UNAVAILABLE` (o status
+HTTP não foi persistido; a evidência não distingue erro de
+requisição/modelo/parâmetros, endpoint inexistente, erro 5xx ou outra resposta
+não allowlisted), e o item segue preservado para reprocessamento explícito
 ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)). Permanecem como condições
 da operação contínua os requisitos de identidade, R2 e cota/custo de IA do
 M0-40. Definir polling ou webhook

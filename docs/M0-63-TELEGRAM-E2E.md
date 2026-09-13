@@ -9,8 +9,11 @@ Codex retransmitida pelo proprietário (regra 8 do [AGENTS.md](../AGENTS.md)).
 **Classificação: PARCIAL** — a cadeia foi consumida até R2 + IA com as
 garantias válidas (identidade, anexo único, uma única tentativa de IA, R2
 writer/reader, zero efeito financeiro, item preservado); a **extração não
-completou** por indisponibilidade do provedor (`AI_PROVIDER_UNAVAILABLE`),
-registrada como falha sanitizada.
+completou**: a tentativa recebeu uma resposta HTTP não aceita, classificada
+pelo código como `AI_PROVIDER_UNAVAILABLE`. O status HTTP não foi persistido
+nesta execução; portanto, a evidência não distingue erro de
+requisição/modelo/parâmetros, endpoint inexistente, erro 5xx ou outra resposta
+não allowlisted.
 
 ## 1. Autorização retransmitida pelo proprietário
 
@@ -98,11 +101,12 @@ aposta, lançamento, liquidação ou alteração de saldo.
 
 Durante a vizinhança da janela foram observados **pares de alertas do monitor**
 (atenção → recuperação no ciclo seguinte), reportados pelo proprietário apenas
-como recebidos: ~03:30/03:35Z e ~04:00/04:05Z. O par das 04:00Z antecede o
-processamento do bilhete (04:03:40Z), e `OPS_BACKUP_VERIFIED` foi observado no
-log do serviço de operações na janela 03:55–04:10Z — flapping compatível com a
-janela de backup de 30 min, **não relacionado ao bilhete**; etiquetas dos
-checks não registradas. Nenhuma ação foi tomada (sem reinício, sem alteração).
+como recebidos: ~03:30/03:35Z e ~04:00/04:05Z, com **correlação temporal
+compatível com a janela de backup de 30 min** (`OPS_BACKUP_VERIFIED` foi
+observado no log do serviço de operações na janela 03:55–04:10Z; os checks
+degradados não foram capturados; etiquetas não registradas). O par das 04:00Z
+antecede o processamento do bilhete (04:03:40Z). Nenhuma ação foi tomada (sem
+reinício, sem alteração).
 
 ## 7. Estado final (worker e monitor)
 
@@ -126,10 +130,12 @@ depende de decisão posterior.
   (`IMAGEM_VISIVEL=true`); uma única tentativa de IA (sem repetição
   automática); nenhum efeito financeiro; filas sem item preso; item
   preservado; monitor e worker saudáveis.
-- **Não completado:** extração e resultado para revisão — o provedor de IA
-  respondeu indisponível na única tentativa autorizada
-  (`AI_PROVIDER_UNAVAILABLE`). Reprocessamento não tentado (fora da
-  autorização).
+- **Não completado:** extração e resultado para revisão. A tentativa recebeu
+  uma resposta HTTP não aceita, classificada pelo código como
+  `AI_PROVIDER_UNAVAILABLE`. O status HTTP não foi persistido nesta execução;
+  portanto, a evidência não distingue erro de requisição/modelo/parâmetros,
+  endpoint inexistente, erro 5xx ou outra resposta não allowlisted.
+  Reprocessamento não tentado (fora da autorização).
 
 ## 10. Confirmações
 
