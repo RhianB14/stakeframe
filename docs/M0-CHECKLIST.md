@@ -435,12 +435,15 @@ ou janela de rede; cada item exige a evidência descrita.
       reader/interface comprovado** (`IMAGEM_VISIVEL=true`), uma única
       tentativa de IA (sem repetição) e **zero efeito financeiro**; a
       extração não completou: a tentativa recebeu uma resposta HTTP não aceita,
-      classificada pelo código como `AI_PROVIDER_UNAVAILABLE`; o status HTTP não
-      foi persistido e a evidência não distingue erro de
-      requisição/modelo/parâmetros, endpoint inexistente, erro 5xx ou outra
-      resposta não allowlisted — e o item permanece preservado em `failed`
+      classificada pelo código como `AI_PROVIDER_UNAVAILABLE`; a investigação
+      read-only posterior (STK-M0-64) comprovou HTTP 400 `INVALID_ARGUMENT` do
+      Google Vertex em uma única tentativa. A correção para schema estrutural e
+      categoria `AI_REQUEST_INVALID` aguarda integração e validação operacional;
+      o provedor não informou qual argumento foi recusado, e o item permanece
+      preservado em `failed`
       para reprocessamento explícito (não autorizado até aqui)
-      ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)). O backlog remoto do
+      ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md),
+      [M0-64-OPENROUTER-INVALID-ARGUMENT.md](M0-64-OPENROUTER-INVALID-ARGUMENT.md)). O backlog remoto do
       Telegram permaneceu **não observado** (`getUpdates` direto não
       executado). A notificação de recuperação de 13/09 00:01Z veio do
       **monitor externo** (health check do endpoint público) — **não** de

@@ -31,6 +31,7 @@ const extractionErrors: Record<string, string> = {
   AI_OUTCOME_UNCERTAIN: 'Uma extração foi interrompida; o resultado é incerto.',
   AI_BUDGET_EXHAUSTED: 'O orçamento da IA foi atingido.',
   AI_RATE_LIMITED: 'O provedor limitou temporariamente as solicitações.',
+  AI_REQUEST_INVALID: 'A solicitação de extração foi recusada antes do processamento.',
   AI_CONNECTION_FAILED: 'Não foi possível obter a resposta da IA.',
   AI_EXTRACTION_INVALID: 'A resposta da IA não trouxe dados válidos para revisão.',
 };
