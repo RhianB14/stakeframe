@@ -5,9 +5,11 @@ Encerra formalmente a contenção iniciada na STK-M0-41; preflight da STK-M0-60
 consumado. Execução pelo Hermes; aprovação do Codex retransmitida pelo
 proprietário (regra 8 do [AGENTS.md](../AGENTS.md)).
 
-**Classificação: OPERACIONAL** — worker reativado, `worker` e `aiBudget`
-`ready` após três ciclos, recuperação natural entregue e confirmada uma única
-vez.
+**Classificação: OPERACIONAL (runtime)** — worker reativado e monitor
+externo validado: `worker` e `aiBudget` `ready` após três ciclos; notificação
+de recuperação do monitor externo entregue e confirmada uma única vez.
+**Nenhuma mensagem de teste foi enviada; o fluxo funcional ponta a ponta do
+consumidor não foi exercitado nesta janela.**
 
 ## 1. Autorização retransmitida pelo proprietário
 
@@ -87,13 +89,15 @@ READ#2 reflete o ciclo de `00:00:58` (pós-reativação); `lastFiredAt` e
 `lastCompletedAt` avançando, `lastCompletedAt ≥ lastStartedAt`. Bearer
 permaneceu no procedimento privado do proprietário.
 
-## 6. Recuperação natural
+## 6. Recuperação entregue pelo monitor externo
 
 Ciclo `00:00:58 → 00:01:00Z`: `fire → /check/start → /check/complete →
 /check/confirm-delivery (204)`. A mudança real de assinatura gerou **uma única**
 notificação, **recebida** pelo proprietário às 21:01 locais (00:01Z);
 `delivery=confirmed`. Os ciclos `00:05` e `00:10` concluíram sem reenvio —
-nenhum alerta duplicado.
+nenhum alerta duplicado. A notificação veio do **monitor externo**
+(verificação do endpoint público de saúde da API) — **não** de mensagem
+recebida ou processada pelo consumidor Telegram.
 
 ## 7. Contagens antes → depois (sanitizadas)
 
@@ -107,26 +111,34 @@ nenhum alerta duplicado.
 | `integration.ai_usage_day`       | 0/0     | 0/0                                 |
 | Cursor Telegram                  | nonzero | nonzero (avançou; sem persistência) |
 
-Tráfego orgânico observado apenas por contagens; nenhuma mensagem, imagem, ID
-privado ou payload registrado. `/budget = ready` (consulta de metadados da
-chave OpenRouter); nenhuma inferência paga; nenhuma mensagem artificial;
-nenhum upload de teste.
+Nenhum conteúdo foi observado — apenas contagens; nenhuma mensagem, imagem,
+ID privado ou payload registrado. **Nenhuma mensagem de teste foi enviada.**
+`/budget = ready` (consulta de metadados da chave OpenRouter); nenhuma
+inferência paga; nenhuma mensagem artificial; nenhum upload de teste.
 
 ## 8. Estabilidade e classificação
 
 Estabilidade confirmada até 2026-09-13 02:10Z: `running`/`healthy`,
 `restarts=0`, started `23:55:53Z` inalterado.
 
-**OPERACIONAL** — worker `running/healthy` sem restart; lock presente; `/`
-`ready`; `/budget` `ready`; filas estáveis; monitor HTTP 200 com
-`lastError=null`; `worker` e `aiBudget` fora de `failed`; três ciclos
-concluídos; nenhum alerta duplicado. Nenhuma contenção foi necessária —
-`stop worker` **não** executado.
+**OPERACIONAL (runtime do worker e monitor externo)** — worker
+`running/healthy` sem restart; lock presente; `/` `ready`; `/budget` `ready`;
+filas **locais** estáveis; monitor HTTP 200 com `lastError=null`; `worker` e
+`aiBudget` fora de `failed`; três ciclos concluídos; nenhum alerta duplicado.
+Nenhuma contenção foi necessária — `stop worker` **não** executado. **Escopo
+da classificação:** cobre a reativação e a validação de runtime do worker e
+do monitor externo; **não comprova** ingestão Telegram, R2 ou extração —
+nenhuma mensagem de teste foi enviada e o fluxo funcional ponta a ponta do
+consumidor não foi exercitado nesta janela; o backlog remoto do Telegram
+permaneceu não observado.
 
 ## 9. Confirmações
 
 - Zero segredos lidos, impressos, copiados ou registrados; o bearer do
   `/status` permaneceu no procedimento privado do proprietário.
+- Nenhuma mensagem de teste foi enviada; o fluxo funcional ponta a ponta do
+  consumidor não foi exercitado nesta janela; a recuperação registrada veio
+  do monitor externo.
 - Zero mutações fora do escopo: a única escrita foi o `start worker`
   autorizado (sem `pull`, recriação, deploy, migração, rollback, alteração de
   secrets/configuração, Cloudflare, DNS, firewall ou banco além das consultas

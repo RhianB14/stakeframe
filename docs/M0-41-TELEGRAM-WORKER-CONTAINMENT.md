@@ -158,12 +158,17 @@ existente `worker` foi reativado em **2026-09-12 23:55:53Z** (execução única
 de `docker compose … start worker` com o mesmo conjunto de três arquivos),
 com gate read-only satisfeito, digest instalado preservado
 (`sha256:cbe6b61a…`), advisory lock `782341094` de volta, endpoints internos
-`ready` e classificação final **OPERACIONAL** — registro completo, leituras
-sanitizadas do monitor, contagens e recuperação natural em
+`ready` e classificação final **OPERACIONAL (runtime)** — registro completo,
+leituras sanitizadas do monitor, contagens e notificação de recuperação do
+monitor externo em
 [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md).
 
 As evidências históricas desta contenção (§§1–10) permanecem **sem
-reescrita**. Os itens da §9 foram decididos ou consumidos na janela da
-STK-M0-61 (identidade conferida; backlog sem itens; R2, orçamento e monitor
-observados), exceto a validação de reader/writer R2 com operação real, que
-segue como pendência no [M0-CHECKLIST.md](M0-CHECKLIST.md).
+reescrita**. Os itens da §9 foram atualizados na janela da STK-M0-61: identidade
+conferida (`IDENTIDADE_CONFERE=true`); as **filas locais** estavam vazias;
+orçamento e monitor observados. O **backlog remoto do Telegram permaneceu
+não observado** — `getUpdates` direto não foi executado. A validação de
+reader/writer R2 com operação real **permanece pendência** no
+[M0-CHECKLIST.md](M0-CHECKLIST.md). A janela validou o **runtime**; nenhuma
+mensagem de teste foi enviada e o fluxo funcional ponta a ponta do consumidor
+não foi exercitado.

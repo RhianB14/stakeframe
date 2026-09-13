@@ -138,14 +138,18 @@ conteúdo privado.
 
 ## 13. Consumação do preflight (2026-09-12/13)
 
-O preflight foi **consumado com sucesso**: a STK-M0-61 reativou o contêiner
-existente exatamente como proposto na §8 — execução única do mesmo comando,
-imagem `sha256:cbe6b61a…` preservada, sem pull ou recriação — e validou a
-operação: advisory lock presente, `/` e `/budget` `ready`, filas estáveis,
-monitor `ready` após três ciclos e recuperação natural entregue e confirmada
-uma única vez. Classificação: **OPERACIONAL**. Registro completo em
+O preflight foi **consumado com sucesso no nível de runtime**: a STK-M0-61
+reativou o contêiner existente exatamente como proposto na §8 — execução
+única do mesmo comando, imagem `sha256:cbe6b61a…` preservada, sem pull ou
+recriação — e validou a operação: advisory lock presente, `/` e `/budget`
+`ready`, filas **locais** estáveis, monitor `ready` após três ciclos e
+notificação de recuperação do monitor externo entregue e confirmada uma única
+vez. Classificação: **OPERACIONAL (runtime)**. Registro completo em
 [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md).
 
-Limitações da §11 consumidas, exceto a validação de reader/writer R2 com
-operação real, que permanece acompanhada no
-[M0-CHECKLIST.md](M0-CHECKLIST.md).
+Limitações da §11: **não consumidas** a observação do backlog remoto do
+Telegram (permaneceu não observado; `getUpdates` direto não executado) nem a
+validação de reader/writer R2 com operação real (acompanhada no
+[M0-CHECKLIST.md](M0-CHECKLIST.md)). A reativação **não substitui** um ensaio
+funcional ponta a ponta do consumidor: nenhuma mensagem de teste foi enviada
+e o fluxo de ingestão não foi exercitado nesta janela.

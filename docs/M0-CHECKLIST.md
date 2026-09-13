@@ -416,19 +416,27 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Consumidor Telegram implementado com recusa de outras identidades antes
       de baixar anexos, persistir mensagens ou enfileirar processamento.
       Inbox/enqueue transacional e testes em [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
-- [x] Ativar e validar o consumidor contínuo com configuração privada na VPS.
+- [ ] Ativar e validar o consumidor contínuo com configuração privada na VPS.
+      **PARCIAL — runtime validado; ingestão ponta a ponta não exercitada.**
       **Encontrado ativo em 11/09/2026 sem autorização prévia e sem validação
       operacional** (worker criado em 07/09/2026 com o overlay de integrações;
       advisory lock retido; cursor avançado com consumo de updates comprovado;
       zero itens persistidos e zero chamadas de IA registradas na base até a
       leitura). Contenção executada em 11/09/2026 (worker parado; ver M0-41).
       A STK-M0-60 concluiu o preflight read-only de reativação (12/09/2026):
-      identidade conferida pelo proprietário (`IDENTIDADE_CONFERE=true`), fila
-      vazia, sem bloqueios técnicos — reativação pronta para janela controlada
-      autorizada. **Reativação executada e validada operacionalmente pela
-      STK-M0-61 em 12/09/2026 23:55:53Z**: gates satisfeitos, lock presente,
-      `/` e `/budget` `ready`, filas estáveis, `worker` e `aiBudget` `ready`
-      após três ciclos do monitor e recuperação natural entregue uma única vez
+      identidade conferida pelo proprietário (`IDENTIDADE_CONFERE=true`),
+      filas locais vazias, sem bloqueios técnicos. A STK-M0-61 reativou o
+      contêiner existente em 12/09/2026 23:55:53Z e validou o **runtime**:
+      worker `running`/`healthy` sem restart, digest `sha256:cbe6b61a…`
+      preservado, advisory lock presente, `/budget` `ready`, monitor `ready`
+      e filas **locais** estáveis. **Não exercitado: processamento ponta a
+      ponta de uma entrada Telegram autorizada** — nenhuma mensagem de teste
+      foi enviada; ingestão, R2 e extração não são comprovados por esta
+      janela; o backlog remoto do Telegram permaneceu **não observado**
+      (`getUpdates` direto não foi executado). A notificação de recuperação
+      de 13/09 00:01Z veio do **monitor externo** (health check do endpoint
+      público) — **não** de mensagem recebida ou processada pelo consumidor
+      Telegram.
       ([M0-60-WORKER-REACTIVATION-PREFLIGHT.md](M0-60-WORKER-REACTIVATION-PREFLIGHT.md),
       [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md),
       [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md),
@@ -542,9 +550,9 @@ ou janela de rede; cada item exige a evidência descrita.
       ([M0-58-MONITOR-MANUAL-REDIRECT.md](M0-58-MONITOR-MANUAL-REDIRECT.md)).
       Deploy autorizado e executado na STK-M0-59 (validação **OPERACIONAL**:
       `/status` com `200`, `lastError=null` e alerta entregue); a STK-M0-61
-      confirmou `worker` e `aiBudget` `ready` após três ciclos, com
-      recuperação natural entregue e confirmada uma única vez e nenhum alerta
-      duplicado
+      confirmou `worker` e `aiBudget` `ready` após três ciclos, com a
+      notificação de recuperação entregue e confirmada uma única vez e nenhum
+      alerta duplicado
       ([M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md),
       [M0-46-MONITOR-HEALTH-CHECK.md](M0-46-MONITOR-HEALTH-CHECK.md),
       [M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
