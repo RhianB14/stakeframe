@@ -462,10 +462,10 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Credencial R2 de backup instalada e validada pelos ciclos: 36 ciclos com
       retenção ativa e `state=ready` desde 07/09/2026
       ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
-- [ ] Validar reader/writer de anexos com operação real (com `imageCount=0`
-      não há validação de anexos) e instalar/validar as credenciais de
-      restauração (`r2_backup_restore_*`) no ensaio de restauração; não
-      reutilizar automaticamente o token temporário de ensaio.
+- [x] Validar reader/writer de anexos com operação real (`imageCount=1`) e
+      credenciais de restauração (`r2_backup_restore_*`) no ensaio isolado da
+      [STK-M0-68](M0-68-RESTORE-REHEARSAL.md); token temporário de ensaio não
+      reutilizado.
 
 ### IA direta com Gemini
 
@@ -512,8 +512,9 @@ ou janela de rede; cada item exige a evidência descrita.
 - [ ] Alerta de atraso de backup ativo — **pendente**; preflight do monitor
       externo concluído na STK-M0-35 e ativação executada na M0-37 (validação
       do alerta ainda pendente).
-- [ ] Teste de restauração demonstrado com dados de produção e RPO 1h / RTO 4h
-      medidos.
+- [x] Teste de restauração demonstrado com backup real e dados de produção em
+      cluster isolado; RPO de 19 min e RTO de 29,526 s medidos na
+      [STK-M0-68](M0-68-RESTORE-REHEARSAL.md). Failover completo não ensaiado.
 - [x] STK-M0-10: ensaio isolado de dump completo PostgreSQL e roles sem hashes
       de senha, criptografia Restic e restauração em outro cluster, conferindo
       dados, proprietários, ACLs, recusas e limpeza. Sem acesso ao banco real.

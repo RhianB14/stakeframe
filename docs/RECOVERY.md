@@ -1,15 +1,16 @@
 # Recuperação de desastre
 
-> **STATUS: VALIDAÇÃO PARCIAL COM DADOS FICTÍCIOS.** STK-M0-10 demonstra dump
+> **STATUS: ENSAIO REAL APROVADO; FAILOVER NÃO ENSAIADO.** STK-M0-10 demonstra dump
 > criptografado local; STK-M0-13 demonstra envio ao R2 e restauração em cluster novo.
 > Evidências externas em [M0-13-VALIDATION.md](M0-13-VALIDATION.md). STK-M0-18
 > implementa backup completo da aplicação, retenção histórica, agendamento,
 > quarentena de recuperação e monitor; procedimentos em [OPERATIONS.md](OPERATIONS.md).
 > O backup externo R2 está ativo desde 07/09/2026, com ciclos de 30 minutos e
 > retenção ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)). O timer mensal de
-> ensaio foi instalado e validado na [STK-M0-30](M0-30-VALIDATION.md).
-> Permanecem pendentes a restauração integral/failover, o alerta de atraso,
-> anexos reais com manifesto e a comprovação das métricas RPO/RTO.
+> ensaio foi instalado e validado na [STK-M0-30](M0-30-VALIDATION.md). O ensaio
+> com backup real, manifesto de anexo e métricas RPO/RTO foi aprovado na
+> [STK-M0-68](M0-68-RESTORE-REHEARSAL.md). Permanece pendente o alerta de atraso
+> e um failover completo.
 
 ## Objetivos (do plano mestre)
 
@@ -65,7 +66,7 @@
 - A restauração deve reaplicar as regras de retenção de anexos (não
   reintroduzir imagens expiradas), inclusive nas cópias de recuperação.
 
-## Procedimento de restauração de produção (ativação pendente)
+## Procedimento de restauração de produção (ensaio aprovado; failover pendente)
 
 A implementação ensaiada está em [OPERATIONS.md](OPERATIONS.md). Ela separa
 as imagens do dump para permitir exclusão seletiva nas cópias históricas,
@@ -96,8 +97,9 @@ Os passos abaixo continuam sendo os critérios operacionais de aceite.
 
 ## Testes exigidos antes de considerar o M0 concluído
 
-- [ ] Restauração completa executada com sucesso ao menos uma vez, incluindo
-      recriação de roles e conferência de anexos por manifesto.
+- [x] Ensaio de restauração executado com backup real em cluster isolado,
+      incluindo recriação de roles, conferência de permissões e anexos por
+      manifesto; RPO/RTO medidos em [M0-68-RESTORE-REHEARSAL.md](M0-68-RESTORE-REHEARSAL.md).
 - [ ] Alerta de backup atrasado verificado.
 - [x] Teste mensal de restauração agendado e documentado; timer ativo e
       execução inicial supervisionada aprovada na
