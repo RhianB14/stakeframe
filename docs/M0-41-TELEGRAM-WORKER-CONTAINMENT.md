@@ -150,3 +150,20 @@ Esta tarefa **não** reativa o worker.
   rollback; firewall, DNS e Cloudflare intocados.
 - Documento sanitizado: sem identificadores privados, IPs adicionais,
   hostname ou conteúdo de mensagens.
+
+## 11. Encerramento da contenção (2026-09-12/13)
+
+A contenção foi **formalmente encerrada pela STK-M0-61**: o contêiner
+existente `worker` foi reativado em **2026-09-12 23:55:53Z** (execução única
+de `docker compose … start worker` com o mesmo conjunto de três arquivos),
+com gate read-only satisfeito, digest instalado preservado
+(`sha256:cbe6b61a…`), advisory lock `782341094` de volta, endpoints internos
+`ready` e classificação final **OPERACIONAL** — registro completo, leituras
+sanitizadas do monitor, contagens e recuperação natural em
+[M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md).
+
+As evidências históricas desta contenção (§§1–10) permanecem **sem
+reescrita**. Os itens da §9 foram decididos ou consumidos na janela da
+STK-M0-61 (identidade conferida; backlog sem itens; R2, orçamento e monitor
+observados), exceto a validação de reader/writer R2 com operação real, que
+segue como pendência no [M0-CHECKLIST.md](M0-CHECKLIST.md).

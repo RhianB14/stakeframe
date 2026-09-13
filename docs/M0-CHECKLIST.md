@@ -416,7 +416,7 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Consumidor Telegram implementado com recusa de outras identidades antes
       de baixar anexos, persistir mensagens ou enfileirar processamento.
       Inbox/enqueue transacional e testes em [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
-- [ ] Ativar e validar o consumidor contínuo com configuração privada na VPS.
+- [x] Ativar e validar o consumidor contínuo com configuração privada na VPS.
       **Encontrado ativo em 11/09/2026 sem autorização prévia e sem validação
       operacional** (worker criado em 07/09/2026 com o overlay de integrações;
       advisory lock retido; cursor avançado com consumo de updates comprovado;
@@ -425,10 +425,14 @@ ou janela de rede; cada item exige a evidência descrita.
       A STK-M0-60 concluiu o preflight read-only de reativação (12/09/2026):
       identidade conferida pelo proprietário (`IDENTIDADE_CONFERE=true`), fila
       vazia, sem bloqueios técnicos — reativação pronta para janela controlada
-      autorizada
+      autorizada. **Reativação executada e validada operacionalmente pela
+      STK-M0-61 em 12/09/2026 23:55:53Z**: gates satisfeitos, lock presente,
+      `/` e `/budget` `ready`, filas estáveis, `worker` e `aiBudget` `ready`
+      após três ciclos do monitor e recuperação natural entregue uma única vez
       ([M0-60-WORKER-REACTIVATION-PREFLIGHT.md](M0-60-WORKER-REACTIVATION-PREFLIGHT.md),
       [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md),
-      [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md)).
+      [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md),
+      [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md)).
 - [x] Cloudflare R2 ativado; buckets privados separados de anexos e backups
       criados. Token de ensaio restrito ao bucket de backups, autorizado por
       30 dias, com segredos fora do Git. [R2.md](R2.md), STK-M0-13.
@@ -499,8 +503,8 @@ ou janela de rede; cada item exige a evidência descrita.
       cluster novo com a origem parada; acesso ao bucket de anexos recusado,
       dados/ACLs conferidos e chave preservada fora da VPS.
       [M0-13-VALIDATION.md](M0-13-VALIDATION.md). Não ativa backups reais.
-- [ ] Monitoramento externo de disponibilidade e alertas deduplicados —
-      **pendente**; Worker e testes prontos e pré-checados na STK-M0-35
+- [x] Monitoramento externo de disponibilidade e alertas deduplicados —
+      **concluído**; Worker e testes prontos e pré-checados na STK-M0-35
       ([M0-35-MONITOR-PREFLIGHT.md](M0-35-MONITOR-PREFLIGHT.md)) e ativação
       executada na M0-37 — Worker habilitado, cron `*/5 * * * *`, binding
       Durable Object, quatro segredos instalados, `MONITOR_ENABLED=true`
@@ -536,8 +540,13 @@ ou janela de rede; cada item exige a evidência descrita.
       dois fetches para `redirect: 'manual'` (fail-closed; 3xx nunca é
       seguido), com validação de produção pendente
       ([M0-58-MONITOR-MANUAL-REDIRECT.md](M0-58-MONITOR-MANUAL-REDIRECT.md)).
-      Deploy pendente de autorização
-      ([M0-46-MONITOR-HEALTH-CHECK.md](M0-46-MONITOR-HEALTH-CHECK.md),
+      Deploy autorizado e executado na STK-M0-59 (validação **OPERACIONAL**:
+      `/status` com `200`, `lastError=null` e alerta entregue); a STK-M0-61
+      confirmou `worker` e `aiBudget` `ready` após três ciclos, com
+      recuperação natural entregue e confirmada uma única vez e nenhum alerta
+      duplicado
+      ([M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md),
+      [M0-46-MONITOR-HEALTH-CHECK.md](M0-46-MONITOR-HEALTH-CHECK.md),
       [M0-38-MONITOR-FIRST-RUN.md](M0-38-MONITOR-FIRST-RUN.md),
       [M0-42-MONITOR-RUNTIME-OBSERVATION.md](M0-42-MONITOR-RUNTIME-OBSERVATION.md),
       [M0-43-MONITOR-CRON-OBSERVABILITY.md](M0-43-MONITOR-CRON-OBSERVABILITY.md)).
