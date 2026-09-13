@@ -100,7 +100,10 @@ Os passos abaixo continuam sendo os critérios operacionais de aceite.
 - [x] Ensaio de restauração executado com backup real em cluster isolado,
       incluindo recriação de roles, conferência de permissões e anexos por
       manifesto; RPO/RTO medidos em [M0-68-RESTORE-REHEARSAL.md](M0-68-RESTORE-REHEARSAL.md).
-- [ ] Alerta de backup atrasado verificado.
+- [ ] Alerta de backup atrasado verificado; regra e deduplicação cobertas por
+      testes e preflight read-only registrado em
+      [M0-69-BACKUP-ALERT-PREFLIGHT.md](M0-69-BACKUP-ALERT-PREFLIGHT.md), mas
+      nenhum atraso real foi observado.
 - [x] Teste mensal de restauração agendado e documentado; timer ativo e
       execução inicial supervisionada aprovada na
       [STK-M0-30](M0-30-VALIDATION.md).
