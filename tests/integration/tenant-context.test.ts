@@ -125,6 +125,24 @@ describe('organization context resolution with a real PostgreSQL', () => {
     expect((failure as Error).message).toBe('MEMBERSHIP_MISSING');
     expect(String(failure)).not.toMatch(/@|tenant-user-1|token|cookie|secret/i);
   });
+
+  it('returns a sanitized membership lookup failure when the query itself fails', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('tenant-user-1', 'Pessoa Um', 'tenant-user-1@example.test');
+    await database.pool.query('DROP TABLE core.membership');
+    let failure: unknown = null;
+    try {
+      await tenant.resolveOrganizationContext('tenant-user-1');
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      name: 'TenantContextError',
+      code: 'MEMBERSHIP_LOOKUP_FAILED',
+    });
+    expect((failure as Error).message).toBe('MEMBERSHIP_LOOKUP_FAILED');
+    expect(String(failure)).not.toMatch(/relation|schema|DROP|postgres/i);
+  });
 });
 
 describe('organization transaction context with a real PostgreSQL', () => {

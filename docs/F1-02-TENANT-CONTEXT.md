@@ -33,24 +33,27 @@ enviado pelo frontend).
 
 ## Erros internos estáveis (sanitizados — a mensagem é o próprio código)
 
-| Código                    | Situação                                                |
-| ------------------------- | ------------------------------------------------------- |
-| `UNAUTHENTICATED`         | usuário ausente/vazio na resolução                      |
-| `MEMBERSHIP_MISSING`      | sem membership para o usuário                           |
-| `MEMBERSHIP_INCONSISTENT` | estado inconsistente (registros/papel fora do contrato) |
-| `INVALID_ORGANIZATION_ID` | UUID inválido — recusado antes de consulta ou conexão   |
-| `ORGANIZATION_MISMATCH`   | organização divergente da esperada no contrato interno  |
-| `CONTEXT_SETUP_FAILED`    | falha ao configurar `app.organization_id`               |
-| `TRANSACTION_FAILED`      | falha de conexão/BEGIN/COMMIT                           |
+| Código                     | Situação                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| `UNAUTHENTICATED`          | usuário ausente/vazio na resolução                                               |
+| `MEMBERSHIP_MISSING`       | sem membership para o usuário                                                    |
+| `MEMBERSHIP_INCONSISTENT`  | estado inconsistente (registros/papel fora do contrato)                          |
+| `MEMBERSHIP_LOOKUP_FAILED` | falha na consulta de membership — o erro original nunca é propagado              |
+| `INVALID_ORGANIZATION_ID`  | UUID inválido — recusado antes de consulta ou conexão                            |
+| `ORGANIZATION_MISMATCH`    | organização divergente da esperada no contrato interno                           |
+| `CONTEXT_SETUP_FAILED`     | falha ao configurar `app.organization_id` (ROLLBACK executado antes de retornar) |
+| `TRANSACTION_FAILED`       | falha de conexão/BEGIN/COMMIT                                                    |
 
-Erros do `callback` são propagados como estão (após ROLLBACK). Nenhum erro ou log contém
-token, cookie, segredo, e-mail, imagem, saldo ou conteúdo financeiro.
+Erros do `callback` são propagados como estão (após ROLLBACK). Falhas de `set_config` também
+executam ROLLBACK antes de retornar — nenhuma transação fica aberta no pool. Nenhum erro ou
+log contém token, cookie, segredo, e-mail, imagem, saldo ou conteúdo financeiro.
 
 ## Garantias contra vazamento de contexto no pool
 
 - `set_config(..., true)` é **local à transação**: descartado automaticamente no
   COMMIT/ROLLBACK;
-- a conexão é devolvida ao pool em `finally`, sempre, mesmo em falha;
+- a conexão é devolvida ao pool em `finally`, sempre, mesmo em falha — falhas de
+  `set_config`, do `callback` e de COMMIT executam ROLLBACK antes da liberação;
 - testes de integração cobrem: contexto presente **durante** a transação; ausente **após**
   o término; reuso sequencial de conexões sem resíduo da requisição anterior; duas
   transações concorrentes isoladas entre si; erros sanitizados.

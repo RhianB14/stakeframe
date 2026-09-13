@@ -7,6 +7,7 @@ export type TenantContextErrorCode =
   | 'UNAUTHENTICATED'
   | 'MEMBERSHIP_MISSING'
   | 'MEMBERSHIP_INCONSISTENT'
+  | 'MEMBERSHIP_LOOKUP_FAILED'
   | 'ORGANIZATION_MISMATCH'
   | 'INVALID_ORGANIZATION_ID'
   | 'CONTEXT_SETUP_FAILED'
@@ -67,10 +68,15 @@ export function createTenantContext(database: Database) {
   async function resolveOrganizationContext(userId: string): Promise<OrganizationContext> {
     if (typeof userId !== 'string' || userId.length === 0)
       throw new TenantContextError('UNAUTHENTICATED');
-    const rows = await database.orm
-      .select({ organizationId: membership.organizationId, role: membership.role })
-      .from(membership)
-      .where(eq(membership.userId, userId));
+    let rows: { organizationId: string; role: MembershipRole }[];
+    try {
+      rows = await database.orm
+        .select({ organizationId: membership.organizationId, role: membership.role })
+        .from(membership)
+        .where(eq(membership.userId, userId));
+    } catch {
+      throw new TenantContextError('MEMBERSHIP_LOOKUP_FAILED');
+    }
     if (rows.length === 0) throw new TenantContextError('MEMBERSHIP_MISSING');
     if (rows.length > 1) throw new TenantContextError('MEMBERSHIP_INCONSISTENT');
     const row = rows[0]!;
@@ -106,6 +112,7 @@ export function createTenantContext(database: Database) {
           organizationId,
         ]);
       } catch {
+        await rollback(client);
         throw new TenantContextError('CONTEXT_SETUP_FAILED');
       }
       let result: T;

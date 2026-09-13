@@ -89,4 +89,81 @@ describe('tenant context pre-flight validation (no database required)', () => {
     expect(String(failure)).toBe('TenantContextError: UNAUTHENTICATED');
     expect(String(failure)).not.toMatch(/@|token|cookie|secret/i);
   });
+
+  it('rolls back and releases the connection when set_config fails', async () => {
+    const queries: string[] = [];
+    let releases = 0;
+    const client = {
+      query: async (text: string) => {
+        queries.push(text);
+        if (text.startsWith('SELECT set_config'))
+          throw new Error('RAW_FAILURE 10.0.0.9 core.membership');
+        return { rows: [] };
+      },
+      release: () => {
+        releases += 1;
+      },
+    };
+    const database = {
+      orm: {
+        select: () => {
+          throw new Error('query must not run');
+        },
+      },
+      pool: { connect: async () => client },
+    } as unknown as Database;
+    const tenant = createTenantContext(database);
+    let callbackRan = false;
+    let failure: unknown = null;
+    try {
+      await tenant.withOrganizationTransaction(
+        { organizationId: ORG_A, role: 'owner', userId: 'user-1' },
+        async () => {
+          callbackRan = true;
+          return 'never';
+        },
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ name: 'TenantContextError', code: 'CONTEXT_SETUP_FAILED' });
+    expect((failure as Error).message).toBe('CONTEXT_SETUP_FAILED');
+    expect(String(failure)).not.toMatch(/10\.0\.0\.9|core\.membership|RAW_FAILURE/);
+    expect(callbackRan).toBe(false);
+    expect(releases).toBe(1);
+    expect(queries[0]).toBe('BEGIN');
+    expect(queries[1]!.startsWith('SELECT set_config')).toBe(true);
+    expect(queries[2]).toBe('ROLLBACK');
+  });
+
+  it('sanitizes membership lookup failures without exposing driver details', async () => {
+    const database = {
+      orm: {
+        select: () => {
+          throw new Error(
+            'connection to server at "10.0.0.9", port 5432 failed for user "stakeframe_local"',
+          );
+        },
+      },
+      pool: {
+        connect: () => {
+          throw new Error('connection must not be acquired');
+        },
+      },
+    } as unknown as Database;
+    const tenant = createTenantContext(database);
+    let failure: unknown = null;
+    try {
+      await tenant.resolveOrganizationContext('user-1');
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      name: 'TenantContextError',
+      code: 'MEMBERSHIP_LOOKUP_FAILED',
+    });
+    expect((failure as Error).message).toBe('MEMBERSHIP_LOOKUP_FAILED');
+    expect(String(failure)).toBe('TenantContextError: MEMBERSHIP_LOOKUP_FAILED');
+    expect(String(failure)).not.toMatch(/10\.0\.0\.9|5432|stakeframe_local/);
+  });
 });
