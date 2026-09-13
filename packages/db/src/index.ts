@@ -5,6 +5,14 @@ import { authSchema } from './auth-schema.js';
 import { coreSchema } from './core-schema.js';
 export { authSchema } from './auth-schema.js';
 export { coreSchema, membershipRole, type MembershipRole } from './core-schema.js';
+export {
+  createTenantContext,
+  ORGANIZATION_CONTEXT_SETTING,
+  TenantContextError,
+  type OrganizationContext,
+  type TenantContextErrorCode,
+  type WithOrganizationTransactionOptions,
+} from './tenant-context.js';
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
 export { createImportService, type ImportService } from './import-review.js';
 export {
