@@ -21,7 +21,9 @@ não autorizado) está no destaque abaixo. Evidência da STK-M0-15 em
 > [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md) e
 > [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md)
 > — estado atual autorizado e validado em
-> [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md).
+> [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md); ensaio
+> funcional ponta a ponta registrado em
+> [M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md).
 
 ## Configuração e fronteira de acesso
 
@@ -109,9 +111,13 @@ Estado real descoberto no M0-40 (11/09/2026): um consumidor contínuo **já est�
 ativo** em produção, sem autorização registrada e sem validação operacional
 na época; **a STK-M0-61 (12/09/2026) executou a reativação autorizada e a
 validação de runtime** (worker ativo/healthy, filas locais estáveis, monitor
-`ready`); o processamento ponta a ponta de uma entrada autorizada permanece
-não exercitado (nenhuma mensagem de teste foi enviada; backlog remoto não
-observado), permanecendo como condições da operação contínua os requisitos de
-identidade, R2 e cota/custo de IA do M0-40. Definir polling ou webhook
+`ready`) e a **STK-M0-63 (13/09/2026) executou o ensaio funcional ponta a
+ponta** com um bilhete autorizado — classificação **PARCIAL**: R2 writer e
+reader/interface (`IMAGEM_VISIVEL=true`), anexo único e uma única tentativa de
+IA comprovados; extração interrompida por `AI_PROVIDER_UNAVAILABLE` e item
+preservado para reprocessamento explícito
+([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)). Permanecem como condições
+da operação contínua os requisitos de identidade, R2 e cota/custo de IA do
+M0-40. Definir polling ou webhook
 em tarefa própria, com testes e autorização de implantação. Nenhuma mensagem
 não autorizada deve gerar resposta, download ou operação financeira.

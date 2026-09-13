@@ -66,9 +66,11 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > STK-M0-40 (preflight somente leitura de 11/09/2026) e **o worker foi parado
 > pela STK-M0-41 em 11/09/2026**; **reativado com validação de runtime
 > pela STK-M0-61 em 12/09/2026 23:55:53Z** — worker ativo/healthy e monitor
-> `ready` (validação de **runtime**; nenhuma mensagem de teste foi enviada e o
-> fluxo funcional ponta a ponta do consumidor não foi exercitado; backlog
-> remoto não observado); registro em
+> `ready` (validação de **runtime**); o ensaio funcional ponta a ponta foi
+> executado na **STK-M0-63** (13/09/2026, **PARCIAL**): um bilhete autorizado
+> consumido com R2 writer/reader comprovados, uma única tentativa de IA e item
+> preservado após `AI_PROVIDER_UNAVAILABLE`
+> ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)); registros em
 > [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md). A descrição de configuração padrão acima permanece
 > válida para o conjunto sem overlays; a divergência, os riscos, a contenção
 > e o plano de reativação estão em
@@ -76,8 +78,9 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md).
 > Para a operação contínua: manter conferidos identidade (procedimento
 > privado, valores reais de produção), R2 (bucket/credenciais) e política de
-> IA (cota/custo) como condições permanentes; o ensaio funcional ponta a
-> ponta do consumidor permanece pendente de tarefa autorizada. O runtime local
+> IA (cota/custo) como condições permanentes. O ensaio funcional ponta a
+> ponta foi exercitado na STK-M0-63 (PARCIAL); o reprocessamento do item
+> preservado depende de decisão e autorização próprias. O runtime local
 > aguarda o migrador; produção segue seu runbook de migração prévia.
 > Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
 > provedor. Readiness não substitui o monitoramento de atraso/erros da fila.
