@@ -438,12 +438,13 @@ ou janela de rede; cada item exige a evidência descrita.
       classificada pelo código como `AI_PROVIDER_UNAVAILABLE`; a investigação
       read-only posterior (STK-M0-64) comprovou HTTP 400 `INVALID_ARGUMENT` do
       Google Vertex em uma única tentativa. A correção para schema estrutural e
-      categoria `AI_REQUEST_INVALID` aguarda integração e validação operacional;
-      o provedor não informou qual argumento foi recusado, e o item permanece
-      preservado em `failed`
-      para reprocessamento explícito (não autorizado até aqui)
+      categoria `AI_REQUEST_INVALID` foi publicada e implantada na STK-M0-70;
+      o item preservado foi reprocessado uma única vez e terminou `imported`,
+      com extração presente e `error_code=null`. O provedor não informou qual
+      argumento foi recusado na tentativa original
       ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md),
-      [M0-64-OPENROUTER-INVALID-ARGUMENT.md](M0-64-OPENROUTER-INVALID-ARGUMENT.md)). O backlog remoto do
+      [M0-64-OPENROUTER-INVALID-ARGUMENT.md](M0-64-OPENROUTER-INVALID-ARGUMENT.md),
+      [M0-70-OPENROUTER-PRODUCTION-VALIDATION.md](M0-70-OPENROUTER-PRODUCTION-VALIDATION.md)). O backlog remoto do
       Telegram permaneceu **não observado** (`getUpdates` direto não
       executado). A notificação de recuperação de 13/09 00:01Z veio do
       **monitor externo** (health check do endpoint público) — **não** de

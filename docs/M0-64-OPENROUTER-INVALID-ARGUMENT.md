@@ -39,3 +39,11 @@ Código e testes não provam aceitação pelo provedor. Uma nova inferência ou 
 reprocessamento do item preservado exigem autorização operacional explícita.
 Até essa janela, a STK-M0-63 permanece PARCIAL e o item continua intacto em
 `failed`.
+
+## Atualização posterior
+
+A STK-M0-70 publicou e implantou o candidato ARM64 desta correção e confirmou
+em produção o reprocessamento único do item: `attempts=2`, estado `imported`,
+extração presente e `error_code=null`. A validação operacional atual está
+registrada em [M0-70-OPENROUTER-PRODUCTION-VALIDATION.md](M0-70-OPENROUTER-PRODUCTION-VALIDATION.md);
+esta seção histórica não altera as evidências da investigação original.
