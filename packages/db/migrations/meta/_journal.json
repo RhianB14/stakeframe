@@ -36,6 +36,13 @@
       "when": 1788754815480,
       "tag": "0004_event_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789325498400,
+      "tag": "0005_core_tenant_registry",
+      "breakpoints": true
     }
   ]
 }

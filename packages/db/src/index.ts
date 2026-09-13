@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { authSchema } from './auth-schema.js';
 export { authSchema } from './auth-schema.js';
+export { coreSchema, membershipRole, type MembershipRole } from './core-schema.js';
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
 export { createImportService, type ImportService } from './import-review.js';
 export {
