@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
+  coreSchema,
   createDatabase,
   membershipRole,
   requireDatabaseUrl,
@@ -152,6 +153,29 @@ describe('core tenant registry on a fresh database without users', () => {
     await expect(
       insertMembership(organizationId, 'core-test-missing-user', 'owner'),
     ).rejects.toThrow(/membership_user_id_user_id_fk/);
+  });
+
+  it('queries core.organization and core.membership through the ORM schema registry', async () => {
+    await createFreshDatabase();
+    await migrateLocalDatabase(database);
+    expect(await database.orm.query.organization.findMany()).toEqual([]);
+    expect(await database.orm.query.membership.findMany()).toEqual([]);
+    await insertUser('core-orm-user', 'Usuário ORM', 'core-orm@example.test');
+    const [organization] = await database.orm
+      .insert(coreSchema.organization)
+      .values({ name: 'Organização ORM' })
+      .returning({ id: coreSchema.organization.id, name: coreSchema.organization.name });
+    expect(organization).toMatchObject({ name: 'Organização ORM' });
+    await database.orm.insert(coreSchema.membership).values({
+      organizationId: organization!.id,
+      userId: 'core-orm-user',
+      role: 'owner',
+    });
+    const memberships = await database.orm.query.membership.findMany();
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0]!).toMatchObject({ userId: 'core-orm-user', role: 'owner' });
+    expect(await count('SELECT count(*) FROM core.organization')).toBe(1);
+    expect(await count('SELECT count(*) FROM core.membership')).toBe(1);
   });
 });
 
