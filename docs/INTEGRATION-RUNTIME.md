@@ -64,20 +64,23 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > registrada e sem validação operacional, desde 07/09/2026**
 > (`TELEGRAM_ENABLED=true`; `AI_ENABLED=true`); foi **encontrado ativo** na
 > STK-M0-40 (preflight somente leitura de 11/09/2026) e **o worker foi parado
-> pela STK-M0-41 em 11/09/2026** — a reativação continua pendente de
-> autorização separada. A descrição de configuração padrão acima permanece
+> pela STK-M0-41 em 11/09/2026**; **reativado com validação de runtime
+> pela STK-M0-61 em 12/09/2026 23:55:53Z** — worker ativo/healthy e monitor
+> `ready` (validação de **runtime**; nenhuma mensagem de teste foi enviada e o
+> fluxo funcional ponta a ponta do consumidor não foi exercitado; backlog
+> remoto não observado); registro em
+> [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md). A descrição de configuração padrão acima permanece
 > válida para o conjunto sem overlays; a divergência, os riscos, a contenção
 > e o plano de reativação estão em
 > [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md) e
 > [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md).
-> Para qualquer reativação autorizada futura: conferir backlog do lado
-> Telegram e identidade por procedimento privado (valores reais de produção);
-> R2 (bucket/credenciais); política de IA (cota/custo); e preparar a montagem
-> dos arquivos privados, a saída HTTPS e o ambiente explícito antes de
-> iniciar o worker. O runtime local aguarda o migrador; produção segue seu
-> runbook de migração prévia.
+> Para a operação contínua: manter conferidos identidade (procedimento
+> privado, valores reais de produção), R2 (bucket/credenciais) e política de
+> IA (cota/custo) como condições permanentes; o ensaio funcional ponta a
+> ponta do consumidor permanece pendente de tarefa autorizada. O runtime local
+> aguarda o migrador; produção segue seu runbook de migração prévia.
 > Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
-> provedor. Readiness não substitui o futuro monitoramento de atraso/erros da fila.
+> provedor. Readiness não substitui o monitoramento de atraso/erros da fila.
 
 Verificação: `pnpm typecheck`, `pnpm test`, `pnpm local:test-db`, `pnpm lint`.
 Os testes de integração conferem atomicidade, rollback de enqueue, concorrência,

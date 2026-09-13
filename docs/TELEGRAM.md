@@ -14,10 +14,14 @@ não autorizado) está no destaque abaixo. Evidência da STK-M0-15 em
 > que este documento registrava — com `TELEGRAM_ENABLED=true` desde a criação
 > do worker (07/09/2026), advisory lock retido e cursor avançado, sem
 > autorização prévia e sem validação operacional. Contenção executada em
-> 11/09/2026 (worker parado — ver M0-41); reativação autorizada pendente;
-> evidência em
+> 11/09/2026 (worker parado — ver M0-41); **reativado com validação de
+> runtime em 12/09/2026 pela STK-M0-61** (worker ativo/healthy, monitor
+> `ready`; nenhuma mensagem de teste foi enviada e o fluxo funcional ponta a
+> ponta do consumidor não foi exercitado); evidência em
 > [M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md](M0-40-TELEGRAM-PRODUCTION-PREFLIGHT.md) e
-> [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md).
+> [M0-41-TELEGRAM-WORKER-CONTAINMENT.md](M0-41-TELEGRAM-WORKER-CONTAINMENT.md)
+> — estado atual autorizado e validado em
+> [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md).
 
 ## Configuração e fronteira de acesso
 
@@ -102,8 +106,12 @@ Plano original (STK-M0-15): antes de ativar um consumidor na VPS, implementar
 a mesma checagem de identidade, deduplicação por `update_id`, limites de
 arquivos e filas, retenção e descarte de anexos conforme [PLAN.md](PLAN.md).
 Estado real descoberto no M0-40 (11/09/2026): um consumidor contínuo **já está
-ativo** em produção, sem autorização registrada e sem validação operacional;
-qualquer reativação autorizada futura deve seguir o plano de reativação do
-M0-40 (backlog, identidade, R2 e política de IA). Definir polling ou webhook
+ativo** em produção, sem autorização registrada e sem validação operacional
+na época; **a STK-M0-61 (12/09/2026) executou a reativação autorizada e a
+validação de runtime** (worker ativo/healthy, filas locais estáveis, monitor
+`ready`); o processamento ponta a ponta de uma entrada autorizada permanece
+não exercitado (nenhuma mensagem de teste foi enviada; backlog remoto não
+observado), permanecendo como condições da operação contínua os requisitos de
+identidade, R2 e cota/custo de IA do M0-40. Definir polling ou webhook
 em tarefa própria, com testes e autorização de implantação. Nenhuma mensagem
 não autorizada deve gerar resposta, download ou operação financeira.
