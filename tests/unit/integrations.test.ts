@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OPENROUTER_MODEL, parseCaption } from '../../packages/shared/src/index.js';
-import { extractTicket, readAiConfig } from '../../apps/worker/src/openrouter.js';
+import {
+  extractTicket,
+  providerStructuredSchema,
+  readAiConfig,
+} from '../../apps/worker/src/openrouter.js';
 import {
   authorizedImage,
   pollTelegramOnce,
@@ -81,12 +85,57 @@ describe('OpenRouter boundary', () => {
     expect(request.provider).toEqual({ allow_fallbacks: false, require_parameters: true });
     expect(request.model).toBe(OPENROUTER_MODEL);
     expect(request.response_format.json_schema.strict).toBe(true);
+    const providerSchema = request.response_format.json_schema.schema;
+    expect(JSON.stringify(providerSchema)).not.toMatch(
+      /"(?:\$schema|maxItems|maxLength|minItems|minLength|pattern)"/,
+    );
+    expect(providerSchema).toMatchObject({
+      type: 'object',
+      required: expect.arrayContaining(['bookmaker', 'selections', 'warnings']),
+      additionalProperties: false,
+    });
+  });
+  it('simplifies provider constraints recursively without weakening local validation', async () => {
+    expect(
+      providerStructuredSchema({
+        $schema: 'draft',
+        type: 'array',
+        minItems: 1,
+        items: { type: 'string', minLength: 1, pattern: '^x$' },
+      }),
+    ).toEqual({ type: 'array', items: { type: 'string' } });
+    await expect(
+      extractTicket({
+        apiKey: 'test-key',
+        image,
+        fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(
+          Response.json({
+            ...completion,
+            choices: [
+              {
+                finish_reason: 'stop',
+                message: { content: JSON.stringify({ ...extraction, stake: 'x' }) },
+              },
+            ],
+          }),
+        ),
+      }),
+    ).rejects.toThrow('AI_EXTRACTION_INVALID');
   });
   it.each([402, 429, 503])('never retries HTTP %i automatically', async (status) => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response('sensitive provider error', { status }));
     await expect(extractTicket({ apiKey: 'test-key', image, fetchImpl })).rejects.toThrow(/^AI_/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it.each([400, 422])('classifies HTTP %i as a sanitized invalid request', async (status) => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('sensitive provider error', { status }));
+    await expect(extractTicket({ apiKey: 'test-key', image, fetchImpl })).rejects.toThrow(
+      'AI_REQUEST_INVALID',
+    );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
   it('rejects truncation, model substitution, numeric money, and malformed output', async () => {

@@ -11,6 +11,28 @@ import {
 } from '@stakeframe/shared';
 import { IntegrationError, readJson } from './http.js';
 
+const PROVIDER_SCHEMA_CONSTRAINTS = new Set([
+  '$schema',
+  'maxItems',
+  'maxLength',
+  'minItems',
+  'minLength',
+  'pattern',
+]);
+
+// Gemini can reject otherwise valid, constraint-heavy JSON schemas with HTTP 400.
+// Keep the provider schema structural and enforce every omitted constraint locally
+// with the Zod schemas below before any extraction is persisted.
+export function providerStructuredSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(providerStructuredSchema);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !PROVIDER_SCHEMA_CONSTRAINTS.has(key))
+      .map(([key, child]) => [key, providerStructuredSchema(child)]),
+  );
+}
+
 export function readAiConfig(env: NodeJS.ProcessEnv) {
   if (env.AI_ENABLED === undefined || env.AI_ENABLED === 'false') return null;
   if (
@@ -111,7 +133,9 @@ export async function extractTicket(options: {
             json_schema: {
               name: 'ticket_extraction',
               strict: true,
-              schema: layouts.length ? layoutExtractionJsonSchema : ticketExtractionJsonSchema,
+              schema: providerStructuredSchema(
+                layouts.length ? layoutExtractionJsonSchema : ticketExtractionJsonSchema,
+              ),
             },
           },
         }),
@@ -126,7 +150,9 @@ export async function extractTicket(options: {
             ? 'AI_RATE_LIMITED'
             : [401, 403].includes(response.status)
               ? 'AI_AUTH_REFUSED'
-              : 'AI_PROVIDER_UNAVAILABLE',
+              : [400, 422].includes(response.status)
+                ? 'AI_REQUEST_INVALID'
+                : 'AI_PROVIDER_UNAVAILABLE',
       );
     }
     const parsed = completionSchema.safeParse(await readJson(response));

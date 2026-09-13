@@ -70,10 +70,13 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > executado na **STK-M0-63** (13/09/2026, **PARCIAL**): um bilhete autorizado
 > consumido com R2 writer/reader comprovados, uma única tentativa de IA e item
 > preservado: a tentativa recebeu uma resposta HTTP não aceita, classificada
-> pelo código como `AI_PROVIDER_UNAVAILABLE`; o status HTTP não foi persistido
-> e a evidência não distingue erro de requisição/modelo/parâmetros, endpoint
-> inexistente, erro 5xx ou outra resposta não allowlisted
-> ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)); registros em
+> pelo código como `AI_PROVIDER_UNAVAILABLE`. A STK-M0-64 identificou por
+> metadados do OpenRouter uma única resposta HTTP 400 `INVALID_ARGUMENT` do
+> Google Vertex e implementou schema estrutural + categoria sanitizada
+> `AI_REQUEST_INVALID`; o provedor não informou qual argumento foi recusado.
+> Integração e validação operacional seguem pendentes
+> ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md),
+> [M0-64-OPENROUTER-INVALID-ARGUMENT.md](M0-64-OPENROUTER-INVALID-ARGUMENT.md)); registros em
 > [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md). A descrição de configuração padrão acima permanece
 > válida para o conjunto sem overlays; a divergência, os riscos, a contenção
 > e o plano de reativação estão em
