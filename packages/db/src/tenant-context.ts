@@ -8,6 +8,8 @@ export type TenantContextErrorCode =
   | 'MEMBERSHIP_MISSING'
   | 'MEMBERSHIP_INCONSISTENT'
   | 'MEMBERSHIP_LOOKUP_FAILED'
+  | 'USER_NOT_FOUND'
+  | 'PROVISIONING_FAILED'
   | 'ORGANIZATION_MISMATCH'
   | 'INVALID_ORGANIZATION_ID'
   | 'CONTEXT_SETUP_FAILED'
@@ -134,5 +136,85 @@ export function createTenantContext(database: Database) {
     }
   }
 
-  return { resolveOrganizationContext, withOrganizationTransaction };
+  /**
+   * Idempotent provisioning: guarantees exactly one organization and one membership for the
+   * authenticated user. Serialized per user with a transaction-scoped advisory lock, so
+   * concurrent requests cannot create duplicates; an existing membership (and its role) is
+   * returned untouched.
+   */
+  async function ensureOrganizationMembership(userId: string): Promise<OrganizationContext> {
+    if (typeof userId !== 'string' || userId.length === 0)
+      throw new TenantContextError('UNAUTHENTICATED');
+    let client: PoolClient;
+    try {
+      client = await database.pool.connect();
+    } catch {
+      throw new TenantContextError('PROVISIONING_FAILED');
+    }
+    try {
+      try {
+        await client.query('BEGIN');
+      } catch {
+        throw new TenantContextError('PROVISIONING_FAILED');
+      }
+      let result: OrganizationContext;
+      try {
+        try {
+          await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
+            'stakeframe.organization.provision',
+            userId,
+          ]);
+        } catch {
+          throw new TenantContextError('PROVISIONING_FAILED');
+        }
+        const existing = await client.query<{ organization_id: string; role: string }>(
+          'SELECT organization_id, role FROM core.membership WHERE user_id = $1',
+          [userId],
+        );
+        if (existing.rows.length > 1) throw new TenantContextError('MEMBERSHIP_INCONSISTENT');
+        if (existing.rows.length === 1) {
+          const row = existing.rows[0]!;
+          if (!VALID_ROLES.has(row.role)) throw new TenantContextError('MEMBERSHIP_INCONSISTENT');
+          result = {
+            organizationId: row.organization_id,
+            role: row.role as MembershipRole,
+            userId,
+          };
+        } else {
+          const users = await client.query<{ name: string }>(
+            'SELECT name FROM auth."user" WHERE id = $1',
+            [userId],
+          );
+          if (users.rows.length === 0) throw new TenantContextError('USER_NOT_FOUND');
+          const displayName = (users.rows[0]!.name ?? '').trim() || 'Fundação';
+          const created = await client.query<{ id: string }>(
+            'INSERT INTO core.organization (name) VALUES ($1) RETURNING id',
+            [displayName],
+          );
+          const organizationId = created.rows[0]!.id;
+          await client.query(
+            'INSERT INTO core.membership (organization_id, user_id, role) VALUES ($1, $2, $3)',
+            [organizationId, userId, 'owner'],
+          );
+          result = { organizationId, role: 'owner', userId };
+        }
+      } catch (error) {
+        await rollback(client);
+        throw error instanceof TenantContextError
+          ? error
+          : new TenantContextError('PROVISIONING_FAILED');
+      }
+      try {
+        await client.query('COMMIT');
+      } catch {
+        await rollback(client);
+        throw new TenantContextError('PROVISIONING_FAILED');
+      }
+      return result;
+    } finally {
+      client.release();
+    }
+  }
+
+  return { resolveOrganizationContext, withOrganizationTransaction, ensureOrganizationMembership };
 }

@@ -176,7 +176,7 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
         summary: 'Consultar a sessão do proprietário',
         security: ownerSessionSecurity,
         description:
-          'Consulta o banco e revalida a identidade autorizada. Retorna somente id, nome e expiração; não inclui e-mail, identificador Google, cookies ou tokens.',
+          'Consulta o banco e revalida a identidade autorizada. Garante a organização técnica do proprietário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.',
         response: {
           200: ownerSessionSchema,
           401: apiErrorSchema,

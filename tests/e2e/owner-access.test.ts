@@ -39,6 +39,7 @@ test('private welcome is removed when logout succeeds', async ({ page }) => {
       ? route.fulfill({
           json: {
             user: { id: 'fixture-user', name: 'Fixture Owner' },
+            organization: { id: '00000000-0000-4000-8000-000000000002', role: 'owner' },
             expiresAt: '2026-09-07T00:00:00.000Z',
           },
         })

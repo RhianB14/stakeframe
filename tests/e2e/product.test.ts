@@ -132,6 +132,7 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
     route.fulfill({
       json: {
         user: { id: 'fixture-owner', name: 'Fixture Owner' },
+        organization: { id: '00000000-0000-4000-8000-000000000001', role: 'owner' },
         expiresAt: '2099-09-01T00:00:00Z',
       },
     }),

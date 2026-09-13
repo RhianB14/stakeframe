@@ -3,7 +3,7 @@ import { APIError } from 'better-auth/api';
 import { google, verifyGoogleIdToken } from 'better-auth/social-providers';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { and, eq } from 'drizzle-orm';
-import { authSchema, type Database } from '@stakeframe/db';
+import { authSchema, createTenantContext, type Database } from '@stakeframe/db';
 import type { EnabledAuthConfig } from './auth-config.js';
 
 export function isAllowedGoogleProfile(
@@ -19,6 +19,7 @@ export function isAllowedGoogleProfile(
 }
 
 export function createOwnerAuth(config: EnabledAuthConfig, database: Database) {
+  const tenant = createTenantContext(database);
   const googleProvider = google({
     clientId: config.googleClientId,
     clientSecret: config.googleClientSecret,
@@ -155,10 +156,19 @@ export function createOwnerAuth(config: EnabledAuthConfig, database: Database) {
         query: { disableCookieCache: true, disableRefresh: true },
       });
       if (!session || !(await isOwner(session.user.id))) return null;
-      return {
-        user: { id: session.user.id, name: session.user.name },
-        expiresAt: session.session.expiresAt.toISOString(),
-      };
+      try {
+        await tenant.ensureOrganizationMembership(session.user.id);
+        const organization = await tenant.resolveOrganizationContext(session.user.id);
+        return {
+          user: { id: session.user.id, name: session.user.name },
+          organization: { id: organization.organizationId, role: organization.role },
+          expiresAt: session.session.expiresAt.toISOString(),
+        };
+      } catch {
+        // Sanitized fail-closed behavior: membership/organization failures behave exactly like
+        // an unauthenticated session; no database detail ever reaches the caller.
+        return null;
+      }
     },
   };
 }
