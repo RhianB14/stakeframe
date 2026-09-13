@@ -154,7 +154,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   if (database)
     await database.pool.query(
-      'TRUNCATE auth."user", auth.account, auth.session, auth.verification CASCADE',
+      'TRUNCATE auth."user", auth.account, auth.session, auth.verification, core.membership, core.organization CASCADE',
     );
 });
 afterAll(async () => {
@@ -221,6 +221,10 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
     expect(me.statusCode).toBe(200);
     expect(ownerSessionSchema.parse(me.json())).toEqual(me.json());
     expect(me.json()).toMatchObject({ user: { name: 'Fixture Owner' } });
+    expect(me.json().organization).toMatchObject({ role: 'owner' });
+    expect(me.json().organization.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
     expect(me.body).not.toMatch(/token|email|ipAddress|test-only/);
     expect(me.headers['cache-control']).toBe('no-store');
     expect(await count('user')).toBe(1);
@@ -359,5 +363,36 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
     const { cookie } = await login();
     await database.pool.query("UPDATE auth.account SET account_id = '222222222222222222222'");
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(401);
+  });
+  it('provisions exactly one organization per owner and preserves an existing role', async () => {
+    const { cookie } = await login();
+    const first = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+    expect(first.statusCode).toBe(200);
+    const organizationId = first.json().organization.id;
+    expect(first.json().organization.role).toBe('owner');
+    const countCore = async (table: 'organization' | 'membership') =>
+      Number(
+        (await database.pool.query(`SELECT count(*) AS count FROM core.${table}`)).rows[0]!.count,
+      );
+    expect(await countCore('organization')).toBe(1);
+    expect(await countCore('membership')).toBe(1);
+    const second = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+    expect(second.json().organization).toEqual({ id: organizationId, role: 'owner' });
+    expect(await countCore('organization')).toBe(1);
+    await database.pool.query("UPDATE core.membership SET role = 'superadmin'");
+    const third = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+    expect(third.json().organization).toEqual({ id: organizationId, role: 'superadmin' });
+    expect(await countCore('membership')).toBe(1);
+  });
+  it('treats an organization storage failure as an unauthenticated session (sanitized)', async () => {
+    const { cookie } = await login();
+    await database.pool.query('ALTER TABLE core.membership RENAME TO membership_probe_failure');
+    try {
+      const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+      expect(me.statusCode).toBe(401);
+      expect(me.body).not.toMatch(/relation|does not exist|core\.|postgres|probe_failure/i);
+    } finally {
+      await database.pool.query('ALTER TABLE core.membership_probe_failure RENAME TO membership');
+    }
   });
 });

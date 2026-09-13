@@ -60,9 +60,13 @@ export const signOutSchema = z.object({ success: z.literal(true) }).meta({ id: '
 export const probeSchema = z.object({ nonce: z.string().uuid() }).strict();
 export const PROBE_QUEUE = 'system-probe';
 
+export const organizationRoleSchema = z.enum(['owner', 'superadmin']);
+export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
+
 export const ownerSessionSchema = z
   .object({
     user: z.object({ id: z.string(), name: z.string() }),
+    organization: z.object({ id: z.uuid(), role: organizationRoleSchema }),
     expiresAt: z.iso.datetime(),
   })
   .meta({ id: 'OwnerSession' });

@@ -107,6 +107,11 @@ describe('executable API contracts', () => {
               name: 'Fixture Owner',
               email: 'private-input@example.test',
             },
+            organization: {
+              id: '00000000-0000-4000-8000-000000000001',
+              role: 'owner',
+              secret: 'private-input-organization',
+            },
             expiresAt: invalid ? 'private-invalid-date' : '2026-09-07T00:00:00.000Z',
             token: 'private-input-token',
           }),
@@ -118,6 +123,7 @@ describe('executable API contracts', () => {
       else
         expect(response.json()).toEqual({
           user: { id: 'fixture-owner', name: 'Fixture Owner' },
+          organization: { id: '00000000-0000-4000-8000-000000000001', role: 'owner' },
           expiresAt: '2026-09-07T00:00:00.000Z',
         });
       expect(response.body).not.toMatch(/private-input|private-invalid-date|email|token|stack/);

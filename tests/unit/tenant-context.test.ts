@@ -166,4 +166,38 @@ describe('tenant context pre-flight validation (no database required)', () => {
     expect(String(failure)).toBe('TenantContextError: MEMBERSHIP_LOOKUP_FAILED');
     expect(String(failure)).not.toMatch(/10\.0\.0\.9|5432|stakeframe_local/);
   });
+
+  it('rejects a missing authenticated user for provisioning before touching the pool', async () => {
+    const counter = { connects: 0, selects: 0 };
+    const tenant = createTenantContext(unusedDatabase(counter));
+    await expect(
+      tenant.ensureOrganizationMembership('' as unknown as string),
+    ).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    expect(counter.connects).toBe(0);
+  });
+
+  it('sanitizes a pool connection failure during provisioning', async () => {
+    const database = {
+      orm: {
+        select: () => {
+          throw new Error('query must not run');
+        },
+      },
+      pool: {
+        connect: async () => {
+          throw new Error('RAW_POOL_FAILURE 10.0.0.9:5432');
+        },
+      },
+    } as unknown as Database;
+    const tenant = createTenantContext(database);
+    let failure: unknown = null;
+    try {
+      await tenant.ensureOrganizationMembership('user-1');
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ name: 'TenantContextError', code: 'PROVISIONING_FAILED' });
+    expect((failure as Error).message).toBe('PROVISIONING_FAILED');
+    expect(String(failure)).not.toMatch(/10\.0\.0\.9|5432|RAW_POOL_FAILURE/);
+  });
 });

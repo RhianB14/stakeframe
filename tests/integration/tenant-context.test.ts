@@ -289,3 +289,137 @@ describe('organization transaction context with a real PostgreSQL', () => {
     expect(await poolSettingValue()).toBeNull();
   });
 });
+
+describe('organization provisioning with a real PostgreSQL', () => {
+  it('creates exactly one organization and owner membership for a user without membership', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('prov-user', 'Pessoa Provisão', 'prov-user@example.test');
+    const context = await tenant.ensureOrganizationMembership('prov-user');
+    expect(context).toEqual({
+      organizationId: context.organizationId,
+      role: 'owner',
+      userId: 'prov-user',
+    });
+    const organizations = await database.pool.query<{ id: string; name: string }>(
+      'SELECT id, name FROM core.organization',
+    );
+    expect(organizations.rows).toHaveLength(1);
+    expect(organizations.rows[0]).toMatchObject({
+      id: context.organizationId,
+      name: 'Pessoa Provisão',
+    });
+    const memberships = await database.pool.query(
+      'SELECT organization_id, user_id, role FROM core.membership',
+    );
+    expect(memberships.rows).toHaveLength(1);
+  });
+
+  it('falls back to Fundação when the user name is blank', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('prov-blank', '   ', 'prov-blank@example.test');
+    const context = await tenant.ensureOrganizationMembership('prov-blank');
+    const row = (
+      await database.pool.query<{ name: string }>(
+        'SELECT name FROM core.organization WHERE id = $1',
+        [context.organizationId],
+      )
+    ).rows[0]!;
+    expect(row.name).toBe('Fundação');
+  });
+
+  it('is idempotent across repeated calls', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('prov-user', 'Pessoa Provisão', 'prov-user@example.test');
+    const first = await tenant.ensureOrganizationMembership('prov-user');
+    const second = await tenant.ensureOrganizationMembership('prov-user');
+    const third = await tenant.ensureOrganizationMembership('prov-user');
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+    expect(
+      Number(
+        (await database.pool.query('SELECT count(*) AS count FROM core.organization')).rows[0]!
+          .count,
+      ),
+    ).toBe(1);
+    expect(
+      Number(
+        (await database.pool.query('SELECT count(*) AS count FROM core.membership')).rows[0]!.count,
+      ),
+    ).toBe(1);
+  });
+
+  it('preserves an existing membership and never rewrites its role', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('prov-user', 'Pessoa Provisão', 'prov-user@example.test');
+    const organizationId = await insertOrganization('Organização Existente');
+    await insertMembership(organizationId, 'prov-user', 'superadmin');
+    const context = await tenant.ensureOrganizationMembership('prov-user');
+    expect(context).toEqual({ organizationId, role: 'superadmin', userId: 'prov-user' });
+    expect(
+      Number(
+        (await database.pool.query('SELECT count(*) AS count FROM core.organization')).rows[0]!
+          .count,
+      ),
+    ).toBe(1);
+    await database.pool.query("UPDATE core.membership SET role = 'owner'");
+    const afterOwner = await tenant.ensureOrganizationMembership('prov-user');
+    expect(afterOwner).toEqual({ organizationId, role: 'owner', userId: 'prov-user' });
+  });
+
+  it('serializes concurrent provisioning without duplicates', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('prov-user', 'Pessoa Provisão', 'prov-user@example.test');
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => tenant.ensureOrganizationMembership('prov-user')),
+    );
+    expect(new Set(results.map((value) => value.organizationId)).size).toBe(1);
+    expect(
+      Number(
+        (await database.pool.query('SELECT count(*) AS count FROM core.organization')).rows[0]!
+          .count,
+      ),
+    ).toBe(1);
+    expect(
+      Number(
+        (await database.pool.query('SELECT count(*) AS count FROM core.membership')).rows[0]!.count,
+      ),
+    ).toBe(1);
+  });
+
+  it('fails sanitized for a user that does not exist', async () => {
+    const tenant = await createFreshDatabase();
+    let failure: unknown = null;
+    try {
+      await tenant.ensureOrganizationMembership('ghost-provider-user');
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ name: 'TenantContextError', code: 'USER_NOT_FOUND' });
+    expect((failure as Error).message).toBe('USER_NOT_FOUND');
+    expect(String(failure)).not.toMatch(/relation|postgres|ghost|does not exist/i);
+    expect(
+      Number(
+        (await database.pool.query('SELECT count(*) AS count FROM core.organization')).rows[0]!
+          .count,
+      ),
+    ).toBe(0);
+  });
+
+  it('fails closed on an inconsistent membership state', async () => {
+    const tenant = await createFreshDatabase();
+    await insertUser('prov-user', 'Pessoa Provisão', 'prov-user@example.test');
+    const first = await insertOrganization('Organização A');
+    const second = await insertOrganization('Organização B');
+    await insertMembership(first, 'prov-user', 'owner');
+    await database.pool.query('DROP INDEX core.membership_user_id_unique');
+    await insertMembership(second, 'prov-user', 'owner');
+    let failure: unknown = null;
+    try {
+      await tenant.ensureOrganizationMembership('prov-user');
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ name: 'TenantContextError', code: 'MEMBERSHIP_INCONSISTENT' });
+    expect((failure as Error).message).toBe('MEMBERSHIP_INCONSISTENT');
+  });
+});
