@@ -118,8 +118,11 @@ IA comprovados; extração interrompida: a tentativa recebeu uma resposta HTTP
 não aceita, classificada pelo código como `AI_PROVIDER_UNAVAILABLE` (o status
 HTTP não foi persistido; a evidência não distingue erro de
 requisição/modelo/parâmetros, endpoint inexistente, erro 5xx ou outra resposta
-não allowlisted), e o item segue preservado para reprocessamento explícito
-([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md)). Permanecem como condições
+não allowlisted). A STK-M0-70 publicou o fix do schema e confirmou o
+reprocessamento único: o item terminou `imported`, com extração presente e
+`error_code=null`
+([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md),
+[M0-70-OPENROUTER-PRODUCTION-VALIDATION.md](M0-70-OPENROUTER-PRODUCTION-VALIDATION.md)). Permanecem como condições
 da operação contínua os requisitos de identidade, R2 e cota/custo de IA do
 M0-40. Definir polling ou webhook
 em tarefa própria, com testes e autorização de implantação. Nenhuma mensagem

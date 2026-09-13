@@ -74,9 +74,12 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > metadados do OpenRouter uma única resposta HTTP 400 `INVALID_ARGUMENT` do
 > Google Vertex e implementou schema estrutural + categoria sanitizada
 > `AI_REQUEST_INVALID`; o provedor não informou qual argumento foi recusado.
-> Integração e validação operacional seguem pendentes
+> A STK-M0-70 publicou e implantou o candidato ARM64 e confirmou o
+> reprocessamento único do item preservado: estado `imported`, extração presente
+> e `error_code=null`
 > ([M0-63-TELEGRAM-E2E.md](M0-63-TELEGRAM-E2E.md),
-> [M0-64-OPENROUTER-INVALID-ARGUMENT.md](M0-64-OPENROUTER-INVALID-ARGUMENT.md)); registros em
+> [M0-64-OPENROUTER-INVALID-ARGUMENT.md](M0-64-OPENROUTER-INVALID-ARGUMENT.md),
+> [M0-70-OPENROUTER-PRODUCTION-VALIDATION.md](M0-70-OPENROUTER-PRODUCTION-VALIDATION.md)); registros em
 > [M0-61-WORKER-REACTIVATION.md](M0-61-WORKER-REACTIVATION.md). A descrição de configuração padrão acima permanece
 > válida para o conjunto sem overlays; a divergência, os riscos, a contenção
 > e o plano de reativação estão em
@@ -85,8 +88,8 @@ Os Composes padrão mantêm integrações desativadas e worker sem saída extern
 > Para a operação contínua: manter conferidos identidade (procedimento
 > privado, valores reais de produção), R2 (bucket/credenciais) e política de
 > IA (cota/custo) como condições permanentes. O ensaio funcional ponta a
-> ponta foi exercitado na STK-M0-63 (PARCIAL); o reprocessamento do item
-> preservado depende de decisão e autorização próprias. O runtime local
+> ponta original foi exercitado na STK-M0-63 (PARCIAL); a validação posterior
+> do fix e o reprocessamento único estão registrados na STK-M0-70. O runtime local
 > aguarda o migrador; produção segue seu runbook de migração prévia.
 > Logs contêm códigos estáveis, sem tokens, URLs Telegram, imagens ou conteúdo do
 > provedor. Readiness não substitui o monitoramento de atraso/erros da fila.
