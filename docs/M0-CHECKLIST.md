@@ -509,9 +509,10 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Backups externos criptografados (R2) a cada 30 min: ativos desde
       07/09/2026, 36 ciclos verificados, retenção ativa e estado `ready`
       ([M0-25-VALIDATION.md](M0-25-VALIDATION.md)).
-- [ ] Alerta de atraso de backup ativo — **pendente**; preflight do monitor
-      externo concluído na STK-M0-35 e ativação executada na M0-37 (validação
-      do alerta ainda pendente).
+- [ ] Alerta de atraso de backup ativo — **pendente**; regra, deduplicação e
+      recuperação cobertas por testes, e preflight read-only da produção
+      concluído na [STK-M0-69](M0-69-BACKUP-ALERT-PREFLIGHT.md), mas nenhum
+      atraso real ou cenário sintético autorizado foi observado.
 - [x] Teste de restauração demonstrado com backup real e dados de produção em
       cluster isolado; RPO de 19 min e RTO de 29,526 s medidos na
       [STK-M0-68](M0-68-RESTORE-REHEARSAL.md). Failover completo não ensaiado.
