@@ -43,6 +43,13 @@
       "when": 1789325498400,
       "tag": "0005_core_tenant_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789337657513,
+      "tag": "0006_beta_invitation",
+      "breakpoints": true
     }
   ]
 }

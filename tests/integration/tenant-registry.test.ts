@@ -38,12 +38,14 @@ async function dropCurrentDatabase() {
 
 /**
  * Returns the database to the state before migration 0005: the core schema does not exist and
- * the newest journal record is 0004, so the next migrator run must replay 0005 for real.
+ * the recorded migrations stop at 0004, so the next migrator run must replay the 0005 chain
+ * (0005 and every later core migration, e.g. 0006) for real.
  */
 async function reopenCoreMigration() {
   await database.pool.query('DROP SCHEMA "core" CASCADE');
   await database.pool.query(
-    'DELETE FROM drizzle.__drizzle_migrations WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)',
+    `DELETE FROM drizzle.__drizzle_migrations
+     WHERE created_at > (SELECT created_at FROM drizzle.__drizzle_migrations ORDER BY created_at ASC OFFSET 4 LIMIT 1)`,
   );
 }
 
@@ -81,7 +83,7 @@ afterEach(dropCurrentDatabase);
 afterAll(async () => admin.close());
 
 describe('core tenant registry on a fresh database without users', () => {
-  it('creates the core namespace, both tables and the role enum', async () => {
+  it('creates the core namespace, its tables and the role enum', async () => {
     await createFreshDatabase();
     await migrateLocalDatabase(database);
     const tables = (
@@ -89,7 +91,7 @@ describe('core tenant registry on a fresh database without users', () => {
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'core' ORDER BY table_name",
       )
     ).rows.map((row) => row.table_name);
-    expect(tables).toEqual(['membership', 'organization']);
+    expect(tables).toEqual(['beta_invitation', 'membership', 'organization']);
     const enums = await count(
       "SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'core' AND t.typname = 'membership_role'",
     );
@@ -233,8 +235,10 @@ describe('core tenant registry backfill with more than one pre-existing user', (
     expect(
       await count("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'core'"),
     ).toBe(0);
+    // reopenCoreMigration removed the markers of 0005 and 0006; the failed 0005 replay
+    // must not add any marker back.
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(
-      recordedBefore - 1,
+      recordedBefore - 2,
     );
     expect(await count('SELECT count(*) FROM auth."user"')).toBe(2);
   });

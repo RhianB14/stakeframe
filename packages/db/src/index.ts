@@ -4,7 +4,24 @@ import { sql } from 'drizzle-orm';
 import { authSchema } from './auth-schema.js';
 import { coreSchema } from './core-schema.js';
 export { authSchema } from './auth-schema.js';
-export { coreSchema, membershipRole, type MembershipRole } from './core-schema.js';
+export {
+  coreSchema,
+  membershipRole,
+  betaInvitation,
+  betaInvitationStatus,
+  type BetaInvitationStatus,
+  type MembershipRole,
+} from './core-schema.js';
+export {
+  createBetaInvitation,
+  normalizeInvitationEmail,
+  hashInvitationToken,
+  BetaInvitationError,
+  type BetaInvitationErrorCode,
+  type BetaInvitationService,
+  type CreatedBetaInvitation,
+  type RedeemedBetaInvitation,
+} from './beta-invitation.js';
 export {
   createTenantContext,
   ORGANIZATION_CONTEXT_SETTING,
