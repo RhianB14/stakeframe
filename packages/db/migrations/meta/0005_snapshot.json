@@ -133,12 +133,8 @@
           "tableFrom": "account",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -227,12 +223,8 @@
           "tableFrom": "session",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -242,9 +234,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -308,9 +298,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -438,12 +426,8 @@
           "tableFrom": "membership",
           "tableTo": "organization",
           "schemaTo": "core",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -452,12 +436,8 @@
           "tableFrom": "membership",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -465,10 +445,7 @@
       "compositePrimaryKeys": {
         "membership_organization_id_user_id_pk": {
           "name": "membership_organization_id_user_id_pk",
-          "columns": [
-            "organization_id",
-            "user_id"
-          ]
+          "columns": ["organization_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -657,9 +634,7 @@
         "attachment_object_key_unique": {
           "name": "attachment_object_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "object_key"
-          ]
+          "columns": ["object_key"]
         }
       },
       "policies": {},
@@ -706,12 +681,8 @@
           "tableFrom": "extraction_request",
           "tableTo": "inbox",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "inbox_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inbox_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -902,12 +873,8 @@
           "tableFrom": "inbox",
           "tableTo": "attachment",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "attachment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["attachment_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -916,12 +883,8 @@
           "tableFrom": "inbox",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "imported_bet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["imported_bet_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -931,9 +894,7 @@
         "inbox_source_key_unique": {
           "name": "inbox_source_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "source_key"
-          ]
+          "columns": ["source_key"]
         }
       },
       "policies": {},
@@ -1188,12 +1149,8 @@
           "tableFrom": "bet",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "bookmaker_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["bookmaker_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1202,12 +1159,8 @@
           "tableFrom": "bet",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "tipster_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tipster_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1216,12 +1169,8 @@
           "tableFrom": "bet",
           "tableTo": "freebet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "freebet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["freebet_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1230,12 +1179,8 @@
           "tableFrom": "bet",
           "tableTo": "monthly_unit",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "unit_month"
-          ],
-          "columnsTo": [
-            "month"
-          ],
+          "columnsFrom": ["unit_month"],
+          "columnsTo": ["month"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1244,12 +1189,8 @@
           "tableFrom": "bet",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "stake_journal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["stake_journal_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1409,12 +1350,8 @@
           "tableFrom": "selection",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "bet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["bet_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1541,12 +1478,8 @@
           "tableFrom": "catalog_alias",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "catalog_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["catalog_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1554,10 +1487,7 @@
       "compositePrimaryKeys": {
         "catalog_alias_kind_alias_pk": {
           "name": "catalog_alias_kind_alias_pk",
-          "columns": [
-            "kind",
-            "alias"
-          ]
+          "columns": ["kind", "alias"]
         }
       },
       "uniqueConstraints": {},
@@ -1678,12 +1608,8 @@
           "tableFrom": "account",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "bookmaker_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["bookmaker_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1876,12 +1802,8 @@
           "tableFrom": "freebet",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "bookmaker_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["bookmaker_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1890,12 +1812,8 @@
           "tableFrom": "freebet",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "used_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["used_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2011,12 +1929,8 @@
           "tableFrom": "journal",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "reversal_of"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reversal_of"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2132,12 +2046,8 @@
           "tableFrom": "posting",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "journal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["journal_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2146,12 +2056,8 @@
           "tableFrom": "posting",
           "tableTo": "account",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2159,10 +2065,7 @@
       "compositePrimaryKeys": {
         "posting_journal_id_account_id_pk": {
           "name": "posting_journal_id_account_id_pk",
-          "columns": [
-            "journal_id",
-            "account_id"
-          ]
+          "columns": ["journal_id", "account_id"]
         }
       },
       "uniqueConstraints": {},
@@ -2336,12 +2239,8 @@
           "tableFrom": "settlement",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "bet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["bet_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2350,12 +2249,8 @@
           "tableFrom": "settlement",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "journal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["journal_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2415,12 +2310,8 @@
           "tableFrom": "settlement_reversal",
           "tableTo": "settlement",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "settlement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["settlement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2429,12 +2320,8 @@
           "tableFrom": "settlement_reversal",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "journal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["journal_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2658,10 +2545,7 @@
     "core.membership_role": {
       "name": "membership_role",
       "schema": "core",
-      "values": [
-        "owner",
-        "superadmin"
-      ]
+      "values": ["owner", "superadmin"]
     }
   },
   "schemas": {
