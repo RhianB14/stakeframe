@@ -193,7 +193,9 @@ test('refuses missing or invalid policy files and invalid corpus directories', a
   );
   assert.deepEqual(missing.failures, ['POLICY_FILE_INVALID']);
   const invalidDirectory = mkdtempSync(join(tmpdir(), 'stk-policy-invalid-'));
-  writeFileSync(join(invalidDirectory, 'corpus.json'), 'private-invalid-content');
+  const invalidCorpusFile = join(invalidDirectory, 'corpus.json');
+  writeFileSync(invalidCorpusFile, 'private-invalid-content');
+  chmodSync(invalidCorpusFile, 0o600);
   const invalidCorpus = writePolicy([
     buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256),
   ]);
