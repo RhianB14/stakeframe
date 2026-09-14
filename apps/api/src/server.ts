@@ -46,6 +46,7 @@ async function main() {
     checkDatabase: database.check,
     logger: true,
     runtime: config.runtime,
+    release: config.release,
     finance: createFinanceService(database),
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),

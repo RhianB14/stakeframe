@@ -18,7 +18,23 @@ RUN pnpm --config.hoist-workspace-packages=false --filter @stakeframe/api --prod
 
 # Runtime selection is explicit; production enforces its authentication/secret contract.
 FROM node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime
-ENV NODE_ENV=production
+# Release metadata is stamped by the build from the single source of truth (root
+# package.json `version` + build inputs); missing values stay explicit markers so an
+# unstamped artifact is refused downstream instead of being mistaken for a release.
+# api/worker/migrate inherit these variables and labels.
+ARG STAKEFRAME_VERSION=unversioned
+ARG STAKEFRAME_COMMIT=unknown
+ARG STAKEFRAME_BUILD_DATE=unknown
+ENV NODE_ENV=production \
+    STAKEFRAME_VERSION=${STAKEFRAME_VERSION} \
+    STAKEFRAME_COMMIT=${STAKEFRAME_COMMIT} \
+    STAKEFRAME_BUILD_DATE=${STAKEFRAME_BUILD_DATE}
+LABEL org.opencontainers.image.title="Stakeframe" \
+      org.opencontainers.image.description="Stakeframe application image" \
+      org.opencontainers.image.source="https://github.com/RhianB14/stakeframe" \
+      org.opencontainers.image.revision=${STAKEFRAME_COMMIT} \
+      org.opencontainers.image.version=${STAKEFRAME_VERSION} \
+      org.opencontainers.image.created=${STAKEFRAME_BUILD_DATE}
 WORKDIR /app
 USER node
 
@@ -44,6 +60,15 @@ COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 COPY --from=packages --chown=1000:1000 /out/ops /app
 RUN node --version && pg_dump --version && restic version \
  && mkdir /work /status /repository && chown 1000:1000 /work /status /repository && chmod 700 /work /status /repository
+ARG STAKEFRAME_VERSION=unversioned
+ARG STAKEFRAME_COMMIT=unknown
+ARG STAKEFRAME_BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="Stakeframe" \
+      org.opencontainers.image.description="Stakeframe operations image" \
+      org.opencontainers.image.source="https://github.com/RhianB14/stakeframe" \
+      org.opencontainers.image.revision=${STAKEFRAME_COMMIT} \
+      org.opencontainers.image.version=${STAKEFRAME_VERSION} \
+      org.opencontainers.image.created=${STAKEFRAME_BUILD_DATE}
 ENV NODE_ENV=production
 WORKDIR /app
 USER 1000:1000
@@ -56,6 +81,15 @@ RUN setcap -r /usr/bin/caddy
 COPY --from=build /workspace/apps/web/dist /srv
 COPY infra/Caddyfile.dev /etc/caddy/Caddyfile
 USER 1000:1000
+ARG STAKEFRAME_VERSION=unversioned
+ARG STAKEFRAME_COMMIT=unknown
+ARG STAKEFRAME_BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="Stakeframe" \
+      org.opencontainers.image.description="Stakeframe web image" \
+      org.opencontainers.image.source="https://github.com/RhianB14/stakeframe" \
+      org.opencontainers.image.revision=${STAKEFRAME_COMMIT} \
+      org.opencontainers.image.version=${STAKEFRAME_VERSION} \
+      org.opencontainers.image.created=${STAKEFRAME_BUILD_DATE}
 
 FROM web AS web-production
 USER root

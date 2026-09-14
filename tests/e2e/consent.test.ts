@@ -6,6 +6,12 @@ const statusBody = {
   database: 'available',
   authentication: 'google',
   productEnabled: false,
+  release: {
+    version: '0.1.0-beta.1',
+    commit: 'a'.repeat(40),
+    builtAt: '2026-09-14T12:00:00Z',
+    environment: 'production',
+  },
 };
 
 const consentDocuments = [

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { requireDatabaseUrl, readRuntime, readDatabaseConfig } from '@stakeframe/db';
+import { resolveReleaseInfo } from '@stakeframe/shared';
 import { readAuthConfig } from './auth-config.js';
 
 const environmentSchema = z.object({
@@ -17,5 +18,6 @@ export function readConfig(environment: NodeJS.ProcessEnv) {
     port: result.data.API_PORT,
     databaseUrl: requireDatabaseUrl(readDatabaseConfig(environment)),
     auth: readAuthConfig(environment),
+    release: resolveReleaseInfo(environment),
   };
 }

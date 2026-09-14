@@ -61,9 +61,20 @@ jobs:
       - name: Build five OCI archives and verify content and provenance
         run: |
           set -euo pipefail
+          # The release version comes from the single source of truth at the reviewed
+          # commit (root package.json); the build date is stamped once for all five
+          # artifacts of this run. verify_oci refuses unstamped or malformed labels.
+          STAKEFRAME_VERSION="$(node -p "require('./package.json').version")"
+          STAKEFRAME_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          [[ "$STAKEFRAME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
+            || { echo "RELEASE_VERSION_INVALID"; exit 1; }
+          echo "CANDIDATE_STAMP $STAKEFRAME_VERSION $SOURCE_SHA $STAKEFRAME_BUILD_DATE"
           for target in api worker migrate web-production operations; do
             docker buildx build --builder "$BUILDER" --platform "linux/$TARGET_ARCH" \
               --target "$target" --provenance=mode=max,version=v0.2 \
+              --build-arg "STAKEFRAME_VERSION=$STAKEFRAME_VERSION" \
+              --build-arg "STAKEFRAME_COMMIT=$SOURCE_SHA" \
+              --build-arg "STAKEFRAME_BUILD_DATE=$STAKEFRAME_BUILD_DATE" \
               --tag "ghcr.io/rhianb14/stakeframe-$target:candidate-$SOURCE_SHA-$TARGET_ARCH" \
               --label "org.opencontainers.image.source=https://github.com/RhianB14/stakeframe" \
               --label "org.opencontainers.image.revision=$SOURCE_SHA" \

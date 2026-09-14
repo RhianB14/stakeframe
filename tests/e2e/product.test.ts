@@ -125,6 +125,12 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
         database: 'available',
         authentication: 'google',
         productEnabled: true,
+        release: {
+          version: '0.1.0-beta.1',
+          commit: 'a'.repeat(40),
+          builtAt: '2026-09-14T12:00:00Z',
+          environment: 'production',
+        },
       },
     }),
   );
@@ -903,4 +909,11 @@ test('analytics distinguishes missing units and failed data from empty results',
   await expect(
     page.getByText('Nenhuma aposta corresponde a estes filtros.', { exact: true }),
   ).toHaveCount(0);
+});
+
+test('owner panel footer shows the stamped release version', async ({ page }) => {
+  await enabledProduct(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
 });

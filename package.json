@@ -2,7 +2,7 @@
   "name": "stakeframe",
   "private": true,
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.1",
   "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=24.20.0 <25"
@@ -20,6 +20,9 @@
     "images:check": "node scripts/check-runtime-images.mjs",
     "deployment:check": "node scripts/deployment-check.mjs",
     "deployment:rehearse": "node scripts/deployment-rehearsal.mjs",
+    "deployment:verify": "node scripts/deployment-verify.mjs",
+    "deployment:traceability": "node --test scripts/deployment/traceability.test.mjs scripts/deployment/rollback-plan.test.mjs scripts/deployment-verify.test.mjs",
+    "rollback:plan": "node scripts/deployment/rollback-plan.mjs",
     "operations:test": "pnpm build:types && node --test tests/operations/*.test.mjs",
     "operations:rehearse": "node scripts/operations-rehearsal.mjs",
     "monitor:check": "wrangler deploy --dry-run --outdir .cache/monitor-build --config infra/monitor/wrangler.jsonc",

@@ -44,6 +44,12 @@ test('reports database unavailability without stale positive status', async ({ p
         database: 'unavailable',
         authentication: 'not-configured',
         productEnabled: false,
+        release: {
+          version: '0.1.0-beta.1',
+          commit: 'a'.repeat(40),
+          builtAt: '2026-09-14T12:00:00Z',
+          environment: 'production',
+        },
       },
     }),
   );
