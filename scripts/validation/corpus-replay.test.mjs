@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { runReplay } from './corpus-replay.mjs';
+import { evaluateCorpus } from './corpus-core.mjs';
 import { syntheticExtraction } from './corpus-fixture.mjs';
 import { OPENROUTER_MODEL } from '../../packages/shared/dist/index.js';
 
@@ -23,7 +24,13 @@ function writePrivate(file, content) {
   chmodSync(file, 0o600);
 }
 
-function makeHouse({ bookmaker, count = 10, extraction = syntheticExtraction(), duplicates = 0 }) {
+function makeHouse({
+  bookmaker,
+  count = 10,
+  extraction = syntheticExtraction(),
+  duplicates = 0,
+  draftFile = 'ground-truth-draft.json',
+}) {
   const directory = mkdtempSync(join(tmpdir(), `stk-replay-${bookmaker}-`));
   const cases = [];
   for (let index = 0; index < count; index += 1) {
@@ -51,7 +58,7 @@ function makeHouse({ bookmaker, count = 10, extraction = syntheticExtraction(), 
     cases,
     ...(entries.length ? { duplicates: entries } : {}),
   };
-  writePrivate(join(directory, 'ground-truth-draft.json'), JSON.stringify(draft, null, 2) + '\n');
+  writePrivate(join(directory, draftFile), JSON.stringify(draft, null, 2) + '\n');
   return directory;
 }
 
@@ -345,4 +352,67 @@ test('refuses invalid arguments and paths from the CLI without touching the netw
   const missing = run(['bet365', tmpdir(), tmpdir()]);
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /CORPUS_REPLAY_FAILED REPLAY_ARGS_INVALID/);
+});
+
+test('flags cross-house false positives instead of adapting expectations', async () => {
+  const own = makeHouse({ bookmaker: 'bet365' });
+  const other = makeHouse({ bookmaker: 'superbet' });
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    const layoutId = calls <= 10 || calls === 11 || calls === 13 ? 'bet365-v1' : null;
+    return Response.json({
+      id: `fictional-${calls}`,
+      model: OPENROUTER_MODEL,
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: { content: JSON.stringify({ layoutId, extraction: syntheticExtraction() }) },
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 10, cost: 0.001 },
+    });
+  };
+  await runReplay({
+    bookmaker: 'bet365',
+    ownDir: own,
+    otherDir: other,
+    bookmakerId: BOOKMAKER_ID,
+    env: makeEnv(),
+    fetchImpl,
+  });
+  const corpus = JSON.parse(readFileSync(join(own, 'corpus.json'), 'utf8'));
+  assert.equal(corpus.cases[10].expectedLayoutId, null);
+  assert.equal(corpus.cases[10].actual.layoutId, 'bet365-v1');
+  const report = evaluateCorpus(corpus);
+  assert.equal(report.eligibleForOwnerReview, false);
+  assert.equal(report.fieldCounts.layout.mismatches, 2);
+  assert.equal(report.cases[10].correct, false);
+  assert.equal(report.cases[12].correct, false);
+});
+
+test('supports versioned drafts and records their hashes without touching defaults', async () => {
+  const own = makeHouse({ bookmaker: 'bet365', draftFile: 'ground-truth-v2.json' });
+  const other = makeHouse({ bookmaker: 'superbet', draftFile: 'ground-truth-v2.json' });
+  const defaultAttempt = await runReplay({
+    bookmaker: 'bet365',
+    ownDir: own,
+    otherDir: other,
+    bookmakerId: BOOKMAKER_ID,
+    env: makeEnv(),
+    fetchImpl: mockFetch({ positiveLayoutId: 'bet365-v1' }),
+  }).catch((error) => error);
+  assert.equal(defaultAttempt.message, 'REPLAY_DRAFT_INVALID');
+  const { summary } = await runReplay({
+    bookmaker: 'bet365',
+    ownDir: own,
+    otherDir: other,
+    bookmakerId: BOOKMAKER_ID,
+    env: makeEnv(),
+    fetchImpl: mockFetch({ positiveLayoutId: 'bet365-v1' }),
+    draftFile: 'ground-truth-v2.json',
+  });
+  assert.equal(summary.draftFile, 'ground-truth-v2.json');
+  assert.equal(summary.draftSha256, sha(readFileSync(join(own, 'ground-truth-v2.json'))));
+  assert.equal(summary.otherDraftSha256, sha(readFileSync(join(other, 'ground-truth-v2.json'))));
 });

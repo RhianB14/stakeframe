@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractTicket, readAiConfig } from '../../apps/worker/dist/openrouter.js';
+import { extractTicketForEvidence, readAiConfig } from '../../apps/worker/dist/openrouter.js';
 import {
   OPENROUTER_MODEL,
   corpusEvaluationInputSchema,
@@ -26,14 +26,14 @@ const LAYOUT_PROFILES = {
   bet365: {
     id: 'bet365-v1',
     description:
-      'Recorte de tela de bilhete/cupom da Bet365 (interface pt-BR, moeda BRL): bilhetes liquidados, recortes parciais sem prêmio visível e cupons de pré-aposta não confirmados. A identificação visual da casa pode estar ausente no recorte. Campos ausentes ou ilegíveis permanecem null; nenhuma data é inferida.',
+      'Recorte de tela de bilhete/cupom da Bet365 (interface pt-BR, moeda BRL): bilhetes liquidados, recortes parciais sem prêmio visível e cupons de pré-aposta não confirmados. Corresponder somente quando o recorte exibir marcadores visuais da Bet365 (marca ou identidade da casa, tipografia e controles característicos da interface). Não corresponde a capturas de outra casa nem quando a casa não puder ser determinada visualmente; nesse caso não atribua este layout. Campos ausentes ou ilegíveis permanecem null; nenhuma data é inferida.',
     placedAtFormat: 'br-sao-paulo',
     allowFreebet: true,
   },
   superbet: {
     id: 'superbet-v1',
     description:
-      'Recorte de tela de bilhete/cupom da Superbet (interface pt-BR, moeda BRL): bilhetes liquidados, recortes parciais sem prêmio visível, múltiplas com aposta grátis e cupons de pré-aposta não confirmados. A identificação visual da casa pode estar ausente no recorte. Campos ausentes ou ilegíveis permanecem null; nenhuma data é inferida.',
+      'Recorte de tela de bilhete/cupom da Superbet (interface pt-BR, moeda BRL): bilhetes liquidados, recortes parciais sem prêmio visível, múltiplas com aposta grátis e cupons de pré-aposta não confirmados. Corresponder somente quando o recorte exibir marcadores visuais da Superbet (marca ou identidade da casa, tipografia e controles característicos da interface). Não corresponde a capturas de outra casa nem quando a casa não puder ser determinada visualmente; nesse caso não atribua este layout. Campos ausentes ou ilegíveis permanecem null; nenhuma data é inferida.',
     placedAtFormat: 'br-sao-paulo',
     allowFreebet: true,
   },
@@ -77,10 +77,12 @@ async function guardedDirectory(directoryArg) {
   return directory;
 }
 
-async function readDraft(directory) {
+async function readDraft(directory, draftFile) {
   let draft;
+  let raw;
   try {
-    draft = JSON.parse(await readFile(join(directory, 'ground-truth-draft.json'), 'utf8'));
+    raw = await readFile(join(directory, draftFile));
+    draft = JSON.parse(raw.toString('utf8'));
   } catch {
     refuse('REPLAY_DRAFT_INVALID');
   }
@@ -103,7 +105,12 @@ async function readDraft(directory) {
   });
   if (new Set(cases.map((item) => item.sha256)).size !== cases.length)
     refuse('REPLAY_DRAFT_INVALID');
-  return { cases, duplicates, scope: draft.scope };
+  return {
+    cases,
+    duplicates,
+    scope: draft.scope,
+    sha256: createHash('sha256').update(raw).digest('hex'),
+  };
 }
 
 async function verifyImage(directory, file, sha256) {
@@ -132,10 +139,18 @@ export async function runReplay(options) {
     env = process.env,
     fetchImpl,
     dryRun = false,
+    draftFile = 'ground-truth-draft.json',
   } = options ?? {};
   if (!KNOWN_BOOKMAKERS.includes(bookmaker)) refuse('REPLAY_BOOKMAKER_UNKNOWN');
   if (typeof bookmakerId !== 'string' || !UUID.test(bookmakerId))
     refuse('REPLAY_BOOKMAKER_ID_INVALID');
+  if (
+    typeof draftFile !== 'string' ||
+    !/^[A-Za-z0-9._-]+\.json$/.test(draftFile) ||
+    draftFile === 'corpus.json' ||
+    draftFile === 'evaluation.json'
+  )
+    refuse('REPLAY_ARGS_INVALID');
   const profile = LAYOUT_PROFILES[bookmaker];
   const ownDir = await guardedDirectory(ownArg);
   const otherDir = await guardedDirectory(otherArg);
@@ -151,8 +166,8 @@ export async function runReplay(options) {
     if (error instanceof ReplayError) throw error;
     refuse(safeCode(error?.message));
   }
-  const own = await readDraft(ownDir);
-  const other = await readDraft(otherDir);
+  const own = await readDraft(ownDir, draftFile);
+  const other = await readDraft(otherDir, draftFile);
   if (own.scope?.bookmaker !== undefined && own.scope.bookmaker !== bookmaker)
     refuse('REPLAY_DRAFT_INVALID');
   if (other.scope?.bookmaker !== undefined && other.scope.bookmaker === bookmaker)
@@ -191,6 +206,9 @@ export async function runReplay(options) {
     layoutId: layout.id,
     bookmakerId,
     model: layout.model,
+    draftFile,
+    draftSha256: own.sha256,
+    otherDraftSha256: other.sha256,
     dryRun,
     positives: positives.length,
     negatives: negatives.length,
@@ -212,13 +230,12 @@ export async function runReplay(options) {
     const started = performance.now();
     let actual;
     try {
-      const result = await extractTicket({
+      const result = await extractTicketForEvidence({
         apiKey,
         image: item.bytes,
         layouts: [layout],
-        // The layout is not approved yet: recognition runs without the policy
-        // digest, which requires the approval fields validated by layoutDigest.
-        includePolicyDigest: false,
+        // Not approved yet: the evidence-only path skips the policy digest,
+        // which requires the approval fields validated by layoutDigest.
         ...(fetchImpl ? { fetchImpl } : {}),
       });
       summary.calls += 1;
@@ -280,13 +297,14 @@ const invokedAsCli = async () => {
 };
 
 async function main() {
-  const flags = { dryRun: false, bookmakerId: undefined };
+  const flags = { dryRun: false, bookmakerId: undefined, draftFile: undefined };
   const positional = [];
   const args = process.argv.slice(2);
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--dry-run') flags.dryRun = true;
     else if (arg === '--bookmaker-id') flags.bookmakerId = args[(index += 1)];
+    else if (arg === '--draft') flags.draftFile = args[(index += 1)];
     else if (arg.startsWith('--')) refuse('REPLAY_ARGS_INVALID');
     else positional.push(arg);
   }
@@ -299,6 +317,7 @@ async function main() {
     otherDir,
     bookmakerId: flags.bookmakerId,
     dryRun: flags.dryRun,
+    draftFile: flags.draftFile,
   });
   console.log(JSON.stringify(summary));
   if (summary.failures > 0) process.exitCode = 1;

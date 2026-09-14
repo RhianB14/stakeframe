@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi } from 'vitest';
 import {
   parseAutomaticPlacedAt,
@@ -11,7 +12,7 @@ import {
   type ValidatedLayout,
 } from '../../packages/shared/src/index.js';
 import { readAutomaticLayouts } from '../../apps/worker/src/automatic-config.js';
-import { extractTicket } from '../../apps/worker/src/openrouter.js';
+import { extractTicket, extractTicketForEvidence } from '../../apps/worker/src/openrouter.js';
 import { layoutDigest } from '../../packages/db/src/automatic-policy.js';
 const layout: ValidatedLayout = {
   id: 'synthetic-layout',
@@ -199,16 +200,83 @@ describe('automatic import policy boundaries', () => {
         ],
       }),
     );
-    const result = await extractTicket({
+    const result = await extractTicketForEvidence({
       apiKey: 'synthetic-key',
       image,
       layouts: validatedLayoutsSchema.parse([layout]),
-      includePolicyDigest: false,
       fetchImpl,
     });
     expect(result.layoutId).toBe(layout.id);
     expect(result.policyDigest).toBeNull();
     expect(result.requiresReview).toBe(true);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('instructs the extractor not to infer sport from participant names', async () => {
+    const extraction = {
+      bookmaker: 'Fictional',
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'fictional-completion',
+        model: OPENROUTER_MODEL,
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+          },
+        ],
+      }),
+    );
+    await extractTicket({
+      apiKey: 'synthetic-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([layout]),
+      fetchImpl,
+    });
+    const request = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
+    expect(request.messages[0].content).toContain('não infira esporte');
+  });
+
+  it('keeps the evidence-only extraction out of the worker request flow', () => {
+    const sourceDir = fileURLToPath(new URL('../../apps/worker/src/', import.meta.url));
+    const workerFiles = readdirSync(sourceDir).filter((name) => name.endsWith('.ts'));
+    expect(workerFiles).toContain('openrouter.ts');
+    for (const name of workerFiles) {
+      const source = readFileSync(join(sourceDir, name), 'utf8');
+      if (name === 'openrouter.ts') {
+        expect(source).toContain('export function extractTicketForEvidence');
+        continue;
+      }
+      expect(source).not.toContain('extractTicketForEvidence');
+    }
+    const integrations = readFileSync(join(sourceDir, 'integrations.ts'), 'utf8');
+    expect(integrations).toContain('extractTicket(');
+    expect(integrations).not.toContain('extractTicketForEvidence');
+    const replay = readFileSync(
+      fileURLToPath(new URL('../../scripts/validation/corpus-replay.mjs', import.meta.url)),
+      'utf8',
+    );
+    expect(replay).toContain('extractTicketForEvidence');
+    expect(replay).not.toContain('extractTicket(');
   });
 });

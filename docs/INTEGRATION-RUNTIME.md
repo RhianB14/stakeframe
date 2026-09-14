@@ -31,7 +31,8 @@ recepção ao Telegram. Telegram não é backup: sua retenção de updates é li
 O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 2.048 tokens,
 raciocínio `low`, prazo de 60 segundos e fallback desativado. A saída é validada
 novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
-preservadas como texto, sem inferir ano/fuso. Toda extração vai para revisão;
+preservadas como texto, sem inferir ano/fuso. Esporte não é inferido a partir de nomes de equipes ou
+participantes. Toda extração vai para revisão;
 o lançamento exige confirmação do proprietário pelo comando `import.confirm`.
 
 A reserva de cota ocorre em transação antes da chamada externa: até 60 chamadas

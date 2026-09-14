@@ -123,8 +123,10 @@ ou automação habilitada no repositório; testes fictícios nunca as aprovam.
 `pnpm validation:replay <casa> <diretório-privado> <diretório-da-outra-casa>
 --bookmaker-id <uuid>` gera a evidência real: lê os rascunhos privados das duas
 casas, confere o SHA-256 de cada imagem, ignora as duplicatas listadas no
-rascunho e usa a extração real do worker (`apps/worker/dist/openrouter.js`) —
-uma chamada por imagem, sem repetição automática. Cinco imagens distintas da
+rascunho e usa a extração real do worker (`apps/worker/dist/openrouter.js`;
+função de evidência, sem cálculo do digest de política — o fluxo normal do
+worker continua sempre calculando) — uma chamada por imagem, sem repetição
+automática. Cinco imagens distintas da
 outra casa entram como negativas (`expectedLayoutId=null`). Falhas de cobrança,
 cota ou autenticação abortam sem escrever; falhas por imagem ficam preservadas
 em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.
@@ -132,7 +134,10 @@ em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.
 `corpus.json` só é gravado no diretório privado e não sobrescreve arquivo
 existente. Exige `AI_ENABLED=true` e as variáveis OpenRouter de `.env.example`
 (segredo via `OPENROUTER_API_KEY_FILE`); chaves e conteúdo de imagem não
-aparecem em logs.
+aparecem em logs. `--draft <arquivo>` seleciona o rascunho revisado versionado
+(padrão `ground-truth-draft.json`) e o resumo registra o SHA-256 dos rascunhos
+usados. O extrator não infere esporte a partir de nomes de equipes ou
+participantes.
 
 ## Piloto e aceite operacional
 

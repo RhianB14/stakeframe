@@ -35,6 +35,24 @@ test('reports invented values, omissions, selection count and wrong layouts as e
   assert.equal(report.fieldCounts['selections.length'].mismatches, 1);
   assert.equal(report.fieldCounts.layout.mismatches, 1);
 });
+test('counts an invented sport when the evidence does not show it', () => {
+  const value = fixture();
+  value.cases[0].expected.selections[0].sport = null;
+  value.cases[0].actual.extraction.selections[0].sport = 'Futebol';
+  const report = evaluateCorpus(value);
+  assert.equal(report.eligibleForOwnerReview, false);
+  assert.equal(report.fieldCounts['selections.sport'].invented, 1);
+  assert.equal(
+    report.cases[0].issues.some(
+      (issue) => issue.field === 'selections.sport' && issue.kind === 'invented',
+    ),
+    true,
+  );
+  const coherent = fixture();
+  coherent.cases[0].expected.selections[0].sport = 'Futebol';
+  coherent.cases[0].actual.extraction.selections[0].sport = 'Futebol';
+  assert.equal(evaluateCorpus(coherent).fieldCounts['selections.sport'], undefined);
+});
 test('binds each result to its image and model, rejects invalid schemas and missed warnings', () => {
   const value = fixture();
   value.cases[0].actual.imageSha256 = 'a'.repeat(64);
