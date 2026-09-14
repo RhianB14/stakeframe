@@ -179,6 +179,20 @@ describe('email runtime configuration', () => {
     expect(read('local', { RESEND_API_KEY: 'k', RESEND_FROM: 'not-an-email' })).toBeNull();
     expect(read('local', { RESEND_API_KEY: 'key-without-sender' })).toBeNull();
   });
+  it('boots production without any Resend configuration and requires file secrets when set', () => {
+    // Regression: an absent optional secret must never break the startup (SECRET_FILE_REQUIRED).
+    expect(read('production', { STAKEFRAME_RUNTIME: 'production' })).toBeNull();
+    expect(
+      read('production', {
+        STAKEFRAME_RUNTIME: 'production',
+        RESEND_FROM: 'Stakeframe <no-reply@stakeframe.test>',
+      }),
+    ).toBeNull();
+    // A configured value without the file mount is a real misconfiguration and must fail.
+    expect(() =>
+      read('production', { STAKEFRAME_RUNTIME: 'production', RESEND_API_KEY: 'inline-value' }),
+    ).toThrow('SECRET_FILE_REQUIRED');
+  });
   it('does not log or expose secrets while reading configuration', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {

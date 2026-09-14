@@ -131,7 +131,12 @@ export function readEmailRuntimeConfig(
   environment: NodeJS.ProcessEnv,
 ): EmailRuntimeConfig | null {
   const transport = environment.EMAIL_TRANSPORT?.trim().toLowerCase();
-  const apiKey = readSecret(environment, 'RESEND_API_KEY');
+  // The API key is optional: only read the secret when it is actually configured, so a
+  // production boot without Resend never fails (`readSecret` enforces file-only secrets
+  // for production and throws when the variable is absent).
+  const configuredKey =
+    environment.RESEND_API_KEY !== undefined || environment.RESEND_API_KEY_FILE !== undefined;
+  const apiKey = configuredKey ? readSecret(environment, 'RESEND_API_KEY') : undefined;
   const from = environment.RESEND_FROM?.trim();
   const validFrom = isValidSender(from);
   if (transport === 'memory') return runtime === 'production' ? null : { kind: 'memory' };
