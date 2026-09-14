@@ -48,9 +48,12 @@ export function App() {
   }, [client, owner.isError, owner.data]);
   const session = owner.data && owner.data !== 'consent-required' ? owner.data : null;
   if (status.data?.productEnabled && session && !owner.isError) {
-    return <ProductApp owner={session.user} />;
+    return <ProductApp owner={session.user} release={status.data?.release} />;
   }
   const production = status.data?.stage === 'production-setup';
+  const releaseVersion = status.data?.release.version;
+  const releaseLabel =
+    releaseVersion && releaseVersion !== 'unversioned' ? ` · v${releaseVersion}` : '';
   const connectionLabel = status.isPending
     ? 'Verificando conexão'
     : status.isError
@@ -167,6 +170,7 @@ export function App() {
         <span>
           Stakeframe <span className="footer-divider">/</span>{' '}
           {production ? 'Seu espaço' : 'Desenvolvimento'}
+          {releaseLabel}
         </span>
       </footer>
     </div>

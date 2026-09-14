@@ -7,6 +7,7 @@ import {
   type Workspace,
   type Bet,
   type CatalogItem,
+  type ReleaseInfo,
 } from '@stakeframe/shared';
 import { authAction } from '../OwnerAccess.js';
 import { Button } from '../components/ui/button.js';
@@ -63,7 +64,13 @@ function currentPage(): Page {
   return navigation.find((item) => item.id === id)?.id ?? 'overview';
 }
 
-export function ProductApp({ owner }: { owner: Owner }) {
+export function ProductApp({
+  owner,
+  release,
+}: {
+  owner: Owner;
+  release?: ReleaseInfo | undefined;
+}) {
   const workspace = useQuery({
     queryKey: ['product', 'workspace'],
     queryFn: () => request('/api/v1/workspace', workspaceSchema),
@@ -91,11 +98,20 @@ export function ProductApp({ owner }: { owner: Owner }) {
     );
   return (
     <ActionProvider key={owner.id} owner={owner.id} version={workspace.data.version}>
-      <ProductShell owner={owner} workspace={workspace.data} />
+      <ProductShell owner={owner} workspace={workspace.data} release={release} />
     </ActionProvider>
   );
 }
-function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace }) {
+function ProductShell({
+  owner,
+  workspace,
+  release,
+}: {
+  owner: Owner;
+  workspace: Workspace;
+  release?: ReleaseInfo | undefined;
+}) {
+  const releaseLabel = release && release.version !== 'unversioned' ? ` · v${release.version}` : '';
   const [page, setPage] = useState(currentPage);
   const [modal, setModal] = useState<Modal | null>(null);
   const actions = useFinanceActions();
@@ -227,7 +243,8 @@ function ProductShell({ owner, workspace }: { owner: Owner; workspace: Workspace
           )}
         </main>
         <div className="product-footer">
-          Seus movimentos, com contexto.<span>BRL · America/Sao_Paulo</span>
+          Seus movimentos, com contexto.
+          <span>BRL · America/Sao_Paulo{releaseLabel}</span>
         </div>
       </div>
       {modal ? (

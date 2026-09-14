@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../apps/api/src/app.js';
 import { readConfig } from '../../apps/api/src/config.js';
-import { apiErrorSchema, systemStatusSchema } from '../../packages/shared/src/index.js';
+import {
+  apiErrorSchema,
+  resolveReleaseInfo,
+  systemStatusSchema,
+} from '../../packages/shared/src/index.js';
 import { requireDatabaseUrl } from '../../packages/db/src/index.js';
 
 const apps: ReturnType<typeof createApp>[] = [];
@@ -30,8 +34,24 @@ describe('API local', () => {
     expect(status.database).toBe(available ? 'available' : 'unavailable');
     expect(status.productEnabled).toBe(false);
     expect(status.authentication).toBe('not-configured');
+    expect(status.release).toEqual(resolveReleaseInfo(process.env));
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).not.toContain('private-db-error');
+  });
+  it('reports the stamped release metadata supplied by the build without leaking environment values', async () => {
+    const release = {
+      version: '0.1.0-beta.1',
+      commit: 'a'.repeat(40),
+      builtAt: '2026-09-14T12:00:00Z',
+      environment: 'production' as const,
+    };
+    const app = createApp({ checkDatabase: async () => {}, release });
+    apps.push(app);
+    const response = await app.inject('/api/v1/system/status');
+    const status = systemStatusSchema.parse(response.json());
+    expect(status.release).toEqual(release);
+    expect(response.body).not.toContain('STAKEFRAME_');
+    expect(response.body).not.toMatch(/password|secret|token/i);
   });
   it('returns a stable not-found error without trusting a caller request ID', async () => {
     const response = await appWithDatabase().inject({
@@ -86,6 +106,12 @@ describe('configuration', () => {
       port: 3000,
       databaseUrl: DATABASE_URL,
       auth: { enabled: false },
+      release: {
+        version: 'unversioned',
+        commit: 'unknown',
+        builtAt: 'unknown',
+        environment: 'local',
+      },
     });
   });
   it.each([undefined, '', 'https://private-secret@example.test/db', 'postgresql://localhost'])(

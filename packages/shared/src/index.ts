@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import { releaseInfoSchema } from './release.js';
 export * from './imports.js';
 export * from './decimal.js';
 export * from './finance.js';
+export * from './release.js';
 
 export const systemStatusSchema = z
   .object({
@@ -10,6 +12,7 @@ export const systemStatusSchema = z
     database: z.enum(['available', 'unavailable']),
     authentication: z.enum(['not-configured', 'google']),
     productEnabled: z.boolean(),
+    release: releaseInfoSchema,
   })
   .meta({ id: 'SystemStatus' });
 

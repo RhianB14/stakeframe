@@ -95,6 +95,10 @@ def verify(path, metadata, source_sha, arch, target):
     require(config.get("os") == "linux" and config.get("architecture") == arch, "OCI_CONFIG_PLATFORM_MISMATCH")
     labels = config.get("config", {}).get("Labels", {})
     require(labels.get("org.opencontainers.image.source") == SOURCE and labels.get("org.opencontainers.image.revision") == source_sha, "OCI_REVISION_MISMATCH")
+    version = labels.get("org.opencontainers.image.version")
+    created = labels.get("org.opencontainers.image.created")
+    require(isinstance(version, str) and bool(re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version)), "OCI_VERSION_REQUIRED")
+    require(isinstance(created, str) and bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", created)), "OCI_CREATED_REQUIRED")
     require(config.get("config", {}).get("User") in ("node", "1000:1000"), "OCI_NONROOT_REQUIRED")
     layers = image.get("layers", [])
     require(layers, "OCI_LAYERS_REQUIRED")
@@ -127,6 +131,7 @@ def verify(path, metadata, source_sha, arch, target):
         archive_sha = hashlib.file_digest(stream, "sha256").hexdigest()
     return {"version": 1, "sourceSha": source_sha, "architecture": arch, "target": target,
             "archive": path.name, "archiveBytes": path.stat().st_size, "archiveSha256": archive_sha,
+            "releaseVersion": version, "releaseCreated": created,
             "indexDigest": roots[0]["digest"], "runtimeDigest": image_ref["digest"],
             "provenanceDigest": ref["digest"], "provenanceVerified": True, "nonRootVerified": True}
 

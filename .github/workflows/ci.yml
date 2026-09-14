@@ -37,6 +37,7 @@ jobs:
         run: |
           node --test scripts/release/source.test.mjs
           python3 -B -m unittest discover -s scripts/release -p 'test_*.py' -v
+          pnpm deployment:traceability
 
   application-check:
     name: ${{ matrix.check }}

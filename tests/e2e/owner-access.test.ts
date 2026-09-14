@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function enabledAuth(page: Page) {
+async function enabledAuth(page: Page, version = '0.1.0-beta.1') {
   await page.route('**/api/v1/system/status', (route) =>
     route.fulfill({
       json: {
@@ -9,6 +9,12 @@ async function enabledAuth(page: Page) {
         database: 'available',
         authentication: 'google',
         productEnabled: false,
+        release: {
+          version,
+          commit: 'a'.repeat(40),
+          builtAt: '2026-09-14T12:00:00Z',
+          environment: 'production',
+        },
       },
     }),
   );
@@ -87,4 +93,18 @@ test('unexpected redirect destinations are rejected', async ({ page }) => {
   await page.getByRole('button', { name: 'Entrar com Google' }).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível entrar.');
   await expect(page).toHaveURL(/127\.0\.0\.1:8088\/$/);
+});
+
+test('public footer shows the stamped version and hides unstamped builds safely', async ({
+  page,
+}) => {
+  await enabledAuth(page);
+  await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
+  await page.goto('/');
+  await expect(page.locator('footer')).toContainText('v0.1.0-beta.1');
+  // A build without stamped metadata must show no version at all (the later route wins).
+  await enabledAuth(page, 'unversioned');
+  await page.reload();
+  await expect(page.locator('footer')).toContainText('Stakeframe');
+  await expect(page.locator('footer')).not.toContainText('v0.1.0-beta.1');
 });

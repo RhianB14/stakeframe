@@ -12,7 +12,8 @@ SHA = "a" * 40
 
 
 def fixture(directory, *, revision=SHA, arch="arm64", subject=None, provenance_sha=SHA,
-            target="api", user="node", repository=SOURCE + ".git", mutation=None):
+            target="api", user="node", repository=SOURCE + ".git", version="0.1.0-beta.1",
+            created="2026-09-14T12:00:00Z", mutation=None):
     files = {"oci-layout": json.dumps({"imageLayoutVersion": "1.0.0"}).encode()}
 
     def blob(content, media):
@@ -21,9 +22,15 @@ def fixture(directory, *, revision=SHA, arch="arm64", subject=None, provenance_s
         files["blobs/sha256/" + digest] = data
         return {"mediaType": media, "digest": "sha256:" + digest, "size": len(data)}
 
-    config = blob({"os": "linux", "architecture": arch, "config": {"User": user, "Labels": {
+    labels = {
         "org.opencontainers.image.source": SOURCE,
-        "org.opencontainers.image.revision": revision}}}, CONFIG)
+        "org.opencontainers.image.revision": revision,
+    }
+    if version is not None:
+        labels["org.opencontainers.image.version"] = version
+    if created is not None:
+        labels["org.opencontainers.image.created"] = created
+    config = blob({"os": "linux", "architecture": arch, "config": {"User": user, "Labels": labels}}, CONFIG)
     image = blob({"schemaVersion": 2, "mediaType": MANIFEST, "config": config,
                   "layers": [blob(b"fictional-layer", "application/vnd.oci.image.layer.v1.tar+gzip")]}, MANIFEST)
     image["platform"] = {"os": "linux", "architecture": arch}
@@ -77,7 +84,24 @@ class OciTests(unittest.TestCase):
             path, metadata = fixture(Path(tmp))
             result = verify(path, metadata, SHA, "arm64", "api")
             self.assertTrue(result["provenanceVerified"])
+            self.assertEqual(result["releaseVersion"], "0.1.0-beta.1")
+            self.assertEqual(result["releaseCreated"], "2026-09-14T12:00:00Z")
             self.assertEqual(result["archiveSha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_refuses_archives_without_release_version_or_created_labels(self):
+        for case, code in [
+            ({"version": None}, "OCI_VERSION_REQUIRED"),
+            ({"version": "unversioned"}, "OCI_VERSION_REQUIRED"),
+            ({"version": "1.0"}, "OCI_VERSION_REQUIRED"),
+            ({"version": ""}, "OCI_VERSION_REQUIRED"),
+            ({"created": None}, "OCI_CREATED_REQUIRED"),
+            ({"created": "unknown"}, "OCI_CREATED_REQUIRED"),
+            ({"created": "2026-09-14"}, "OCI_CREATED_REQUIRED"),
+        ]:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                path, metadata = fixture(Path(tmp), **case)
+                with self.assertRaisesRegex(ValueError, code):
+                    verify(path, metadata, SHA, "arm64", "api")
 
     def test_refuses_revision_architecture_root_and_provenance_mismatches(self):
         cases = [{"revision": "b" * 40}, {"arch": "amd64"}, {"subject": "b" * 64},

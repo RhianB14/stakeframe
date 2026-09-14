@@ -4,8 +4,10 @@ import {
   apiErrorSchema,
   livenessSchema,
   readinessSchema,
+  resolveReleaseInfo,
   systemStatusSchema,
   unavailabilitySchema,
+  type ReleaseInfo,
 } from '@stakeframe/shared';
 import { registerAuthRoutes } from './auth-routes.js';
 import { registerConsentRoutes } from './consent-routes.js';
@@ -24,6 +26,7 @@ export function createApp(options: {
   logger?: boolean;
   ownerAuth?: OwnerAuth;
   runtime?: 'local' | 'production';
+  release?: ReleaseInfo;
   finance?: FinanceService;
   imports?: ImportService;
   events?: EventService;
@@ -106,6 +109,7 @@ export function createApp(options: {
           database,
           authentication: options.ownerAuth ? 'google' : 'not-configured',
           productEnabled: Boolean(options.finance),
+          release: options.release ?? resolveReleaseInfo(),
         });
       },
     );

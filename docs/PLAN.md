@@ -475,7 +475,9 @@ separados.
 
 A publicação usa imagens identificadas por versão/digest, produzidas pela CI.
 Deploy, migrações e rollback têm procedimentos documentados e autorização
-específica do Codex.
+específica do Codex — versionamento e rastreabilidade em
+[docs/RELEASE-TRACEABILITY.md](RELEASE-TRACEABILITY.md) e reversão em
+[docs/ROLLBACK.md](ROLLBACK.md).
 
 ## 5. Execução, revisão e critérios de conclusão
 
