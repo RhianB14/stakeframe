@@ -118,6 +118,22 @@ alteração muda o digest usado na decisão e requer nova conferência. Desabili
 a variável devolve as novas extrações à revisão manual. Não há políticas reais
 ou automação habilitada no repositório; testes fictícios nunca as aprovam.
 
+### Replay privado da extração
+
+`pnpm validation:replay <casa> <diretório-privado> <diretório-da-outra-casa>
+--bookmaker-id <uuid>` gera a evidência real: lê os rascunhos privados das duas
+casas, confere o SHA-256 de cada imagem, ignora as duplicatas listadas no
+rascunho e usa a extração real do worker (`apps/worker/dist/openrouter.js`) —
+uma chamada por imagem, sem repetição automática. Cinco imagens distintas da
+outra casa entram como negativas (`expectedLayoutId=null`). Falhas de cobrança,
+cota ou autenticação abortam sem escrever; falhas por imagem ficam preservadas
+em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.
+`--dry-run` valida plano e configuração sem chamadas nem escrita. O
+`corpus.json` só é gravado no diretório privado e não sobrescreve arquivo
+existente. Exige `AI_ENABLED=true` e as variáveis OpenRouter de `.env.example`
+(segredo via `OPENROUTER_API_KEY_FILE`); chaves e conteúdo de imagem não
+aparecem em logs.
+
 ## Piloto e aceite operacional
 
 Iniciar o piloto somente após a implantação autorizada, com saldos iniciais

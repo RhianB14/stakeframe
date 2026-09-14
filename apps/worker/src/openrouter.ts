@@ -87,6 +87,9 @@ export async function extractTicket(options: {
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
   layouts?: ValidatedLayout[];
+  // Evidence replays recognize layouts that are not approved yet; the policy
+  // digest requires the approval fields and is skipped explicitly.
+  includePolicyDigest?: boolean;
 }) {
   const layouts = options.layouts ?? [];
   const mime = imageMime(options.image);
@@ -180,7 +183,8 @@ export async function extractTicket(options: {
       requiresReview: true as const,
       model: completion.model,
       layoutId: selected?.id ?? null,
-      policyDigest: selected ? layoutDigest(selected) : null,
+      policyDigest:
+        selected && options.includePolicyDigest !== false ? layoutDigest(selected) : null,
       elapsedMs: Math.round(performance.now() - started),
     };
   } catch (error) {

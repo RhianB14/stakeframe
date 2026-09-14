@@ -163,4 +163,52 @@ describe('automatic import policy boundaries', () => {
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     }
   });
+
+  it('recognizes a layout before approval without computing a policy digest', async () => {
+    const extraction = {
+      bookmaker: 'Fictional',
+      reference: 'fictional-1',
+      placedAtText: null,
+      currency: 'BRL',
+      stake: '10.00',
+      odds: '2.00',
+      potentialReturn: null,
+      freebet: false,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: 'Result',
+          selection: 'A',
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'fictional-completion',
+        model: OPENROUTER_MODEL,
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+          },
+        ],
+      }),
+    );
+    const result = await extractTicket({
+      apiKey: 'synthetic-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([layout]),
+      includePolicyDigest: false,
+      fetchImpl,
+    });
+    expect(result.layoutId).toBe(layout.id);
+    expect(result.policyDigest).toBeNull();
+    expect(result.requiresReview).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
