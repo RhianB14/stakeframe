@@ -112,6 +112,17 @@ em execução de cada serviço, os labels `version`/`revision` das imagens e a r
 `DEPLOYMENT_TRACEABILITY_VERIFIED` e os digests observados (truncados). O script é
 somente leitura (não altera estado) e nunca imprime valores de ambiente além dos digests.
 
+**Conjunto obrigatório (fail-closed):** o `deployment.env` deve fixar **exatamente os
+cinco serviços** (`api`, `worker`, `migrate`, `web`, `operations`). No modo padrão o
+verificador recusa qualquer conjunto incompleto (`PINS_INCOMPLETE … missing=…`) e
+qualquer chave `*_IMAGE` duplicada (`PIN_DUPLICATE_KEY`) — nunca há aceitação silenciosa
+do "último valor". A inspeção dos containers não pode ser omitida no modo padrão
+(`SKIP_DOCKER_REQUIRES_SERVICES`). O modo **parcial** existe somente de forma explícita
+via `--services api,worker,…`: os serviços são declarados pelo operador, validados um a
+um, e a saída é marcada `mode=explicit services=N` — uma execução parcial nunca se
+confunde com a verificação completa (`mode=full services=5`). O modo parcial destina-se a
+ensaios locais/rehearsal, nunca à validação de produção.
+
 ## 7. Estado da produção na auditoria de 2026-09-14 (somente leitura)
 
 - containers `stakeframe-production-*`: api, worker, migrate (imagem usada pelo perfil de

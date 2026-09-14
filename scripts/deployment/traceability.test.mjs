@@ -4,6 +4,7 @@ import {
   DEFAULT_REPOSITORY_PREFIX,
   TraceabilityError,
   parsePinnedImages,
+  requireCompletePins,
   rollbackCommands,
   rollbackPlan,
   traceabilityFailures,
@@ -50,6 +51,40 @@ test('parses only digest-pinned images of this project and refuses anything else
       (error) => error instanceof TraceabilityError && error.code === code,
     );
   assert.throws(() => parsePinnedImages('# empty'), /PIN_FILE_EMPTY/);
+});
+
+test('rejects a duplicated *_IMAGE key instead of silently taking the last value', () => {
+  const duplicated = `${pinFile(fullSet)}\nAPI_IMAGE=${DEFAULT_REPOSITORY_PREFIX}-api@${digest('9')}\n`;
+  assert.throws(
+    () => parsePinnedImages(duplicated),
+    (error) => error instanceof TraceabilityError && error.code === 'PIN_DUPLICATE_KEY API_IMAGE',
+  );
+});
+
+test('requires exactly the five pinned services for the operational default set', () => {
+  requireCompletePins(parsePinnedImages(pinFile(fullSet)));
+  assert.throws(
+    () => requireCompletePins(parsePinnedImages(pinFile({ api: '1' }))),
+    /PINS_INCOMPLETE deployment\.env missing=worker,migrate,web,operations/,
+  );
+  const four = { ...fullSet };
+  delete four.web;
+  assert.throws(
+    () => requireCompletePins(parsePinnedImages(pinFile(four))),
+    /PINS_INCOMPLETE deployment\.env missing=web/,
+  );
+});
+
+test('rollback requires complete current and previous sets', () => {
+  const full = pinFile(fullSet);
+  assert.throws(
+    () => rollbackPlan({ currentText: pinFile({ api: 'a' }), previousText: full }),
+    /ROLLBACK_CURRENT_INCOMPLETE missing=worker,migrate,web,operations/,
+  );
+  assert.throws(
+    () => rollbackPlan({ currentText: full, previousText: pinFile({ api: '1' }) }),
+    /ROLLBACK_PREVIOUS_INCOMPLETE missing=worker,migrate,web,operations/,
+  );
 });
 
 test('verifies containers, labels and the application against the expected release', () => {
@@ -106,6 +141,29 @@ test('verifies containers, labels and the application against the expected relea
     () => traceabilityFailures({ pins, services, expected: { version: '1.0', commit: COMMIT } }),
     /EXPECTATION_INVALID/,
   );
+  // Explicit container-skip mode still requires the pin to exist and verifies the app.
+  assert.deepEqual(
+    traceabilityFailures({
+      pins,
+      services,
+      expected,
+      containers: {},
+      app: { version: VERSION, commit: COMMIT },
+      skipContainers: true,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    traceabilityFailures({
+      pins: parsePinnedImages(pinFile({ api: '1' })),
+      services: ['api', 'worker'],
+      expected,
+      containers: {},
+      app: { version: VERSION, commit: COMMIT },
+      skipContainers: true,
+    }),
+    ['PIN_MISSING worker'],
+  );
 });
 
 test('rolls back only known services and builds digest-only commands', () => {
@@ -131,6 +189,6 @@ test('rolls back only known services and builds digest-only commands', () => {
   );
   assert.throws(
     () => rollbackPlan({ currentText, previousText: pinFile({ api: '1' }) }),
-    /ROLLBACK_TARGET_MISSING worker/,
+    /ROLLBACK_PREVIOUS_INCOMPLETE missing=worker,migrate,web,operations/,
   );
 });

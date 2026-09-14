@@ -41,6 +41,11 @@ node scripts/deployment/rollback-plan.mjs \
 
 - emite `ROLLBACK_STEP <serviço> <digest atual> -> <digest anterior>` por serviço
   alterado e os comandos `docker compose ... up -d --no-deps <serviço>`;
+- **conjunto obrigatório (fail-closed):** o arquivo atual e o anterior devem conter
+  **exatamente os cinco serviços**; o planejador recusa
+  `ROLLBACK_CURRENT_INCOMPLETE missing=…`, `ROLLBACK_PREVIOUS_INCOMPLETE missing=…` e
+  chaves duplicadas (`PIN_DUPLICATE_KEY`). Um plano só é emitido quando os dois lados
+  estão completos;
 - recusa (`ROLLBACK_PLAN_REFUSED <código>`, saída 1) quando: algum pin não é
   digest-only do repositório esperado, o arquivo anterior não cobre todos os serviços
   atuais (`ROLLBACK_TARGET_MISSING`) ou o digest anterior não existe no host

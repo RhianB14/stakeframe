@@ -21,7 +21,7 @@
     "deployment:check": "node scripts/deployment-check.mjs",
     "deployment:rehearse": "node scripts/deployment-rehearsal.mjs",
     "deployment:verify": "node scripts/deployment-verify.mjs",
-    "deployment:traceability": "node --test scripts/deployment/traceability.test.mjs scripts/deployment/rollback-plan.test.mjs",
+    "deployment:traceability": "node --test scripts/deployment/traceability.test.mjs scripts/deployment/rollback-plan.test.mjs scripts/deployment-verify.test.mjs",
     "rollback:plan": "node scripts/deployment/rollback-plan.mjs",
     "operations:test": "pnpm build:types && node --test tests/operations/*.test.mjs",
     "operations:rehearse": "node scripts/operations-rehearsal.mjs",

@@ -52,14 +52,43 @@ test('prints a digest-only rollback plan for changed services', () => {
   }
 });
 
-test('refuses a plan whose previous set cannot cover the current services', () => {
+test('refuses a plan whose current or previous set is incomplete', () => {
   const directory = mkdtempSync(join(tmpdir(), 'stk-rollback-'));
   try {
+    assert.throws(
+      () => runPlan(directory, pinFile({ api: '1' }), pinFile(fullSet)),
+      (error) =>
+        error.status === 1 &&
+        /ROLLBACK_PLAN_REFUSED ROLLBACK_CURRENT_INCOMPLETE missing=worker,migrate,web,operations/.test(
+          error.stderr,
+        ),
+    );
     assert.throws(
       () => runPlan(directory, pinFile(fullSet), pinFile({ api: '1' })),
       (error) =>
         error.status === 1 &&
-        /ROLLBACK_PLAN_REFUSED ROLLBACK_TARGET_MISSING worker/.test(error.stderr),
+        /ROLLBACK_PLAN_REFUSED ROLLBACK_PREVIOUS_INCOMPLETE missing=worker,migrate,web,operations/.test(
+          error.stderr,
+        ),
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('refuses a duplicated key and a partial set in the planner input', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'stk-rollback-'));
+  try {
+    assert.throws(
+      () =>
+        runPlan(
+          directory,
+          `${pinFile(fullSet)}API_IMAGE=${DEFAULT_REPOSITORY_PREFIX}-api@${digest('9')}\n`,
+          pinFile(fullSet),
+        ),
+      (error) =>
+        error.status === 1 &&
+        /ROLLBACK_PLAN_REFUSED PIN_DUPLICATE_KEY API_IMAGE/.test(error.stderr),
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });

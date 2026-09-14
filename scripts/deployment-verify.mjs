@@ -2,6 +2,15 @@
 // and the release metadata reported by the application endpoint against one expected
 // release. Any divergence refuses with DEPLOYMENT_TRACEABILITY_REFUSED and exit code 1.
 //
+// Modes:
+// - default (full): the deployment.env must pin exactly the five services
+//   (api, worker, migrate, web, operations); missing pins or duplicated keys refuse the
+//   whole check, and the container inspection cannot be skipped.
+// - explicit (--services a,b,...): the operator declares the services to verify. This is
+//   the only way to run a partial check (documented in docs/RELEASE-TRACEABILITY.md);
+//   each listed service must be known and pinned, --skip-docker is allowed here and the
+//   output is marked mode=explicit so a partial run is never mistaken for a full one.
+//
 // Usage (on the VPS, after an authorized deployment):
 //   node scripts/deployment-verify.mjs --env-file /etc/stakeframe/deployment.env \
 //     --endpoint http://127.0.0.1:8080 --expect-version 0.1.0-beta.1 --expect-commit <sha>
@@ -13,6 +22,7 @@ import {
   TraceabilityError,
   assertValidExpectation,
   parsePinnedImages,
+  requireCompletePins,
   traceabilityFailures,
 } from './deployment/traceability.mjs';
 
@@ -97,7 +107,12 @@ async function main() {
   const pins = parsePinnedImages(readFileSync(options.envFile, 'utf8'), {
     repositoryPrefix: options.repositoryPrefix,
   });
-  const services = options.services ?? [...pins.keys()];
+  // Default mode is the complete operational set and cannot be partial; skipping the
+  // container inspection is only available for an explicit --services list.
+  if (!options.services) requireCompletePins(pins);
+  if (options.skipDocker && !options.services)
+    throw new TraceabilityError('SKIP_DOCKER_REQUIRES_SERVICES');
+  const services = options.services ?? DEFAULT_SERVICES;
   for (const service of services)
     if (!DEFAULT_SERVICES.includes(service)) throw new TraceabilityError('SERVICE_UNKNOWN');
   const containers = {};
@@ -111,15 +126,17 @@ async function main() {
     expected: { version: options.version, commit: options.commit },
     containers,
     app,
+    skipContainers: options.skipDocker,
   });
   if (failures.length > 0) {
     console.error(`DEPLOYMENT_TRACEABILITY_REFUSED ${failures.join(' ')}`);
     process.exitCode = 1;
     return;
   }
+  const mode = options.services ? 'explicit' : 'full';
   const digests = services.map((service) => `${service}:${pins.get(service).digest.slice(0, 19)}`);
   console.info(
-    `DEPLOYMENT_TRACEABILITY_VERIFIED version=${options.version} commit=${options.commit.slice(0, 12)} services=${services.length}`,
+    `DEPLOYMENT_TRACEABILITY_VERIFIED version=${options.version} commit=${options.commit.slice(0, 12)} mode=${mode} services=${services.length}`,
   );
   console.info(`DEPLOYMENT_TRACEABILITY_DIGESTS ${digests.join(' ')}`);
 }
