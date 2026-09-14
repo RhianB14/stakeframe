@@ -99,17 +99,28 @@ export const automaticDecisionSchema = z.strictObject({
 });
 export const validatedLayoutSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
+  bookmaker: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/),
   bookmakerId: z.uuid(),
   model: z.literal(OPENROUTER_MODEL),
   description: z.string().trim().min(20).max(1000),
   placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo']),
   allowFreebet: z.boolean(),
+  layoutSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  coverage: z.strictObject({
+    positive: z.number().int().min(20).max(10000),
+    negative: z.number().int().min(5).max(10000),
+    multiples: z.number().int().min(3).max(10000),
+    missingFields: z.number().int().min(3).max(10000),
+    promotional: z.number().int().min(0).max(10000),
+    uniqueImages: z.number().int().min(20).max(10000),
+  }),
   corpusSha256: z.string().regex(/^[a-f0-9]{64}$/),
   evaluationSha256: z.string().regex(/^[a-f0-9]{64}$/),
   sampleCount: z.number().int().min(20).max(10000),
   essentialFieldErrors: z.literal(0),
   approvedBy: z.literal('owner'),
   approvedAt: z.iso.datetime({ offset: true }),
+  expiresAt: z.iso.datetime({ offset: true }),
 });
 export const validatedLayoutsSchema = z
   .array(validatedLayoutSchema)
