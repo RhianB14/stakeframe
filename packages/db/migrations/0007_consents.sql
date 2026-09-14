@@ -202,4 +202,3 @@ e a revisão jurídica.
 A declaração falsa pode resultar no encerramento do acesso, observadas as regras do beta
 e a legislação aplicável.
 $stk$, 'd84990c2e1b569d398cdd6349d5d7ffff0b7460be78c58ee24d630b623d1015c', '/api/v1/legal/documents/minimum_age/1.0.0-draft', true, 'current', '2026-09-14T03:00:00Z');
-

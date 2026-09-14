@@ -160,9 +160,10 @@ export function createConsentsService(database: Database) {
 
   /**
    * Records the acceptance of every required, currently effective document in ONE
-   * transaction. `ON CONFLICT DO NOTHING` against the unique (user, document) key makes
-   * repeated calls idempotent; any failure rolls the whole batch back, so partial
-   * acceptances never persist.
+   * transaction. Fail-closed: an incomplete or drifted catalog refuses the WHOLE batch
+   * before any insert (a tampered document is never dropped from the expected set).
+   * `ON CONFLICT DO NOTHING` against the unique (user, document) key makes repeated calls
+   * idempotent; any failure rolls the whole batch back, so partial acceptances never persist.
    */
   async function accept(
     userId: string,
@@ -170,13 +171,25 @@ export function createConsentsService(database: Database) {
   ): Promise<{ accepted: { type: LegalDocumentType; version: string; acceptedAt: Date }[] }> {
     return database.orm.transaction(async (transaction) => {
       const documents = await currentDocuments(transaction);
-      const acceptable = documents.filter((document) => document.intact);
-      if (acceptable.length === 0) throw new ConsentError('CONSENT_UNAVAILABLE');
-      const expected = new Set(acceptable.map((document) => document.type));
+      if (documents.length === 0) throw new ConsentError('CONSENT_UNAVAILABLE');
+      // Fail closed on an incomplete or tampered catalog BEFORE any insert:
+      // - a required type without a currently effective version makes the batch impossible
+      //   to satisfy — refuse instead of accepting a shrunken set;
+      // - stored content diverging from its recorded hash refuses the WHOLE batch, so the
+      //   drifted document can never be silently omitted and accepted partially.
+      for (const requiredType of REQUIRED_LEGAL_DOCUMENT_TYPES) {
+        if (!documents.some((document) => document.type === requiredType)) {
+          throw new ConsentError('CONSENT_UNAVAILABLE');
+        }
+      }
+      if (documents.some((document) => !document.intact)) {
+        throw new ConsentError('CONSENT_INVALID');
+      }
+      const expected = new Set(documents.map((document) => document.type));
       const provided = new Set<LegalDocumentType>();
       for (const item of input) {
         provided.add(item.type);
-        const document = acceptable.find((candidate) => candidate.type === item.type);
+        const document = documents.find((candidate) => candidate.type === item.type);
         // The client may echo the version it saw; anything other than the currently
         // effective version is refused instead of silently downgraded.
         if (!document || (item.version !== undefined && item.version !== document.version)) {
@@ -186,7 +199,7 @@ export function createConsentsService(database: Database) {
       if (provided.size !== expected.size || [...expected].some((type) => !provided.has(type))) {
         throw new ConsentError('CONSENT_INVALID');
       }
-      for (const document of acceptable) {
+      for (const document of documents) {
         await transaction
           .insert(consentRecord)
           .values({

@@ -461,6 +461,34 @@ describe('versioned consent catalog and the access gate', () => {
     expect(apiCode(attempt)).toBe('CONSENT_INVALID');
     expect(await countConsentRecords()).toBe(3);
   });
+  it('refuses a batch that omits a tampered required document (fail-closed, no partial record)', async () => {
+    const { cookie } = await admittedSession('consent.tamper@example.test');
+    // Silent change of one required document: the stored content no longer matches its hash.
+    await database.pool.query(
+      `UPDATE core.legal_document SET content_md = content_md || E'\nconteudo adulterado pelo teste' WHERE doc_type = 'minimum_age' AND status = 'current'`,
+    );
+    // Only the intact documents are provided; the tampered one is omitted on purpose.
+    const attempt = await app.inject({
+      method: 'POST',
+      url: '/api/v1/consents/accept',
+      remoteAddress: nextIp(),
+      headers: { cookie, origin: config.origin },
+      payload: {
+        documents: [{ type: 'terms_of_use' }, { type: 'privacy_policy' }],
+      },
+    });
+    expect(attempt.statusCode).toBe(400);
+    expect(apiCode(attempt)).toBe('CONSENT_INVALID');
+    expect(attempt.body).not.toMatch(
+      /postgres|driver|select|legal_document|content_hash|adulterado/i,
+    );
+    // The whole operation was refused before any insert: no partial acceptance.
+    expect(await countConsentRecords()).toBe(0);
+    // The private app remains blocked pending the full acceptance.
+    const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+    expect(me.statusCode).toBe(403);
+    expect(apiCode(me)).toBe('CONSENT_REQUIRED');
+  });
   it('keeps histories isolated per user and ignores client-supplied user ids', async () => {
     const first = await admittedSession('consent.one@example.test');
     const second = await admittedSession('consent.two@example.test');

@@ -64,7 +64,11 @@ O status do usuário recomputa `sha256(content_md)` e compara com `content_hash`
 
 - hash divergente ⇒ o documento é tratado como **não satisfazível** (`integrity: 'changed'`);
 - aceite antigo deixa de satisfazer a versão modificada (o gate **volta a bloquear**);
-- tentativa de aceite com documento nessa condição é **rejeitada** (`CONSENT_INVALID`).
+- tentativa de aceite com documento nessa condição é **rejeitada** (`CONSENT_INVALID`);
+- o lote inteiro é recusado de forma fechada **antes de qualquer gravação**: a requisição
+  não pode "escapar" omitindo o documento divergente (a checagem roda sobre o catálogo
+  completo, nunca sobre um subconjunto filtrado); documento obrigatório sem versão vigente
+  também recusa o lote (`CONSENT_UNAVAILABLE`) em vez de aceitar um conjunto menor.
 
 Assim, alteração material de conteúdo **exige nova versão** — a mudança silenciosa
 quebra o gate em vez de passar despercebida.
@@ -79,8 +83,9 @@ são a via para satisfazê-lo):
 - `POST /api/v1/consents/accept` — corpo `{ documents: [{ type, version? }] }`.
   O servidor resolve as versões vigentes; exige **todos** os obrigatórios; `version`
   é opcional e, se enviada, precisa ser exatamente a vigente (versões antigas ou
-  futuras são rejeitadas). Grava tudo em **uma transação**; `ON CONFLICT DO NOTHING`
-  torna a repetição idempotente; `user_id` vem sempre da sessão.
+  futuras são rejeitadas). Um catálogo adulterado ou incompleto recusa o lote inteiro
+  antes de gravar (sem aceite parcial). Grava tudo em **uma transação**;
+  `ON CONFLICT DO NOTHING` torna a repetição idempotente; `user_id` vem sempre da sessão.
 - `GET /api/v1/consents/history` — histórico do próprio usuário, ordenado por
   `accepted_at DESC, id DESC`; sem edição/exclusão; sem IP/user-agent.
 
@@ -145,7 +150,9 @@ Tela `ConsentScreen` (exibida quando `/me` responde `CONSENT_REQUIRED`):
 - `tests/integration/consents.test.ts` — catálogo, gate, status, aceite completo/parcial/
   idempotente, versão inválida/antiga/futura, re-aceite, histórico + isolamento entre
   usuários, `user_id` ignorado, falha transacional sem aceite parcial, concorrência,
-  integridade/alteração silenciosa, zero segredos em respostas/logs.
+  integridade/alteração silenciosa (inclusive **lote parcial omitindo o documento
+  adulterado: 400 sanitizado, zero `consent_record`, `/me` segue `CONSENT_REQUIRED`**),
+  zero segredos em respostas/logs.
 - `tests/e2e/consent.test.ts` — tela: sem pré-seleção, botão bloqueado, liberação após
   aceite, aviso de versão anterior, recusa/logout, navegação por teclado, labels.
 - Suítes preservadas e atualizadas para o novo passo: `beta-gate`, `auth-email`,
