@@ -321,6 +321,45 @@ h2 {
   font-size: 11px;
   margin-top: 12px;
 }
+.invite-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.invite-tabs .google-button,
+.invite-tabs .retry-button {
+  width: auto;
+  flex: 1;
+  min-height: 40px;
+}
+.invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.invite-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8b94a7;
+}
+.invite-form input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #3a4152;
+  border-radius: 7px;
+  background: #141821;
+  color: #f0f2f6;
+  font: inherit;
+}
+.invite-form input:focus-visible {
+  outline: 3px solid #8ca9ff;
+  outline-offset: 2px;
+}
 footer {
   min-height: 74px;
   display: flex;

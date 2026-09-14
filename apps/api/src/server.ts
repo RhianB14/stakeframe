@@ -10,12 +10,22 @@ import {
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { createOwnerAuth } from './auth.js';
+import { createMemoryEmailTransport } from './beta-email.js';
 import { createOperationsService } from './operations.js';
 
 async function main() {
   const config = readConfig(process.env);
   const database = createDatabase(config.databaseUrl);
-  const ownerAuth = config.auth.enabled ? createOwnerAuth(config.auth, database) : undefined;
+  const ownerAuth = config.auth.enabled
+    ? createOwnerAuth(config.auth, database, {
+        // Local runtime only: controlled in-memory e-mail transport (never real mail, no
+        // external service, never logged). Production stays without a transport until a
+        // later, separately authorized e-mail integration exists.
+        ...(config.runtime === 'local'
+          ? { emailTransport: createMemoryEmailTransport().transport }
+          : {}),
+      })
+    : undefined;
   const operations = createOperationsService(database, process.env);
   const app = createApp({
     checkDatabase: database.check,

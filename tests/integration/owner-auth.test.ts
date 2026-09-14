@@ -201,10 +201,15 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
   it('refuses anonymous requests and does not expose generic auth endpoints', async () => {
     expect((await app.inject('/api/v1/me')).statusCode).toBe(401);
     expect((await app.inject('/api/auth/get-session')).statusCode).toBe(404);
-    expect(
-      (await app.inject({ method: 'POST', url: '/api/auth/sign-up/email', payload: {} }))
-        .statusCode,
-    ).toBe(404);
+    // The e-mail/password sign-up exists only behind the beta-invitation gate and only
+    // when the controlled e-mail transport is configured (not here): it never becomes a
+    // generic public endpoint.
+    const signUp = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sign-up/email',
+      payload: { name: 'Fixture', email: 'fixture@example.test', password: 'fixture-password' },
+    });
+    expect(signUp.statusCode).toBe(503);
   });
   it('admits only the owner, preserves secure cookie attributes and discards provider tokens', async () => {
     const { response, cookie } = await login();

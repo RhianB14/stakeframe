@@ -97,7 +97,8 @@ async function rollback(client: PoolClient) {
  *   an organization.
  * - The raw token never reaches the database, logs, errors or documentation; only its
  *   SHA-256 hash is stored.
- * - No public route uses these services in this task.
+ * - Public routes (F1-05) expose only the sanitized open/consume paths; the raw token is
+ *   handled at the strictly necessary boundary and discarded after validation.
  */
 export function createBetaInvitation(database: Database) {
   async function createInvitation(email: string, expiresAt: Date): Promise<CreatedBetaInvitation> {
@@ -178,7 +179,153 @@ export function createBetaInvitation(database: Database) {
     }
   }
 
-  return { createInvitation, redeemBetaInvitation };
+  type InvitationRow = {
+    id: string;
+    email: string;
+    status: string;
+    expires_at: Date;
+  };
+
+  function assertUsablePendingRow(row: InvitationRow | undefined, email?: string) {
+    if (!row) throw new BetaInvitationError('INVITATION_INVALID');
+    if (row.status === 'accepted') throw new BetaInvitationError('INVITATION_ALREADY_ACCEPTED');
+    if (row.status === 'revoked') throw new BetaInvitationError('INVITATION_REVOKED');
+    if (row.status !== 'pending') throw new BetaInvitationError('INVITATION_INVALID');
+    if (row.expires_at.getTime() <= Date.now()) throw new BetaInvitationError('INVITATION_EXPIRED');
+    if (email !== undefined && row.email !== email) {
+      throw new BetaInvitationError('INVITATION_INVALID');
+    }
+  }
+
+  function assertTokenShape(token: string) {
+    if (typeof token !== 'string' || token.length === 0 || token.length > MAX_TOKEN_LENGTH) {
+      throw new BetaInvitationError('INVITATION_INVALID');
+    }
+  }
+
+  async function loadInvitationByHash(
+    tokenHash: string,
+    options: { forUpdate?: boolean; client?: PoolClient } = {},
+  ): Promise<InvitationRow | undefined> {
+    const sqlText = `SELECT id, email, status, expires_at FROM core.beta_invitation WHERE token_hash = $1${
+      options.forUpdate ? ' FOR UPDATE' : ''
+    }`;
+    if (options.client) {
+      const found = await options.client.query<InvitationRow>(sqlText, [tokenHash]);
+      return found.rows[0];
+    }
+    const found = await database.pool.query<InvitationRow>(sqlText, [tokenHash]);
+    return found.rows[0];
+  }
+
+  /**
+   * Read-only validation used when the invite link is opened: the invitation must exist,
+   * be pending and be within its validity window. Never consumes; never returns the token.
+   */
+  async function readAcceptableInvitation(token: string): Promise<{ invitationId: string }> {
+    assertTokenShape(token);
+    let row: InvitationRow | undefined;
+    try {
+      row = await loadInvitationByHash(hashInvitationToken(token));
+    } catch (error) {
+      throw error instanceof BetaInvitationError
+        ? error
+        : new BetaInvitationError('INVITATION_STORAGE_FAILED');
+    }
+    assertUsablePendingRow(row);
+    return { invitationId: row!.id };
+  }
+
+  /**
+   * Read-only validation bound to an e-mail (used while the identity is being created):
+   * the invitation must be pending, within its window and match the normalized e-mail.
+   * Never consumes, so a later identity failure cannot leave a consumed invitation.
+   */
+  async function assertInvitationAcceptableForEmail(token: string, email: string): Promise<void> {
+    assertTokenShape(token);
+    const normalized = normalizeInvitationEmail(email);
+    let row: InvitationRow | undefined;
+    try {
+      row = await loadInvitationByHash(hashInvitationToken(token));
+    } catch (error) {
+      throw error instanceof BetaInvitationError
+        ? error
+        : new BetaInvitationError('INVITATION_STORAGE_FAILED');
+    }
+    assertUsablePendingRow(row, normalized);
+  }
+
+  /**
+   * Single-use atomic consumption of an invitation bound to an existing identity:
+   * row lock, e-mail match, one accepted transition, `accepted_user_id` linked to the user.
+   * Under concurrency only one attempt can transition the row; the others fail sanitized.
+   */
+  async function consumeInvitationForUser(
+    token: string,
+    input: { userId: string; email: string },
+  ): Promise<RedeemedBetaInvitation> {
+    assertTokenShape(token);
+    if (
+      typeof input?.userId !== 'string' ||
+      input.userId.length === 0 ||
+      input.userId.length > 255
+    ) {
+      throw new BetaInvitationError('INVITATION_INVALID');
+    }
+    const normalized = normalizeInvitationEmail(input.email);
+    const tokenHash = hashInvitationToken(token);
+    let client: PoolClient;
+    try {
+      client = await database.pool.connect();
+    } catch {
+      throw new BetaInvitationError('INVITATION_STORAGE_FAILED');
+    }
+    try {
+      await client.query('BEGIN');
+      const row = await loadInvitationByHash(tokenHash, { forUpdate: true, client });
+      assertUsablePendingRow(row, normalized);
+      const accepted = await client.query(
+        "UPDATE core.beta_invitation SET status = 'accepted', accepted_at = now(), accepted_user_id = $2, updated_at = now() WHERE id = $1 AND status = 'pending'",
+        [row!.id, input.userId],
+      );
+      if (accepted.rowCount !== 1) throw new BetaInvitationError('INVITATION_STORAGE_FAILED');
+      await client.query('COMMIT');
+      return { invitationId: row!.id, email: row!.email };
+    } catch (error) {
+      await rollback(client);
+      throw error instanceof BetaInvitationError
+        ? error
+        : new BetaInvitationError('INVITATION_STORAGE_FAILED');
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Whether the identity already holds an accepted invitation (admitted beta user).
+   * Fail-closed: any storage failure reports `false` so callers deny the session.
+   */
+  async function findAcceptedInvitationForUser(userId: string): Promise<boolean> {
+    if (typeof userId !== 'string' || userId.length === 0 || userId.length > 255) return false;
+    try {
+      const rows = await database.pool.query(
+        "SELECT 1 FROM core.beta_invitation WHERE accepted_user_id = $1 AND status = 'accepted' LIMIT 1",
+        [userId],
+      );
+      return rows.rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  return {
+    createInvitation,
+    redeemBetaInvitation,
+    readAcceptableInvitation,
+    assertInvitationAcceptableForEmail,
+    consumeInvitationForUser,
+    findAcceptedInvitationForUser,
+  };
 }
 
 export type BetaInvitationService = ReturnType<typeof createBetaInvitation>;
