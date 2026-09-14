@@ -2633,6 +2633,7 @@
                   "AUTH_REQUEST_FAILED",
                   "RATE_LIMITED",
                   "AUTH_UNAVAILABLE",
+                  "INVITE_REJECTED",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -2688,6 +2689,60 @@
         "type": "object",
         "properties": { "success": { "type": "boolean", "enum": [true] } },
         "required": ["success"]
+      },
+      "BetaInviteOpenInput": {
+        "type": "object",
+        "properties": { "token": { "type": "string", "minLength": 1, "maxLength": 512 } },
+        "required": ["token"]
+      },
+      "BetaInviteOpenedInput": {
+        "type": "object",
+        "properties": { "ok": { "type": "boolean", "enum": [true] } },
+        "required": ["ok"]
+      },
+      "EmailSignUpInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "password": { "type": "string", "minLength": 8, "maxLength": 128 }
+        },
+        "required": ["name", "email", "password"]
+      },
+      "EmailSignInInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "password": { "type": "string", "minLength": 8, "maxLength": 128 }
+        },
+        "required": ["email", "password"]
+      },
+      "AuthUserSummaryInput": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "name": { "type": "string" }
+            },
+            "required": ["id", "name"]
+          }
+        },
+        "required": ["user"]
+      },
+      "EmailVerificationResultInput": {
+        "type": "object",
+        "properties": { "status": { "type": "boolean", "enum": [true] } },
+        "required": ["status"]
       },
       "OwnerSessionInput": {
         "type": "object",
@@ -5371,6 +5426,7 @@
                   "AUTH_REQUEST_FAILED",
                   "RATE_LIMITED",
                   "AUTH_UNAVAILABLE",
+                  "INVITE_REJECTED",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -5432,6 +5488,67 @@
         "type": "object",
         "properties": { "success": { "type": "boolean", "enum": [true] } },
         "required": ["success"],
+        "additionalProperties": false
+      },
+      "BetaInviteOpen": {
+        "type": "object",
+        "properties": { "token": { "type": "string", "minLength": 1, "maxLength": 512 } },
+        "required": ["token"],
+        "additionalProperties": false
+      },
+      "BetaInviteOpened": {
+        "type": "object",
+        "properties": { "ok": { "type": "boolean", "enum": [true] } },
+        "required": ["ok"],
+        "additionalProperties": false
+      },
+      "EmailSignUp": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "password": { "type": "string", "minLength": 8, "maxLength": 128 }
+        },
+        "required": ["name", "email", "password"],
+        "additionalProperties": false
+      },
+      "EmailSignIn": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "password": { "type": "string", "minLength": 8, "maxLength": 128 }
+        },
+        "required": ["email", "password"],
+        "additionalProperties": false
+      },
+      "AuthUserSummary": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "name": { "type": "string" }
+            },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["user"],
+        "additionalProperties": false
+      },
+      "EmailVerificationResult": {
+        "type": "object",
+        "properties": { "status": { "type": "boolean", "enum": [true] } },
+        "required": ["status"],
         "additionalProperties": false
       },
       "OwnerSession": {
@@ -5558,12 +5675,289 @@
         }
       }
     },
+    "/api/v1/beta-invite/open": {
+      "post": {
+        "operationId": "openBetaInvite",
+        "summary": "Abrir o convite beta no navegador",
+        "tags": ["Autenticação"],
+        "description": "Valida um token de convite beta (existente, pendente e dentro da validade) e vincula o token à sessão deste navegador por cookie HttpOnly de vida curta, para uso no cadastro ou no login Google. Não consome o convite e não revela dados do convite; rejeições usam código sanitizado único.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/BetaInviteOpenInput" } }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/BetaInviteOpened" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-up/email": {
+      "post": {
+        "operationId": "signUpWithEmail",
+        "summary": "Cadastro por e-mail e senha (somente com convite beta)",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada e um convite beta aberto neste navegador. O cadastro só prossegue com convite pendente, dentro da validade e vinculado ao e-mail informado; a senha é tratada exclusivamente pelo provedor de autenticação. Nenhuma sessão é criada antes da verificação do e-mail e a resposta nunca revela se o e-mail já possui conta.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/EmailSignUpInput" } }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthUserSummary" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sign-in/email": {
+      "post": {
+        "operationId": "signInWithEmail",
+        "summary": "Login por e-mail e senha (usuário convidado admitido)",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada. Somente identidades admitidas (proprietário ou usuário com convite beta aceito) e e-mail verificado obtêm sessão; falhas usam código sanitizado único, sem distinguir e-mail inexistente, senha incorreta ou e-mail não verificado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/EmailSignInInput" } }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthUserSummary" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verify-email": {
+      "get": {
+        "operationId": "verifyEmail",
+        "summary": "Confirmar o e-mail do cadastro",
+        "tags": ["Autenticação"],
+        "description": "Uso exclusivo do link enviado pelo transporte de e-mail controlado. Confirma o e-mail e redireciona para a aplicação; o token de verificação é apresentado apenas nesta chamada e nunca é registrado.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "maxLength": 8192 },
+            "in": "query",
+            "name": "token",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "maxLength": 2048 },
+            "in": "query",
+            "name": "callbackURL",
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmailVerificationResult" }
+              }
+            }
+          },
+          "302": { "description": "Redirecionamento para a aplicação após confirmação." },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/sign-in/google": {
       "post": {
         "operationId": "startGoogleSignIn",
-        "summary": "Iniciar login Google do proprietário",
+        "summary": "Iniciar login Google (proprietário ou convidado com convite aberto)",
         "tags": ["Autenticação"],
-        "description": "Exige Origin igual à origem configurada e autenticação habilitada. O navegador deve conservar os cookies e navegar para a URL retornada. Nenhum token Google é aceito no corpo.",
+        "description": "Exige Origin igual à origem configurada e autenticação habilitada. O navegador deve conservar os cookies e navegar para a URL retornada. Nenhum token Google é aceito no corpo. O proprietário entra com a identidade já autorizada; usuários externos só prosseguem com um convite beta aberto neste navegador e vinculado ao e-mail verificado do provedor.",
         "requestBody": {
           "required": false,
           "content": {
@@ -5643,7 +6037,7 @@
         "operationId": "completeGoogleSignIn",
         "summary": "Receber retorno do Google",
         "tags": ["Autenticação"],
-        "description": "Uso exclusivo do fluxo de navegador iniciado pela aplicação. Requer estado, cookie e PKCE válidos; a identidade é verificada antes de criar sessão. Falhas do fluxo redirecionam para mensagem genérica na aplicação.",
+        "description": "Uso exclusivo do fluxo de navegador iniciado pela aplicação. Requer estado, cookie e PKCE válidos; a identidade é verificada antes de criar sessão e externos dependem de convite beta aceito no gate. Falhas do fluxo redirecionam para mensagem genérica na aplicação.",
         "parameters": [
           {
             "schema": { "type": "string", "maxLength": 8192 },
@@ -5791,9 +6185,9 @@
     "/api/v1/me": {
       "get": {
         "operationId": "getOwnerSession",
-        "summary": "Consultar a sessão do proprietário",
+        "summary": "Consultar a sessão autenticada",
         "tags": ["Autenticação"],
-        "description": "Consulta o banco e revalida a identidade autorizada. Garante a organização técnica do proprietário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.",
+        "description": "Consulta o banco e revalida a identidade autorizada (proprietário ou usuário convidado admitido). Garante a organização técnica do usuário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.",
         "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
         "responses": {
           "200": {

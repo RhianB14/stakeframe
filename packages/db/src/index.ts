@@ -23,6 +23,11 @@ export {
   type RedeemedBetaInvitation,
 } from './beta-invitation.js';
 export {
+  captureTransactions,
+  currentTransaction,
+  type TransactionExecutor,
+} from './transaction-scope.js';
+export {
   createTenantContext,
   ORGANIZATION_CONTEXT_SETTING,
   TenantContextError,

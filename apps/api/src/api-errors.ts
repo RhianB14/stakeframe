@@ -14,6 +14,8 @@ const messages: Record<ApiErrorCode, string> = {
   AUTH_REQUEST_FAILED: 'Não foi possível concluir a autenticação.',
   RATE_LIMITED: 'Muitas tentativas. Aguarde antes de tentar novamente.',
   AUTH_UNAVAILABLE: 'Autenticação temporariamente indisponível.',
+  INVITE_REJECTED:
+    'Este convite beta não está disponível. Confira o link ou solicite um novo convite.',
   STATE_CONFLICT: 'O registro mudou ou esta operação já foi realizada. Atualize os dados.',
   VERSION_CONFLICT:
     'Os dados foram atualizados em outra operação. Recarregue e confira antes de tentar novamente.',

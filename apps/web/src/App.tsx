@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { systemStatusSchema } from '@stakeframe/shared';
 import { OwnerAccess, loadOwner } from './OwnerAccess.js';
+import { InviteAccess } from './InviteAccess.js';
 import { ProductApp } from './product/ProductApp.js';
 
 async function loadStatus() {
@@ -12,6 +13,7 @@ async function loadStatus() {
 
 export function App() {
   const client = useQueryClient();
+  const inviteToken = new URLSearchParams(window.location.search).get('invite');
   const status = useQuery({
     queryKey: ['system-status'],
     queryFn: loadStatus,
@@ -127,7 +129,11 @@ export function App() {
               Tentar novamente <span aria-hidden="true">↗</span>
             </button>
           ) : status.data?.authentication === 'google' ? (
-            <OwnerAccess />
+            inviteToken ? (
+              <InviteAccess token={inviteToken} />
+            ) : (
+              <OwnerAccess />
+            )
           ) : (
             <div className="access-note">
               <svg viewBox="0 0 20 20" aria-hidden="true">

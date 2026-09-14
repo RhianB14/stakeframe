@@ -10,6 +10,7 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@better-auth/core": "1.7.3",
     "@better-auth/drizzle-adapter": "1.7.3",
     "@fastify/swagger": "9.8.1",
     "@stakeframe/db": "workspace:*",

@@ -175,6 +175,120 @@ describe('createBetaInvitation (unit)', () => {
   });
 });
 
+describe('beta invitation gate services (unit, pre-flight only)', () => {
+  it('rejects malformed tokens before touching the pool or the executor', async () => {
+    const counter = { connects: 0, selects: 0 };
+    let executed = 0;
+    const executor = {
+      execute: async () => {
+        executed += 1;
+        return { rows: [] };
+      },
+    };
+    const service = createBetaInvitation(unusedDatabase(counter));
+    for (const token of ['', 'x'.repeat(600)]) {
+      await expect(service.readAcceptableInvitation(token)).rejects.toMatchObject({
+        code: 'INVITATION_INVALID',
+      });
+      await expect(
+        service.assertInvitationAcceptableForEmail(token, 'beta@example.test'),
+      ).rejects.toMatchObject({ code: 'INVITATION_INVALID' });
+      await expect(
+        service.consumeInvitationForUser(executor, token, {
+          userId: 'user-1',
+          email: 'beta@example.test',
+        }),
+      ).rejects.toMatchObject({ code: 'INVITATION_INVALID' });
+    }
+    expect(counter.connects).toBe(0);
+    expect(counter.selects).toBe(0);
+    expect(executed).toBe(0);
+  });
+
+  it('rejects an invalid user id or e-mail during consumption without executing', async () => {
+    const counter = { connects: 0, selects: 0 };
+    let executed = 0;
+    const executor = {
+      execute: async () => {
+        executed += 1;
+        return { rows: [] };
+      },
+    };
+    const service = createBetaInvitation(unusedDatabase(counter));
+    await expect(
+      service.consumeInvitationForUser(executor, 'a'.repeat(43), {
+        userId: '',
+        email: 'beta@example.test',
+      }),
+    ).rejects.toMatchObject({ code: 'INVITATION_INVALID' });
+    await expect(
+      service.consumeInvitationForUser(executor, 'a'.repeat(43), {
+        userId: 'user-1',
+        email: 'not-an-email',
+      }),
+    ).rejects.toMatchObject({ code: 'INVITATION_EMAIL_INVALID' });
+    expect(counter.connects).toBe(0);
+    expect(executed).toBe(0);
+  });
+
+  it('reports not-admitted for malformed user ids without touching the pool', async () => {
+    const counter = { connects: 0, selects: 0 };
+    const service = createBetaInvitation(unusedDatabase(counter));
+    expect(await service.findAcceptedInvitationForUser('')).toBe(false);
+    expect(await service.findAcceptedInvitationForUser('x'.repeat(300))).toBe(false);
+    expect(counter.selects).toBe(0);
+  });
+
+  it('fails closed without an executor and never opens its own transaction', async () => {
+    const counter = { connects: 0, selects: 0 };
+    const service = createBetaInvitation(unusedDatabase(counter));
+    await expect(
+      service.consumeInvitationForUser(undefined as never, 'a'.repeat(43), {
+        userId: 'user-1',
+        email: 'beta@example.test',
+      }),
+    ).rejects.toMatchObject({ code: 'INVITATION_STORAGE_FAILED' });
+    expect(counter.connects).toBe(0);
+  });
+
+  it('sanitizes an executor failure during consumption', async () => {
+    const counter = { connects: 0, selects: 0 };
+    const service = createBetaInvitation(unusedDatabase(counter));
+    const executor = {
+      execute: async () => {
+        throw new Error('relation "core.beta_invitation" does not exist at 10.0.0.9:5432');
+      },
+    };
+    let failure: unknown = null;
+    try {
+      await service.consumeInvitationForUser(executor, 'a'.repeat(43), {
+        userId: 'user-1',
+        email: 'beta@example.test',
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      name: 'BetaInvitationError',
+      code: 'INVITATION_STORAGE_FAILED',
+    });
+    expect(String(failure)).not.toMatch(/relation|does not exist|10\.0\.0\.9|5432|core\./i);
+    expect(counter.connects).toBe(0);
+  });
+
+  it('refuses an unknown token through the executor with a sanitized error', async () => {
+    const counter = { connects: 0, selects: 0 };
+    const service = createBetaInvitation(unusedDatabase(counter));
+    const executor = { execute: async () => ({ rows: [] }) };
+    await expect(
+      service.consumeInvitationForUser(executor, 'a'.repeat(43), {
+        userId: 'user-1',
+        email: 'beta@example.test',
+      }),
+    ).rejects.toMatchObject({ code: 'INVITATION_INVALID' });
+  });
+});
+
 describe('redeemBetaInvitation (unit, pre-flight only)', () => {
   it('rejects malformed tokens before touching the pool', async () => {
     const counter = { connects: 0, selects: 0 };
