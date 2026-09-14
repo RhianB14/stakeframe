@@ -13,6 +13,7 @@ import { createEmailService } from '../../apps/api/src/email-service.js';
 import { createApp } from '../../apps/api/src/app.js';
 import type { EnabledAuthConfig } from '../../apps/api/src/auth-config.js';
 import { apiErrorSchema, ownerSessionSchema } from '../../packages/shared/src/index.js';
+import { acceptRequiredConsents } from '../fixtures/consents.js';
 
 const config: EnabledAuthConfig = {
   enabled: true,
@@ -285,6 +286,15 @@ describe('beta invitation gate with Google OAuth', () => {
     expect(new URL(response.headers.location!, config.origin).href).toBe(`${config.origin}/`);
     expect(sessionCookieOf(response.headers)).toContain('HttpOnly');
     expect(tokenRequests).toBe(1);
+    // Consent gate: the private app is blocked (and nothing is provisioned) until the
+    // versioned documents are accepted.
+    const gated = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+    expect(gated.statusCode).toBe(403);
+    expect(apiCode(gated)).toBe('CONSENT_REQUIRED');
+    expect(await countCore('organization')).toBe(0);
+    expect(
+      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     const session = ownerSessionSchema.parse(me.json());
@@ -456,6 +466,9 @@ describe('beta invitation gate with e-mail and password', () => {
     const signedIn = await signIn('beta.email@example.test', 'fixture-password-1');
     expect(signedIn.statusCode).toBe(200);
     const cookie = cookieJar(signedIn.headers['set-cookie']);
+    expect(
+      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     expect(ownerSessionSchema.parse(me.json()).organization.role).toBe('owner');
@@ -603,6 +616,9 @@ describe('beta gate concurrency and sanitization', () => {
       invokeToken: invite.token,
       overrides: { sub: '9020', email: 'beta.org@example.test' },
     });
+    expect(
+      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
     await database.pool.query('ALTER TABLE core.membership RENAME TO membership_probe_failure');
     try {
@@ -703,6 +719,7 @@ describe('beta gate concurrency and sanitization', () => {
     expect(sessionCookie).toContain('HttpOnly');
     expect(sessionCookie).toMatch(/SameSite=Lax/i);
     const cookie = cookieJar(signedIn.headers['set-cookie']);
+    expect((await acceptRequiredConsents(app, cookie, { origin })).statusCode).toBe(200);
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
   });
   it('gives each external user an isolated organization with no sharing', async () => {
@@ -715,7 +732,15 @@ describe('beta gate concurrency and sanitization', () => {
       `${config.origin}/`,
     );
     const googleMe = await app.inject({ url: '/api/v1/me', headers: { cookie: google.cookie } });
-    expect(googleMe.statusCode).toBe(200);
+    expect(googleMe.statusCode).toBe(403);
+    expect(
+      (await acceptRequiredConsents(app, google.cookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
+    const googleSession = await app.inject({
+      url: '/api/v1/me',
+      headers: { cookie: google.cookie },
+    });
+    expect(googleSession.statusCode).toBe(200);
     const emailInvite = await createInvite('beta.iso.email@example.test');
     const created = await signUp(
       { name: 'Iso Email', email: 'beta.iso.email@example.test', password: 'fixture-password-1' },
@@ -725,9 +750,12 @@ describe('beta gate concurrency and sanitization', () => {
     await verifyEmailFromTransport();
     const signedIn = await signIn('beta.iso.email@example.test', 'fixture-password-1');
     const emailCookie = cookieJar(signedIn.headers['set-cookie']);
+    expect(
+      (await acceptRequiredConsents(app, emailCookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
     const emailMe = await app.inject({ url: '/api/v1/me', headers: { cookie: emailCookie } });
     expect(emailMe.statusCode).toBe(200);
-    expect(googleMe.json().organization.id).not.toBe(emailMe.json().organization.id);
+    expect(googleSession.json().organization.id).not.toBe(emailMe.json().organization.id);
     expect(await count('user')).toBe(2);
     expect(await countCore('organization')).toBe(2);
     expect(await countCore('membership')).toBe(2);

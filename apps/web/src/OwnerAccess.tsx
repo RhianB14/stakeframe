@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ownerSessionSchema } from '@stakeframe/shared';
+import { apiErrorSchema, ownerSessionSchema } from '@stakeframe/shared';
 
 export async function loadOwner() {
   const response = await fetch('/api/v1/me', {
@@ -8,9 +8,17 @@ export async function loadOwner() {
     signal: AbortSignal.timeout(5_000),
   });
   if (response.status === 401) return null;
+  if (response.status === 403) {
+    const body: unknown = await response.json().catch(() => null);
+    const parsed = apiErrorSchema.safeParse(body);
+    if (parsed.success && parsed.data.error.code === 'CONSENT_REQUIRED')
+      return 'consent-required' as const;
+    throw new Error('SESSION_UNAVAILABLE');
+  }
   if (!response.ok) throw new Error('SESSION_UNAVAILABLE');
   return ownerSessionSchema.parse(await response.json());
 }
+export type OwnerLoad = Awaited<ReturnType<typeof loadOwner>>;
 export async function authAction(path: string) {
   const response = await fetch(`/api/auth/${path}`, {
     method: 'POST',
@@ -76,6 +84,12 @@ export function OwnerAccess() {
           Verificar acesso novamente
         </button>
       </div>
+    );
+  if (owner.data === 'consent-required')
+    return (
+      <p className="access-note" role="status">
+        Complete o aceite dos documentos para continuar.
+      </p>
     );
   if (owner.data)
     return (

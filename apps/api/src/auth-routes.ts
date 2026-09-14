@@ -473,10 +473,11 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
         summary: 'Consultar a sessão autenticada',
         security: ownerSessionSecurity,
         description:
-          'Consulta o banco e revalida a identidade autorizada (proprietário ou usuário convidado admitido). Garante a organização técnica do usuário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.',
+          'Consulta o banco e revalida a identidade autorizada (proprietário ou usuário convidado admitido). Exige consentimentos vigentes aceitos: sem eles responde 403 CONSENT_REQUIRED sem provisionar ou expor contexto organizacional. Com o aceite em dia, garante a organização técnica do usuário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.',
         response: {
           200: ownerSessionSchema,
           401: apiErrorSchema,
+          403: apiErrorSchema,
           500: apiErrorSchema,
           default: apiErrorSchema,
           503: apiErrorSchema,
@@ -487,7 +488,15 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
       if (!ownerAuth) return refuse(request, reply, 503, 'AUTH_NOT_CONFIGURED');
       const owner = await ownerAuth.getOwner(headersFor(request));
       if (!owner) return refuse(request, reply, 401, 'UNAUTHENTICATED');
-      return reply.send(owner);
+      if (owner.status === 'consent_required')
+        return refuse(request, reply, 403, 'CONSENT_REQUIRED');
+      return reply.send(
+        ownerSessionSchema.parse({
+          user: owner.user,
+          organization: owner.organization,
+          expiresAt: owner.expiresAt,
+        }),
+      );
     },
   );
 }

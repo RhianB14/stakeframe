@@ -20,8 +20,10 @@ export function registerReportRoutes(
 ) {
   const authorize = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!auth) return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
-    if (!(await auth.getOwner(fromNodeHeaders({ cookie: request.headers.cookie }))))
-      return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
+    const owner = await auth.getOwner(fromNodeHeaders({ cookie: request.headers.cookie }));
+    if (!owner) return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
+    if (owner.status === 'consent_required')
+      return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
   };
   const execute = async (

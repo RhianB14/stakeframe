@@ -28,6 +28,8 @@ export const apiErrorCodeSchema = z.enum([
   'INVITE_REJECTED',
   'RESET_REJECTED',
   'EMAIL_NOT_VERIFIED',
+  'CONSENT_REQUIRED',
+  'CONSENT_INVALID',
   'STATE_CONFLICT',
   'VERSION_CONFLICT',
   'IDEMPOTENCY_CONFLICT',
@@ -96,6 +98,74 @@ export const passwordResetSubmitSchema = z
 export const resendVerificationSchema = z
   .object({ email: z.email().max(320) })
   .meta({ id: 'ResendVerification' });
+
+/** Stable legal-document types; never derived from display text. */
+export const legalDocumentTypeSchema = z
+  .enum(['terms_of_use', 'privacy_policy', 'minimum_age'])
+  .meta({ id: 'LegalDocumentType' });
+export type LegalDocumentTypeName = z.infer<typeof legalDocumentTypeSchema>;
+
+export const consentDocumentStatusSchema = z
+  .object({
+    type: legalDocumentTypeSchema,
+    version: z.string().min(1).max(64),
+    title: z.string().min(1).max(200),
+    summary: z.string().min(1).max(600),
+    textUrl: z.string().min(1).max(300),
+    effectiveAt: z.iso.datetime(),
+    accepted: z.boolean(),
+    stale: z.boolean(),
+    integrity: z.enum(['ok', 'changed']),
+    acceptedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'ConsentDocumentStatus' });
+
+export const consentStatusSchema = z
+  .object({
+    status: z.enum(['accepted', 'pending']),
+    documents: z.array(consentDocumentStatusSchema).min(1),
+    pendingTypes: z.array(legalDocumentTypeSchema),
+  })
+  .meta({ id: 'ConsentStatus' });
+
+export const consentAcceptSchema = z
+  .object({
+    documents: z
+      .array(
+        z.object({
+          type: legalDocumentTypeSchema,
+          /** Optional echo of the version the client displayed; must match the effective one. */
+          version: z.string().min(1).max(64).optional(),
+        }),
+      )
+      .min(1)
+      .max(10),
+  })
+  .meta({ id: 'ConsentAccept' });
+
+export const consentAcceptedSchema = z
+  .object({
+    accepted: z.array(
+      z.object({
+        type: legalDocumentTypeSchema,
+        version: z.string().min(1).max(64),
+        acceptedAt: z.iso.datetime(),
+      }),
+    ),
+  })
+  .meta({ id: 'ConsentAccepted' });
+
+export const consentHistorySchema = z
+  .object({
+    history: z.array(
+      z.object({
+        type: legalDocumentTypeSchema,
+        version: z.string().min(1).max(64),
+        acceptedAt: z.iso.datetime(),
+      }),
+    ),
+  })
+  .meta({ id: 'ConsentHistory' });
 
 export const probeSchema = z.object({ nonce: z.string().uuid() }).strict();
 export const PROBE_QUEUE = 'system-probe';

@@ -40,6 +40,8 @@ export function registerImportRoutes(
       return sendApiError(request, reply, 403, 'ORIGIN_NOT_ALLOWED');
     const owner = await auth.getOwner(fromNodeHeaders({ cookie: request.headers.cookie }));
     if (!owner) return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
+    if (owner.status === 'consent_required')
+      return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
     identities.set(request, owner.user.id);
   };

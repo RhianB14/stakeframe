@@ -39,6 +39,8 @@ M0-24 e o fluxo Google real de produção foi validado na STK-M0-39.
 `/api/v1/system/status` e healthchecks continuam técnicos e públicos. Novas
 rotas privadas de produto devem exigir a mesma verificação de proprietário;
 não existe autorização global implícita para rotas que ainda serão criadas.
+O aceite vigente dos documentos obrigatórios (STK-F1-07) é exigido antes de
+qualquer contexto de organização, inclusive para o proprietário.
 
 ## Beta fechado por convite (STK-F1-05, 2026-09-13)
 
@@ -69,6 +71,21 @@ continua sem senha e contas só-Google não têm redefinição. Templates PT-BR 
 explícita e limites de taxa adicionais (reenvio 3/5min, reset 3/5min, envio de reset
 5/5min, verify 10/5min). Decisões, limitações e testes em
 [F1-06-AUTH-RESEND.md](F1-06-AUTH-RESEND.md).
+
+## Consentimentos versionados (STK-F1-07, 2026-09-14)
+
+O acesso à aplicação privada exige o aceite vigente de três documentos obrigatórios
+(Termos de Uso, Política de Privacidade e declaração de idade mínima), tratados como
+**catálogo versionado** em `core.legal_document` (tipo estável, versão, vigência,
+hash SHA-256 do conteúdo) com histórico **append-only** de aceites em
+`core.consent_record` (timestamp gerado pelo banco; unique por usuário/versão;
+gravação transacional e idempotente). Sem aceite, `/api/v1/me` e todas as rotas
+privadas respondem `403 CONSENT_REQUIRED` e **nada da organização é provisionado ou
+exposto**; a sessão restrita alcança apenas status/aceite/histórico, logout e
+autenticação. Publicar uma nova versão reabre o gate (re-aceite) sem tocar no
+histórico. Alteração de conteúdo na mesma versão quebra o hash e volta a bloquear
+(fail-closed). Textos iniciais são rascunhos provisórios (`1.0.0-draft`) com
+validação jurídica externa pendente. Detalhes em [F1-07-CONSENTS.md](F1-07-CONSENTS.md).
 
 ## Ativação local
 

@@ -8,6 +8,7 @@ import {
   unavailabilitySchema,
 } from '@stakeframe/shared';
 import { registerAuthRoutes } from './auth-routes.js';
+import { registerConsentRoutes } from './consent-routes.js';
 import type { OwnerAuth } from './auth.js';
 import { registerApiContracts } from './openapi.js';
 import { sendApiError } from './api-errors.js';
@@ -109,6 +110,7 @@ export function createApp(options: {
       },
     );
     registerAuthRoutes(app, options.ownerAuth);
+    registerConsentRoutes(app, options.ownerAuth);
     registerFinanceRoutes(app, options.ownerAuth, options.finance);
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
