@@ -63,7 +63,8 @@ O limite do arquivo é 20 MiB. Imagens, gabaritos e respostas reais não vão ao
 O contrato executável é `corpusEvaluationInputSchema` em
 `packages/shared/src/automatic.ts`. O arquivo contém:
 
-- `schemaVersion: 1` e `layout`: `id`, `bookmakerId` do cadastro de destino,
+- `schemaVersion: 1` e `layout`: `id`, `bookmaker` (slug; somente `bet365`,
+  `superbet` e `novibet` são aceitos), `bookmakerId` do cadastro de destino,
   `model`, descrição visual exata, `placedAtFormat` (`iso-offset` ou
   `br-sao-paulo`) e `allowFreebet`.
 - `cases`: SHA-256 da imagem em `imageSha256`, `expectedLayoutId` (ID ou `null`
@@ -82,6 +83,13 @@ nomes, inferir datas ou corrigir valores. O relatório privado identifica
 índice do caso e campo com erro, sem copiar os valores; a saída de console
 mostra somente totais e hashes.
 
+`pnpm validation:policy <arquivo-de-políticas-absoluto> <diretório-corpus>...`
+verifica uma política proposta contra as evidências salvas: recalcula a
+avaliação, confere hashes, cobertura, contagens e validade, exige que cada
+entrada tenha corpus aprovado correspondente e falha fechado quando qualquer
+campo divergir. A verificação não escreve nada e não imprime conteúdo dos
+bilhetes.
+
 Para levar um layout à aprovação, exigir zero divergências na amostra, pelo
 menos 20 imagens distintas do layout, cinco exemplos que não devem ser
 reconhecidos, três múltiplas do layout e três casos do próprio layout com
@@ -94,11 +102,14 @@ seu próprio ensaio; validar Bet365, Superbet e Novibet separadamente.
 
 Depois de conferir o relatório e autorizar a política, o proprietário prepara
 um JSON privado com uma lista de até cinco layouts. Cada item segue
-`validatedLayoutSchema`: os campos de `layout`, `corpusSha256` e
-`evaluationSha256` apresentados pelo avaliador, `sampleCount`,
-`essentialFieldErrors: 0`, `approvedBy: "owner"` e `approvedAt` com offset.
-O worker valida esses campos e o modelo fixo; o arquivo é a configuração
-operacional confiável, não uma saída que a IA possa escrever.
+`validatedLayoutSchema`: os campos de `layout`, `layoutSha256`, `corpusSha256`
+e `evaluationSha256` apresentados pelo avaliador, `coverage` com as contagens
+da amostra, `sampleCount`, `essentialFieldErrors: 0`, `approvedBy: "owner"`,
+`approvedAt` com offset e `expiresAt` (validade explícita; política expirada é
+recusada).
+O worker valida esses campos, o modelo fixo, `approvedAt` no passado e
+`expiresAt` no futuro; o arquivo é a configuração operacional confiável, não
+uma saída que a IA possa escrever.
 
 Montar esse arquivo no worker, definir `AUTOMATIC_IMPORT_POLICIES_FILE` com
 seu caminho absoluto e `AUTOMATIC_IMPORT_ENABLED=true`, mantendo IA habilitada.

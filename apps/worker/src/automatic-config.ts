@@ -20,7 +20,12 @@ export function readAutomaticLayouts(env: NodeJS.ProcessEnv): ValidatedLayout[] 
     const bytes = readFileSync(file);
     if (bytes.length > 32768) throw new Error();
     const layouts = validatedLayoutsSchema.parse(JSON.parse(bytes.toString('utf8')));
-    if (!layouts.length || layouts.some((layout) => Date.parse(layout.approvedAt) > Date.now()))
+    const now = Date.now();
+    if (
+      !layouts.length ||
+      layouts.some((layout) => Date.parse(layout.approvedAt) > now) ||
+      layouts.some((layout) => Date.parse(layout.expiresAt) <= now)
+    )
       throw new Error();
     return layouts;
   } catch {

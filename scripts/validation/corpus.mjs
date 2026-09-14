@@ -15,15 +15,19 @@ try {
   if (
     !rel ||
     (!rel.startsWith(`..${sep}`) && !isAbsolute(rel)) ||
-    canonical(resolve(directoryArg)) !== canonical(directory)
+    // Windows exposes short (8.3) temp names whose realpath expands to the long
+    // form; POSIX keeps refusing any path with a symlinked component.
+    (process.platform !== 'win32' && canonical(resolve(directoryArg)) !== canonical(directory))
   )
     throw new Error();
   const info = await lstat(directory);
+  const argInfo = await lstat(directoryArg);
   const file = join(directory, 'corpus.json');
   const stat = await lstat(file);
   if (
     !info.isDirectory() ||
     info.isSymbolicLink() ||
+    argInfo.isSymbolicLink() ||
     !stat.isFile() ||
     stat.isSymbolicLink() ||
     stat.size > 20 * 1024 * 1024 ||
@@ -38,6 +42,8 @@ try {
   await writeFile(join(directory, 'evaluation.json'), output, { flag: 'wx', mode: 0o600 });
   console.log(
     JSON.stringify({
+      layoutId: report.layoutId,
+      bookmaker: report.bookmaker,
       totalCases: report.totalCases,
       correctTickets: report.correctTickets,
       essentialFieldErrors: report.essentialFieldErrors,

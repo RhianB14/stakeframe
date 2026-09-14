@@ -15,17 +15,28 @@ import { extractTicket } from '../../apps/worker/src/openrouter.js';
 import { layoutDigest } from '../../packages/db/src/automatic-policy.js';
 const layout: ValidatedLayout = {
   id: 'synthetic-layout',
+  bookmaker: 'bet365',
   bookmakerId: randomUUID(),
   model: OPENROUTER_MODEL,
   description: 'Fictional deterministic layout, never a production approval.',
   placedAtFormat: 'iso-offset',
   allowFreebet: false,
+  layoutSha256: '2'.repeat(64),
+  coverage: {
+    positive: 20,
+    negative: 5,
+    multiples: 3,
+    missingFields: 3,
+    promotional: 0,
+    uniqueImages: 25,
+  },
   corpusSha256: '0'.repeat(64),
   evaluationSha256: '1'.repeat(64),
   sampleCount: 20,
   essentialFieldErrors: 0,
   approvedBy: 'owner',
   approvedAt: '2020-01-01T00:00:00Z',
+  expiresAt: '2999-01-01T00:00:00Z',
 };
 describe('automatic import policy boundaries', () => {
   it('requires an explicit offset or an approved exact São Paulo grammar', () => {
@@ -79,6 +90,10 @@ describe('automatic import policy boundaries', () => {
         [{ ...layout, sampleCount: 1 }],
         [{ ...layout, essentialFieldErrors: 1 }],
         [{ ...layout, approvedAt: '9999-01-01T00:00:00Z' }],
+        [{ ...layout, expiresAt: '1999-01-01T00:00:00Z' }],
+        [{ ...layout, coverage: { ...layout.coverage, negative: 4 } }],
+        [{ ...layout, bookmaker: 'House X' }],
+        [{ ...layout, layoutSha256: 'invalid' }],
         [layout, layout],
         [{ ...layout, model: 'unknown' }],
       ]) {

@@ -1,67 +1,13 @@
-import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { evaluateCorpus } from './corpus-core.mjs';
-import { OPENROUTER_MODEL } from '../../packages/shared/dist/index.js';
+import { syntheticCorpus } from './corpus-fixture.mjs';
 
-function fixture() {
-  const extraction = {
-    bookmaker: 'Fictional',
-    reference: 'fixture',
-    placedAtText: null,
-    currency: 'BRL',
-    stake: '10.00',
-    odds: '2.00',
-    potentialReturn: null,
-    freebet: false,
-    selections: [
-      {
-        event: 'Fictional A × B',
-        sport: null,
-        market: 'Result',
-        selection: 'A',
-        odds: null,
-        eventDateText: null,
-      },
-    ],
-    warnings: [],
-  };
-  return {
-    schemaVersion: 1,
-    layout: {
-      id: 'fictional-layout',
-      bookmakerId: '10000000-0000-4000-8000-000000000001',
-      model: OPENROUTER_MODEL,
-      description: 'Fictional evidence for evaluator tests only.',
-      placedAtFormat: 'iso-offset',
-      allowFreebet: false,
-    },
-    cases: Array.from({ length: 25 }, (_, index) => {
-      const imageSha256 = createHash('sha256').update(`fictional-image-${index}`).digest('hex');
-      const layoutId = index < 20 ? 'fictional-layout' : null;
-      const expected = structuredClone(extraction);
-      if (index < 3)
-        expected.selections.push({ ...expected.selections[0], event: 'Another fictional event' });
-      return {
-        imageSha256,
-        expectedLayoutId: layoutId,
-        expected,
-        actual: {
-          imageSha256,
-          model: OPENROUTER_MODEL,
-          layoutId,
-          extraction: structuredClone(expected),
-          latencyMs: 100 + index,
-          requestCount: 1,
-          costUsd: null,
-        },
-      };
-    }),
-  };
-}
+const fixture = syntheticCorpus;
 test('evaluates distinct positive/negative cases, multiple bets and missing fields without treating missing cost as zero', () => {
   const report = evaluateCorpus(fixture());
   assert.equal(report.eligibleForOwnerReview, true);
+  assert.equal(report.bookmaker, 'bet365');
   assert.equal(report.correctTickets, 25);
   assert.equal(report.sampleCount, 20);
   assert.equal(report.requestCount, 25);
@@ -70,12 +16,17 @@ test('evaluates distinct positive/negative cases, multiple bets and missing fiel
   assert.equal(JSON.stringify(report).includes('Fictional A'), false);
   assert.equal('approvedBy' in report, false);
 });
+test('rejects a corpus from an unknown house before any other evaluation', () => {
+  const unknown = fixture();
+  unknown.layout.bookmaker = 'kalshi';
+  assert.throws(() => evaluateCorpus(unknown), /CORPUS_BOOKMAKER_UNKNOWN/);
+});
 test('reports invented values, omissions, selection count and wrong layouts as essential errors', () => {
   const value = fixture();
   value.cases[0].actual.extraction.potentialReturn = '20.00';
   value.cases[1].actual.extraction.reference = null;
   value.cases[2].actual.extraction.selections.pop();
-  value.cases[24].actual.layoutId = 'fictional-layout';
+  value.cases[24].actual.layoutId = 'bet365-fixture';
   const report = evaluateCorpus(value);
   assert.equal(report.eligibleForOwnerReview, false);
   assert.equal(report.essentialFieldErrors, 4);

@@ -4,6 +4,10 @@ import {
   ticketExtractionSchema,
 } from '../../packages/shared/dist/index.js';
 
+// The beta gate only accepts the three planned houses; anything else is refused
+// before any other check so a corpus can never be approved under an unknown name.
+export const KNOWN_BOOKMAKERS = ['bet365', 'superbet', 'novibet'];
+
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const normalize = (value, field) => {
   if (typeof value !== 'string') return value;
@@ -13,6 +17,8 @@ const normalize = (value, field) => {
 };
 export function evaluateCorpus(value) {
   const input = corpusEvaluationInputSchema.parse(value);
+  if (!KNOWN_BOOKMAKERS.includes(input.layout.bookmaker))
+    throw new Error('CORPUS_BOOKMAKER_UNKNOWN');
   if (
     input.cases.some(
       (item) => item.expectedLayoutId !== null && item.expectedLayoutId !== input.layout.id,
@@ -98,14 +104,17 @@ export function evaluateCorpus(value) {
     layout: input.layout,
     layoutSha256: hash(input.layout),
     layoutId: input.layout.id,
+    bookmaker: input.layout.bookmaker,
     model: input.layout.model,
-    corpusSha256: hash(
-      input.cases.map(({ imageSha256, expectedLayoutId, expected }) => ({
+    corpusSha256: hash({
+      bookmaker: input.layout.bookmaker,
+      layoutId: input.layout.id,
+      cases: input.cases.map(({ imageSha256, expectedLayoutId, expected }) => ({
         imageSha256,
         expectedLayoutId,
         expected,
       })),
-    ),
+    }),
     evidenceSha256: hash(input.cases),
     sampleCount: positive.length,
     totalCases: cases.length,

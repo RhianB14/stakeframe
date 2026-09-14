@@ -65,17 +65,28 @@ beforeEach(async () => {
   });
   layout = {
     id: 'synthetic-layout',
+    bookmaker: 'bet365',
     bookmakerId,
     model: OPENROUTER_MODEL,
     description: 'Fictional layout used exclusively for deterministic integration tests.',
     placedAtFormat: 'iso-offset',
     allowFreebet: true,
+    layoutSha256: '2'.repeat(64),
+    coverage: {
+      positive: 20,
+      negative: 5,
+      multiples: 3,
+      missingFields: 3,
+      promotional: 3,
+      uniqueImages: 25,
+    },
     corpusSha256: '0'.repeat(64),
     evaluationSha256: '1'.repeat(64),
     sampleCount: 20,
     essentialFieldErrors: 0,
     approvedBy: 'owner',
     approvedAt: '2020-01-01T00:00:00Z',
+    expiresAt: '2999-01-01T00:00:00Z',
   };
 });
 afterEach(async () => {

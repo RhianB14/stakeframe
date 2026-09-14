@@ -4,12 +4,15 @@ import { validatedLayoutSchema, ticketExtractionSchema, type ValidatedLayout } f
 export const corpusEvaluationInputSchema = z.strictObject({
   schemaVersion: z.literal(1),
   layout: validatedLayoutSchema.omit({
+    layoutSha256: true,
+    coverage: true,
     corpusSha256: true,
     evaluationSha256: true,
     sampleCount: true,
     essentialFieldErrors: true,
     approvedBy: true,
     approvedAt: true,
+    expiresAt: true,
   }),
   cases: z
     .array(
