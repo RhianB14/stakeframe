@@ -8,6 +8,7 @@ import {
   authSchema,
   captureTransactions,
   createBetaInvitation,
+  createConsentsService,
   createTenantContext,
   currentTransaction,
   normalizeInvitationEmail,
@@ -38,6 +39,7 @@ export function createOwnerAuth(
 ) {
   const tenant = createTenantContext(database);
   const invitations = createBetaInvitation(database);
+  const consents = createConsentsService(database);
   const emailService = options.emailService;
   const emailPasswordEnabled = Boolean(emailService);
   // Bounded in-process guard against duplicate new-login alerts for the same session.
@@ -480,11 +482,17 @@ export function createOwnerAuth(
   return {
     auth,
     origin: config.origin,
+    consents,
     beta: {
       emailPasswordEnabled,
       readAcceptableInvitation: invitations.readAcceptableInvitation,
     },
-    async getOwner(headers: Headers) {
+    /**
+     * Authentication-only identity check (session + admission). Used by the consent
+     * endpoints, which must stay reachable before the consent gate is satisfied; it never
+     * resolves or provisions any organization context.
+     */
+    async getIdentity(headers: Headers) {
       const session = await auth.api.getSession({
         headers,
         query: { disableCookieCache: true, disableRefresh: true },
@@ -495,13 +503,30 @@ export function createOwnerAuth(
         const admitted = await invitations.findAcceptedInvitationForUser(session.user.id);
         if (!admitted) return null;
       }
+      return {
+        user: { id: session.user.id, name: session.user.name },
+        expiresAt: session.session.expiresAt.toISOString(),
+      };
+    },
+    /**
+     * Full access check used by every private route: session + admission + the versioned
+     * consent gate. Without a current acceptance for every required document the caller
+     * gets `consent_required` — the organization is neither resolved nor provisioned, so
+     * no private context is exposed before consent.
+     */
+    async getOwner(headers: Headers) {
+      const identity = await this.getIdentity(headers);
+      if (!identity) return null;
       try {
-        await tenant.ensureOrganizationMembership(session.user.id);
-        const organization = await tenant.resolveOrganizationContext(session.user.id);
+        const consentStatus = await consents.statusFor(identity.user.id);
+        if (!consentStatus.allAccepted) return { status: 'consent_required' as const };
+        await tenant.ensureOrganizationMembership(identity.user.id);
+        const organization = await tenant.resolveOrganizationContext(identity.user.id);
         return {
-          user: { id: session.user.id, name: session.user.name },
+          status: 'ok' as const,
+          user: identity.user,
           organization: { id: organization.organizationId, role: organization.role },
-          expiresAt: session.session.expiresAt.toISOString(),
+          expiresAt: identity.expiresAt,
         };
       } catch {
         // Sanitized fail-closed behavior: membership/organization failures behave exactly like

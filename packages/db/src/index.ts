@@ -9,9 +9,28 @@ export {
   membershipRole,
   betaInvitation,
   betaInvitationStatus,
+  legalDocument,
+  legalDocumentType,
+  legalDocumentStatus,
+  consentRecord,
   type BetaInvitationStatus,
   type MembershipRole,
+  type LegalDocumentType,
+  type LegalDocumentStatus,
 } from './core-schema.js';
+export {
+  createConsentsService,
+  hashDocumentContent,
+  documentContentIsIntact,
+  ConsentError,
+  LEGAL_DOCUMENT_TYPES,
+  REQUIRED_LEGAL_DOCUMENT_TYPES,
+  type ConsentErrorCode,
+  type ConsentStatus,
+  type ConsentDocumentStatus,
+  type ConsentsService,
+  type CurrentDocument,
+} from './consents.js';
 export {
   createBetaInvitation,
   normalizeInvitationEmail,

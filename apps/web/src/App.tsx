@@ -4,6 +4,7 @@ import { systemStatusSchema } from '@stakeframe/shared';
 import { OwnerAccess, loadOwner } from './OwnerAccess.js';
 import { InviteAccess } from './InviteAccess.js';
 import { PasswordResetGate } from './PasswordReset.js';
+import { ConsentScreen } from './ConsentScreen.js';
 import { ProductApp } from './product/ProductApp.js';
 
 async function loadStatus() {
@@ -45,8 +46,9 @@ export function App() {
   useEffect(() => {
     if (owner.isError || owner.data === null) client.removeQueries({ queryKey: ['product'] });
   }, [client, owner.isError, owner.data]);
-  if (status.data?.productEnabled && owner.data && !owner.isError) {
-    return <ProductApp owner={owner.data.user} />;
+  const session = owner.data && owner.data !== 'consent-required' ? owner.data : null;
+  if (status.data?.productEnabled && session && !owner.isError) {
+    return <ProductApp owner={session.user} />;
   }
   const production = status.data?.stage === 'production-setup';
   const connectionLabel = status.isPending
@@ -140,6 +142,8 @@ export function App() {
               <PasswordResetGate token={resetToken} />
             ) : inviteToken ? (
               <InviteAccess token={inviteToken} />
+            ) : owner.data === 'consent-required' ? (
+              <ConsentScreen />
             ) : (
               <OwnerAccess />
             )

@@ -20,6 +20,10 @@ const messages: Record<ApiErrorCode, string> = {
     'Este link de redefinição de senha não é mais válido. Solicite um novo link e tente novamente.',
   EMAIL_NOT_VERIFIED:
     'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada ou reenvie a confirmação.',
+  CONSENT_REQUIRED:
+    'É necessário aceitar os documentos legais vigentes (Termos de Uso, Política de Privacidade e declaração de idade mínima) para continuar.',
+  CONSENT_INVALID:
+    'Não foi possível registrar o aceite. Recarregue a página, revise os documentos e tente novamente.',
   STATE_CONFLICT: 'O registro mudou ou esta operação já foi realizada. Atualize os dados.',
   VERSION_CONFLICT:
     'Os dados foram atualizados em outra operação. Recarregue e confira antes de tentar novamente.',

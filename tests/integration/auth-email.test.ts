@@ -18,6 +18,7 @@ import {
 import { createApp } from '../../apps/api/src/app.js';
 import type { EnabledAuthConfig } from '../../apps/api/src/auth-config.js';
 import { apiErrorSchema } from '../../packages/shared/src/index.js';
+import { acceptRequiredConsents } from '../fixtures/consents.js';
 
 const config: EnabledAuthConfig = {
   enabled: true,
@@ -314,10 +315,16 @@ describe('beta e-mail lifecycle with the Resend abstraction', () => {
         ).rows[0]!.count,
       ),
     ).toBe(1);
-    // The organization is provisioned only through the authenticated session.
+    // The organization is provisioned only through the authenticated session, and only
+    // after the versioned consent documents are accepted.
     const signedIn = await signIn('beta.lifecycle@example.test', 'fixture-password-1');
     expect(signedIn.statusCode).toBe(200);
     const cookie = cookieJar(signedIn.headers['set-cookie']);
+    const gated = await app.inject({ url: '/api/v1/me', headers: { cookie } });
+    expect(gated.statusCode).toBe(403);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     expect(await countCore('organization')).toBe(1);
@@ -409,6 +416,9 @@ describe('password reset', () => {
     const signedIn = await signIn('beta.reset@example.test', 'fixture-password-1');
     expect(signedIn.statusCode).toBe(200);
     const oldCookie = cookieJar(signedIn.headers['set-cookie']);
+    expect(
+      (await acceptRequiredConsents(app, oldCookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
     expect(
       (await app.inject({ url: '/api/v1/me', headers: { cookie: oldCookie } })).statusCode,
     ).toBe(200);
@@ -601,6 +611,10 @@ describe('session lifecycle and new-login alerts', () => {
     });
     expect(failingLogin.statusCode).toBe(200);
     const cookie = cookieJar(failingLogin.headers['set-cookie']);
+    // The consent route does not touch the e-mail sender; the gate opens for the session.
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
     expect(transport.takeAll('new-login')).toHaveLength(1);
   });
@@ -680,13 +694,21 @@ describe('session lifecycle and new-login alerts', () => {
     await admittedUser('beta.iso.two@example.test');
     const first = await signIn('beta.iso.one@example.test', 'fixture-password-1');
     const second = await signIn('beta.iso.two@example.test', 'fixture-password-1');
+    const firstCookie = cookieJar(first.headers['set-cookie']);
+    const secondCookie = cookieJar(second.headers['set-cookie']);
+    expect(
+      (await acceptRequiredConsents(app, firstCookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
+    expect(
+      (await acceptRequiredConsents(app, secondCookie, { origin: config.origin })).statusCode,
+    ).toBe(200);
     const firstMe = await app.inject({
       url: '/api/v1/me',
-      headers: { cookie: cookieJar(first.headers['set-cookie']) },
+      headers: { cookie: firstCookie },
     });
     const secondMe = await app.inject({
       url: '/api/v1/me',
-      headers: { cookie: cookieJar(second.headers['set-cookie']) },
+      headers: { cookie: secondCookie },
     });
     expect(firstMe.statusCode).toBe(200);
     expect(secondMe.statusCode).toBe(200);

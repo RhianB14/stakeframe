@@ -50,6 +50,13 @@
       "when": 1789337657513,
       "tag": "0006_beta_invitation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789377594460,
+      "tag": "0007_consents",
+      "breakpoints": true
     }
   ]
 }

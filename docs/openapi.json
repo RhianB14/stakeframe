@@ -2636,6 +2636,8 @@
                   "INVITE_REJECTED",
                   "RESET_REJECTED",
                   "EMAIL_NOT_VERIFIED",
+                  "CONSENT_REQUIRED",
+                  "CONSENT_INVALID",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -2782,6 +2784,125 @@
           }
         },
         "required": ["email"]
+      },
+      "LegalDocumentTypeInput": {
+        "type": "string",
+        "enum": ["terms_of_use", "privacy_policy", "minimum_age"]
+      },
+      "ConsentDocumentStatusInput": {
+        "type": "object",
+        "properties": {
+          "type": { "$ref": "#/components/schemas/LegalDocumentTypeInput" },
+          "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 600 },
+          "textUrl": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "accepted": { "type": "boolean" },
+          "stale": { "type": "boolean" },
+          "integrity": { "type": "string", "enum": ["ok", "changed"] },
+          "acceptedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "type",
+          "version",
+          "title",
+          "summary",
+          "textUrl",
+          "effectiveAt",
+          "accepted",
+          "stale",
+          "integrity",
+          "acceptedAt"
+        ]
+      },
+      "ConsentStatusInput": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["accepted", "pending"] },
+          "documents": {
+            "minItems": 1,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ConsentDocumentStatusInput" }
+          },
+          "pendingTypes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LegalDocumentTypeInput" }
+          }
+        },
+        "required": ["status", "documents", "pendingTypes"]
+      },
+      "ConsentAcceptInput": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "$ref": "#/components/schemas/LegalDocumentTypeInput" },
+                "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
+              "required": ["type"]
+            }
+          }
+        },
+        "required": ["documents"]
+      },
+      "ConsentAcceptedInput": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "$ref": "#/components/schemas/LegalDocumentTypeInput" },
+                "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "acceptedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["type", "version", "acceptedAt"]
+            }
+          }
+        },
+        "required": ["accepted"]
+      },
+      "ConsentHistoryInput": {
+        "type": "object",
+        "properties": {
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "$ref": "#/components/schemas/LegalDocumentTypeInput" },
+                "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "acceptedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["type", "version", "acceptedAt"]
+            }
+          }
+        },
+        "required": ["history"]
       },
       "OwnerSessionInput": {
         "type": "object",
@@ -5468,6 +5589,8 @@
                   "INVITE_REJECTED",
                   "RESET_REJECTED",
                   "EMAIL_NOT_VERIFIED",
+                  "CONSENT_REQUIRED",
+                  "CONSENT_INVALID",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -5631,6 +5754,133 @@
           }
         },
         "required": ["email"],
+        "additionalProperties": false
+      },
+      "LegalDocumentType": {
+        "type": "string",
+        "enum": ["terms_of_use", "privacy_policy", "minimum_age"]
+      },
+      "ConsentDocumentStatus": {
+        "type": "object",
+        "properties": {
+          "type": { "$ref": "#/components/schemas/LegalDocumentType" },
+          "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 600 },
+          "textUrl": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "accepted": { "type": "boolean" },
+          "stale": { "type": "boolean" },
+          "integrity": { "type": "string", "enum": ["ok", "changed"] },
+          "acceptedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "type",
+          "version",
+          "title",
+          "summary",
+          "textUrl",
+          "effectiveAt",
+          "accepted",
+          "stale",
+          "integrity",
+          "acceptedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ConsentStatus": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["accepted", "pending"] },
+          "documents": {
+            "minItems": 1,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ConsentDocumentStatus" }
+          },
+          "pendingTypes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LegalDocumentType" }
+          }
+        },
+        "required": ["status", "documents", "pendingTypes"],
+        "additionalProperties": false
+      },
+      "ConsentAccept": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "$ref": "#/components/schemas/LegalDocumentType" },
+                "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
+              "required": ["type"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["documents"],
+        "additionalProperties": false
+      },
+      "ConsentAccepted": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "$ref": "#/components/schemas/LegalDocumentType" },
+                "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "acceptedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["type", "version", "acceptedAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["accepted"],
+        "additionalProperties": false
+      },
+      "ConsentHistory": {
+        "type": "object",
+        "properties": {
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "$ref": "#/components/schemas/LegalDocumentType" },
+                "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "acceptedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["type", "version", "acceptedAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["history"],
         "additionalProperties": false
       },
       "OwnerSession": {
@@ -6488,7 +6738,7 @@
         "operationId": "getOwnerSession",
         "summary": "Consultar a sessão autenticada",
         "tags": ["Autenticação"],
-        "description": "Consulta o banco e revalida a identidade autorizada (proprietário ou usuário convidado admitido). Garante a organização técnica do usuário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.",
+        "description": "Consulta o banco e revalida a identidade autorizada (proprietário ou usuário convidado admitido). Exige consentimentos vigentes aceitos: sem eles responde 403 CONSENT_REQUIRED sem provisionar ou expor contexto organizacional. Com o aceite em dia, garante a organização técnica do usuário (criando a membership inicial owner quando ausente, de forma idempotente) e retorna id, nome, organização (id e papel) e expiração; não inclui e-mail, identificador Google, cookies ou tokens.",
         "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
         "responses": {
           "200": {
@@ -6503,6 +6753,12 @@
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
             }
           },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
           "500": {
             "description": "Default Response",
             "content": {
@@ -6510,6 +6766,231 @@
             }
           },
           "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/consents/status": {
+      "get": {
+        "operationId": "getConsentStatus",
+        "summary": "Consultar o estado dos consentimentos do usuário atual",
+        "tags": ["Consentimentos"],
+        "description": "Sessão válida de identidade admitida (proprietário ou usuário beta com convite aceito). Retorna os documentos obrigatórios vigentes com versão, resumo, link de leitura, vigência e o estado do aceite do próprio usuário. Não retorna consentimentos de terceiros, dados da organização nem detalhes internos.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ConsentStatus" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/consents/accept": {
+      "post": {
+        "operationId": "acceptConsents",
+        "summary": "Aceitar os documentos obrigatórios vigentes",
+        "tags": ["Consentimentos"],
+        "description": "Exige Origin igual à origem configurada e sessão válida. O servidor resolve as versões vigentes no catálogo — versões enviadas pelo cliente que não sejam as atuais são rejeitadas, o user_id nunca vem do corpo, o timestamp é gerado pelo banco e todos os aceites são gravados em uma única transação (sem aceite parcial). Repetir a operação é idempotente.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ConsentAcceptInput" } }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ConsentAccepted" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/consents/history": {
+      "get": {
+        "operationId": "getConsentHistory",
+        "summary": "Consultar o próprio histórico de aceites",
+        "tags": ["Consentimentos"],
+        "description": "Sessão válida de identidade admitida. Retorna apenas os aceites do próprio usuário, em ordem determinística (mais recentes primeiro), sem IP, user-agent ou qualquer dado de terceiros; o histórico é somente leitura.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ConsentHistory" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/documents/{type}/{version}": {
+      "get": {
+        "operationId": "getLegalDocumentText",
+        "summary": "Ler o texto integral de um documento legal versionado",
+        "tags": ["Consentimentos"],
+        "description": "Público: entrega o texto do documento exato (tipo e versão estáveis do catálogo) em texto simples, para leitura integral. Não requer sessão e não expõe dados de usuários.",
+        "parameters": [
+          {
+            "schema": { "$ref": "#/components/schemas/LegalDocumentTypeInput" },
+            "in": "path",
+            "name": "type",
+            "required": true
+          },
+          {
+            "schema": { "type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$" },
+            "in": "path",
+            "name": "version",
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Texto integral do documento (text/plain).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Texto integral do documento (text/plain)."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

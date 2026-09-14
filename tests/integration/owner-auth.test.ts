@@ -11,6 +11,7 @@ import {
   ownerSessionSchema,
   signOutSchema,
 } from '../../packages/shared/src/index.js';
+import { acceptRequiredConsents } from '../fixtures/consents.js';
 
 const config: EnabledAuthConfig = {
   enabled: true,
@@ -182,6 +183,8 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
     );
     expect(sessionCookie).toContain('Secure');
     expect(sessionCookie).toContain('HttpOnly');
+    // Consent gate on the owner too: acceptance comes before any private context.
+    expect((await acceptRequiredConsents(app, cookie, { origin })).statusCode).toBe(200);
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
   });
   it('applies the migration twice without duplicating its journal', async () => {
@@ -222,6 +225,9 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
     );
     expect(sessionCookie).toContain('HttpOnly');
     expect(sessionCookie).toMatch(/SameSite=Lax/i);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     expect(ownerSessionSchema.parse(me.json())).toEqual(me.json());
@@ -371,6 +377,9 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
   });
   it('provisions exactly one organization per owner and preserves an existing role', async () => {
     const { cookie } = await login();
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     const first = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(first.statusCode).toBe(200);
     const organizationId = first.json().organization.id;
@@ -391,6 +400,10 @@ describe('Google owner authentication with a real PostgreSQL database', () => {
   });
   it('treats an organization storage failure as an unauthenticated session (sanitized)', async () => {
     const { cookie } = await login();
+    // The consent gate is satisfied first so the request reaches (and fails on) storage.
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     await database.pool.query('ALTER TABLE core.membership RENAME TO membership_probe_failure');
     try {
       const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });

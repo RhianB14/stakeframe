@@ -45,6 +45,8 @@ export function registerFinanceRoutes(
     const headers = fromNodeHeaders({ cookie: request.headers.cookie });
     const owner = await ownerAuth.getOwner(headers);
     if (!owner) return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
+    if (owner.status === 'consent_required')
+      return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
     identities.set(request, owner.user.id);
   };
