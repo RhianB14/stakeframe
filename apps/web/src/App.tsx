@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { systemStatusSchema } from '@stakeframe/shared';
 import { OwnerAccess, loadOwner } from './OwnerAccess.js';
 import { InviteAccess } from './InviteAccess.js';
+import { PasswordResetGate } from './PasswordReset.js';
 import { ProductApp } from './product/ProductApp.js';
 
 async function loadStatus() {
@@ -14,6 +15,12 @@ async function loadStatus() {
 export function App() {
   const client = useQueryClient();
   const inviteToken = new URLSearchParams(window.location.search).get('invite');
+  // The reset token is captured once per page load; the URL is cleaned afterwards so a
+  // refresh never replays the form with a consumed link.
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'));
+  useEffect(() => {
+    if (resetToken) window.history.replaceState(null, '', window.location.pathname);
+  }, [resetToken]);
   const status = useQuery({
     queryKey: ['system-status'],
     queryFn: loadStatus,
@@ -129,7 +136,9 @@ export function App() {
               Tentar novamente <span aria-hidden="true">↗</span>
             </button>
           ) : status.data?.authentication === 'google' ? (
-            inviteToken ? (
+            resetToken ? (
+              <PasswordResetGate token={resetToken} />
+            ) : inviteToken ? (
               <InviteAccess token={inviteToken} />
             ) : (
               <OwnerAccess />

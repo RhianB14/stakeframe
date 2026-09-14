@@ -2634,6 +2634,8 @@
                   "RATE_LIMITED",
                   "AUTH_UNAVAILABLE",
                   "INVITE_REJECTED",
+                  "RESET_REJECTED",
+                  "EMAIL_NOT_VERIFIED",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -2743,6 +2745,43 @@
         "type": "object",
         "properties": { "status": { "type": "boolean", "enum": [true] } },
         "required": ["status"]
+      },
+      "AuthStatusInput": {
+        "type": "object",
+        "properties": { "status": { "type": "boolean", "enum": [true] } },
+        "required": ["status"]
+      },
+      "PasswordResetRequestInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          }
+        },
+        "required": ["email"]
+      },
+      "PasswordResetSubmitInput": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "newPassword": { "type": "string", "minLength": 8, "maxLength": 128 }
+        },
+        "required": ["token", "newPassword"]
+      },
+      "ResendVerificationInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          }
+        },
+        "required": ["email"]
       },
       "OwnerSessionInput": {
         "type": "object",
@@ -5427,6 +5466,8 @@
                   "RATE_LIMITED",
                   "AUTH_UNAVAILABLE",
                   "INVITE_REJECTED",
+                  "RESET_REJECTED",
+                  "EMAIL_NOT_VERIFIED",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -5549,6 +5590,47 @@
         "type": "object",
         "properties": { "status": { "type": "boolean", "enum": [true] } },
         "required": ["status"],
+        "additionalProperties": false
+      },
+      "AuthStatus": {
+        "type": "object",
+        "properties": { "status": { "type": "boolean", "enum": [true] } },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "PasswordResetRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          }
+        },
+        "required": ["email"],
+        "additionalProperties": false
+      },
+      "PasswordResetSubmit": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "newPassword": { "type": "string", "minLength": 8, "maxLength": 128 }
+        },
+        "required": ["token", "newPassword"],
+        "additionalProperties": false
+      },
+      "ResendVerification": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          }
+        },
+        "required": ["email"],
         "additionalProperties": false
       },
       "OwnerSession": {
@@ -5920,6 +6002,225 @@
           },
           "302": { "description": "Redirecionamento para a aplicação após confirmação." },
           "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/request-password-reset": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "summary": "Solicitar a redefinição de senha por e-mail",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada. A resposta é sempre a mesma para e-mail existente ou inexistente (sem enumeração) e o link chega exclusivamente pelo e-mail da conta, com token de uso único e vida curta. A chamada nunca revela se o e-mail possui conta.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordResetRequestInput" }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthStatus" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "operationId": "resetPassword",
+        "summary": "Definir nova senha com o token do e-mail",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada. O token é de uso único, expira em 30 minutos e é aceito apenas se emitido para a conta; a senha é tratada exclusivamente pelo provedor de autenticação e as sessões antigas são revogadas após a redefinição. Falhas usam um único código sanitizado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordResetSubmitInput" }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthStatus" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/send-verification-email": {
+      "post": {
+        "operationId": "resendEmailVerification",
+        "summary": "Reenviar a confirmação de e-mail",
+        "tags": ["Autenticação"],
+        "description": "Exige Origin igual à origem configurada. Responde de forma genérica com piso de tempo constante: e-mail sem conta pendente não dispara envio e não distingue da resposta de sucesso. Limitado por taxa e sem revelar existência de conta.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResendVerificationInput" }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthStatus" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "415": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

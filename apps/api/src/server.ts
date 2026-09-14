@@ -10,19 +10,34 @@ import {
 import { createApp } from './app.js';
 import { readConfig } from './config.js';
 import { createOwnerAuth } from './auth.js';
-import { createMemoryEmailTransport } from './beta-email.js';
+import { createEmailService } from './email-service.js';
+import {
+  createMemoryEmailSender,
+  createResendEmailSender,
+  readEmailRuntimeConfig,
+} from './email.js';
 import { createOperationsService } from './operations.js';
 
 async function main() {
   const config = readConfig(process.env);
   const database = createDatabase(config.databaseUrl);
+  const email = readEmailRuntimeConfig(config.runtime, process.env);
   const ownerAuth = config.auth.enabled
     ? createOwnerAuth(config.auth, database, {
-        // Local runtime only: controlled in-memory e-mail transport (never real mail, no
-        // external service, never logged). Production stays without a transport until a
-        // later, separately authorized e-mail integration exists.
-        ...(config.runtime === 'local'
-          ? { emailTransport: createMemoryEmailTransport().transport }
+        // Resend delivery in production (RESEND_API_KEY/RESEND_FROM via environment
+        // secrets); the controlled in-memory adapter in local/CI. Without a configured
+        // sender the password flows stay unavailable (sanitized 503) — e-mail
+        // verification is never weakened to compensate.
+        ...(email
+          ? {
+              emailService: createEmailService({
+                sender:
+                  email.kind === 'resend'
+                    ? createResendEmailSender({ apiKey: email.apiKey, from: email.from })
+                    : createMemoryEmailSender().sender,
+                origin: config.auth.origin,
+              }),
+            }
           : {}),
       })
     : undefined;

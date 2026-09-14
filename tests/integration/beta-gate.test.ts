@@ -8,10 +8,8 @@ import {
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import { BETA_INVITE_COOKIE, createOwnerAuth } from '../../apps/api/src/auth.js';
-import {
-  createMemoryEmailTransport,
-  type MemoryEmailTransport,
-} from '../../apps/api/src/beta-email.js';
+import { createMemoryEmailSender, type MemoryEmailSender } from '../../apps/api/src/email.js';
+import { createEmailService } from '../../apps/api/src/email-service.js';
 import { createApp } from '../../apps/api/src/app.js';
 import type { EnabledAuthConfig } from '../../apps/api/src/auth-config.js';
 import { apiErrorSchema, ownerSessionSchema } from '../../packages/shared/src/index.js';
@@ -31,7 +29,7 @@ const databaseName = `stk_gate_test_${randomUUID().replaceAll('-', '')}`;
 let database: Database;
 let created = false;
 let app: ReturnType<typeof createApp>;
-let transport: MemoryEmailTransport;
+let transport: MemoryEmailSender;
 let claims: Record<string, unknown>;
 let tokenRequests = 0;
 let challenge: string | null = null;
@@ -190,9 +188,9 @@ async function createInvite(email: string, expiresAt = futureDate()) {
   return invitations.createInvitation(email, expiresAt);
 }
 async function verifyEmailFromTransport() {
-  const message = transport.takeLast();
+  const message = transport.takeAll('verification').at(-1);
   expect(message).toBeTruthy();
-  const url = new URL(message!.url);
+  const url = new URL(message!.meta.url!);
   const response = await app.inject({
     url: `${url.pathname}${url.search}`,
     remoteAddress: nextIp(),
@@ -229,7 +227,7 @@ beforeEach(async () => {
   tokenRequests = 0;
   challenge = null;
   invalidSignature = false;
-  transport = createMemoryEmailTransport();
+  transport = createMemoryEmailSender();
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     if (url === 'https://www.googleapis.com/oauth2/v3/certs') return Response.json({ keys: [jwk] });
@@ -254,7 +252,9 @@ beforeEach(async () => {
   });
   app = createApp({
     checkDatabase: database.check,
-    ownerAuth: createOwnerAuth(config, database, { emailTransport: transport.transport }),
+    ownerAuth: createOwnerAuth(config, database, {
+      emailService: createEmailService({ sender: transport.sender, origin: config.origin }),
+    }),
   });
 });
 afterEach(async () => {
@@ -433,10 +433,11 @@ describe('beta invitation gate with e-mail and password', () => {
     ).rows;
     expect(users).toHaveLength(1);
     expect(users[0]!.email_verified).toBe(false);
-    // Sign-in before verification is refused and creates no session.
+    // Sign-in before verification is refused with the actionable sanitized code and
+    // creates no session.
     const early = await signIn('beta.email@example.test', 'fixture-password-1');
-    expect(early.statusCode).toBe(401);
-    expect(apiCode(early)).toBe('AUTH_REQUEST_FAILED');
+    expect(early.statusCode).toBe(403);
+    expect(apiCode(early)).toBe('EMAIL_NOT_VERIFIED');
     expect(sessionCookieOf(early.headers)).toBeUndefined();
     expect(await count('session')).toBe(0);
     // Verification through the controlled transport.
@@ -676,7 +677,7 @@ describe('beta gate concurrency and sanitization', () => {
     app = createApp({
       checkDatabase: database.check,
       ownerAuth: createOwnerAuth({ ...config, origin }, database, {
-        emailTransport: transport.transport,
+        emailService: createEmailService({ sender: transport.sender, origin }),
       }),
     });
     const invite = await createInvite('beta.secure@example.test');

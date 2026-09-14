@@ -14,7 +14,7 @@ import {
   type Database,
 } from '@stakeframe/db';
 import type { EnabledAuthConfig } from './auth-config.js';
-import type { BetaEmailTransport } from './beta-email.js';
+import type { EmailService } from './email-service.js';
 
 export const BETA_INVITE_COOKIE = 'stakeframe-invite';
 export const BETA_INVITE_COOKIE_MAX_AGE_SECONDS = 3600;
@@ -34,12 +34,14 @@ export function isAllowedGoogleProfile(
 export function createOwnerAuth(
   config: EnabledAuthConfig,
   database: Database,
-  options: { emailTransport?: BetaEmailTransport } = {},
+  options: { emailService?: EmailService } = {},
 ) {
   const tenant = createTenantContext(database);
   const invitations = createBetaInvitation(database);
-  const emailTransport = options.emailTransport;
-  const emailPasswordEnabled = Boolean(emailTransport);
+  const emailService = options.emailService;
+  const emailPasswordEnabled = Boolean(emailService);
+  // Bounded in-process guard against duplicate new-login alerts for the same session.
+  const alertedSessions = new Map<string, number>();
   const googleProvider = google({
     clientId: config.googleClientId,
     clientSecret: config.googleClientSecret,
@@ -139,6 +141,55 @@ export function createOwnerAuth(
     accessTokenExpiresAt: null,
     refreshTokenExpiresAt: null,
   };
+  /**
+   * Deterministic "new login" criterion (documented in docs/F1-06-AUTH-RESEND.md): a
+   * committed session whose (IP, user-agent) pair matches no earlier session of the same
+   * user — requiring at least one earlier session (the very first access never alerts)
+   * and a complete fingerprint (missing IP or user-agent never alerts). Everything here
+   * is swallowed on failure: the alert never blocks, fails or slows the login.
+   */
+  async function maybeSendNewLoginAlert(session: {
+    id?: unknown;
+    userId?: unknown;
+    ipAddress?: unknown;
+    userAgent?: unknown;
+    createdAt?: unknown;
+  }): Promise<void> {
+    try {
+      if (!emailService) return;
+      if (typeof session.id !== 'string' || typeof session.userId !== 'string') return;
+      if (alertedSessions.has(session.id)) return;
+      const ip = typeof session.ipAddress === 'string' ? session.ipAddress.trim() : '';
+      const userAgent = typeof session.userAgent === 'string' ? session.userAgent.trim() : '';
+      if (!ip || !userAgent) return;
+      const rows = await database.orm
+        .select({
+          id: authSchema.session.id,
+          ipAddress: authSchema.session.ipAddress,
+          userAgent: authSchema.session.userAgent,
+        })
+        .from(authSchema.session)
+        .where(eq(authSchema.session.userId, session.userId));
+      const previous = rows.filter((row) => row.id !== session.id);
+      if (previous.length === 0) return;
+      if (previous.some((row) => row.ipAddress === ip && row.userAgent === userAgent)) return;
+      if (alertedSessions.size >= 500) alertedSessions.clear();
+      alertedSessions.set(session.id, Date.now());
+      const identity = await database.orm
+        .select({ email: authSchema.user.email, emailVerified: authSchema.user.emailVerified })
+        .from(authSchema.user)
+        .where(eq(authSchema.user.id, session.userId))
+        .limit(1);
+      const user = identity[0];
+      if (!user || user.emailVerified !== true) return;
+      await emailService.sendNewLoginAlert({
+        to: user.email,
+        when: session.createdAt instanceof Date ? session.createdAt : new Date(),
+      });
+    } catch {
+      // Sanitized by omission: alert problems never surface and never affect the login.
+    }
+  }
   const auth = betterAuth({
     appName: 'Stakeframe',
     baseURL: config.origin,
@@ -157,6 +208,35 @@ export function createOwnerAuth(
           autoSignIn: false,
           minPasswordLength: 8,
           maxPasswordLength: 128,
+          resetPasswordTokenExpiresIn: 1_800,
+          revokeSessionsOnPasswordReset: true,
+          sendResetPassword: async ({
+            user,
+            token,
+          }: {
+            user: { id: string; email: string };
+            token: string;
+          }) => {
+            try {
+              if (typeof user?.email !== 'string' || user.email.toLowerCase() === config.ownerEmail)
+                return; // the owner identity never holds a password
+              const credential = await database.orm
+                .select({ id: authSchema.account.id })
+                .from(authSchema.account)
+                .where(
+                  and(
+                    eq(authSchema.account.userId, user.id),
+                    eq(authSchema.account.providerId, 'credential'),
+                  ),
+                )
+                .limit(1);
+              if (credential.length === 0) return; // Google-only accounts have no password
+              await emailService!.sendPasswordResetEmail({ to: user.email, token });
+            } catch {
+              // Sanitized by omission: the public answer stays generic (anti-enumeration)
+              // and no provider/driver detail escapes.
+            }
+          },
         }
       : { enabled: false },
     ...(emailPasswordEnabled
@@ -168,14 +248,14 @@ export function createOwnerAuth(
             sendVerificationEmail: async ({
               user,
               url,
-              token,
             }: {
               user: { email: string };
               url: string;
-              token: string;
             }) => {
-              // Controlled fake transport: no real e-mail is ever sent in local/CI.
-              await emailTransport!.sendVerificationEmail({ to: user.email, url, token });
+              // Delivered through the configured e-mail service (Resend in production, the
+              // controlled in-memory adapter in local/CI); the token only lives inside the
+              // action URL of the rendered message.
+              await emailService!.sendVerificationEmail({ to: user.email, url });
             },
           },
         }
@@ -272,6 +352,10 @@ export function createOwnerAuth(
         '/callback/google': { window: 60, max: 20 },
         '/sign-up/email': { window: 60, max: 5 },
         '/sign-in/email': { window: 60, max: 5 },
+        '/send-verification-email': { window: 300, max: 3 },
+        '/request-password-reset': { window: 300, max: 3 },
+        '/reset-password': { window: 300, max: 5 },
+        '/verify-email': { window: 300, max: 10 },
       },
     },
     databaseHooks: {
@@ -356,6 +440,19 @@ export function createOwnerAuth(
               throw accessDenied();
             }
             return { data: session };
+          },
+          after: async (session) => {
+            // Runs after the session transaction commits (queueAfterTransactionHook):
+            // a rolled-back login never produces an alert.
+            await maybeSendNewLoginAlert(
+              session as {
+                id?: unknown;
+                userId?: unknown;
+                ipAddress?: unknown;
+                userAgent?: unknown;
+                createdAt?: unknown;
+              },
+            );
           },
         },
       },

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { authAction } from './OwnerAccess.js';
+import { authPost } from './auth-actions.js';
+import { ForgotPasswordPanel } from './PasswordReset.js';
 
 type Phase = 'opening' | 'ready' | 'rejected';
+type Mode = 'sign-up' | 'sign-in' | 'forgot';
 
 async function openInvite(token: string) {
   const response = await fetch('/api/v1/beta-invite/open', {
@@ -16,30 +19,20 @@ async function openInvite(token: string) {
   return response.json() as Promise<{ ok: true }>;
 }
 
-async function emailAction(path: 'sign-up/email' | 'sign-in/email', payload: object) {
-  const response = await fetch(`/api/auth/${path}`, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error('AUTH_ACTION_FAILED');
-  return response.json() as Promise<unknown>;
-}
-
 /**
  * Minimal beta-invite entry: opens the invitation link (pinning the token to this
- * browser through the server-set HttpOnly cookie) and offers the two allowed paths —
- * Google or e-mail/password. No full onboarding in this step.
+ * browser through the server-set HttpOnly cookie) and offers the allowed paths — Google,
+ * e-mail/password sign-up or sign-in, verification resend and password recovery.
  */
 export function InviteAccess({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>('opening');
-  const [mode, setMode] = useState<'sign-up' | 'sign-in'>('sign-up');
+  const [mode, setMode] = useState<Mode>('sign-up');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const open = useMutation({
     mutationFn: () => openInvite(token),
     onSuccess: () => setPhase('ready'),
@@ -64,18 +57,47 @@ export function InviteAccess({ token }: { token: string }) {
     },
   });
   const emailSubmit = useMutation({
-    mutationFn: () =>
-      emailAction(
+    mutationFn: async () => {
+      const result = await authPost(
         mode === 'sign-up' ? 'sign-up/email' : 'sign-in/email',
         mode === 'sign-up' ? { name, email, password } : { email, password },
-      ),
-    onSuccess: () => {
-      if (mode === 'sign-up') {
-        setNotice('Cadastro recebido. Confira seu e-mail para confirmar o endereço.');
-      } else {
-        setNotice('Sessão iniciada. Recarregando…');
-        window.setTimeout(() => window.location.assign('/'), 400);
+      );
+      return result;
+    },
+    onSuccess: (result) => {
+      if (result.ok) {
+        if (mode === 'sign-up') {
+          setNeedsVerification(true);
+          setResendState('idle');
+          setNotice('Cadastro recebido. Confira seu e-mail para confirmar o endereço.');
+        } else {
+          setNotice('Sessão iniciada. Recarregando…');
+          window.setTimeout(() => window.location.assign('/'), 400);
+        }
+        return;
       }
+      if (result.code === 'EMAIL_NOT_VERIFIED') {
+        setNeedsVerification(true);
+        setResendState('idle');
+        setNotice(result.message);
+        return;
+      }
+      setNeedsVerification(false);
+      setNotice(result.message);
+    },
+  });
+  const resend = useMutation({
+    mutationFn: async () => {
+      const result = await authPost('send-verification-email', { email });
+      return result;
+    },
+    onSuccess: (result) => {
+      setResendState('sent');
+      setNotice(
+        result.ok
+          ? 'Se este endereço precisar de confirmação, o e-mail será reenviado em instantes.'
+          : result.message,
+      );
     },
   });
   if (phase === 'opening')
@@ -95,16 +117,32 @@ export function InviteAccess({ token }: { token: string }) {
         </button>
       </div>
     );
+  if (mode === 'forgot')
+    return <ForgotPasswordPanel initialEmail={email} onBack={() => setMode('sign-in')} />;
   return (
     <div className="owner-access">
       <p className="owner-greeting">Convite confirmado.</p>
-      <p>Continue com sua conta Google ou crie o acesso por e-mail e senha.</p>
-      {google.isError || emailSubmit.isError ? (
-        <p role="alert">
-          {notice ?? 'Não foi possível concluir. Confira os dados e tente novamente.'}
-        </p>
+      <p>Continue com sua conta Google ou use seu acesso por e-mail e senha.</p>
+      {emailSubmit.isError || resend.isError ? (
+        <p role="alert">Não foi possível concluir. Confira os dados e tente novamente.</p>
       ) : notice ? (
         <p role="status">{notice}</p>
+      ) : null}
+      {needsVerification ? (
+        <button
+          className="link-button"
+          disabled={resendState === 'sending' || email.length === 0 || !email.includes('@')}
+          onClick={() => {
+            setResendState('sending');
+            resend.mutate();
+          }}
+        >
+          {resendState === 'sending'
+            ? 'Reenviando…'
+            : resendState === 'sent'
+              ? 'Reenviar novamente'
+              : 'Reenviar e-mail de confirmação'}
+        </button>
       ) : null}
       <button className="google-button" disabled={google.isPending} onClick={() => google.mutate()}>
         <span aria-hidden="true" className="google-symbol">
@@ -115,13 +153,21 @@ export function InviteAccess({ token }: { token: string }) {
       <div className="invite-tabs">
         <button
           className={mode === 'sign-up' ? 'retry-button' : 'google-button'}
-          onClick={() => setMode('sign-up')}
+          onClick={() => {
+            setMode('sign-up');
+            setNotice(null);
+            setNeedsVerification(false);
+          }}
         >
           Criar conta
         </button>
         <button
           className={mode === 'sign-in' ? 'retry-button' : 'google-button'}
-          onClick={() => setMode('sign-in')}
+          onClick={() => {
+            setMode('sign-in');
+            setNotice(null);
+            setNeedsVerification(false);
+          }}
         >
           Já tenho conta
         </button>
@@ -177,6 +223,11 @@ export function InviteAccess({ token }: { token: string }) {
               : 'Entrar com e-mail'}
         </button>
       </form>
+      {mode === 'sign-in' ? (
+        <button className="link-button" onClick={() => setMode('forgot')}>
+          Esqueci minha senha
+        </button>
+      ) : null}
     </div>
   );
 }
