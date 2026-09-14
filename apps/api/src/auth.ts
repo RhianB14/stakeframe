@@ -2,11 +2,14 @@ import { betterAuth } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { google, verifyGoogleIdToken } from 'better-auth/social-providers';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
+import { runWithTransaction } from '@better-auth/core/context';
 import { and, eq } from 'drizzle-orm';
 import {
   authSchema,
+  captureTransactions,
   createBetaInvitation,
   createTenantContext,
+  currentTransaction,
   normalizeInvitationEmail,
   type Database,
 } from '@stakeframe/db';
@@ -141,7 +144,7 @@ export function createOwnerAuth(
     baseURL: config.origin,
     basePath: '/api/auth',
     secret: config.secret,
-    database: drizzleAdapter(database.orm, {
+    database: drizzleAdapter(captureTransactions(database.orm), {
       provider: 'pg',
       schema: authSchema,
       transaction: true,
@@ -307,7 +310,16 @@ export function createOwnerAuth(
               return { data: { ...account, ...discardProviderTokens } };
             }
             if (account.providerId === 'credential') {
-              await assertBetaInvitationFor(identity.email, ctx);
+              const token = inviteTokenFromContext(ctx);
+              if (!token) throw accessDenied();
+              const transaction = currentTransaction();
+              if (!transaction) throw accessDenied();
+              // Consumption runs on the sign-up transaction itself: a later failure rolls the
+              // acceptance back together with the identity that justified it.
+              await invitations.consumeInvitationForUser(transaction, token, {
+                userId: account.userId,
+                email: identity.email,
+              });
               return { data: account };
             }
             throw accessDenied();
@@ -330,10 +342,13 @@ export function createOwnerAuth(
               return { data: session };
             const token = inviteTokenFromContext(ctx);
             if (!token) throw accessDenied();
+            const transaction = currentTransaction();
+            if (!transaction) throw accessDenied();
             try {
-              // Single-use atomic consumption: the invitation is accepted exactly once and
-              // linked to this identity; a failed gate never releases a session.
-              await invitations.consumeInvitationForUser(token, {
+              // Single-use consumption on the SAME transaction as the session insert: a
+              // failure after this point rolls the acceptance back with the rest of the flow,
+              // so an accepted invitation never survives without its session.
+              await invitations.consumeInvitationForUser(transaction, token, {
                 userId: session.userId,
                 email: identity.email,
               });
@@ -349,34 +364,28 @@ export function createOwnerAuth(
     logger: { disabled: true },
     telemetry: { enabled: false },
   });
-  /** Post-sign-up step (password flow): consume the invitation only for real identities. */
-  async function finalizeEmailSignUp(input: {
-    userId: string;
-    email: string;
-    inviteToken: string | undefined;
-  }): Promise<'consumed' | 'skipped'> {
-    const identity = await loadIdentity(undefined, input.userId);
-    let normalized: string;
-    try {
-      normalized = normalizeInvitationEmail(input.email);
-    } catch {
-      return 'skipped';
-    }
-    if (!identity || identity.email !== normalized) return 'skipped';
-    if (!input.inviteToken) throw accessDenied();
-    await invitations.consumeInvitationForUser(input.inviteToken, {
-      userId: input.userId,
-      email: identity.email,
-    });
-    return 'consumed';
-  }
+  // The library resets its transaction state at the HTTP handler boundary, so the atomic
+  // unit is the session creation itself: the session write — database hooks included — runs
+  // inside ONE transaction. Any failure in that unit (invitation consumption or the session
+  // insert) rolls the whole unit back, so an accepted invitation never survives without its
+  // session. The invitation consumption inside the hook runs on this same transaction via
+  // `currentTransaction()` (captured by `captureTransactions` on the Drizzle instance).
+  void auth.$context
+    .then((context) => {
+      const internal = context.internalAdapter as unknown as {
+        createSession: (...args: unknown[]) => Promise<unknown>;
+      };
+      const original = internal.createSession;
+      internal.createSession = (...args: unknown[]) =>
+        runWithTransaction(context.adapter, () => original(...args));
+    })
+    .catch(() => undefined);
   return {
     auth,
     origin: config.origin,
     beta: {
       emailPasswordEnabled,
       readAcceptableInvitation: invitations.readAcceptableInvitation,
-      finalizeEmailSignUp,
     },
     async getOwner(headers: Headers) {
       const session = await auth.api.getSession({

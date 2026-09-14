@@ -521,16 +521,14 @@ describe('beta gate concurrency and sanitization', () => {
       'beta.race@example.test',
     ]);
     const invitations = createBetaInvitation(database);
-    const results = await Promise.allSettled([
-      invitations.consumeInvitationForUser(invite.token, {
-        userId: 'race-user-1',
-        email: 'beta.race@example.test',
-      }),
-      invitations.consumeInvitationForUser(invite.token, {
-        userId: 'race-user-1',
-        email: 'beta.race@example.test',
-      }),
-    ]);
+    const consume = () =>
+      database.orm.transaction((transaction) =>
+        invitations.consumeInvitationForUser(transaction, invite.token, {
+          userId: 'race-user-1',
+          email: 'beta.race@example.test',
+        }),
+      );
+    const results = await Promise.allSettled([consume(), consume()]);
     const fulfilled = results.filter((result) => result.status === 'fulfilled');
     const rejected = results.filter((result) => result.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
@@ -541,6 +539,62 @@ describe('beta gate concurrency and sanitization', () => {
     const row = (await readInvitation(invite.invitationId))!;
     expect(row.status).toBe('accepted');
     expect(row.accepted_user_id).toBe('race-user-1');
+  });
+  it('does not consume the invitation when session persistence fails after the attempt', async () => {
+    const invite = await createInvite('beta.session@example.test');
+    const overrides = { sub: '9040', email: 'beta.session@example.test', name: 'Beta Session' };
+    // Force a REAL failure on the session write that only fires AFTER the consumption
+    // attempt: the trigger blocks the session insert while the invitation is accepted in
+    // the SAME transaction. The test therefore only passes when the acceptance actually
+    // happened (consumption attempted) and was rolled back with the failed session.
+    await database.pool.query(`
+      CREATE OR REPLACE FUNCTION stk_session_probe_guard() RETURNS trigger AS $fn$
+      BEGIN
+        IF (SELECT count(*) FROM core.beta_invitation WHERE status = 'accepted') > 0 THEN
+          RAISE EXCEPTION 'session persistence blocked after the consumption attempt';
+        END IF;
+        RETURN NEW;
+      END
+      $fn$ LANGUAGE plpgsql`);
+    await database.pool.query(
+      'CREATE TRIGGER session_probe_failure BEFORE INSERT ON auth.session FOR EACH ROW EXECUTE FUNCTION stk_session_probe_guard()',
+    );
+    try {
+      const failed = await googleLogin({ invokeToken: invite.token, overrides });
+      if (failed.response.statusCode >= 300 && failed.response.statusCode < 400) {
+        expect(failed.response.headers.location).toContain('auth=failed');
+      } else {
+        expect(failed.response.statusCode).toBe(500);
+      }
+      expect(sessionCookieOf(failed.response.headers)).toBeUndefined();
+      expect(failed.response.body).not.toMatch(
+        /token|hash|select|insert|postgres|relation|probe|driver/i,
+      );
+      const location = failed.response.headers.location ?? '';
+      expect(location).not.toMatch(/persistence|consumption|token|hash|postgres|relation/i);
+    } finally {
+      await database.pool.query('DROP TRIGGER IF EXISTS session_probe_failure ON auth.session');
+      await database.pool.query('DROP FUNCTION IF EXISTS stk_session_probe_guard()');
+    }
+    // Nothing partial survived the failed attempt: no session and no acceptance. The
+    // identity may exist as an inert, unadmitted row — never with a session or accepted
+    // invitation attached.
+    expect(await count('session')).toBe(0);
+    const pending = (await readInvitation(invite.invitationId))!;
+    expect(pending.status).toBe('pending');
+    expect(pending.accepted_at).toBeNull();
+    expect(pending.accepted_user_id).toBeNull();
+    // A valid retry still proceeds: session and acceptance land together.
+    const retry = await googleLogin({ invokeToken: invite.token, overrides });
+    expect(retry.response.statusCode).toBe(302);
+    expect(new URL(retry.response.headers.location!, config.origin).href).toBe(`${config.origin}/`);
+    expect(sessionCookieOf(retry.response.headers)).toContain('HttpOnly');
+    expect(await count('session')).toBe(1);
+    expect(await count('user')).toBe(1);
+    const accepted = (await readInvitation(invite.invitationId))!;
+    expect(accepted.status).toBe('accepted');
+    expect(accepted.accepted_at).toBeInstanceOf(Date);
+    expect(accepted.accepted_user_id).not.toBeNull();
   });
   it('keeps org provisioning fail-closed for admitted users when storage breaks', async () => {
     const invite = await createInvite('beta.org@example.test');

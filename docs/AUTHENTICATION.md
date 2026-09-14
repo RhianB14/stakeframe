@@ -44,12 +44,15 @@ não existe autorização global implícita para rotas que ainda serão criadas.
 
 O beta fechado exige convite: usuários externos entram apenas com convite válido (pendente,
 dentro da validade e vinculado ao e-mail verificado pelo provedor), aberto no navegador por
-cookie HttpOnly e consumido uma única vez (`accepted_user_id`). O proprietário continua
-entrando exclusivamente pelo Google com as validações originais — senha nunca existe para o
-e-mail do proprietário. E-mail/senha funciona somente atrás desse gate, com verificação de
-e-mail obrigatória e transporte de e-mail falso/controlado em local/CI; em produção, sem
-transporte, o recurso responde 503 (desabilitado). Regras fail-closed, consumo atômico,
-anti-vazamento e testes em [F1-05-BETA-GATE.md](F1-05-BETA-GATE.md).
+cookie HttpOnly e consumido uma única vez (`accepted_user_id`). O consumo e a criação da
+sessão compartilham **uma única transação** (mecanismo transacional do próprio Better Auth
+sobre o adapter Drizzle): falha na persistência da sessão reverte a aceitação — não existe
+convite aceito sem sessão. O proprietário continua entrando exclusivamente pelo Google com as
+validações originais — senha nunca existe para o e-mail do proprietário. E-mail/senha
+funciona somente atrás desse gate, com verificação de e-mail obrigatória e transporte de
+e-mail falso/controlado em local/CI; em produção, sem transporte, o recurso responde 503
+(desabilitado). Regras fail-closed, consumo atômico, anti-vazamento e testes em
+[F1-05-BETA-GATE.md](F1-05-BETA-GATE.md).
 
 ## Ativação local
 

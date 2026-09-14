@@ -25,7 +25,8 @@ automaticamente por usuário.
      pendente válido **ou** for o proprietário (caminho existente intacto);
    - **conta**: idem, para conta `google` (e `credential`), com descarte dos tokens do provedor;
    - **sessão**: proprietário, ou identidade verificada que já aceitou convite, ou **consumo
-     atômico agora** (token do cookie + e-mail + `accepted_user_id`), senão a sessão é negada.
+     atômico agora** (token do cookie + e-mail + `accepted_user_id`, na MESMA transação do
+     `INSERT` da sessão), senão a sessão é negada.
 4. Sessão e organização seguem o fluxo já existente: `/api/v1/me` garante a organização
    (idempotente) e resolve o contexto; falha de organização = 401 sanitizado, sem dados.
 
@@ -37,8 +38,9 @@ automaticamente por usuário.
    **não verificado**, a credencial é tratada exclusivamente pelo Better Auth (hash) e o
    transporte **falso/controlado** envia o link de verificação (memória, local/CI — nunca
    e-mail real, nunca Resend).
-3. Com o usuário real criado, a API **consome o convite** (`accepted_user_id` = usuário);
-   a resposta pública nunca revela e-mail, token ou senha.
+3. O convite é **consumido na própria transação do cadastro** (hook de criação da conta,
+   `accepted_user_id` = usuário): falha posterior reverte identidade e aceitação juntas; a
+   resposta pública nunca revela e-mail, token ou senha.
 4. `GET /api/auth/verify-email` confirma o e-mail (token só nesta chamada, nunca registrado).
 5. `POST /api/auth/sign-in/email` só obtém sessão com e-mail verificado **e** convite já
    aceito (predicado de admissão); falhas usam um único código sanitizado.
@@ -59,16 +61,25 @@ automaticamente por usuário.
 Nada é confiado ao cliente: e-mail/userId/organização/status vindos do navegador são
 ignorados; o token é a única capacidade aceita e é validado por hash no servidor.
 
-## Consumo atômico
+## Consumo atômico (transação compartilhada)
 
-- `consumeInvitationForUser`: `BEGIN` → `SELECT ... FOR UPDATE` por hash → checagens
-  (pendente, validade, e-mail) → `UPDATE status='accepted', accepted_at=now(),
-accepted_user_id=$user` → `COMMIT`; rollback em falha; conexão sempre liberada.
-- No Google, o consumo roda no hook de criação de sessão: **nenhuma sessão existe antes da
-  aceitação** e uma falha de consumo nega a sessão.
-- No cadastro por senha, o consumo roda após a criação da identidade: falha da identidade
-  **não consome**; falha do consumo **não libera sessão** e não marca o convite.
-- Recuperação: identidade aceita que perca a sessão pode reentrar (vínculo
+- `consumeInvitationForUser(executor, token, { userId, email })` **não abre transação própria**:
+  roda no executor da transação do chamador (`SELECT ... FOR UPDATE` por hash → checagens de
+  pendência/validade/e-mail → `UPDATE status='accepted', accepted_at=now(), accepted_user_id`).
+  O commit/rollback é o da transação que o contém; a função nunca libera conexão por conta
+  própria (não há conexão própria).
+- A **criação de sessão** roda inteira dentro de UMA transação pelo mecanismo transacional do
+  próprio Better Auth (`runWithTransaction` + adapter Drizzle com `transaction: true`): os
+  hooks de banco (consumo do convite incluído) e o `INSERT` da sessão compartilham a mesma
+  conexão e o mesmo commit/rollback. Uma falha na persistência da sessão — mesmo convertida
+  pela biblioteca em resposta de erro — **reverte a aceitação junto**: não existe janela de
+  convite aceito sem sessão.
+- No cadastro por senha, o consumo roda no hook de criação da conta, dentro da transação do
+  próprio sign-up: falha da identidade reverte a aceitação; falha do consumo não cria a
+  identidade nem libera sessão.
+- Concorrência: duas tentativas do mesmo token serializam no `FOR UPDATE`; exatamente uma
+  aceita e a outra falha sanitizada.
+- Recuperação: identidade admitida que perca a sessão pode reentrar (vínculo
   `accepted_user_id`); token já aceito nunca é aceito de novo.
 
 ## Sessão e organização
@@ -99,6 +110,9 @@ como está (`status`, `accepted_at`, `accepted_user_id` já existentes).
 - Transporte de e-mail é falso/controlado (memória) para local/CI; o runtime de produção
   permanece **sem transporte** e, portanto, com e-mail/senha desabilitado (503) até uma
   integração de e-mail autorizada em tarefa posterior. Nenhum e-mail real é enviado.
+- No Google, se a criação da sessão falhar, a identidade pode persistir **inerte** (sem
+  sessão e sem convite aceito — nunca admitida); a nova tentativa reutiliza a identidade e
+  conclui. O que nunca sobrevive a uma falha é a dupla convite-aceito↔sessão.
 - Sem recuperação de senha, sem UI completa de onboarding, sem convite de membros, sem
   organização compartilhada, sem impersonação (fora do escopo desta unidade).
 - O convite aberto não é revalidado em cada requisição posterior — a admissão fica registrada
@@ -106,12 +120,16 @@ como está (`status`, `accepted_at`, `accepted_user_id` já existentes).
 
 ## Testes
 
-- `tests/integration/beta-gate.test.ts` (16): Google convidado aceito; rejeições sem convite,
+- `tests/integration/beta-gate.test.ts` (17): Google convidado aceito; rejeições sem convite,
   inválido, expirado, revogado, já aceito, e-mail divergente e e-mail não verificado; retorno
   do usuário admitido sem convite; rejeição de identidade alheia; fluxo e-mail/senha completo
   (cadastro → verificação → sessão); rejeições de cadastro; proprietário sem senha; consumo
-  concorrente único; organização fail-closed; sanitização de respostas; rotas sem bypass;
-  cookies (inclusive `Secure` em HTTPS); duas organizações isoladas.
-- `tests/unit/beta-invitation.test.ts` (+4): pré-checagens sem I/O e sanitização de falha de pool.
+  concorrente único (duas transações reais); **falha real na persistência da sessão após a
+  tentativa de consumo → nenhuma sessão, convite ainda pendente, `accepted_user_id` nulo e
+  nova tentativa válida conclui** (trigger que só bloqueia o insert quando o convite está
+  aceito na MESMA transação); organização fail-closed; sanitização de respostas; rotas sem
+  bypass; cookies (inclusive `Secure` em HTTPS); duas organizações isoladas.
+- `tests/unit/beta-invitation.test.ts` (+4): pré-checagens sem I/O (executor nunca chamado),
+  falha fechada sem executor, sanitização de falha do executor e token desconhecido.
 - `tests/integration/owner-auth.test.ts`: mantido (23) com a rota de cadastro agora desabilitada
   sem transporte (503) e todas as validações do proprietário inalteradas.

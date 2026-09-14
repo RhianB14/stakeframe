@@ -17,22 +17,6 @@ import { BETA_INVITE_COOKIE, BETA_INVITE_COOKIE_MAX_AGE_SECONDS, type OwnerAuth 
 import { sendApiError } from './api-errors.js';
 import { ownerSessionSecurity } from './openapi.js';
 
-function readRequestCookie(header: string | undefined, name: string): string | undefined {
-  if (typeof header !== 'string' || header.length === 0) return undefined;
-  for (const part of header.split(';')) {
-    const separator = part.indexOf('=');
-    if (separator === -1) continue;
-    if (part.slice(0, separator).trim() !== name) continue;
-    try {
-      const value = decodeURIComponent(part.slice(separator + 1).trim());
-      return value.length > 0 && value.length <= 512 ? value : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
 export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | undefined) {
   const refuse = sendApiError;
   function headersFor(request: FastifyRequest) {
@@ -191,7 +175,6 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
         return refuse(request, reply, 503, 'AUTH_UNAVAILABLE');
       if (originRefused(request)) return refuse(request, reply, 403, 'ORIGIN_NOT_ALLOWED');
       const body = request.body as { name: string; email: string; password: string };
-      const inviteToken = readRequestCookie(request.headers.cookie, BETA_INVITE_COOKIE);
       const response = await callAuth(request, reply, '/sign-up/email', body);
       if (response.status >= 400) {
         if (response.status === 403) return refuse(request, reply, 403, 'INVITE_REJECTED');
@@ -209,17 +192,8 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
         .catch(() => null);
       const user = result?.user;
       if (!user) return refuse(request, reply, 500, 'INTERNAL_ERROR');
-      try {
-        // Consumes the invitation only when the sign-up created a real identity; the
-        // synthetic duplicate response is forwarded as-is, with no consumption.
-        await ownerAuth.beta.finalizeEmailSignUp({
-          userId: user.id,
-          email: body.email,
-          inviteToken,
-        });
-      } catch {
-        return refuse(request, reply, 403, 'INVITE_REJECTED');
-      }
+      // The invitation is consumed inside the sign-up transaction itself (database hook);
+      // a synthetic duplicate response carries no consumption.
       return reply.send(
         authUserSummarySchema.parse({ user: { id: user.id, name: user.name ?? '' } }),
       );

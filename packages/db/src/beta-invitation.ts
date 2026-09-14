@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import type { PoolClient } from 'pg';
 import { betaInvitation } from './core-schema.js';
+import type { TransactionExecutor } from './transaction-scope.js';
 import type { Database } from './index.js';
 
 export type BetaInvitationErrorCode =
@@ -49,6 +51,26 @@ export function normalizeInvitationEmail(input: string): string {
  */
 export function hashInvitationToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+/** Rows from a raw executor result (node-postgres result object or a plain array). */
+function readRows(result: unknown): unknown[] {
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === 'object') {
+    const rows = (result as { rows?: unknown }).rows;
+    if (Array.isArray(rows)) return rows;
+  }
+  return [];
+}
+
+/** Affected-row count from a raw executor result, normalizing driver shapes. */
+function readRowCount(result: unknown): number {
+  if (result && typeof result === 'object') {
+    const candidate = result as { rowCount?: unknown; count?: unknown };
+    if (typeof candidate.rowCount === 'number') return candidate.rowCount;
+    if (typeof candidate.count === 'number') return candidate.count;
+  }
+  return readRows(result).length;
 }
 
 export type CreatedBetaInvitation = {
@@ -191,7 +213,12 @@ export function createBetaInvitation(database: Database) {
     if (row.status === 'accepted') throw new BetaInvitationError('INVITATION_ALREADY_ACCEPTED');
     if (row.status === 'revoked') throw new BetaInvitationError('INVITATION_REVOKED');
     if (row.status !== 'pending') throw new BetaInvitationError('INVITATION_INVALID');
-    if (row.expires_at.getTime() <= Date.now()) throw new BetaInvitationError('INVITATION_EXPIRED');
+    // Raw executor rows may surface timestamptz as string (driver-dependent); normalize.
+    const expiresAt =
+      row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at));
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      throw new BetaInvitationError('INVITATION_EXPIRED');
+    }
     if (email !== undefined && row.email !== email) {
       throw new BetaInvitationError('INVITATION_INVALID');
     }
@@ -256,14 +283,21 @@ export function createBetaInvitation(database: Database) {
   }
 
   /**
-   * Single-use atomic consumption of an invitation bound to an existing identity:
-   * row lock, e-mail match, one accepted transition, `accepted_user_id` linked to the user.
-   * Under concurrency only one attempt can transition the row; the others fail sanitized.
+   * Single-use consumption of an invitation bound to an existing identity, running on the
+   * CALLER'S transaction (the auth library's transactional integration, shared with the
+   * identity/session writes). There is no transaction of its own: anything that fails later
+   * in that transaction rolls the acceptance back together with the rest of the flow, so an
+   * accepted invitation can never survive without the session/identity it was bound to.
+   * Under concurrency the row lock (`FOR UPDATE`) keeps exactly one acceptance.
    */
   async function consumeInvitationForUser(
+    executor: TransactionExecutor,
     token: string,
     input: { userId: string; email: string },
   ): Promise<RedeemedBetaInvitation> {
+    if (!executor || typeof executor.execute !== 'function') {
+      throw new BetaInvitationError('INVITATION_STORAGE_FAILED');
+    }
     assertTokenShape(token);
     if (
       typeof input?.userId !== 'string' ||
@@ -274,30 +308,21 @@ export function createBetaInvitation(database: Database) {
     }
     const normalized = normalizeInvitationEmail(input.email);
     const tokenHash = hashInvitationToken(token);
-    let client: PoolClient;
     try {
-      client = await database.pool.connect();
-    } catch {
-      throw new BetaInvitationError('INVITATION_STORAGE_FAILED');
-    }
-    try {
-      await client.query('BEGIN');
-      const row = await loadInvitationByHash(tokenHash, { forUpdate: true, client });
-      assertUsablePendingRow(row, normalized);
-      const accepted = await client.query(
-        "UPDATE core.beta_invitation SET status = 'accepted', accepted_at = now(), accepted_user_id = $2, updated_at = now() WHERE id = $1 AND status = 'pending'",
-        [row!.id, input.userId],
+      const found = await executor.execute(
+        sql`SELECT id, email, status, expires_at FROM core.beta_invitation WHERE token_hash = ${tokenHash} FOR UPDATE`,
       );
-      if (accepted.rowCount !== 1) throw new BetaInvitationError('INVITATION_STORAGE_FAILED');
-      await client.query('COMMIT');
+      const row = readRows(found)[0] as InvitationRow | undefined;
+      assertUsablePendingRow(row, normalized);
+      const accepted = await executor.execute(
+        sql`UPDATE core.beta_invitation SET status = 'accepted', accepted_at = now(), accepted_user_id = ${input.userId}, updated_at = now() WHERE id = ${row!.id} AND status = 'pending'`,
+      );
+      if (readRowCount(accepted) !== 1) throw new BetaInvitationError('INVITATION_STORAGE_FAILED');
       return { invitationId: row!.id, email: row!.email };
     } catch (error) {
-      await rollback(client);
       throw error instanceof BetaInvitationError
         ? error
         : new BetaInvitationError('INVITATION_STORAGE_FAILED');
-    } finally {
-      client.release();
     }
   }
 
