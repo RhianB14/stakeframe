@@ -3,6 +3,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import {
   apiErrorSchema,
+  authStatusSchema,
   authUserSummarySchema,
   betaInviteOpenedSchema,
   betaInviteOpenSchema,
@@ -11,6 +12,9 @@ import {
   emailVerificationResultSchema,
   googleSignInSchema,
   ownerSessionSchema,
+  passwordResetRequestSchema,
+  passwordResetSubmitSchema,
+  resendVerificationSchema,
   signOutSchema,
 } from '@stakeframe/shared';
 import { BETA_INVITE_COOKIE, BETA_INVITE_COOKIE_MAX_AGE_SECONDS, type OwnerAuth } from './auth.js';
@@ -81,6 +85,15 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
             ? 'INTERNAL_ERROR'
             : 'AUTH_REQUEST_FAILED';
     return refuse(request, reply, response.status, code);
+  }
+  async function authErrorCode(response: Response): Promise<string | undefined> {
+    try {
+      const body: unknown = await response.clone().json();
+      const code = (body as { code?: unknown } | null)?.code;
+      return typeof code === 'string' ? code : undefined;
+    } catch {
+      return undefined;
+    }
   }
   async function forward(
     request: FastifyRequest,
@@ -223,6 +236,11 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
       if (response.status >= 400) {
         if (response.status === 429 || response.status === 503 || response.status >= 500)
           return mapAuthFailure(reply, request, response);
+        // A correct password for an unverified e-mail reaches this point (the credential
+        // was already validated by the library); the user gets the actionable, sanitized
+        // code instead of the generic failure.
+        if (response.status === 403 && (await authErrorCode(response)) === 'EMAIL_NOT_VERIFIED')
+          return refuse(request, reply, 403, 'EMAIL_NOT_VERIFIED');
         return refuse(request, reply, 401, 'AUTH_REQUEST_FAILED');
       }
       const result = await response
@@ -278,6 +296,102 @@ export function registerAuthRoutes(app: FastifyInstance, ownerAuth: OwnerAuth | 
       // object) is never forwarded.
       await response.json().catch(() => undefined);
       return reply.send(emailVerificationResultSchema.parse({ status: true }));
+    },
+  );
+  app.post(
+    '/api/auth/request-password-reset',
+    {
+      schema: {
+        operationId: 'requestPasswordReset',
+        tags: ['Autenticação'],
+        summary: 'Solicitar a redefinição de senha por e-mail',
+        security: [],
+        description:
+          'Exige Origin igual à origem configurada. A resposta é sempre a mesma para e-mail existente ou inexistente (sem enumeração) e o link chega exclusivamente pelo e-mail da conta, com token de uso único e vida curta. A chamada nunca revela se o e-mail possui conta.',
+        body: passwordResetRequestSchema,
+        response: { 200: authStatusSchema, ...mutationErrors },
+      },
+    },
+    async (request, reply) => {
+      if (!ownerAuth) return refuse(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      if (!ownerAuth.beta.emailPasswordEnabled)
+        return refuse(request, reply, 503, 'AUTH_UNAVAILABLE');
+      if (originRefused(request)) return refuse(request, reply, 403, 'ORIGIN_NOT_ALLOWED');
+      const body = request.body as { email: string };
+      const response = await callAuth(request, reply, '/request-password-reset', {
+        email: body.email,
+      });
+      if (response.status >= 400) {
+        if (response.status === 429 || response.status === 503 || response.status >= 500)
+          return mapAuthFailure(reply, request, response);
+        return refuse(request, reply, 400, 'INVALID_REQUEST');
+      }
+      return reply.send(authStatusSchema.parse({ status: true }));
+    },
+  );
+  app.post(
+    '/api/auth/reset-password',
+    {
+      schema: {
+        operationId: 'resetPassword',
+        tags: ['Autenticação'],
+        summary: 'Definir nova senha com o token do e-mail',
+        security: [],
+        description:
+          'Exige Origin igual à origem configurada. O token é de uso único, expira em 30 minutos e é aceito apenas se emitido para a conta; a senha é tratada exclusivamente pelo provedor de autenticação e as sessões antigas são revogadas após a redefinição. Falhas usam um único código sanitizado.',
+        body: passwordResetSubmitSchema,
+        response: { 200: authStatusSchema, ...mutationErrors },
+      },
+    },
+    async (request, reply) => {
+      if (!ownerAuth) return refuse(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      if (!ownerAuth.beta.emailPasswordEnabled)
+        return refuse(request, reply, 503, 'AUTH_UNAVAILABLE');
+      if (originRefused(request)) return refuse(request, reply, 403, 'ORIGIN_NOT_ALLOWED');
+      const body = request.body as { token: string; newPassword: string };
+      const response = await callAuth(request, reply, '/reset-password', {
+        newPassword: body.newPassword,
+        token: body.token,
+      });
+      if (response.status >= 400) {
+        if (response.status === 429 || response.status === 503 || response.status >= 500)
+          return mapAuthFailure(reply, request, response);
+        return refuse(request, reply, 400, 'RESET_REJECTED');
+      }
+      await response.json().catch(() => undefined);
+      return reply.send(authStatusSchema.parse({ status: true }));
+    },
+  );
+  app.post(
+    '/api/auth/send-verification-email',
+    {
+      schema: {
+        operationId: 'resendEmailVerification',
+        tags: ['Autenticação'],
+        summary: 'Reenviar a confirmação de e-mail',
+        security: [],
+        description:
+          'Exige Origin igual à origem configurada. Responde de forma genérica com piso de tempo constante: e-mail sem conta pendente não dispara envio e não distingue da resposta de sucesso. Limitado por taxa e sem revelar existência de conta.',
+        body: resendVerificationSchema,
+        response: { 200: authStatusSchema, ...mutationErrors },
+      },
+    },
+    async (request, reply) => {
+      if (!ownerAuth) return refuse(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      if (!ownerAuth.beta.emailPasswordEnabled)
+        return refuse(request, reply, 503, 'AUTH_UNAVAILABLE');
+      if (originRefused(request)) return refuse(request, reply, 403, 'ORIGIN_NOT_ALLOWED');
+      const body = request.body as { email: string };
+      const response = await callAuth(request, reply, '/send-verification-email', {
+        email: body.email,
+      });
+      if (response.status >= 400) {
+        if (response.status === 429 || response.status === 503 || response.status >= 500)
+          return mapAuthFailure(reply, request, response);
+        return refuse(request, reply, 400, 'INVALID_REQUEST');
+      }
+      await response.json().catch(() => undefined);
+      return reply.send(authStatusSchema.parse({ status: true }));
     },
   );
   app.post(

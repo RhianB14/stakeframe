@@ -26,6 +26,8 @@ export const apiErrorCodeSchema = z.enum([
   'RATE_LIMITED',
   'AUTH_UNAVAILABLE',
   'INVITE_REJECTED',
+  'RESET_REJECTED',
+  'EMAIL_NOT_VERIFIED',
   'STATE_CONFLICT',
   'VERSION_CONFLICT',
   'IDEMPOTENCY_CONFLICT',
@@ -83,6 +85,17 @@ export const authUserSummarySchema = z
 export const emailVerificationResultSchema = z
   .object({ status: z.literal(true) })
   .meta({ id: 'EmailVerificationResult' });
+export const authStatusSchema = z.object({ status: z.literal(true) }).meta({ id: 'AuthStatus' });
+
+export const passwordResetRequestSchema = z
+  .object({ email: z.email().max(320) })
+  .meta({ id: 'PasswordResetRequest' });
+export const passwordResetSubmitSchema = z
+  .object({ token: z.string().min(1).max(512), newPassword: z.string().min(8).max(128) })
+  .meta({ id: 'PasswordResetSubmit' });
+export const resendVerificationSchema = z
+  .object({ email: z.email().max(320) })
+  .meta({ id: 'ResendVerification' });
 
 export const probeSchema = z.object({ nonce: z.string().uuid() }).strict();
 export const PROBE_QUEUE = 'system-probe';

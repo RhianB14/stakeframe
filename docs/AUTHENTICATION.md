@@ -54,6 +54,22 @@ e-mail falso/controlado em local/CI; em produção, sem transporte, o recurso re
 (desabilitado). Regras fail-closed, consumo atômico, anti-vazamento e testes em
 [F1-05-BETA-GATE.md](F1-05-BETA-GATE.md).
 
+## E-mail/senha completo com Resend (STK-F1-06, 2026-09-14)
+
+E-mail/senha atrás do gate de convite agora tem: verificação de e-mail obrigatória (token
+JWT de 1 h, reenvio com resposta genérica), recuperação de senha (link de uso único com
+30 min de validade, sessões antigas revogadas após a redefinição, resposta sem enumeração)
+e aviso de novo login (critério: par IP+user-agent sem sessão anterior; primeiro acesso
+não alerta; falha de envio nunca bloqueia o login; alerta sem IP/dispositivo no conteúdo).
+O envio passa por uma abstração com implementação Resend (chave exclusivamente por
+`RESEND_API_KEY(_FILE)`; falhas colapsam em `EMAIL_SEND_FAILED` sem eco de detalhes) e
+adaptador in-memory para local/CI; produção sem chave responde 503 nos fluxos de senha —
+a verificação nunca é enfraquecida para contornar configuração ausente. O proprietário
+continua sem senha e contas só-Google não têm redefinição. Templates PT-BR com expiração
+explícita e limites de taxa adicionais (reenvio 3/5min, reset 3/5min, envio de reset
+5/5min, verify 10/5min). Decisões, limitações e testes em
+[F1-06-AUTH-RESEND.md](F1-06-AUTH-RESEND.md).
+
 ## Ativação local
 
 A regra 9 de [AGENTS.md](../AGENTS.md) exige autorização específica para

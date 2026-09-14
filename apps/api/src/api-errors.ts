@@ -16,6 +16,10 @@ const messages: Record<ApiErrorCode, string> = {
   AUTH_UNAVAILABLE: 'Autenticação temporariamente indisponível.',
   INVITE_REJECTED:
     'Este convite beta não está disponível. Confira o link ou solicite um novo convite.',
+  RESET_REJECTED:
+    'Este link de redefinição de senha não é mais válido. Solicite um novo link e tente novamente.',
+  EMAIL_NOT_VERIFIED:
+    'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada ou reenvie a confirmação.',
   STATE_CONFLICT: 'O registro mudou ou esta operação já foi realizada. Atualize os dados.',
   VERSION_CONFLICT:
     'Os dados foram atualizados em outra operação. Recarregue e confira antes de tentar novamente.',
