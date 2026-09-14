@@ -54,7 +54,7 @@ descontinuado ou alterado a qualquer momento, com aviso razoável.
 
 ## 8. Lei aplicável e foro
 
-*A definir na revisão jurídica, considerando a legislação brasileira aplicável.*
+_A definir na revisão jurídica, considerando a legislação brasileira aplicável._
 
 ## 9. Contato
 

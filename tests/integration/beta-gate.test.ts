@@ -292,9 +292,9 @@ describe('beta invitation gate with Google OAuth', () => {
     expect(gated.statusCode).toBe(403);
     expect(apiCode(gated)).toBe('CONSENT_REQUIRED');
     expect(await countCore('organization')).toBe(0);
-    expect(
-      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
-    ).toBe(200);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     const session = ownerSessionSchema.parse(me.json());
@@ -466,9 +466,9 @@ describe('beta invitation gate with e-mail and password', () => {
     const signedIn = await signIn('beta.email@example.test', 'fixture-password-1');
     expect(signedIn.statusCode).toBe(200);
     const cookie = cookieJar(signedIn.headers['set-cookie']);
-    expect(
-      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
-    ).toBe(200);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     expect(ownerSessionSchema.parse(me.json()).organization.role).toBe('owner');
@@ -616,9 +616,9 @@ describe('beta gate concurrency and sanitization', () => {
       invokeToken: invite.token,
       overrides: { sub: '9020', email: 'beta.org@example.test' },
     });
-    expect(
-      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
-    ).toBe(200);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
     await database.pool.query('ALTER TABLE core.membership RENAME TO membership_probe_failure');
     try {

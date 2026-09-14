@@ -152,4 +152,10 @@ export const consentRecord = core.table(
   ],
 );
 
-export const coreSchema = { organization, membership, betaInvitation, legalDocument, consentRecord };
+export const coreSchema = {
+  organization,
+  membership,
+  betaInvitation,
+  legalDocument,
+  consentRecord,
+};

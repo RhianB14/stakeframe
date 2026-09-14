@@ -322,9 +322,9 @@ describe('beta e-mail lifecycle with the Resend abstraction', () => {
     const cookie = cookieJar(signedIn.headers['set-cookie']);
     const gated = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(gated.statusCode).toBe(403);
-    expect(
-      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
-    ).toBe(200);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     const me = await app.inject({ url: '/api/v1/me', headers: { cookie } });
     expect(me.statusCode).toBe(200);
     expect(await countCore('organization')).toBe(1);
@@ -612,9 +612,9 @@ describe('session lifecycle and new-login alerts', () => {
     expect(failingLogin.statusCode).toBe(200);
     const cookie = cookieJar(failingLogin.headers['set-cookie']);
     // The consent route does not touch the e-mail sender; the gate opens for the session.
-    expect(
-      (await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode,
-    ).toBe(200);
+    expect((await acceptRequiredConsents(app, cookie, { origin: config.origin })).statusCode).toBe(
+      200,
+    );
     expect((await app.inject({ url: '/api/v1/me', headers: { cookie } })).statusCode).toBe(200);
     expect(transport.takeAll('new-login')).toHaveLength(1);
   });

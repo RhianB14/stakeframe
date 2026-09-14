@@ -503,7 +503,10 @@ export function createOwnerAuth(
         const admitted = await invitations.findAcceptedInvitationForUser(session.user.id);
         if (!admitted) return null;
       }
-      return { user: { id: session.user.id, name: session.user.name }, expiresAt: session.session.expiresAt.toISOString() };
+      return {
+        user: { id: session.user.id, name: session.user.name },
+        expiresAt: session.session.expiresAt.toISOString(),
+      };
     },
     /**
      * Full access check used by every private route: session + admission + the versioned
