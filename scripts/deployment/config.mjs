@@ -141,6 +141,7 @@ export function assertDeploymentConfig(
       OPENROUTER_MAX_OUTPUT_TOKENS: '2048',
       OPENROUTER_REASONING_EFFORT: 'low',
       OPENROUTER_TIMEOUT_MS: '60000',
+      AZURE_VISION_ENABLED: 'false',
       TELEGRAM_ENABLED: 'true',
     }))
       assert.equal(worker[name], value, 'INTEGRATION_POLICY_REQUIRED');

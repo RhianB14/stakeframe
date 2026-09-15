@@ -28,6 +28,7 @@ type Evidence = {
   model?: unknown;
   layoutId?: unknown;
   policyDigest?: unknown;
+  ocrConsistent?: unknown;
 };
 const normalized = (value: string) =>
   value
@@ -56,6 +57,7 @@ async function candidate(
     !extraction.reference?.trim()
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
+  if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
   const labels = parseCaption(caption);
   if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
   const aliases = (
