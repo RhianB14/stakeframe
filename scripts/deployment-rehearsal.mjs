@@ -320,7 +320,7 @@ async function main() {
   assert.throws(() => assertDeploymentConfig(automatic, { integrations: true, automatic: true }));
   for (const mutate of [
     (value) => {
-      value.services.worker.environment.OPENROUTER_ALLOW_FALLBACKS = 'true';
+      value.services.worker.environment.OPENROUTER_ALLOW_FALLBACKS = 'false';
     },
     (value) => {
       value.services.worker.environment.OPENROUTER_API_KEY = 'private';

@@ -56,7 +56,7 @@ export function readAiConfig(env: NodeJS.ProcessEnv) {
     env.AI_ENABLED !== 'true' ||
     env.AI_PROVIDER !== 'openrouter' ||
     env.OPENROUTER_MODEL !== OPENROUTER_MODEL ||
-    env.OPENROUTER_ALLOW_FALLBACKS !== 'false'
+    env.OPENROUTER_ALLOW_FALLBACKS !== 'true'
   )
     throw new IntegrationError('AI_CONFIGURATION_INVALID');
   const apiKey = readSecret(env, 'OPENROUTER_API_KEY');
@@ -166,7 +166,10 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
           reasoning: { effort: 'medium' },
           temperature: 0,
           stream: false,
-          provider: { allow_fallbacks: false, require_parameters: true },
+          // Keep the model immutable while allowing OpenRouter to fail over
+          // between endpoints serving that exact model. This avoids making a
+          // single upstream's transient 429 an application-wide outage.
+          provider: { allow_fallbacks: true, require_parameters: true, sort: 'throughput' },
           messages: [
             {
               role: 'system',
@@ -242,6 +245,7 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
       usage: completion.usage ?? null,
       requiresReview: true as const,
       model: completion.model,
+      provider: completion.provider ?? null,
       layoutId: selected?.id ?? null,
       policyDigest: selected && includePolicyDigest ? layoutDigest(selected) : null,
       elapsedMs: Math.round(performance.now() - started),

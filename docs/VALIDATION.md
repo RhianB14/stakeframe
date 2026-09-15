@@ -163,6 +163,9 @@ numéricos seguros de limite (`Retry-After` e `X-RateLimit-*`) são preservados
 quando enviados pelo provedor — corpo e headers arbitrários são descartados.
 Falhas por imagem ficam preservadas
 em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.
+O modelo permanece fixo; a OpenRouter pode trocar apenas o endpoint que serve
+esse mesmo modelo em caso de indisponibilidade ou rate limit, e o nome do
+provedor retornado fica registrado por caso quando a API o informa.
 `--dry-run` valida plano e configuração sem chamadas nem escrita. O
 `corpus.json` só é gravado no diretório privado e não sobrescreve arquivo
 existente. Exige `AI_ENABLED=true` e as variáveis OpenRouter de `.env.example`

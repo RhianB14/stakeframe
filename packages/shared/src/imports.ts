@@ -172,6 +172,7 @@ export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema)
 export const completionSchema = z.object({
   id: z.string().min(1).max(200),
   model: z.literal(OPENROUTER_MODEL),
+  provider: z.string().min(1).max(200).optional(),
   choices: z
     .array(
       z.object({

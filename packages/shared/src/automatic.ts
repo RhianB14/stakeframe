@@ -27,6 +27,7 @@ export const corpusEvaluationInputSchema = z.strictObject({
         actual: z.strictObject({
           imageSha256: z.string().regex(/^[a-f0-9]{64}$/),
           model: z.string().max(200),
+          provider: z.string().max(200).nullable().optional(),
           layoutId: z.string().nullable(),
           extraction: z.unknown(),
           latencyMs: z.number().finite().nonnegative(),

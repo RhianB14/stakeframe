@@ -42,6 +42,7 @@ const extraction = {
 const completion = {
   id: 'test-completion',
   model: OPENROUTER_MODEL,
+  provider: 'Google AI Studio',
   choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(extraction) } }],
 };
 const config = {
@@ -77,13 +78,13 @@ describe('OpenRouter boundary', () => {
       AI_ENABLED: 'true',
       AI_PROVIDER: 'openrouter',
       OPENROUTER_MODEL,
-      OPENROUTER_ALLOW_FALLBACKS: 'false',
+      OPENROUTER_ALLOW_FALLBACKS: 'true',
       OPENROUTER_API_KEY: `sk-or-v1-${'0'.repeat(64)}`,
     };
     expect(readAiConfig(env)).not.toBeNull();
     for (const change of [
       { OPENROUTER_MODEL: 'another-model' },
-      { OPENROUTER_ALLOW_FALLBACKS: 'true' },
+      { OPENROUTER_ALLOW_FALLBACKS: 'false' },
       { OPENROUTER_MAX_OUTPUT_TOKENS: '2048' },
       { OPENROUTER_REASONING_EFFORT: 'low' },
     ])
@@ -94,10 +95,15 @@ describe('OpenRouter boundary', () => {
     const result = await extractTicket({ apiKey: 'test-key', image, fetchImpl });
     expect(result.extraction.selections[0]?.eventDateText).toBeNull();
     expect(result.requiresReview).toBe(true);
+    expect(result.provider).toBe('Google AI Studio');
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
     const request = JSON.parse(String(init?.body));
-    expect(request.provider).toEqual({ allow_fallbacks: false, require_parameters: true });
+    expect(request.provider).toEqual({
+      allow_fallbacks: true,
+      require_parameters: true,
+      sort: 'throughput',
+    });
     expect(request.model).toBe(OPENROUTER_MODEL);
     expect(request.max_tokens).toBe(4096);
     expect(request.reasoning).toEqual({ effort: 'medium' });

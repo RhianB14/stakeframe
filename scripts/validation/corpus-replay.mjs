@@ -258,6 +258,7 @@ export async function runReplay(options) {
       actual = {
         imageSha256: item.sha256,
         model: result.model,
+        provider: result.provider,
         layoutId: result.layoutId,
         extraction: result.extraction,
         latencyMs: result.elapsedMs,

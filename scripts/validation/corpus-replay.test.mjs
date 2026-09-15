@@ -70,7 +70,7 @@ function makeEnv() {
     AI_ENABLED: 'true',
     AI_PROVIDER: 'openrouter',
     OPENROUTER_MODEL,
-    OPENROUTER_ALLOW_FALLBACKS: 'false',
+    OPENROUTER_ALLOW_FALLBACKS: 'true',
     OPENROUTER_API_KEY_FILE: file,
     AUTOMATIC_IMPORT_ENABLED: 'false',
   };

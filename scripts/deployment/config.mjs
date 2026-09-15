@@ -137,7 +137,7 @@ export function assertDeploymentConfig(
       AI_ENABLED: 'true',
       AI_PROVIDER: 'openrouter',
       OPENROUTER_MODEL: 'google/gemini-3.8-flash',
-      OPENROUTER_ALLOW_FALLBACKS: 'false',
+      OPENROUTER_ALLOW_FALLBACKS: 'true',
       OPENROUTER_MAX_OUTPUT_TOKENS: '4096',
       OPENROUTER_REASONING_EFFORT: 'medium',
       OPENROUTER_TIMEOUT_MS: '60000',

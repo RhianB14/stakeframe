@@ -16,9 +16,12 @@ As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime
 - `OPENROUTER_API_KEY_FILE`: caminho absoluto para segredo fora do Git.
 - Até 4.096 tokens de saída, raciocínio `medium`, temperatura `0` e prazo de 60 segundos.
 - Schema JSON explícito e `provider.require_parameters=true`.
-- `provider.allow_fallbacks=false`, preservando a configuração do teste.
+- `provider.allow_fallbacks=true` com ordenação por throughput: a OpenRouter pode
+  trocar somente entre endpoints que servem o mesmo modelo exato quando o
+  primeiro estiver indisponível ou limitado. Não há fallback entre modelos.
 - Erros de crédito/cota preservam o trabalho para revisão; não recarregam
-  saldo, trocam modelo ou repetem uma chamada ambígua automaticamente.
+  saldo nem trocam modelo. O failover de endpoint acontece dentro da única
+  chamada HTTP e o provedor efetivo, quando retornado, fica na evidência.
 - Antes do envio, o worker cria uma cópia visual transitória: respeita a
   orientação EXIF e aplica realce leve de contraste/nitidez, sem alterar os
   bytes originais guardados no anexo e sem binarização de OCR.
