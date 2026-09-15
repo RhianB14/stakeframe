@@ -98,7 +98,9 @@ cobertura. Políticas
 que permitem freebet exigem ao menos três exemplos promocionais. Amostras
 repetidas não contam como cobertura. Esses mínimos são critérios de ensaio,
 não estimativa estatística da precisão futura. Cada layout/casa precisa de
-seu próprio ensaio; validar Bet365, Superbet e Novibet separadamente.
+seu próprio ensaio; a rodada atual do beta avalia Bet365 e Superbet
+separadamente. Novibet está fora do escopo inicial do beta (D025); quando
+retornar ao escopo, exige o próprio ensaio com os mesmos mínimos.
 
 Depois de conferir o relatório e autorizar a política, o proprietário prepara
 um JSON privado com uma lista de até cinco layouts. Cada item segue

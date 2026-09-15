@@ -406,3 +406,16 @@ recebem status `Superseded` e apontam a substituta.
   autorização anterior; CI verde não autoriza merge; merge, deploy, migração,
   credenciais, permissões e exclusões destrutivas continuam exigindo
   autorização específica. Origem: issues #70 e #72.
+
+## D025 — Escopo de casas do corpus no beta inicial (2026-09-14)
+
+- **Decisão do proprietário:** Novibet não faz parte desta rodada nem do escopo
+  inicial do beta. O corpus do subgate de avaliação cobre somente Bet365 e
+  Superbet, cada uma com layout próprio e ensaio independente.
+- **Substituição:** a decisão posterior do proprietário substitui, para o beta
+  atual, a lista original de três casas do plano mestre; o arquivo externo do
+  plano não é reescrito. Quando a Novibet voltar ao escopo, exige o próprio
+  ensaio com os mesmos mínimos de cobertura e aprovação.
+- **Limites:** o allowlist técnico do avaliador continua aceitando as três
+  casas; isso não é cobertura nem aprovação. O fechamento do subgate do corpus
+  não fecha o Gate 0: as demais pendências herdadas permanecem independentes.
