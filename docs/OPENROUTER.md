@@ -14,11 +14,14 @@ As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime
 - Modelo exato `google/gemini-3.8-flash`; não usar alias `latest` ou roteamento
   automático entre modelos.
 - `OPENROUTER_API_KEY_FILE`: caminho absoluto para segredo fora do Git.
-- Até 4.096 tokens de saída, raciocínio `medium`, temperatura `0` e prazo de 60 segundos.
+- Até 4.096 tokens de saída, raciocínio `medium`, `seed: 0` e prazo de 60 segundos.
 - Schema JSON explícito e `provider.require_parameters=true`.
 - `provider.allow_fallbacks=true` com ordenação por throughput: a OpenRouter pode
   trocar somente entre endpoints que servem o mesmo modelo exato quando o
   primeiro estiver indisponível ou limitado. Não há fallback entre modelos.
+- A chamada não envia `temperature`: esse parâmetro excluiria o endpoint Google
+  Vertex sob `require_parameters=true` e deixaria somente o Google AI Studio.
+  `seed: 0` preserva a intenção determinística sem inutilizar o failover.
 - Erros de crédito/cota preservam o trabalho para revisão; não recarregam
   saldo nem trocam modelo. O failover de endpoint acontece dentro da única
   chamada HTTP e o provedor efetivo, quando retornado, fica na evidência.

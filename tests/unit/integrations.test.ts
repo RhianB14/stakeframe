@@ -107,7 +107,8 @@ describe('OpenRouter boundary', () => {
     expect(request.model).toBe(OPENROUTER_MODEL);
     expect(request.max_tokens).toBe(4096);
     expect(request.reasoning).toEqual({ effort: 'medium' });
-    expect(request.temperature).toBe(0);
+    expect(request.seed).toBe(0);
+    expect(request.temperature).toBeUndefined();
     expect(request.response_format.json_schema.strict).toBe(true);
     const providerSchema = request.response_format.json_schema.schema;
     expect(JSON.stringify(providerSchema)).not.toMatch(

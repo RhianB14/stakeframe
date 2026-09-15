@@ -164,7 +164,10 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
           model: OPENROUTER_MODEL,
           max_tokens: 4096,
           reasoning: { effort: 'medium' },
-          temperature: 0,
+          // Seed is supported by both eligible Google endpoints. Sending
+          // temperature would make require_parameters exclude Google Vertex
+          // and collapse same-model failover back to a single endpoint.
+          seed: 0,
           stream: false,
           // Keep the model immutable while allowing OpenRouter to fail over
           // between endpoints serving that exact model. This avoids making a
