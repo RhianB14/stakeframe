@@ -194,6 +194,40 @@ test('keeps the legacy visual-only contract closed when no context is declared',
   assert.equal(report.eligibleForOwnerReview, false);
 });
 
+test('treats stacked sides separated by a line break as a confrontation separator only when strict', () => {
+  const stacked = fixture();
+  stacked.cases[0].expected.selections[0].event = 'Fictional A x B';
+  stacked.cases[0].actual.extraction.selections[0].event = 'Fictional A\nB';
+  assert.equal(evaluateCorpus(stacked).essentialFieldErrors, 0);
+  const uncertain = fixture();
+  uncertain.cases[0].expected.selections[0].event = 'Fictional A x B';
+  uncertain.cases[0].actual.extraction.selections[0].event = 'Fictional A B';
+  assert.equal(evaluateCorpus(uncertain).essentialFieldErrors, 1);
+  const multi = fixture();
+  multi.cases[0].expected.selections[0].event = 'Real Madrid x Bayern de Munique';
+  multi.cases[0].actual.extraction.selections[0].event = 'Real Madrid — Bayern de Munique';
+  assert.equal(evaluateCorpus(multi).essentialFieldErrors, 0);
+  const broken = fixture();
+  broken.cases[0].expected.selections[0].event = 'Guilherme Clezar x Outro';
+  broken.cases[0].actual.extraction.selections[0].event = 'Guilherme\nClezar x Outro';
+  assert.equal(evaluateCorpus(broken).essentialFieldErrors, 1);
+});
+
+test('keeps potential return, prize and stake as distinct exact values', () => {
+  const value = fixture();
+  value.cases[0].expected.potentialReturn = '0.53';
+  value.cases[0].actual.extraction.potentialReturn = '0.53';
+  assert.equal(evaluateCorpus(value).essentialFieldErrors, 0);
+  const swapped = fixture();
+  swapped.cases[0].expected.potentialReturn = '0.53';
+  swapped.cases[0].actual.extraction.potentialReturn = '1.02';
+  assert.equal(evaluateCorpus(swapped).essentialFieldErrors, 1);
+  const asStake = fixture();
+  asStake.cases[0].expected.potentialReturn = null;
+  asStake.cases[0].actual.extraction.potentialReturn = '50.00';
+  assert.equal(evaluateCorpus(asStake).essentialFieldErrors, 1);
+});
+
 test('preserves visible zero returns, exact odds and absence of value', () => {
   const value = fixture();
   value.cases[0].expected.potentialReturn = '0.00';

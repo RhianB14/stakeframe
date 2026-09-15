@@ -258,6 +258,64 @@ describe('automatic import policy boundaries', () => {
     expect(request.messages[0].content).toContain(
       'informe bookmaker somente quando a marca da casa estiver visível',
     );
+    expect(request.messages[0].content).toContain('inclusive 0.00 visível');
+    expect(request.messages[0].content).toContain(
+      'distinga retorno, retorno potencial, prêmio e valor da aposta',
+    );
+    expect(request.messages[0].content).toContain(
+      'sem inferir ano, completar dígitos ou corrigir grafia',
+    );
+  });
+
+  it('rejects invalid provider responses without relaxing the strict extraction schema', async () => {
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const extraction = {
+      bookmaker: null,
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const run = (body: Record<string, unknown>) =>
+      extractTicket({
+        apiKey: 'fictional-key',
+        image,
+        fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(Response.json(body)),
+      });
+    const envelope = (content: string, finish: string = 'stop') => ({
+      id: 'fictional-completion',
+      model: OPENROUTER_MODEL,
+      choices: [{ finish_reason: finish, message: { content } }],
+    });
+    await expect(run(envelope(JSON.stringify(extraction), 'length'))).rejects.toThrow(
+      'AI_RESPONSE_INVALID',
+    );
+    await expect(run(envelope(JSON.stringify(extraction).slice(0, 24)))).rejects.toThrow(
+      'AI_EXTRACTION_INVALID',
+    );
+    await expect(run(envelope(JSON.stringify({ ...extraction, extra: 1 })))).rejects.toThrow(
+      'AI_EXTRACTION_INVALID',
+    );
+    const missing: Record<string, unknown> = { ...extraction };
+    delete missing.warnings;
+    await expect(run(envelope(JSON.stringify(missing)))).rejects.toThrow('AI_EXTRACTION_INVALID');
+    await expect(run(envelope(JSON.stringify({ ...extraction, stake: 10 })))).rejects.toThrow(
+      'AI_EXTRACTION_INVALID',
+    );
   });
 
   it('keeps the evidence-only extraction out of the worker request flow', () => {

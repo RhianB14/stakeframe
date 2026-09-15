@@ -14,7 +14,20 @@ const normalizeName = (value) => value.normalize('NFC').trim().replace(/\s+/g, '
 // hífen legítimo dentro de nomes permanece significativo porque a troca exige
 // espaço dos dois lados; nada mais do texto é tocado.
 const EVENT_SEPARATOR = /\s+(?:vs|x|v|-|–|—)\s+/gi;
-const normalizeEvent = (value) => normalizeName(value).replace(EVENT_SEPARATOR, ' § ');
+const normalizeEvent = (value) => {
+  const text = value.normalize('NFC').trim();
+  // Empilhamento estrito: exatamente dois lados não vazios separados por quebra
+  // de linha são o separador de confronto implícito dos layouts atuais. A
+  // ausência total de separador permanece divergência (leitura incerta) e uma
+  // quebra dentro de um nome único não cria equivalência falsa (o outro lado não
+  // usa o token canônico no mesmo ponto).
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 2 && /\r?\n/.test(text)) return `${lines[0]} § ${lines[1]}`;
+  return text.replace(/\s+/g, ' ').replace(EVENT_SEPARATOR, ' § ');
+};
 // Glifos ordinais º/° são equivalentes somente em mercados; o restante do
 // texto (nomes, valores, datas, acentos) continua exato.
 const normalizeMarket = (value) => normalizeName(value).replace(/[\u00b0\u00ba]/g, '\u00ba');

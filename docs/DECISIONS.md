@@ -445,3 +445,36 @@ recebem status `Superseded` e apontam a substituta.
   fora de política aprovada. Importação, contexto, revisão e escrita
   permanecem fail-closed: incerteza, contexto ausente ou conflito vão para
   revisão, sem bypass por request, cookie, localStorage ou variável externa.
+
+## D027 — Retornos financeiros, eventos empilhados e erros residuais (2026-09-15)
+
+- **Contexto:** a avaliação real de G0-07 mediu os erros residuais (Bet365 16;
+  Superbet 6). As classes dominantes não são de classificação de casa
+  (conflitos zero) e sim de transcrição/contrato: omissões de retorno visível
+  (`0,00`), transcrição de rótulo não-Total, separadores empilhados
+  não-determinísticos e leituras incertas de data/referência.
+- **Decisão (retornos):** o prompt do extrator passa a exigir a leitura do
+  bloco financeiro final do comprovante — transcrever o valor do rótulo de
+  retorno exatamente como exibido (inclusive `0.00` visível), distinguir
+  retorno, retorno potencial, prêmio e valor da aposta, não transformar
+  ausência em zero e não derivar retorno do status. Nenhuma heurística inventa
+  valores; normalização decimal e validação continuam determinísticas e
+  fail-closed.
+- **Decisão (datas e referências):** transcrever exatamente o visível, sem
+  inferir ano, completar dígitos ou corrigir grafia; `null` quando a leitura
+  não for confiável; ambiguidade permanece em revisão.
+- **Eventos empilhados:** o comparador trata a estrutura estrita em que
+  exatamente dois lados não vazios aparecem separados por quebra de linha como
+  equivalente ao separador de confronto; a ausência total de separador
+  permanece divergência e hífens/nomes permanecem exatos.
+- **Respostas inválidas:** a investigação dos dois `AI_RESPONSE_INVALID`
+  (G0-07) confirmou que o envelope estrito (finish_reason `stop`, modelo
+  literal, recusa nula) é a fronteira correta de validação; nenhum conteúdo
+  bruto é preservado e as falhas permanecem como revisão obrigatória, sem
+  afrouxar o schema (JSON truncado, campos extras, campos ausentes, números em
+  vez de strings e schema inválido continuam recusados, com testes).
+- **Ground truth v5:** único ajuste — grafia de um sobrenome em que o modelo
+  estava correto e o v4 tinha erro de transcrição (o caso pertence ao corpus
+  Bet365); nenhum outro valor foi adaptado ao observado e nenhum erro
+  confirmado existiu no corpus Superbet. A elegibilidade do subgate continua
+  pendente de nova avaliação real autorizada.

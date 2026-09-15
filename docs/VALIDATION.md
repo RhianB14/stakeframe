@@ -83,13 +83,24 @@ A avaliação verifica vínculo imagem/modelo/layout, validade do JSON, campos
 essenciais, quantidade/ordem das seleções, presença de dúvidas, omissões e
 valores inventados. Dinheiro/odds com representações como `10` e `10.00` são
 equivalentes; separadores isolados de confronto (`x`, `v`, `vs`, `-`, `–`, `—`)
-são equivalentes em `selections.event` e `º`/`°` em mercados; o hífen dentro de
-nomes permanece significativo e nenhuma outra normalização semântica é
+são equivalentes em `selections.event`, assim como a estrutura empilhada em que
+exatamente dois lados não vazios aparecem separados por quebra de linha (o
+separador implícito dos layouts atuais); a ausência total de separador é
+divergência (leitura incerta) e `º`/`°` são equivalentes em mercados. O hífen
+dentro de nomes permanece significativo e nenhuma outra normalização semântica é
 aplicada — nomes, valores, odds, datas, acentos e ordem continuam exatos. No
 modo `user-informed`, a casa vem do contexto: layout não reconhecido pelo
 modelo não perde um bilhete válido e a evidência visual só pesa quando aponta
-para outra casa; falsos positivos cross-house, conflito de casa e diagnósticos
-visuais são reportados separadamente do caminho principal. O relatório privado
+para outra casa. O relatório separa cinco grupos: (1) **erros essenciais do
+conteúdo extraído** (transcrição); (2) **diagnósticos de layout visual**
+(reconhecimento do modelo, incluindo falsos positivos cross-house — nunca
+mascarados); (3) **divergências normalizáveis** (as equivalências acima,
+aplicadas somente no comparador); (4) **erros de contexto** (conflito de casa;
+a IA não é fonte de verdade para o bookmaker); (5) **falhas que obrigam
+revisão humana** (respostas inválidas preservadas, incertezas e ambiguidades).
+A elegibilidade exige zero erros essenciais, zero falso positivo cross-house e
+cobertura mínima; itens de revisão humana nunca são aprovados automaticamente.
+O relatório privado
 identifica índice do caso e campo com erro, sem copiar os valores; a saída de
 console mostra somente totais e hashes.
 

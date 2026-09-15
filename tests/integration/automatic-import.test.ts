@@ -255,6 +255,8 @@ describe('automatic import financial boundary', () => {
     expect(await complete(missing)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
     const unknown = await input({}, 'Fixture\nCasa Interna');
     expect(await complete(unknown)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    // Revisão não escreve nada: sem confirmação humana não há aposta nem exposição.
+    expect((await finance.workspace()).exposure).toBe('0.00');
     const blurred = await input({ bookmaker: null });
     expect(await complete(blurred)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
     const detail = await createImportService(database).detail(blurred.id);
