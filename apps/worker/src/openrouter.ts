@@ -128,7 +128,8 @@ export function rateLimitMetadata(headers: Headers): Readonly<Record<string, num
 }
 
 // Production extraction: whenever the model selects a layout, the approved
-// policy digest is always computed and bound to the result.
+// policy digest is always computed and bound to the result. The production
+// flow never exposes a model selector: it always sends the fixed chain.
 export function extractTicket(options: ExtractTicketOptions) {
   return runExtraction(options, true);
 }
@@ -137,12 +138,25 @@ export function extractTicket(options: ExtractTicketOptions) {
 // (scripts/validation/corpus-replay.mjs). The candidate layout has no approval
 // fields yet, so the policy digest is not computed. This is a separate exported
 // function rather than a flag: no request data, environment variable or
-// external caller can reach it from the worker request flow.
-export function extractTicketForEvidence(options: ExtractTicketOptions) {
-  return runExtraction(options, false);
+// external caller can reach it from the worker request flow. Model
+// qualification exists only here: the optional selector must belong to the
+// approved chain (validated before any network call) and a single-model run
+// sends exactly one entry, without cross-model fallback.
+type EvidenceExtractionOptions = ExtractTicketOptions & {
+  model?: (typeof OPENROUTER_MODELS)[number];
+};
+
+export function extractTicketForEvidence(options: EvidenceExtractionOptions) {
+  if (options.model !== undefined && !OPENROUTER_MODELS.includes(options.model))
+    throw new IntegrationError('AI_MODEL_NOT_ALLOWED');
+  return runExtraction(options, false, options.model);
 }
 
-async function runExtraction(options: ExtractTicketOptions, includePolicyDigest: boolean) {
+async function runExtraction(
+  options: ExtractTicketOptions,
+  includePolicyDigest: boolean,
+  singleModel?: (typeof OPENROUTER_MODELS)[number],
+) {
   const layouts = options.layouts ?? [];
   imageMime(options.image);
   const prepared = await prepareVisionImage(options.image).catch(() => ({
@@ -165,7 +179,9 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
           // Fixed, quality-ranked model chain. OpenRouter performs the
           // failover inside this single HTTP request; the application never
           // retries and the returned model remains part of the evidence.
-          models: [...OPENROUTER_MODELS],
+          // A single-model qualification sends exactly one entry — no
+          // fallback between models while measuring one of them.
+          models: singleModel ? [singleModel] : [...OPENROUTER_MODELS],
           max_tokens: 4096,
           // Seed is supported across the approved fallback chain. Reasoning
           // and temperature are deliberately omitted because requiring either
@@ -228,6 +244,10 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
     const parsed = completionSchema.safeParse(await readJson(response));
     if (!parsed.success) throw new IntegrationError('AI_RESPONSE_INVALID');
     const completion = parsed.data;
+    // The qualification measures exactly the selected model: a different
+    // returned model fails sanitized and produces no eligible result.
+    if (singleModel && completion.model !== singleModel)
+      throw new IntegrationError('AI_MODEL_MISMATCH');
     let candidate: unknown;
     try {
       candidate = JSON.parse(completion.choices[0]!.message.content) as unknown;

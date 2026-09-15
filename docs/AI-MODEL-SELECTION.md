@@ -147,3 +147,14 @@ configuração de modelo e credencial fora do código de processamento.
 O backup do OmniRoute local preserva a opção de usá-lo depois. Não é necessário
 instalá-lo na VPS apenas para consumir uma API Gemini, e a comparação atual
 não autoriza migração de sessões ou contratação de outro plano.
+
+## Qualificação independente dos fallbacks
+
+Cada combinação casa × modelo (Bet365/Superbet × Gemini/Qwen 3 VL 32B/DeepSeek
+V4 Flash Vision) exige ensaio e política próprios; aprovar um fallback usando o
+corpus, o digest ou o resultado do Gemini é proibido. A ferramenta privada de
+replay aceita `--model` com a allowlist exata da cadeia e grava o modelo
+solicitado e o retornado; divergência de modelo aborta de forma sanitizada e
+não produz avaliação elegível. Enquanto um modelo não tiver corpus e política
+próprios por casa, seu resultado permanece somente evidência para revisão
+humana, e a importação automática continua desabilitada por combinação.

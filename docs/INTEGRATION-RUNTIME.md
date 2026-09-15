@@ -34,7 +34,11 @@ O runtime usa uma cadeia fixa por precisão:
 `seed: 0`, sem raciocínio/temperatura e prazo de 60 segundos. O roteamento
 ocorre dentro de uma única chamada OpenRouter; o worker nunca repete a chamada.
 Modelo e provedor efetivos são registrados, e um fallback sem corpus próprio
-permanece obrigatoriamente em revisão manual. A saída é validada novamente
+permanece obrigatoriamente em revisão manual. A qualificação individual de cada
+modelo da cadeia roda exclusivamente na ferramenta privada de avaliação
+(`--model` com allowlist exata, sem fallback entre modelos); nenhuma request,
+payload, variável pública ou configuração da aplicação pode escolher o modelo
+do runtime. A saída é validada novamente
 pelo Zod. Valores monetários permanecem strings; datas visíveis são
 preservadas como texto, sem inferir ano/fuso. Esporte não é inferido a partir de nomes de equipes ou
 participantes. Toda extração vai para revisão;

@@ -9,7 +9,7 @@ import test from 'node:test';
 import { runReplay } from './corpus-replay.mjs';
 import { evaluateCorpus } from './corpus-core.mjs';
 import { syntheticExtraction } from './corpus-fixture.mjs';
-import { OPENROUTER_MODEL } from '../../packages/shared/dist/index.js';
+import { OPENROUTER_MODEL, OPENROUTER_MODELS } from '../../packages/shared/dist/index.js';
 
 // Synthetic fixtures only: these tests never touch real tickets, images or keys.
 const script = fileURLToPath(new URL('./corpus-replay.mjs', import.meta.url));
@@ -386,6 +386,29 @@ test('dry run validates plan and config without any call or write', async () => 
   assert.equal(existsSync(join(own, 'evaluation.json')), false);
 });
 
+test('dry run records the selected model without calls, writes or cost', async () => {
+  const own = makeHouse({ bookmaker: 'bet365' });
+  const other = makeHouse({ bookmaker: 'superbet' });
+  const fetchImpl = mockFetch({ positiveLayoutId: 'bet365-v1' });
+  const { summary } = await runReplay({
+    bookmaker: 'bet365',
+    ownDir: own,
+    otherDir: other,
+    bookmakerId: BOOKMAKER_ID,
+    env: makeEnv(),
+    fetchImpl,
+    dryRun: true,
+    model: OPENROUTER_MODELS[2],
+  });
+  assert.equal(summary.dryRun, true);
+  assert.equal(summary.model, OPENROUTER_MODELS[2]);
+  assert.equal(summary.modelReturned, null);
+  assert.equal(summary.calls, 0);
+  assert.equal(summary.costUsdTotal, 0);
+  assert.equal(fetchImpl.count(), 0);
+  assert.equal(existsSync(join(own, 'corpus.json')), false);
+});
+
 test('refuses invalid arguments and paths from the CLI without touching the network', () => {
   const unknown = run(['kalshi', tmpdir(), tmpdir(), '--bookmaker-id', BOOKMAKER_ID]);
   assert.equal(unknown.status, 1);
@@ -448,6 +471,118 @@ test('flags cross-house false positives instead of adapting expectations', async
   assert.equal(report.fieldCounts.layout.mismatches, 2);
   assert.equal(report.cases[10].correct, false);
   assert.equal(report.cases[12].correct, false);
+});
+
+test('qualifies exactly one selected chain model per request without cross-model fallback', async () => {
+  for (const model of OPENROUTER_MODELS) {
+    const own = makeHouse({ bookmaker: 'bet365' });
+    const other = makeHouse({ bookmaker: 'superbet' });
+    const bodies = [];
+    const fetchImpl = async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        id: `fictional-${model}`,
+        model,
+        provider: 'Fictional Provider',
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: {
+              content: JSON.stringify({ layoutId: 'bet365-v1', extraction: syntheticExtraction() }),
+            },
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 10, cost: 0.001 },
+      });
+    };
+    const { summary } = await runReplay({
+      bookmaker: 'bet365',
+      ownDir: own,
+      otherDir: other,
+      bookmakerId: BOOKMAKER_ID,
+      env: makeEnv(),
+      fetchImpl,
+      model,
+    });
+    assert.equal(summary.model, model);
+    assert.equal(summary.modelReturned, model);
+    assert.equal(bodies.length, 15);
+    for (const body of bodies) assert.deepEqual(body.models, [model]);
+    const corpus = JSON.parse(readFileSync(join(own, 'corpus.json'), 'utf8'));
+    assert.equal(corpus.layout.model, model);
+    assert.equal(corpus.cases[0].actual.model, model);
+    assert.equal(corpus.cases[0].actual.provider, 'Fictional Provider');
+  }
+});
+
+test('refuses a model outside the approved chain before any network call or write', async () => {
+  const own = makeHouse({ bookmaker: 'bet365' });
+  const other = makeHouse({ bookmaker: 'superbet' });
+  const fetchImpl = mockFetch({ positiveLayoutId: 'bet365-v1' });
+  await assert.rejects(
+    runReplay({
+      bookmaker: 'bet365',
+      ownDir: own,
+      otherDir: other,
+      bookmakerId: BOOKMAKER_ID,
+      env: makeEnv(),
+      fetchImpl,
+      model: 'openai/gpt-fictional',
+    }),
+    (error) => error.name === 'ReplayError' && error.message === 'REPLAY_MODEL_NOT_ALLOWED',
+  );
+  assert.equal(fetchImpl.count(), 0);
+  assert.equal(existsSync(join(own, 'corpus.json')), false);
+  const cli = run([
+    'bet365',
+    tmpdir(),
+    tmpdir(),
+    '--bookmaker-id',
+    BOOKMAKER_ID,
+    '--model',
+    'openai/gpt-fictional',
+  ]);
+  assert.equal(cli.status, 1);
+  assert.match(cli.stderr, /CORPUS_REPLAY_FAILED REPLAY_MODEL_NOT_ALLOWED/);
+});
+
+test('aborts sanitized when the returned model differs and never produces a corpus', async () => {
+  const own = makeHouse({ bookmaker: 'bet365' });
+  const other = makeHouse({ bookmaker: 'superbet' });
+  const fetchImpl = async () =>
+    Response.json({
+      id: 'fictional-mismatch',
+      model: OPENROUTER_MODEL,
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: {
+            content: JSON.stringify({ layoutId: 'bet365-v1', extraction: syntheticExtraction() }),
+          },
+        },
+      ],
+    });
+  await assert.rejects(
+    runReplay({
+      bookmaker: 'bet365',
+      ownDir: own,
+      otherDir: other,
+      bookmakerId: BOOKMAKER_ID,
+      env: makeEnv(),
+      fetchImpl,
+      model: OPENROUTER_MODELS[1],
+    }),
+    (error) => {
+      assert.equal(error.name, 'ReplayError');
+      assert.equal(error.message, 'REPLAY_ABORTED');
+      assert.equal(error.abortCode, 'AI_MODEL_MISMATCH');
+      assert.equal(error.calls, 1);
+      assert.equal(error.completed, 0);
+      return true;
+    },
+  );
+  assert.equal(existsSync(join(own, 'corpus.json')), false);
+  assert.equal(existsSync(join(own, 'evaluation.json')), false);
 });
 
 test('supports versioned drafts and records their hashes without touching defaults', async () => {

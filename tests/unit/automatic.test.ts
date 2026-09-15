@@ -365,6 +365,142 @@ describe('automatic import policy boundaries', () => {
     );
   });
 
+  it('keeps production on the fixed chain while only the evidence path can select one allowed model', async () => {
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const extraction = {
+      bookmaker: null,
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const bodies: Record<string, unknown>[] = [];
+    const mock = (model: string) =>
+      vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return Response.json({
+          id: 'fictional-qualification',
+          model,
+          choices: [
+            {
+              finish_reason: 'stop',
+              // No layouts are sent here, so the content is the extraction itself.
+              message: { content: JSON.stringify(extraction) },
+            },
+          ],
+        });
+      });
+    await extractTicket({ apiKey: 'fictional-key', image, fetchImpl: mock(OPENROUTER_MODEL) });
+    expect(bodies.at(-1)!.models).toEqual([...OPENROUTER_MODELS]);
+    const smuggled = {
+      apiKey: 'fictional-key',
+      image,
+      fetchImpl: mock(OPENROUTER_MODEL),
+      model: OPENROUTER_MODELS[1],
+    };
+    await extractTicket(smuggled as Parameters<typeof extractTicket>[0]);
+    expect(bodies.at(-1)!.models).toEqual([...OPENROUTER_MODELS]);
+    await extractTicketForEvidence({
+      apiKey: 'fictional-key',
+      image,
+      fetchImpl: mock(OPENROUTER_MODELS[1]),
+      model: OPENROUTER_MODELS[1],
+    });
+    expect(bodies.at(-1)!.models).toEqual([OPENROUTER_MODELS[1]]);
+    const before = bodies.length;
+    expect(() =>
+      extractTicketForEvidence({
+        apiKey: 'fictional-key',
+        image,
+        fetchImpl: mock(OPENROUTER_MODEL),
+        model: 'openai/fictional' as never,
+      }),
+    ).toThrow('AI_MODEL_NOT_ALLOWED');
+    expect(bodies.length).toBe(before);
+    await expect(
+      extractTicketForEvidence({
+        apiKey: 'fictional-key',
+        image,
+        fetchImpl: mock(OPENROUTER_MODEL),
+        model: OPENROUTER_MODELS[1],
+      }),
+    ).rejects.toThrow('AI_MODEL_MISMATCH');
+  });
+
+  it('keeps policy digests bound to one model and never reuses them across models', async () => {
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const extraction = {
+      bookmaker: null,
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const qwenLayout: ValidatedLayout = {
+      ...layout,
+      id: 'synthetic-qwen-layout',
+      model: OPENROUTER_MODELS[1],
+    };
+    const completion = (model: string) =>
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          id: 'fictional-digest',
+          model,
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                content: JSON.stringify({ layoutId: 'synthetic-qwen-layout', extraction }),
+              },
+            },
+          ],
+        }),
+      );
+    const cross = await extractTicket({
+      apiKey: 'fictional-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([qwenLayout]),
+      fetchImpl: completion(OPENROUTER_MODEL),
+    });
+    expect(cross.policyDigest).toBeNull();
+    const own = await extractTicket({
+      apiKey: 'fictional-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([qwenLayout]),
+      fetchImpl: completion(OPENROUTER_MODELS[1]),
+    });
+    expect(own.policyDigest).toBe(layoutDigest(qwenLayout));
+    expect(layoutDigest(qwenLayout)).not.toBe(layoutDigest(layout));
+  });
+
   it('keeps the evidence-only extraction out of the worker request flow', () => {
     const sourceDir = fileURLToPath(new URL('../../apps/worker/src/', import.meta.url));
     const workerFiles = readdirSync(sourceDir).filter((name) => name.endsWith('.ts'));

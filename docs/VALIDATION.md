@@ -133,7 +133,9 @@ e `evaluationSha256` apresentados pelo avaliador, `coverage` com as contagens
 da amostra, `sampleCount`, `essentialFieldErrors: 0`, `approvedBy: "owner"`,
 `approvedAt` com offset e `expiresAt` (validade explícita; política expirada é
 recusada).
-O worker valida esses campos, o modelo fixo, `approvedAt` no passado e
+O worker valida esses campos, o modelo do layout (um dos três da cadeia
+aprovada — Qwen e DeepSeek só importam com corpus e política próprios),
+`approvedAt` no passado e
 `expiresAt` no futuro; o arquivo é a configuração operacional confiável, não
 uma saída que a IA possa escrever.
 
@@ -147,7 +149,9 @@ ou automação habilitada no repositório; testes fictícios nunca as aprovam.
 ### Replay privado da extração
 
 `pnpm validation:replay <casa> <diretório-privado> <diretório-da-outra-casa>
---bookmaker-id <uuid>` gera a evidência real: lê os rascunhos privados das duas
+--bookmaker-id <uuid> [--model <modelo>]` gera a evidência real: o modelo
+opcional pertence à cadeia aprovada (padrão: o primeiro) e qualquer outro
+identificador é recusado antes de rede, escrita ou custo; lê os rascunhos privados das duas
 casas, confere o SHA-256 de cada imagem, ignora as duplicatas listadas no
 rascunho e usa a extração real do worker (`apps/worker/dist/openrouter.js`;
 função de evidência, sem cálculo do digest de política — o fluxo normal do
@@ -163,9 +167,15 @@ numéricos seguros de limite (`Retry-After` e `X-RateLimit-*`) são preservados
 quando enviados pelo provedor — corpo e headers arbitrários são descartados.
 Falhas por imagem ficam preservadas
 em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.
-O modelo permanece fixo; a OpenRouter pode trocar apenas o endpoint que serve
-esse mesmo modelo em caso de indisponibilidade ou rate limit, e o nome do
-provedor retornado fica registrado por caso quando a API o informa.
+O modelo é selecionado por execução (`--model`) dentro da cadeia aprovada; a
+qualificação individual mede um modelo exato por rodada, sem fallback entre
+modelos — o resumo registra o modelo solicitado e o retornado, e um retorno
+divergente aborta de forma sanitizada sem gravar corpus. Numa execução real o
+default é o primeiro da cadeia; a OpenRouter pode trocar apenas o endpoint que
+serve esse mesmo modelo em caso de indisponibilidade ou rate limit, e o nome do
+provedor retornado fica registrado por caso quando a API o informa. Os
+artefatos ficam separados por rodada, casa e modelo (um diretório privado
+exclusivo por combinação).
 `--dry-run` valida plano e configuração sem chamadas nem escrita. O
 `corpus.json` só é gravado no diretório privado e não sobrescreve arquivo
 existente. Exige `AI_ENABLED=true` e as variáveis OpenRouter de `.env.example`

@@ -17,6 +17,7 @@ import {
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
   OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
   type FinanceCommand,
   type TicketExtraction,
   type ValidatedLayout,
@@ -263,6 +264,15 @@ describe('automatic import financial boundary', () => {
     expect(detail).toMatchObject({ automatic: true, automaticReason: 'IMPORTED' });
     expect((await finance.bet(detail.item.betId!)).bet.bookmakerId).toBe(layout.bookmakerId);
     expect((await finance.workspace()).exposure).toBe('100.00');
+  });
+  it('keeps a fallback model on review without its own validated layout', async () => {
+    const value = await input();
+    Object.assign(value.result, { model: OPENROUTER_MODELS[1] });
+    expect(await complete(value)).toMatchObject({
+      state: 'review',
+      reason: 'LAYOUT_NOT_VALIDATED',
+    });
+    expect((await finance.workspace()).exposure).toBe('0.00');
   });
   it('commits evidence, bet, unit, ledger and audit once across repeated completions', async () => {
     const value = await input();

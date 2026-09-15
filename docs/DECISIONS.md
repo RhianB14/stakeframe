@@ -502,3 +502,24 @@ recebem status `Superseded` e apontam a substituta.
   contingência operacional, não comprova elegibilidade automática. OpenCode Go
   permanece fora do runtime de bilhetes por ser destinado a tráfego de agentes
   de programação.
+
+## D029 — Qualificação independente por casa e modelo dos fallbacks
+
+- **Contexto:** a cadeia fixa (Gemini → Qwen 3 VL 32B → DeepSeek V4 Flash
+  Vision) pode servir qualquer um dos modelos; um fallback sem corpus próprio
+  não pode herdar a política do Gemini (D028), e o digest de política é
+  específico do modelo que o produziu.
+- **Decisão:** cada combinação casa × modelo tem avaliação e política
+  independentes (Bet365/Superbet × Gemini/Qwen/DeepSeek); a seleção explícita de
+  um modelo existe apenas na ferramenta privada de avaliação (allowlist exata
+  da cadeia, sem fallback entre modelos, sem seleção por request, payload,
+  cookie, query string ou variável pública), que grava o modelo solicitado e o
+  retornado e aborta de forma sanitizada em divergência; os artefatos ficam
+  separados por rodada, casa e modelo. O runtime do worker continua usando
+  exclusivamente a cadeia fixa.
+- **Consequências:** aprovar um modelo com o corpus de outro é proibido; o
+  layout validado declara o modelo a que pertence e o digest nunca atravessa
+  modelos; mudança de modelo, prompt, schema ou normalização invalida a
+  política correspondente; enquanto não houver corpus aprovado por combinação,
+  a importação automática permanece desabilitada e todo resultado de fallback
+  fica em revisão humana.

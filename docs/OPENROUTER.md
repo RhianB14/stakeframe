@@ -61,6 +61,24 @@ A projeção de 1.800 chamadas idênticas seria USD 4,18/mês. É uma extrapola�
 de uma imagem; texto, resolução, saída, raciocínio e novas tentativas variam.
 Os USD 5 escolhidos são um orçamento, não garantia de processar 1.800 bilhetes.
 
+## Fallback operacional e qualificação por modelo
+
+O runtime usa a cadeia fixa; a OpenRouter pode fazer failover entre provedores
+do mesmo modelo dentro de uma única chamada, e o modelo/provedor efetivos ficam
+registrados por caso. Um fallback (Qwen 3 VL 32B, DeepSeek V4 Flash Vision)
+pode produzir resultado para revisão manual, mas nunca importa automaticamente
+enquanto não tiver corpus e política próprios aprovados — o digest da política
+é específico do modelo e não atravessa modelos.
+
+A qualificação isolada de cada combinação casa × modelo roda apenas na
+ferramenta privada (`validation:replay ... --model <modelo>`), que aceita
+exclusivamente os três identificadores da cadeia; a seleção não existe em
+request HTTP, payload de usuário, cookie, query string, variável pública ou
+configuração da aplicação. A avaliação mede exatamente o modelo selecionado
+(uma chamada por caso), sem fallback entre modelos; a execução registra o
+modelo solicitado e o retornado, e um retorno divergente aborta de forma
+sanitizada sem gravar corpus ou avaliação.
+
 Fontes: [modelo](https://openrouter.ai/google/gemini-3.8-flash),
 [saída estruturada](https://openrouter.ai/docs/guides/features/structured-outputs) e
 [limites da chave](https://openrouter.ai/docs/api/api-reference/api-keys/update-keys).

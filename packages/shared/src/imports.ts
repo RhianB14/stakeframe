@@ -111,7 +111,7 @@ export const validatedLayoutSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
   bookmaker: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/),
   bookmakerId: z.uuid(),
-  model: z.literal(OPENROUTER_MODEL),
+  model: z.enum(OPENROUTER_MODELS),
   description: z.string().trim().min(20).max(1000),
   placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo']),
   allowFreebet: z.boolean(),

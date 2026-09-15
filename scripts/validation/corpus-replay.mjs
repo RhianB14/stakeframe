@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { extractTicketForEvidence, readAiConfig } from '../../apps/worker/dist/openrouter.js';
 import {
   OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
   corpusEvaluationInputSchema,
   ticketExtractionSchema,
 } from '../../packages/shared/dist/index.js';
@@ -20,7 +21,16 @@ const KNOWN_BOOKMAKERS = ['bet365', 'superbet', 'novibet'];
 const NEGATIVE_CASES = 5;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const ABORT_CODES = new Set(['AI_BUDGET_EXHAUSTED', 'AI_AUTH_REFUSED', 'AI_RATE_LIMITED']);
+const ABORT_CODES = new Set([
+  'AI_BUDGET_EXHAUSTED',
+  'AI_AUTH_REFUSED',
+  'AI_RATE_LIMITED',
+  // Model qualification: a returned model that differs from the selected one
+  // (or an out-of-chain selector) invalidates the whole run — it must never
+  // become a per-case failure or produce a corpus.
+  'AI_MODEL_MISMATCH',
+  'AI_MODEL_NOT_ALLOWED',
+]);
 const CODE = /^[A-Z][A-Z_]{2,59}$/;
 
 const LAYOUT_PROFILES = {
@@ -142,10 +152,14 @@ export async function runReplay(options) {
     fetchImpl,
     dryRun = false,
     draftFile = 'ground-truth-draft.json',
+    model = OPENROUTER_MODEL,
     pacingMs = fetchImpl ? 0 : 60_000,
     sleepImpl = delay,
   } = options ?? {};
   if (!KNOWN_BOOKMAKERS.includes(bookmaker)) refuse('REPLAY_BOOKMAKER_UNKNOWN');
+  // Model qualification: only the approved chain is accepted and the check
+  // happens before any network access, write or cost.
+  if (!OPENROUTER_MODELS.includes(model)) refuse('REPLAY_MODEL_NOT_ALLOWED');
   if (typeof bookmakerId !== 'string' || !UUID.test(bookmakerId))
     refuse('REPLAY_BOOKMAKER_ID_INVALID');
   if (
@@ -203,7 +217,9 @@ export async function runReplay(options) {
     id: profile.id,
     bookmaker,
     bookmakerId,
-    model: OPENROUTER_MODEL,
+    // Each artefato qualifies exactly one chain model; the policy digest is
+    // model-specific, so corpora/policies never cross models.
+    model,
     description: profile.description,
     placedAtFormat: profile.placedAtFormat,
     allowFreebet: profile.allowFreebet,
@@ -214,7 +230,8 @@ export async function runReplay(options) {
     bookmakerId,
     // O replay avalia o caminho com casa informada pelo usuário.
     bookmakerContext: 'user-informed',
-    model: layout.model,
+    model,
+    modelReturned: null,
     draftFile,
     draftSha256: own.sha256,
     otherDraftSha256: other.sha256,
@@ -245,11 +262,15 @@ export async function runReplay(options) {
         apiKey,
         image: item.bytes,
         layouts: [layout],
+        // Qualification measures exactly the selected model; the evidence
+        // path validates the selector against the approved chain.
+        model,
         // Not approved yet: the evidence-only path skips the policy digest,
         // which requires the approval fields validated by layoutDigest.
         ...(fetchImpl ? { fetchImpl } : {}),
       });
       summary.calls += 1;
+      summary.modelReturned = result.model;
       const cost = typeof result.usage?.cost === 'number' ? result.usage.cost : null;
       if (cost !== null) {
         costUsdTotal += cost;
@@ -315,6 +336,7 @@ async function main() {
     dryRun: false,
     bookmakerId: undefined,
     draftFile: undefined,
+    model: undefined,
     pacingMs: 60_000,
   };
   const positional = [];
@@ -324,6 +346,7 @@ async function main() {
     if (arg === '--dry-run') flags.dryRun = true;
     else if (arg === '--bookmaker-id') flags.bookmakerId = args[(index += 1)];
     else if (arg === '--draft') flags.draftFile = args[(index += 1)];
+    else if (arg === '--model') flags.model = args[(index += 1)];
     else if (arg === '--pacing-ms') flags.pacingMs = Number(args[(index += 1)]);
     else if (arg.startsWith('--')) refuse('REPLAY_ARGS_INVALID');
     else positional.push(arg);
@@ -338,6 +361,7 @@ async function main() {
     bookmakerId: flags.bookmakerId,
     dryRun: flags.dryRun,
     draftFile: flags.draftFile,
+    model: flags.model,
     pacingMs: flags.pacingMs,
   });
   console.log(JSON.stringify(summary));
