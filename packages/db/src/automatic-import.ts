@@ -27,6 +27,7 @@ type Evidence = {
   model?: unknown;
   layoutId?: unknown;
   policyDigest?: unknown;
+  ocrConsistent?: unknown;
 };
 const normalized = (value: string) =>
   value
@@ -81,6 +82,7 @@ async function candidate(
     !extraction.reference?.trim()
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
+  if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
   if (context.labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
   const tipsterId = context.match('tipster', context.labels.tipster);
   if (!tipsterId || !context.bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };

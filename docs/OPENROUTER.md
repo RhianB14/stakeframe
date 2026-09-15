@@ -36,6 +36,26 @@ As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime
   orientação EXIF e aplica realce leve de contraste/nitidez, sem alterar os
   bytes originais guardados no anexo e sem binarização de OCR.
 
+## OCR auxiliar
+
+O worker possui uma camada opcional de Google Document AI Enterprise OCR. Ela
+é desligada por padrão (`GOOGLE_DOCUMENT_AI_ENABLED=false`) e, quando ativada,
+envia a imagem original ao processor configurado antes da chamada OpenRouter.
+O modelo recebe o texto, posições, blocos, linhas, confiança e qualidade como
+contexto auxiliar junto da imagem. A imagem permanece a fonte de verdade e
+falha do OCR é fail-closed; não existe fallback silencioso que remova essa
+camada. O OCR não libera importação automática e seus dados permanecem
+transitórios e privados.
+
+Em produção, o processor exige `GOOGLE_DOCUMENT_AI_PROJECT_ID`,
+`GOOGLE_DOCUMENT_AI_LOCATION`, `GOOGLE_DOCUMENT_AI_PROCESSOR_ID` e uma
+service account JSON montada em `GOOGLE_DOCUMENT_AI_CREDENTIALS_FILE`. O
+segredo não deve ser colocado no ambiente, repositório, PR ou logs. A ativação
+real exige uma rodada comparativa privada contra o corpus, medindo multimodal
+sozinho versus Document AI + multimodal.
+O overlay operacional está em `compose.document-ai.yml` e não é incluído nos
+Composes padrão.
+
 Na máquina do proprietário há `project.env`, segredo, metadados e resultado
 em pasta privada com ACL limitada ao proprietário e SYSTEM. O segredo não
 foi instalado na VPS. O worker consome essas variáveis somente quando

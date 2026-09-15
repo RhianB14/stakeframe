@@ -523,3 +523,22 @@ recebem status `Superseded` e apontam a substituta.
   política correspondente; enquanto não houver corpus aprovado por combinação,
   a importação automática permanece desabilitada e todo resultado de fallback
   fica em revisão humana.
+
+## D030 — OCR auxiliar com Google Document AI (2026-09-15)
+
+- **Contexto:** os erros residuais dos bilhetes incluem referências, datas,
+  valores pequenos e caracteres que se beneficiam de texto e coordenadas
+  independentes, mas a estrutura visual continua necessária para relacionar
+  mercado, seleção e retorno.
+- **Decisão:** adicionar uma integração opcional com o Google Document AI
+  Enterprise OCR antes da chamada multimodal. O processor retorna texto,
+  coordenadas, blocos, linhas, confiança e qualidade; a imagem original segue
+  obrigatoriamente para Gemini/Qwen/DeepSeek.
+- **Fail-closed:** OCR é contexto auxiliar, nunca fonte única. Falha do OCR
+  aborta o job antes da chamada multimodal quando a camada estiver ativada;
+  divergência OCR × modelo ou baixa confiança mantém revisão humana. O OCR
+  não fornece `policyDigest` e não libera importação automática.
+- **Segurança:** ativação explícita, projeto/localização/processor fixos e
+  credencial OAuth de service account somente em arquivo privado. O OCR fica
+  desligado por padrão; nenhuma credencial, imagem, texto ou resposta bruta
+  entra no repositório, logs, PR ou Kanban.

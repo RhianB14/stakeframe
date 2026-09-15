@@ -274,6 +274,15 @@ describe('automatic import financial boundary', () => {
     });
     expect((await finance.workspace()).exposure).toBe('0.00');
   });
+  it('keeps OCR/model divergence on review without writing a bet', async () => {
+    const value = await input();
+    Object.assign(value.result, { ocrConsistent: false });
+    expect(await complete(value)).toMatchObject({
+      state: 'review',
+      reason: 'EXTRACTION_UNCERTAIN',
+    });
+    expect((await finance.workspace()).exposure).toBe('0.00');
+  });
   it('commits evidence, bet, unit, ledger and audit once across repeated completions', async () => {
     const value = await input();
     const outcomes = await Promise.all([complete(value), complete(value)]);

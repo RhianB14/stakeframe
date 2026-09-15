@@ -19,6 +19,7 @@ import {
   readTelegramConfig,
 } from '../../apps/worker/src/telegram.js';
 import { readBounded } from '../../apps/worker/src/http.js';
+import type { DocumentOcrResult } from '../../apps/worker/src/google-document-ai.js';
 
 const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
 const validImage = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
@@ -95,7 +96,9 @@ describe('OpenRouter boundary', () => {
       expect(() => readAiConfig({ ...env, ...change })).toThrow();
   });
   it('uses a fixed endpoint and structured schema, preserves unknown dates, requires review', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json(completion));
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json(completion));
     const result = await extractTicket({ apiKey: 'test-key', image, fetchImpl });
     expect(result.extraction.selections[0]?.eventDateText).toBeNull();
     expect(result.requiresReview).toBe(true);
@@ -124,6 +127,38 @@ describe('OpenRouter boundary', () => {
       required: expect.arrayContaining(['bookmaker', 'selections', 'warnings']),
       additionalProperties: false,
     });
+  });
+  it('sends OCR as auxiliary context while retaining the original image path', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json(completion));
+    const ocr: DocumentOcrResult = {
+      text: 'Casa de teste\nTime A x Time B\nGols\nMais de 2\n10,00\n2,00',
+      pages: [
+        {
+          width: 100,
+          height: 200,
+          unit: 'pixels',
+          qualityScore: 0.96,
+          blocks: [{ text: 'Casa de teste', confidence: 0.99, boundingPoly: [{ x: 0, y: 0 }] }],
+          lines: [
+            { text: 'Retorno potencial 20,00', confidence: 0.98, boundingPoly: [{ x: 0, y: 0 }] },
+          ],
+        },
+      ],
+      averageConfidence: 0.985,
+      averageQualityScore: 0.96,
+    };
+    await extractTicket({ apiKey: 'test-key', image, fetchImpl, ocr });
+    const request = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    const userContent = request.messages[1].content;
+    expect(userContent.some((part: { type: string }) => part.type === 'image_url')).toBe(true);
+    const ocrPart = userContent.find((part: { type: string }) => part.type === 'text');
+    expect(ocrPart.text).toContain('[OCR estruturado auxiliar');
+    expect(ocrPart.text).toContain('Time A x Time B');
+    expect((await extractTicket({ apiKey: 'test-key', image, fetchImpl, ocr })).ocrConsistent).toBe(
+      true,
+    );
   });
   it.each(OPENROUTER_MODELS)('accepts the fixed model response %s', async (model) => {
     const fetchImpl = vi

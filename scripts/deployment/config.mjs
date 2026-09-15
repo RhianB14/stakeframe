@@ -141,6 +141,7 @@ export function assertDeploymentConfig(
       OPENROUTER_MAX_OUTPUT_TOKENS: '4096',
       OPENROUTER_REASONING_EFFORT: 'disabled',
       OPENROUTER_TIMEOUT_MS: '60000',
+      GOOGLE_DOCUMENT_AI_ENABLED: 'false',
       TELEGRAM_ENABLED: 'true',
     }))
       assert.equal(worker[name], value, 'INTEGRATION_POLICY_REQUIRED');

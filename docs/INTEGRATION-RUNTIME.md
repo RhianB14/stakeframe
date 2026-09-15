@@ -28,6 +28,22 @@ recepção ao Telegram. Telegram não é backup: sua retenção de updates é li
 
 ## Extração
 
+Quando explicitamente ativado, o worker executa antes da visão um OCR privado
+do Google Document AI Enterprise OCR. A chamada REST usa a credencial OAuth de
+service account em `GOOGLE_DOCUMENT_AI_CREDENTIALS_FILE` e recebe a imagem
+original; o resultado normalizado contém texto, coordenadas normalizadas,
+blocos, linhas, confiança e qualidade da imagem. A credencial, o texto OCR e
+os resultados não entram em logs, Git, PR ou Kanban. O OCR fica desativado por
+padrão e exige projeto, localização e processor configurados. Se o OCR
+estiver ativado e falhar, o job falha fechado antes da chamada multimodal;
+não há degradação silenciosa para imagem sem OCR.
+
+O modelo multimodal recebe a imagem original preparada para visão e o OCR como
+contexto auxiliar. A imagem continua sendo a fonte de verdade: OCR não pode
+inventar, completar ou corrigir um campo visível. Divergência OCR × modelo,
+baixa confiança ou ausência de evidência mantém o item em revisão. O OCR nunca
+é suficiente sozinho para liberar importação automática.
+
 O runtime usa uma cadeia fixa por precisão:
 `google/gemini-3.8-flash` → `qwen/qwen3-vl-32b-instruct` →
 `deepseek/deepseek-v4-flash-vision-exp`, com schema estrito, 4.096 tokens,

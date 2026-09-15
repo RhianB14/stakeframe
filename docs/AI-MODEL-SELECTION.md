@@ -158,3 +158,13 @@ solicitado e o retornado; divergência de modelo aborta de forma sanitizada e
 não produz avaliação elegível. Enquanto um modelo não tiver corpus e política
 próprios por casa, seu resultado permanece somente evidência para revisão
 humana, e a importação automática continua desabilitada por combinação.
+
+## OCR auxiliar
+
+O pipeline possui uma camada opcional de Google Document AI Enterprise OCR.
+Ela entrega texto, coordenadas, blocos, linhas, confiança e qualidade para o
+modelo multimodal, que continua recebendo a imagem original. O OCR é apenas
+contexto auxiliar e não pode aprovar uma extração sozinho. A próxima avaliação
+privada deve comparar os mesmos casos em duas variantes: multimodal sozinho e
+Document AI + multimodal. A importação automática permanece fechada até a
+variante escolhida passar pelo corpus e pela política correspondentes.
