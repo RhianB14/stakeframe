@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { OPENROUTER_MODEL, parseCaption } from '../../packages/shared/src/index.js';
 import {
@@ -6,6 +7,7 @@ import {
   readAiConfig,
   TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
+import { prepareVisionImage } from '../../apps/worker/src/vision-image.js';
 import {
   authorizedImage,
   pollTelegramOnce,
@@ -14,6 +16,7 @@ import {
 import { readBounded } from '../../apps/worker/src/http.js';
 
 const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+const validImage = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 const extraction = {
   bookmaker: 'Casa de teste',
   reference: null,
@@ -58,6 +61,15 @@ const update = {
 };
 
 describe('OpenRouter boundary', () => {
+  it('prepares only a provider view and preserves the original attachment bytes', async () => {
+    const prepared = await prepareVisionImage(validImage);
+    expect(prepared.image.length).toBeGreaterThan(0);
+    expect(prepared.mime).toBe('image/png');
+    expect(prepared.image).not.toEqual(validImage);
+    expect(validImage).toEqual(
+      readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url)),
+    );
+  });
   it('is opt-in and refuses unapproved models, fallback and larger limits', () => {
     expect(readAiConfig({})).toBeNull();
     const env = {
@@ -106,6 +118,7 @@ describe('OpenRouter boundary', () => {
       'inclusive 0.00',
       'retorno líquido',
       'Nunca derive potentialReturn',
+      '[Exemplos sintéticos]',
       'Leia cada seleção uma por uma',
       'bookmaker é independente do contexto',
       '[Warnings]',

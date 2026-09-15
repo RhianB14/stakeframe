@@ -10,6 +10,7 @@ import {
   type ValidatedLayout,
 } from '@stakeframe/shared';
 import { IntegrationError, readJson } from './http.js';
+import { prepareVisionImage } from './vision-image.js';
 
 const PROVIDER_SCHEMA_CONSTRAINTS = new Set([
   '$schema',
@@ -31,6 +32,7 @@ export const TICKET_EXTRACTION_SYSTEM_PROMPT = [
   '[Seleções] Leia cada seleção uma por uma, de cima para baixo. Copie o evento visível e a odd daquela seleção. Não deixe event ou odds em null quando o texto ou a odd estiverem legíveis e não substitua a odd da seleção pela odd total do cupom.',
   '[Transcrição] Preserve datas, horários, referências e textos exatamente como visíveis, sem inferir ano, completar dígitos, normalizar separadores ou corrigir grafia. Use null somente para campo ausente ou ilegível, não para evitar transcrever texto legível.',
   '[Warnings] Preencha warnings somente quando houver dúvida, conflito, corte ou ilegibilidade observável. Não crie alerta genérico para imagem clara.',
+  '[Exemplos sintéticos] Os exemplos abaixo são fictícios e servem apenas para fixar o formato; nunca copie seus valores para outra imagem. Exemplo de bilhete perdido: {"bookmaker":"Bet365","reference":"ABC123","placedAtText":"15/09/2026 12:00","currency":"BRL","stake":"10.00","odds":"2.00","potentialReturn":"0.00","freebet":false,"selections":[{"event":"Time Alfa x Time Beta","sport":null,"market":"Match Winner","selection":"Time Alfa","odds":"2.00","eventDateText":null}],"warnings":[]}. Exemplo de campo ausente: se o rótulo de retorno potencial não aparecer, potentialReturn deve ser null, mesmo quando stake e odds estiverem presentes.',
   '[Formato] Decimais são strings com ponto, sem moeda. Não liquide apostas. Responda somente com o objeto JSON exigido pelo schema, sem markdown, comentários, explicações ou texto antes/depois do JSON.',
   '[Auto-verificação] Antes do JSON, confira: (1) potentialReturn veio do rótulo correto ou ficou null; (2) nenhum valor foi calculado; (3) bookmaker veio da imagem, não do contexto; (4) todas as seleções visíveis têm event e odd conferidos; (5) warnings refletem somente evidência visual real.',
 ].join('\n\n');
@@ -121,7 +123,11 @@ export function extractTicketForEvidence(options: ExtractTicketOptions) {
 
 async function runExtraction(options: ExtractTicketOptions, includePolicyDigest: boolean) {
   const layouts = options.layouts ?? [];
-  const mime = imageMime(options.image);
+  imageMime(options.image);
+  const prepared = await prepareVisionImage(options.image).catch(() => ({
+    image: options.image,
+    mime: imageMime(options.image),
+  }));
   const started = performance.now();
   const signal = options.signal
     ? AbortSignal.any([options.signal, AbortSignal.timeout(60_000)])
@@ -156,7 +162,9 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
               content: [
                 {
                   type: 'image_url',
-                  image_url: { url: `data:${mime};base64,${options.image.toString('base64')}` },
+                  image_url: {
+                    url: `data:${prepared.mime};base64,${prepared.image.toString('base64')}`,
+                  },
                 },
               ],
             },

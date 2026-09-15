@@ -28,12 +28,18 @@ recepção ao Telegram. Telegram não é backup: sua retenção de updates é li
 
 ## Extração
 
-O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 2.048 tokens,
-raciocínio `low`, prazo de 60 segundos e fallback desativado. A saída é validada
+O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 4.096 tokens,
+raciocínio `medium`, temperatura zero, prazo de 60 segundos e fallback desativado. A saída é validada
 novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
 preservadas como texto, sem inferir ano/fuso. Esporte não é inferido a partir de nomes de equipes ou
 participantes. Toda extração vai para revisão;
 o lançamento exige confirmação do proprietário pelo comando `import.confirm`.
+
+Antes da chamada, o worker prepara uma visualização transitória da imagem,
+corrigindo orientação EXIF e aplicando contraste/nitidez leves inspirados no
+pipeline legado do SharkTrack. A imagem original e seu SHA-256 permanecem
+inalterados no armazenamento privado; a transformação serve apenas para a
+leitura visual do provedor.
 
 A reserva de cota ocorre em transação antes da chamada externa: até 60 chamadas
 por dia e 1.500 por mês UTC. Falhas e chamadas incertas também contam. Isso limita

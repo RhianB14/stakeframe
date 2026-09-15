@@ -19,6 +19,9 @@ As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime
 - `provider.allow_fallbacks=false`, preservando a configuração do teste.
 - Erros de crédito/cota preservam o trabalho para revisão; não recarregam
   saldo, trocam modelo ou repetem uma chamada ambígua automaticamente.
+- Antes do envio, o worker cria uma cópia visual transitória: respeita a
+  orientação EXIF e aplica realce leve de contraste/nitidez, sem alterar os
+  bytes originais guardados no anexo e sem binarização de OCR.
 
 Na máquina do proprietário há `project.env`, segredo, metadados e resultado
 em pasta privada com ACL limitada ao proprietário e SYSTEM. O segredo não
