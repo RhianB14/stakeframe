@@ -139,6 +139,7 @@ test('replays draft-referenced images through the worker path and writes corpus.
   assert.equal(corpus.layout.bookmaker, 'bet365');
   assert.equal(corpus.layout.bookmakerId, BOOKMAKER_ID);
   assert.equal(corpus.layout.model, OPENROUTER_MODEL);
+  assert.equal(corpus.bookmakerContext, 'user-informed');
   assert.equal(corpus.cases.length, 15);
   for (const item of corpus.cases.slice(0, 10)) {
     assert.equal(item.expectedLayoutId, 'bet365-v1');
@@ -319,6 +320,7 @@ test('dry run validates plan and config without any call or write', async () => 
     dryRun: true,
   });
   assert.equal(summary.dryRun, true);
+  assert.equal(summary.bookmakerContext, 'user-informed');
   assert.equal(summary.cases, 15);
   assert.equal(summary.calls, 0);
   assert.equal(summary.output, null);

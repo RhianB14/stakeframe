@@ -205,6 +205,8 @@ export async function runReplay(options) {
     bookmaker,
     layoutId: layout.id,
     bookmakerId,
+    // O replay avalia o caminho com casa informada pelo usuário.
+    bookmakerContext: 'user-informed',
     model: layout.model,
     draftFile,
     draftSha256: own.sha256,
@@ -282,7 +284,7 @@ export async function runReplay(options) {
       actual,
     });
   }
-  const corpus = { schemaVersion: 1, layout, cases };
+  const corpus = { schemaVersion: 1, bookmakerContext: 'user-informed', layout, cases };
   if (!corpusEvaluationInputSchema.safeParse(corpus).success) refuse('REPLAY_CORPUS_INVALID');
   await writeFile(output, JSON.stringify(corpus, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   summary.costUsdTotal = Math.round(costUsdTotal * 1e8) / 1e8;

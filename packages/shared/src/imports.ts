@@ -96,6 +96,11 @@ export const automaticDecisionSchema = z.strictObject({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .nullable(),
+  // Rastreio da casa: o bookmaker aplicado vem do contexto informado pelo
+  // usuário ('context'); a classificação visual fica registrada à parte como
+  // evidência do modelo, nunca como fonte de verdade.
+  bookmakerOrigin: z.literal('context').nullable().optional(),
+  visualLayoutId: z.string().max(200).nullable().optional(),
 });
 export const validatedLayoutSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),

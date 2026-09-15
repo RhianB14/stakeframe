@@ -3,6 +3,10 @@ import { validatedLayoutSchema, ticketExtractionSchema, type ValidatedLayout } f
 
 export const corpusEvaluationInputSchema = z.strictObject({
   schemaVersion: z.literal(1),
+  // Contexto da casa: 'user-informed' = o usuário informa a casa e a IA não é
+  // fonte de verdade para o bookmaker; 'visual-only' = modo legado, em que a
+  // classificação visual de layout e o texto do modelo decidiam.
+  bookmakerContext: z.enum(['user-informed', 'visual-only']).optional(),
   layout: validatedLayoutSchema.omit({
     layoutSha256: true,
     coverage: true,

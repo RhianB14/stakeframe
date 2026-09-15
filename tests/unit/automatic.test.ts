@@ -255,6 +255,9 @@ describe('automatic import policy boundaries', () => {
     });
     const request = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
     expect(request.messages[0].content).toContain('não infira esporte');
+    expect(request.messages[0].content).toContain(
+      'informe bookmaker somente quando a marca da casa estiver visível',
+    );
   });
 
   it('keeps the evidence-only extraction out of the worker request flow', () => {

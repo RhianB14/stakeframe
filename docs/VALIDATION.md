@@ -63,7 +63,11 @@ O limite do arquivo é 20 MiB. Imagens, gabaritos e respostas reais não vão ao
 O contrato executável é `corpusEvaluationInputSchema` em
 `packages/shared/src/automatic.ts`. O arquivo contém:
 
-- `schemaVersion: 1` e `layout`: `id`, `bookmaker` (slug; somente `bet365`,
+- `schemaVersion: 1` e `bookmakerContext`: `user-informed` quando o usuário
+  informa a casa (a IA não é fonte de verdade para o bookmaker; marca ausente
+  não invalida o bilhete) ou `visual-only`, o contrato legado em que a
+  classificação visual decidia; ausente equivale a `visual-only`.
+- `layout`: `id`, `bookmaker` (slug; somente `bet365`,
   `superbet` e `novibet` são aceitos), `bookmakerId` do cadastro de destino,
   `model`, descrição visual exata, `placedAtFormat` (`iso-offset` ou
   `br-sao-paulo`) e `allowFreebet`.
@@ -78,10 +82,16 @@ O contrato executável é `corpusEvaluationInputSchema` em
 A avaliação verifica vínculo imagem/modelo/layout, validade do JSON, campos
 essenciais, quantidade/ordem das seleções, presença de dúvidas, omissões e
 valores inventados. Dinheiro/odds com representações como `10` e `10.00` são
-equivalentes; textos têm apenas normalização Unicode/espaços, sem trocar
-nomes, inferir datas ou corrigir valores. O relatório privado identifica
-índice do caso e campo com erro, sem copiar os valores; a saída de console
-mostra somente totais e hashes.
+equivalentes; separadores isolados de confronto (`x`, `v`, `vs`, `-`, `–`, `—`)
+são equivalentes em `selections.event` e `º`/`°` em mercados; o hífen dentro de
+nomes permanece significativo e nenhuma outra normalização semântica é
+aplicada — nomes, valores, odds, datas, acentos e ordem continuam exatos. No
+modo `user-informed`, a casa vem do contexto: layout não reconhecido pelo
+modelo não perde um bilhete válido e a evidência visual só pesa quando aponta
+para outra casa; falsos positivos cross-house, conflito de casa e diagnósticos
+visuais são reportados separadamente do caminho principal. O relatório privado
+identifica índice do caso e campo com erro, sem copiar os valores; a saída de
+console mostra somente totais e hashes.
 
 `pnpm validation:policy <arquivo-de-políticas-absoluto> <diretório-corpus>...`
 verifica uma política proposta contra as evidências salvas: recalcula a
@@ -94,7 +104,10 @@ Para levar um layout à aprovação, exigir zero divergências na amostra, pelo
 menos 20 imagens distintas do layout, cinco exemplos que não devem ser
 reconhecidos, três múltiplas do layout e três casos do próprio layout com
 ausências explícitas. As ausências dos exemplos negativos não substituem essa
-cobertura. Políticas
+cobertura. No caminho com casa informada, a amostra positiva avalia a extração
+do bilhete: o reconhecimento visual do layout não é classificação independente
+obrigatória, mas falsos positivos cross-house continuam bloqueando a aprovação
+e são reportados à parte. Políticas
 que permitem freebet exigem ao menos três exemplos promocionais. Amostras
 repetidas não contam como cobertura. Esses mínimos são critérios de ensaio,
 não estimativa estatística da precisão futura. Cada layout/casa precisa de
@@ -128,7 +141,8 @@ casas, confere o SHA-256 de cada imagem, ignora as duplicatas listadas no
 rascunho e usa a extração real do worker (`apps/worker/dist/openrouter.js`;
 função de evidência, sem cálculo do digest de política — o fluxo normal do
 worker continua sempre calculando) — uma chamada por imagem, sem repetição
-automática. Cinco imagens distintas da
+automática. O `corpus.json` registra `bookmakerContext: user-informed`: o
+ensaio avalia o caminho com casa informada. Cinco imagens distintas da
 outra casa entram como negativas (`expectedLayoutId=null`). Falhas de cobrança,
 cota ou autenticação abortam sem escrever; falhas por imagem ficam preservadas
 em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.

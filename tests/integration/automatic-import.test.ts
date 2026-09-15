@@ -218,14 +218,12 @@ describe('automatic import financial boundary', () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
-  it('is disabled without validated policy and binds model, layout and policy digest', async () => {
-    const cases = [
+  it('is disabled without validated policy and binds model, house context and policy digest', async () => {
+    const disabled = [
       { layouts: [] as ValidatedLayout[] },
-      { result: { layoutId: 'unknown-layout' } },
       { result: { model: 'different-model' } },
-      { result: { policyDigest: 'f'.repeat(64) } },
     ];
-    for (const change of cases) {
+    for (const change of disabled) {
       const value = await input();
       Object.assign(value.result, change.result);
       expect(await complete(value, change.layouts ?? [layout])).toMatchObject({
@@ -233,7 +231,36 @@ describe('automatic import financial boundary', () => {
         reason: 'LAYOUT_NOT_VALIDATED',
       });
     }
-    expect((await finance.workspace()).exposure).toBe('0.00');
+    // A classificação visual do modelo é evidência, não gate: sem layout
+    // reconhecido o bilhete ainda importa e o digest local continua registrado.
+    const visual = await input();
+    Object.assign(visual.result, { layoutId: 'unknown-layout', policyDigest: 'f'.repeat(64) });
+    expect(await complete(visual)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const automatic = (
+      await database.pool.query<{ automatic: unknown }>(
+        "select extraction->'automatic' automatic from integration.inbox where id=$1",
+        [visual.id],
+      )
+    ).rows[0]!.automatic;
+    expect(automatic).toMatchObject({
+      policyId: layout.id,
+      policyDigest: layoutDigest(layout),
+      bookmakerOrigin: 'context',
+      visualLayoutId: 'unknown-layout',
+    });
+    expect((await finance.workspace()).exposure).toBe('100.00');
+  });
+  it('requires the user-informed house and imports tickets without a visible house brand', async () => {
+    const missing = await input({}, 'Fixture\n');
+    expect(await complete(missing)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    const unknown = await input({}, 'Fixture\nCasa Interna');
+    expect(await complete(unknown)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    const blurred = await input({ bookmaker: null });
+    expect(await complete(blurred)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(blurred.id);
+    expect(detail).toMatchObject({ automatic: true, automaticReason: 'IMPORTED' });
+    expect((await finance.bet(detail.item.betId!)).bet.bookmakerId).toBe(layout.bookmakerId);
+    expect((await finance.workspace()).exposure).toBe('100.00');
   });
   it('commits evidence, bet, unit, ledger and audit once across repeated completions', async () => {
     const value = await input();

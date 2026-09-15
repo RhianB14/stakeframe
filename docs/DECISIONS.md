@@ -419,3 +419,29 @@ recebem status `Superseded` e apontam a substituta.
 - **Limites:** o allowlist técnico do avaliador continua aceitando as três
   casas; isso não é cobertura nem aprovação. O fechamento do subgate do corpus
   não fecha o Gate 0: as demais pendências herdadas permanecem independentes.
+
+## D026 — Casa do bilhete como contexto confiável da importação (2026-09-15)
+
+- **Decisão do proprietário:** o usuário informa explicitamente qual é a casa
+  do bilhete. `bookmakerId` vem desse contexto confiável e é validado contra a
+  casa cadastrada; a IA não substitui, infere ou sobrescreve esse contexto. O
+  texto extraído pelo modelo é evidência, nunca fonte de verdade para a casa —
+  um bookmaker inventado pelo modelo não é aceito.
+- **Sem casa informada:** a importação permanece em revisão. A ausência de
+  marca no print não gera bookmaker inventado nem descarta um bilhete válido;
+  a aplicação preenche o bookmaker final a partir do contexto e mantém a
+  origem rastreável (`bookmakerOrigin: 'context'`, com o layoutId visual
+  registrado à parte como evidência).
+- **Avaliação:** o ensaio distingue o caminho com casa informada
+  (`bookmakerContext: 'user-informed'`) do diagnóstico de layout cross-house.
+  Separadores isolados de confronto (`x`, `v`, `vs`, `-`, `–`, `—`) e glifos
+  ordinais `º`/`°` em mercados são normalizados somente no comparador; nada
+  mais é relaxado (odds, valores, datas, seleções, ordem e schema permanecem
+  exatos). Falsos positivos cross-house e conflitos de casa continuam
+  bloqueando a aprovação e são reportados separadamente.
+- **Escopo:** Bet365 e Superbet seguem como as casas do beta atual; Novibet
+  permanece fora (D025). A confirmação humana continua obrigatória antes de
+  qualquer escrita financeira, e a importação automática segue desabilitada
+  fora de política aprovada. Importação, contexto, revisão e escrita
+  permanecem fail-closed: incerteza, contexto ausente ou conflito vão para
+  revisão, sem bypass por request, cookie, localStorage ou variável externa.
