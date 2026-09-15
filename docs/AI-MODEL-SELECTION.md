@@ -1,7 +1,9 @@
 # Seleção de IA para leitura dos bilhetes
 
 > Decisão aprovada pelo proprietário em 06/09/2026, após comparação por Codex.
-> Escolha vigente: Gemini 3.8 Flash via OpenRouter (D018), após ensaio privado.
+> Escolha vigente: Gemini 3.8 Flash como principal via OpenRouter (D018), com
+> Qwen3 VL 32B e DeepSeek V4 Flash Vision como contingências em revisão manual
+> (D028).
 > Há uma imagem real conferida; não há benchmark representativo nem integração implantada.
 
 ## Recomendação
@@ -14,6 +16,14 @@ A chave dedicada foi ajustada para USD 5 por mês, com renovação no dia 1 UTC.
 É um limite de consumo de créditos, não uma assinatura nem recarga automática.
 Configuração e credencial ficam em arquivo privado fora do Git. Procedimento
 em [OPENROUTER.md](OPENROUTER.md).
+
+Após os 429 persistentes do endpoint Google, uma triagem comparativa autorizada
+em 15/09/2026 testou nove candidatos sintéticos e sete em dois bilhetes privados
+difíceis. Gemini permaneceu primeiro (1 e 2 divergências); Qwen3 VL 32B e
+DeepSeek V4 Flash Vision foram escolhidos como contingências pela combinação de
+visão, schema estruturado e infraestrutura independente. Nenhum fallback teve
+acerto integral nos dois casos: enquanto não passar seu próprio corpus, sua
+resposta é somente evidência para revisão e não autoriza importação automática.
 
 A comparação inicial com a API Google direta priorizou
 `gemini-3.5-flash-lite`, mas a prova real retornou indisponibilidade para ele

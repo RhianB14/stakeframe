@@ -181,14 +181,20 @@ Credenciais administrativas do setup ficam separadas das permissões rotineiras.
 PostgreSQL permanece sem exposição pública direta. Acesso administrativo
 por conexão restrita.
 
-A IA usa `google/gemini-3.8-flash` via OpenRouter, por decisão aprovada pelo
-proprietário em 06/09/2026 após ensaio com uma imagem privada (D018).
+A IA usa `google/gemini-3.8-flash` como modelo primário via OpenRouter, por
+decisão aprovada pelo proprietário em 06/09/2026 após ensaio com uma imagem
+privada (D018). A cadeia fail-closed de continuidade definida em D028 tenta,
+na mesma requisição, `qwen/qwen3-vl-32b-instruct` e
+`deepseek/deepseek-v4-flash-vision-exp`, nessa ordem, apenas quando o primário
+não pode atender. Respostas dos fallbacks nunca herdam uma política aprovada
+para outro modelo e permanecem em revisão humana obrigatória.
 A chave dedicada tem limite de USD 5 por mês. Modelos, comparação histórica
 e evidências estão em [AI-MODEL-SELECTION.md](AI-MODEL-SELECTION.md).
 O worker deve funcionar independentemente do computador pessoal, com credencial
 privada, limites por modelo e fila persistente. O consumo usa o saldo OpenRouter
-do proprietário; não há recarga automática ou troca de modelo autorizada. Em falta de cota ou
-incerteza, preservar o trabalho para revisão/reprocessamento.
+do proprietário; não há recarga automática. Fora da cadeia fixa de D028, não há
+troca de modelo autorizada. Em falta de cota ou incerteza, preservar o trabalho
+para revisão/reprocessamento.
 
 O setup valida autenticação, imagens e saída estruturada; a precisão geral
 depende de amostra representativa e não é comprovada pelo único bilhete testado.

@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { OPENROUTER_MODEL, parseCaption } from '../../packages/shared/src/index.js';
+import {
+  OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
+  parseCaption,
+} from '../../packages/shared/src/index.js';
 import {
   extractTicket,
   providerStructuredSchema,
@@ -86,7 +90,7 @@ describe('OpenRouter boundary', () => {
       { OPENROUTER_MODEL: 'another-model' },
       { OPENROUTER_ALLOW_FALLBACKS: 'false' },
       { OPENROUTER_MAX_OUTPUT_TOKENS: '2048' },
-      { OPENROUTER_REASONING_EFFORT: 'low' },
+      { OPENROUTER_REASONING_EFFORT: 'medium' },
     ])
       expect(() => readAiConfig({ ...env, ...change })).toThrow();
   });
@@ -104,9 +108,10 @@ describe('OpenRouter boundary', () => {
       require_parameters: true,
       sort: 'throughput',
     });
-    expect(request.model).toBe(OPENROUTER_MODEL);
+    expect(request.model).toBeUndefined();
+    expect(request.models).toEqual(OPENROUTER_MODELS);
     expect(request.max_tokens).toBe(4096);
-    expect(request.reasoning).toEqual({ effort: 'medium' });
+    expect(request.reasoning).toBeUndefined();
     expect(request.seed).toBe(0);
     expect(request.temperature).toBeUndefined();
     expect(request.response_format.json_schema.strict).toBe(true);
@@ -119,6 +124,15 @@ describe('OpenRouter boundary', () => {
       required: expect.arrayContaining(['bookmaker', 'selections', 'warnings']),
       additionalProperties: false,
     });
+  });
+  it.each(OPENROUTER_MODELS)('accepts the fixed model response %s', async (model) => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ ...completion, model }));
+    const result = await extractTicket({ apiKey: 'test-key', image, fetchImpl });
+    expect(result.model).toBe(model);
+    expect(result.requiresReview).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
   it('uses a field-specific fail-closed extraction prompt', () => {
     for (const rule of [

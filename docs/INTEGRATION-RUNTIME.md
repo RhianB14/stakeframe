@@ -28,9 +28,14 @@ recepção ao Telegram. Telegram não é backup: sua retenção de updates é li
 
 ## Extração
 
-O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 4.096 tokens,
-raciocínio `medium`, temperatura zero, prazo de 60 segundos e fallback desativado. A saída é validada
-novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
+O runtime usa uma cadeia fixa por precisão:
+`google/gemini-3.8-flash` → `qwen/qwen3-vl-32b-instruct` →
+`deepseek/deepseek-v4-flash-vision-exp`, com schema estrito, 4.096 tokens,
+`seed: 0`, sem raciocínio/temperatura e prazo de 60 segundos. O roteamento
+ocorre dentro de uma única chamada OpenRouter; o worker nunca repete a chamada.
+Modelo e provedor efetivos são registrados, e um fallback sem corpus próprio
+permanece obrigatoriamente em revisão manual. A saída é validada novamente
+pelo Zod. Valores monetários permanecem strings; datas visíveis são
 preservadas como texto, sem inferir ano/fuso. Esporte não é inferido a partir de nomes de equipes ou
 participantes. Toda extração vai para revisão;
 o lançamento exige confirmação do proprietário pelo comando `import.confirm`.

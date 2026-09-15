@@ -478,3 +478,27 @@ recebem status `Superseded` e apontam a substituta.
   Bet365); nenhum outro valor foi adaptado ao observado e nenhum erro
   confirmado existiu no corpus Superbet. A elegibilidade do subgate continua
   pendente de nova avaliação real autorizada.
+
+## D028 — Fallback multimodelo com aprovação separada (2026-09-15)
+
+- **Contexto:** mesmo com failover entre Google AI Studio e Vertex elegível, as
+  avaliações privadas foram interrompidas por HTTP 429. Uma triagem autorizada
+  comparou nove modelos multimodais em imagem sintética e sete finalistas em um
+  caso Bet365 e um Superbet, sempre com o mesmo contrato e sem retry.
+- **Decisão:** usar a ordem fixa `google/gemini-3.8-flash` →
+  `qwen/qwen3-vl-32b-instruct` →
+  `deepseek/deepseek-v4-flash-vision-exp`. Não usar alias, auto-router ou modelo
+  fora da lista. A OpenRouter executa a cadeia dentro de uma única requisição;
+  o worker registra o modelo/provedor retornado e não repete a chamada.
+- **Parâmetros comuns:** schema JSON estrito, `seed: 0`, 4.096 tokens e
+  `require_parameters=true`. Raciocínio e temperatura ficam ausentes porque
+  excluiriam endpoints/modelos da cadeia.
+- **Fail-closed automático:** políticas são específicas por modelo. Enquanto
+  Qwen e DeepSeek não tiverem corpus individual aprovado, podem preservar uma
+  extração para revisão, mas recebem `policyDigest=null` e nunca importam
+  automaticamente usando a aprovação do Gemini.
+- **Evidência comparativa:** Gemini teve 1/2 divergências nos dois casos; Qwen
+  32B teve 3/schema inválido; DeepSeek Vision teve 4/3. A triagem escolhe
+  contingência operacional, não comprova elegibilidade automática. OpenCode Go
+  permanece fora do runtime de bilhetes por ser destinado a tráfego de agentes
+  de programação.

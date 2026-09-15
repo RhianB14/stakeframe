@@ -44,7 +44,12 @@ export const uploadSchema = z.strictObject({
 });
 export const uploadResultSchema = z.object({ id: z.uuid() }).meta({ id: 'UploadResult' });
 
-export const OPENROUTER_MODEL = 'google/gemini-3.8-flash' as const;
+export const OPENROUTER_MODELS = [
+  'google/gemini-3.8-flash',
+  'qwen/qwen3-vl-32b-instruct',
+  'deepseek/deepseek-v4-flash-vision-exp',
+] as const;
+export const OPENROUTER_MODEL = OPENROUTER_MODELS[0];
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const text = z.string().min(1).max(500);
 const decimal = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,4})?$/);
@@ -171,7 +176,7 @@ export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema)
 
 export const completionSchema = z.object({
   id: z.string().min(1).max(200),
-  model: z.literal(OPENROUTER_MODEL),
+  model: z.enum(OPENROUTER_MODELS),
   provider: z.string().min(1).max(200).optional(),
   choices: z
     .array(

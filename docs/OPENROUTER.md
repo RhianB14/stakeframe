@@ -11,20 +11,27 @@ no dia 1 em UTC, confirmada no console. Isso não ativa recarga de saldo.
 As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime:
 
 - Provedor `openrouter`, endpoint `https://openrouter.ai/api/v1/chat/completions`.
-- Modelo exato `google/gemini-3.8-flash`; não usar alias `latest` ou roteamento
-  automático entre modelos.
+- Cadeia fixa e versionada, sem aliases: `google/gemini-3.8-flash` →
+  `qwen/qwen3-vl-32b-instruct` →
+  `deepseek/deepseek-v4-flash-vision-exp`. A ordem reflete a triagem privada de
+  15/09/2026; a OpenRouter só avança quando o modelo anterior falha.
 - `OPENROUTER_API_KEY_FILE`: caminho absoluto para segredo fora do Git.
-- Até 4.096 tokens de saída, raciocínio `medium`, `seed: 0` e prazo de 60 segundos.
+- Até 4.096 tokens de saída, raciocínio desabilitado, `seed: 0` e prazo de 60
+  segundos. Raciocínio e temperatura não são enviados porque não pertencem ao
+  conjunto de parâmetros comum dos três modelos.
 - Schema JSON explícito e `provider.require_parameters=true`.
-- `provider.allow_fallbacks=true` com ordenação por throughput: a OpenRouter pode
-  trocar somente entre endpoints que servem o mesmo modelo exato quando o
-  primeiro estiver indisponível ou limitado. Não há fallback entre modelos.
+- `provider.allow_fallbacks=true` com ordenação por throughput permite tanto o
+  failover entre endpoints do mesmo modelo quanto o avanço pela cadeia fixa.
+  Não existe retry da aplicação: toda a cadeia ocorre dentro de uma única
+  requisição HTTP.
 - A chamada não envia `temperature`: esse parâmetro excluiria o endpoint Google
   Vertex sob `require_parameters=true` e deixaria somente o Google AI Studio.
   `seed: 0` preserva a intenção determinística sem inutilizar o failover.
-- Erros de crédito/cota preservam o trabalho para revisão; não recarregam
-  saldo nem trocam modelo. O failover de endpoint acontece dentro da única
-  chamada HTTP e o provedor efetivo, quando retornado, fica na evidência.
+- O modelo e o provedor efetivos ficam na evidência. Qwen e DeepSeek ainda não
+  possuem corpus aprovado; portanto podem produzir uma extração para revisão,
+  mas nunca herdam o digest da política Gemini nem importam automaticamente.
+  Erros finais de crédito/cota preservam o trabalho para revisão e não
+  recarregam saldo.
 - Antes do envio, o worker cria uma cópia visual transitória: respeita a
   orientação EXIF e aplica realce leve de contraste/nitidez, sem alterar os
   bytes originais guardados no anexo e sem binarização de OCR.

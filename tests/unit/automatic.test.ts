@@ -9,6 +9,7 @@ import {
   automaticEventDate,
   validatedLayoutsSchema,
   OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
   type ValidatedLayout,
 } from '../../packages/shared/src/index.js';
 import { readAutomaticLayouts } from '../../apps/worker/src/automatic-config.js';
@@ -163,6 +164,52 @@ describe('automatic import policy boundaries', () => {
       ]);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it('never binds a fallback response to the primary model policy', async () => {
+    const extraction = {
+      bookmaker: 'Fictional',
+      reference: 'fictional-1',
+      placedAtText: null,
+      currency: 'BRL' as const,
+      stake: '10.00',
+      odds: '2.00',
+      potentialReturn: null,
+      freebet: false,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: 'Result',
+          selection: 'A',
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const fallback = OPENROUTER_MODELS[1];
+    const result = await extractTicket({
+      apiKey: 'fictional-key',
+      image: Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]),
+      layouts: validatedLayoutsSchema.parse([layout]),
+      fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          id: 'fallback-completion',
+          model: fallback,
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+            },
+          ],
+        }),
+      ),
+    });
+    expect(result.model).toBe(fallback);
+    expect(result.layoutId).toBe(layout.id);
+    expect(result.policyDigest).toBeNull();
+    expect(result.requiresReview).toBe(true);
   });
 
   it('recognizes a layout before approval without computing a policy digest', async () => {

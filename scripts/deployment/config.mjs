@@ -139,7 +139,7 @@ export function assertDeploymentConfig(
       OPENROUTER_MODEL: 'google/gemini-3.8-flash',
       OPENROUTER_ALLOW_FALLBACKS: 'true',
       OPENROUTER_MAX_OUTPUT_TOKENS: '4096',
-      OPENROUTER_REASONING_EFFORT: 'medium',
+      OPENROUTER_REASONING_EFFORT: 'disabled',
       OPENROUTER_TIMEOUT_MS: '60000',
       TELEGRAM_ENABLED: 'true',
     }))

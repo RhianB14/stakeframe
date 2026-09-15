@@ -1,6 +1,7 @@
 import { readSecret, layoutDigest } from '@stakeframe/db';
 import {
   OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
   MAX_IMAGE_BYTES,
   completionSchema,
   ticketExtractionSchema,
@@ -65,7 +66,7 @@ export function readAiConfig(env: NodeJS.ProcessEnv) {
   // Runtime limits cannot be silently increased through environment configuration.
   for (const [key, value] of Object.entries({
     OPENROUTER_MAX_OUTPUT_TOKENS: '4096',
-    OPENROUTER_REASONING_EFFORT: 'medium',
+    OPENROUTER_REASONING_EFFORT: 'disabled',
     OPENROUTER_TIMEOUT_MS: '60000',
   })) {
     if (env[key] !== undefined && env[key] !== value)
@@ -161,17 +162,17 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
         signal,
         headers: { authorization: `Bearer ${options.apiKey}`, 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: OPENROUTER_MODEL,
+          // Fixed, quality-ranked model chain. OpenRouter performs the
+          // failover inside this single HTTP request; the application never
+          // retries and the returned model remains part of the evidence.
+          models: [...OPENROUTER_MODELS],
           max_tokens: 4096,
-          reasoning: { effort: 'medium' },
-          // Seed is supported by both eligible Google endpoints. Sending
-          // temperature would make require_parameters exclude Google Vertex
-          // and collapse same-model failover back to a single endpoint.
+          // Seed is supported across the approved fallback chain. Reasoning
+          // and temperature are deliberately omitted because requiring either
+          // would exclude an otherwise eligible fallback endpoint.
           seed: 0,
           stream: false,
-          // Keep the model immutable while allowing OpenRouter to fail over
-          // between endpoints serving that exact model. This avoids making a
-          // single upstream's transient 429 an application-wide outage.
+          // Provider fallback remains enabled within each model as well.
           provider: { allow_fallbacks: true, require_parameters: true, sort: 'throughput' },
           messages: [
             {
@@ -250,7 +251,13 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
       model: completion.model,
       provider: completion.provider ?? null,
       layoutId: selected?.id ?? null,
-      policyDigest: selected && includePolicyDigest ? layoutDigest(selected) : null,
+      // A policy is model-specific. A fallback that has not passed its own
+      // corpus can extract for review but can never inherit the primary
+      // model's automatic-import approval.
+      policyDigest:
+        selected && selected.model === completion.model && includePolicyDigest
+          ? layoutDigest(selected)
+          : null,
       elapsedMs: Math.round(performance.now() - started),
     };
   } catch (error) {
