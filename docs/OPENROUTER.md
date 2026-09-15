@@ -14,7 +14,7 @@ As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime
 - Modelo exato `google/gemini-3.8-flash`; não usar alias `latest` ou roteamento
   automático entre modelos.
 - `OPENROUTER_API_KEY_FILE`: caminho absoluto para segredo fora do Git.
-- Até 2.048 tokens de saída, raciocínio `low`, prazo de 60 segundos.
+- Até 4.096 tokens de saída, raciocínio `medium`, temperatura `0` e prazo de 60 segundos.
 - Schema JSON explícito e `provider.require_parameters=true`.
 - `provider.allow_fallbacks=false`, preservando a configuração do teste.
 - Erros de crédito/cota preservam o trabalho para revisão; não recarregam

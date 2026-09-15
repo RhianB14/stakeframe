@@ -254,16 +254,16 @@ describe('automatic import policy boundaries', () => {
       fetchImpl,
     });
     const request = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
-    expect(request.messages[0].content).toContain('não infira esporte');
+    expect(request.messages[0].content).toContain('Não infira esporte por nomes de equipes');
     expect(request.messages[0].content).toContain(
-      'informe bookmaker somente quando a marca da casa estiver visível',
+      'Preencha bookmaker somente quando a marca estiver claramente visível',
     );
-    expect(request.messages[0].content).toContain('inclusive 0.00 visível');
+    expect(request.messages[0].content).toContain('inclusive 0.00');
     expect(request.messages[0].content).toContain(
-      'distinga retorno, retorno potencial, prêmio e valor da aposta',
+      'Só mapeie para potentialReturn quando o rótulo significar explicitamente',
     );
     expect(request.messages[0].content).toContain(
-      'sem inferir ano, completar dígitos ou corrigir grafia',
+      'sem inferir ano, completar dígitos, normalizar separadores ou corrigir grafia',
     );
   });
 

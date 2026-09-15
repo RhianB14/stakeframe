@@ -4,6 +4,7 @@ import {
   extractTicket,
   providerStructuredSchema,
   readAiConfig,
+  TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
 import {
   authorizedImage,
@@ -70,7 +71,8 @@ describe('OpenRouter boundary', () => {
     for (const change of [
       { OPENROUTER_MODEL: 'another-model' },
       { OPENROUTER_ALLOW_FALLBACKS: 'true' },
-      { OPENROUTER_MAX_OUTPUT_TOKENS: '4096' },
+      { OPENROUTER_MAX_OUTPUT_TOKENS: '2048' },
+      { OPENROUTER_REASONING_EFFORT: 'low' },
     ])
       expect(() => readAiConfig({ ...env, ...change })).toThrow();
   });
@@ -84,6 +86,9 @@ describe('OpenRouter boundary', () => {
     const request = JSON.parse(String(init?.body));
     expect(request.provider).toEqual({ allow_fallbacks: false, require_parameters: true });
     expect(request.model).toBe(OPENROUTER_MODEL);
+    expect(request.max_tokens).toBe(4096);
+    expect(request.reasoning).toEqual({ effort: 'medium' });
+    expect(request.temperature).toBe(0);
     expect(request.response_format.json_schema.strict).toBe(true);
     const providerSchema = request.response_format.json_schema.schema;
     expect(JSON.stringify(providerSchema)).not.toMatch(
@@ -94,6 +99,19 @@ describe('OpenRouter boundary', () => {
       required: expect.arrayContaining(['bookmaker', 'selections', 'warnings']),
       additionalProperties: false,
     });
+  });
+  it('uses a field-specific fail-closed extraction prompt', () => {
+    for (const rule of [
+      '[Procedimento obrigatório]',
+      'inclusive 0.00',
+      'retorno líquido',
+      'Nunca derive potentialReturn',
+      'Leia cada seleção uma por uma',
+      'bookmaker é independente do contexto',
+      '[Warnings]',
+      'somente com o objeto JSON',
+    ])
+      expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain(rule);
   });
   it('simplifies provider constraints recursively without weakening local validation', async () => {
     expect(
