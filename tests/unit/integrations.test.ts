@@ -4,6 +4,7 @@ import { OPENROUTER_MODEL, parseCaption } from '../../packages/shared/src/index.
 import {
   extractTicket,
   providerStructuredSchema,
+  rateLimitMetadata,
   readAiConfig,
   TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
@@ -159,6 +160,34 @@ describe('OpenRouter boundary', () => {
       .mockResolvedValue(new Response('sensitive provider error', { status }));
     await expect(extractTicket({ apiKey: 'test-key', image, fetchImpl })).rejects.toThrow(/^AI_/);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it('preserves only numeric rate-limit headers and never the provider body', async () => {
+    const response = new Response('secret provider payload', {
+      status: 429,
+      headers: {
+        'retry-after': '60',
+        'x-ratelimit-limit': '200',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': '1789516800',
+        'x-provider-secret': 'must-not-escape',
+      },
+    });
+    const error = await extractTicket({
+      apiKey: 'test-key',
+      image,
+      fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response),
+    }).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      code: 'AI_RATE_LIMITED',
+      safeMetadata: {
+        retryAfterSeconds: 60,
+        limit: 200,
+        remaining: 0,
+        reset: 1789516800,
+      },
+    });
+    expect(JSON.stringify(error)).not.toContain('secret');
+    expect(rateLimitMetadata(new Headers({ 'retry-after': 'private value' }))).toEqual({});
   });
   it.each([400, 422])('classifies HTTP %i as a sanitized invalid request', async (status) => {
     const fetchImpl = vi

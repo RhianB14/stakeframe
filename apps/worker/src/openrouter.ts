@@ -106,6 +106,26 @@ type ExtractTicketOptions = {
   layouts?: ValidatedLayout[];
 };
 
+const safeIntegerHeader = (headers: Headers, name: string): number | undefined => {
+  const value = headers.get(name);
+  if (!value || !/^\d{1,16}$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+};
+
+// Preserve only numeric rate-limit metadata. Provider bodies and arbitrary
+// headers may contain credentials, private prompts or image-derived content.
+export function rateLimitMetadata(headers: Headers): Readonly<Record<string, number>> {
+  return Object.fromEntries(
+    [
+      ['retryAfterSeconds', safeIntegerHeader(headers, 'retry-after')],
+      ['limit', safeIntegerHeader(headers, 'x-ratelimit-limit')],
+      ['remaining', safeIntegerHeader(headers, 'x-ratelimit-remaining')],
+      ['reset', safeIntegerHeader(headers, 'x-ratelimit-reset')],
+    ].filter((entry): entry is [string, number] => entry[1] !== undefined),
+  );
+}
+
 // Production extraction: whenever the model selects a layout, the approved
 // policy digest is always computed and bound to the result.
 export function extractTicket(options: ExtractTicketOptions) {
@@ -183,6 +203,7 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
       },
     );
     if (!response.ok) {
+      const safeMetadata = response.status === 429 ? rateLimitMetadata(response.headers) : {};
       await response.body?.cancel();
       throw new IntegrationError(
         response.status === 402
@@ -194,6 +215,7 @@ async function runExtraction(options: ExtractTicketOptions, includePolicyDigest:
               : [400, 422].includes(response.status)
                 ? 'AI_REQUEST_INVALID'
                 : 'AI_PROVIDER_UNAVAILABLE',
+        safeMetadata,
       );
     }
     const parsed = completionSchema.safeParse(await readJson(response));

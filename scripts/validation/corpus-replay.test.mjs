@@ -306,6 +306,63 @@ test('aborts without writing on budget exhaustion and never retries', async () =
   assert.equal(existsSync(join(own, 'corpus.json')), false);
 });
 
+test('paces calls internally and preserves only sanitized 429 metadata', async () => {
+  const own = makeHouse({ bookmaker: 'bet365' });
+  const other = makeHouse({ bookmaker: 'superbet' });
+  let calls = 0;
+  const sleeps = [];
+  const fetchImpl = async () => {
+    calls += 1;
+    if (calls === 2)
+      return new Response('private provider body', {
+        status: 429,
+        headers: {
+          'retry-after': '120',
+          'x-ratelimit-remaining': '0',
+          'x-private-header': 'must-not-escape',
+        },
+      });
+    return Response.json({
+      id: 'fictional-pacing',
+      model: OPENROUTER_MODEL,
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: {
+            content: JSON.stringify({
+              layoutId: 'bet365-v1',
+              extraction: syntheticExtraction(),
+            }),
+          },
+        },
+      ],
+    });
+  };
+  await assert.rejects(
+    runReplay({
+      bookmaker: 'bet365',
+      ownDir: own,
+      otherDir: other,
+      bookmakerId: BOOKMAKER_ID,
+      env: makeEnv(),
+      fetchImpl,
+      pacingMs: 45_000,
+      sleepImpl: async (milliseconds) => sleeps.push(milliseconds),
+    }),
+    (error) => {
+      assert.equal(error.name, 'ReplayError');
+      assert.equal(error.abortCode, 'AI_RATE_LIMITED');
+      assert.equal(error.calls, 2);
+      assert.equal(error.completed, 1);
+      assert.deepEqual(error.rateLimit, { retryAfterSeconds: 120, remaining: 0 });
+      assert.equal(JSON.stringify(error).includes('private'), false);
+      return true;
+    },
+  );
+  assert.deepEqual(sleeps, [45_000]);
+  assert.equal(existsSync(join(own, 'corpus.json')), false);
+});
+
 test('dry run validates plan and config without any call or write', async () => {
   const own = makeHouse({ bookmaker: 'bet365' });
   const other = makeHouse({ bookmaker: 'superbet' });

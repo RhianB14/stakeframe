@@ -152,10 +152,16 @@ casas, confere o SHA-256 de cada imagem, ignora as duplicatas listadas no
 rascunho e usa a extração real do worker (`apps/worker/dist/openrouter.js`;
 função de evidência, sem cálculo do digest de política — o fluxo normal do
 worker continua sempre calculando) — uma chamada por imagem, sem repetição
-automática. O `corpus.json` registra `bookmakerContext: user-informed`: o
+automática. O replay real aplica internamente 60 segundos entre chamadas por
+padrão; `--pacing-ms <milissegundos>` permite ajustar entre 15 e 300 segundos,
+mas nunca desativar o intervalo numa execução real. O resumo registra o pacing
+efetivamente usado. O `corpus.json` registra `bookmakerContext: user-informed`: o
 ensaio avalia o caminho com casa informada. Cinco imagens distintas da
 outra casa entram como negativas (`expectedLayoutId=null`). Falhas de cobrança,
-cota ou autenticação abortam sem escrever; falhas por imagem ficam preservadas
+cota ou autenticação abortam sem escrever; em HTTP 429, somente os headers
+numéricos seguros de limite (`Retry-After` e `X-RateLimit-*`) são preservados
+quando enviados pelo provedor — corpo e headers arbitrários são descartados.
+Falhas por imagem ficam preservadas
 em `actual.extraction` como erro sanitizado, nunca substituídas pelo esperado.
 `--dry-run` valida plano e configuração sem chamadas nem escrita. O
 `corpus.json` só é gravado no diretório privado e não sobrescreve arquivo

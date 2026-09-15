@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, lstat, realpath } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { isAbsolute, relative, resolve, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractTicketForEvidence, readAiConfig } from '../../apps/worker/dist/openrouter.js';
@@ -40,9 +41,10 @@ const LAYOUT_PROFILES = {
 };
 
 class ReplayError extends Error {
-  constructor(code) {
+  constructor(code, details = {}) {
     super(code);
     this.name = 'ReplayError';
+    Object.assign(this, details);
   }
 }
 
@@ -140,6 +142,8 @@ export async function runReplay(options) {
     fetchImpl,
     dryRun = false,
     draftFile = 'ground-truth-draft.json',
+    pacingMs = fetchImpl ? 0 : 60_000,
+    sleepImpl = delay,
   } = options ?? {};
   if (!KNOWN_BOOKMAKERS.includes(bookmaker)) refuse('REPLAY_BOOKMAKER_UNKNOWN');
   if (typeof bookmakerId !== 'string' || !UUID.test(bookmakerId))
@@ -151,6 +155,9 @@ export async function runReplay(options) {
     draftFile === 'evaluation.json'
   )
     refuse('REPLAY_ARGS_INVALID');
+  if (!Number.isSafeInteger(pacingMs) || pacingMs < 0 || pacingMs > 300_000)
+    refuse('REPLAY_PACING_INVALID');
+  if (!fetchImpl && !dryRun && pacingMs < 15_000) refuse('REPLAY_PACING_INVALID');
   const profile = LAYOUT_PROFILES[bookmaker];
   const ownDir = await guardedDirectory(ownArg);
   const otherDir = await guardedDirectory(otherArg);
@@ -212,6 +219,7 @@ export async function runReplay(options) {
     draftSha256: own.sha256,
     otherDraftSha256: other.sha256,
     dryRun,
+    pacingMs,
     positives: positives.length,
     negatives: negatives.length,
     duplicatesIgnored: own.duplicates.size,
@@ -228,7 +236,8 @@ export async function runReplay(options) {
   const cases = [];
   let costUsdTotal = 0;
   let costReported = 0;
-  for (const item of [...positives, ...negatives]) {
+  for (const [index, item] of [...positives, ...negatives].entries()) {
+    if (index > 0 && pacingMs > 0) await sleepImpl(pacingMs);
     const started = performance.now();
     let actual;
     try {
@@ -259,11 +268,13 @@ export async function runReplay(options) {
       summary.calls += 1;
       const code = safeCode(error?.message);
       if (ABORT_CODES.has(code)) {
-        const abort = new ReplayError('REPLAY_ABORTED');
-        abort.abortCode = code;
-        abort.calls = summary.calls;
-        abort.completed = cases.length;
-        throw abort;
+        throw new ReplayError('REPLAY_ABORTED', {
+          abortCode: code,
+          calls: summary.calls,
+          completed: cases.length,
+          rateLimit:
+            code === 'AI_RATE_LIMITED' && error?.safeMetadata ? error.safeMetadata : undefined,
+        });
       }
       summary.failures += 1;
       summary.failureCodes[code] = (summary.failureCodes[code] ?? 0) + 1;
@@ -299,7 +310,12 @@ const invokedAsCli = async () => {
 };
 
 async function main() {
-  const flags = { dryRun: false, bookmakerId: undefined, draftFile: undefined };
+  const flags = {
+    dryRun: false,
+    bookmakerId: undefined,
+    draftFile: undefined,
+    pacingMs: 60_000,
+  };
   const positional = [];
   const args = process.argv.slice(2);
   for (let index = 0; index < args.length; index += 1) {
@@ -307,6 +323,7 @@ async function main() {
     if (arg === '--dry-run') flags.dryRun = true;
     else if (arg === '--bookmaker-id') flags.bookmakerId = args[(index += 1)];
     else if (arg === '--draft') flags.draftFile = args[(index += 1)];
+    else if (arg === '--pacing-ms') flags.pacingMs = Number(args[(index += 1)]);
     else if (arg.startsWith('--')) refuse('REPLAY_ARGS_INVALID');
     else positional.push(arg);
   }
@@ -320,6 +337,7 @@ async function main() {
     bookmakerId: flags.bookmakerId,
     dryRun: flags.dryRun,
     draftFile: flags.draftFile,
+    pacingMs: flags.pacingMs,
   });
   console.log(JSON.stringify(summary));
   if (summary.failures > 0) process.exitCode = 1;
@@ -332,7 +350,11 @@ if (await invokedAsCli()) {
     if (error instanceof ReplayError) {
       const detail =
         error.name === 'ReplayError' && error.abortCode
-          ? ` ${error.abortCode} calls=${error.calls} completed=${error.completed}`
+          ? ` ${error.abortCode} calls=${error.calls} completed=${error.completed}${
+              error.rateLimit && Object.keys(error.rateLimit).length
+                ? ` rateLimit=${JSON.stringify(error.rateLimit)}`
+                : ''
+            }`
           : '';
       console.error(`CORPUS_REPLAY_FAILED ${error.message}${detail}`);
     } else {
