@@ -1,0 +1,15 @@
+# Optional private overlay. Do not include this file unless the Azure Vision
+# resource and its key secret were explicitly provisioned by the owner.
+services:
+  worker:
+    environment:
+      AZURE_VISION_ENABLED: 'true'
+      AZURE_VISION_ENDPOINT: ${AZURE_VISION_ENDPOINT:?Azure Vision endpoint required}
+      AZURE_VISION_API_KEY_FILE: /run/secrets/azure_vision_api_key
+      AZURE_VISION_TIMEOUT_MS: '30000'
+    secrets:
+      - azure_vision_api_key
+
+secrets:
+  azure_vision_api_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/azure_vision_api_key
