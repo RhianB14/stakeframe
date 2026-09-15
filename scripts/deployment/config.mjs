@@ -137,10 +137,11 @@ export function assertDeploymentConfig(
       AI_ENABLED: 'true',
       AI_PROVIDER: 'openrouter',
       OPENROUTER_MODEL: 'google/gemini-3.8-flash',
-      OPENROUTER_ALLOW_FALLBACKS: 'false',
-      OPENROUTER_MAX_OUTPUT_TOKENS: '2048',
-      OPENROUTER_REASONING_EFFORT: 'low',
+      OPENROUTER_ALLOW_FALLBACKS: 'true',
+      OPENROUTER_MAX_OUTPUT_TOKENS: '4096',
+      OPENROUTER_REASONING_EFFORT: 'disabled',
       OPENROUTER_TIMEOUT_MS: '60000',
+      GOOGLE_DOCUMENT_AI_ENABLED: 'false',
       TELEGRAM_ENABLED: 'true',
     }))
       assert.equal(worker[name], value, 'INTEGRATION_POLICY_REQUIRED');

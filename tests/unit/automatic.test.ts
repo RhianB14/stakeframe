@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi } from 'vitest';
 import {
   parseAutomaticPlacedAt,
   automaticEventDate,
   validatedLayoutsSchema,
   OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
   type ValidatedLayout,
 } from '../../packages/shared/src/index.js';
 import { readAutomaticLayouts } from '../../apps/worker/src/automatic-config.js';
-import { extractTicket } from '../../apps/worker/src/openrouter.js';
+import { extractTicket, extractTicketForEvidence } from '../../apps/worker/src/openrouter.js';
 import { layoutDigest } from '../../packages/db/src/automatic-policy.js';
 const layout: ValidatedLayout = {
   id: 'synthetic-layout',
@@ -162,5 +164,363 @@ describe('automatic import policy boundaries', () => {
       ]);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it('never binds a fallback response to the primary model policy', async () => {
+    const extraction = {
+      bookmaker: 'Fictional',
+      reference: 'fictional-1',
+      placedAtText: null,
+      currency: 'BRL' as const,
+      stake: '10.00',
+      odds: '2.00',
+      potentialReturn: null,
+      freebet: false,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: 'Result',
+          selection: 'A',
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const fallback = OPENROUTER_MODELS[1];
+    const result = await extractTicket({
+      apiKey: 'fictional-key',
+      image: Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]),
+      layouts: validatedLayoutsSchema.parse([layout]),
+      fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          id: 'fallback-completion',
+          model: fallback,
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+            },
+          ],
+        }),
+      ),
+    });
+    expect(result.model).toBe(fallback);
+    expect(result.layoutId).toBe(layout.id);
+    expect(result.policyDigest).toBeNull();
+    expect(result.requiresReview).toBe(true);
+  });
+
+  it('recognizes a layout before approval without computing a policy digest', async () => {
+    const extraction = {
+      bookmaker: 'Fictional',
+      reference: 'fictional-1',
+      placedAtText: null,
+      currency: 'BRL',
+      stake: '10.00',
+      odds: '2.00',
+      potentialReturn: null,
+      freebet: false,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: 'Result',
+          selection: 'A',
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'fictional-completion',
+        model: OPENROUTER_MODEL,
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+          },
+        ],
+      }),
+    );
+    const result = await extractTicketForEvidence({
+      apiKey: 'synthetic-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([layout]),
+      fetchImpl,
+    });
+    expect(result.layoutId).toBe(layout.id);
+    expect(result.policyDigest).toBeNull();
+    expect(result.requiresReview).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('instructs the extractor not to infer sport from participant names', async () => {
+    const extraction = {
+      bookmaker: 'Fictional',
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'fictional-completion',
+        model: OPENROUTER_MODEL,
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+          },
+        ],
+      }),
+    );
+    await extractTicket({
+      apiKey: 'synthetic-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([layout]),
+      fetchImpl,
+    });
+    const request = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
+    expect(request.messages[0].content).toContain('Não infira esporte por nomes de equipes');
+    expect(request.messages[0].content).toContain(
+      'Preencha bookmaker somente quando a marca estiver claramente visível',
+    );
+    expect(request.messages[0].content).toContain('inclusive 0.00');
+    expect(request.messages[0].content).toContain(
+      'Só mapeie para potentialReturn quando o rótulo significar explicitamente',
+    );
+    expect(request.messages[0].content).toContain(
+      'sem inferir ano, completar dígitos, normalizar separadores ou corrigir grafia',
+    );
+  });
+
+  it('rejects invalid provider responses without relaxing the strict extraction schema', async () => {
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const extraction = {
+      bookmaker: null,
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const run = (body: Record<string, unknown>) =>
+      extractTicket({
+        apiKey: 'fictional-key',
+        image,
+        fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(Response.json(body)),
+      });
+    const envelope = (content: string, finish: string = 'stop') => ({
+      id: 'fictional-completion',
+      model: OPENROUTER_MODEL,
+      choices: [{ finish_reason: finish, message: { content } }],
+    });
+    await expect(run(envelope(JSON.stringify(extraction), 'length'))).rejects.toThrow(
+      'AI_RESPONSE_INVALID',
+    );
+    await expect(run(envelope(JSON.stringify(extraction).slice(0, 24)))).rejects.toThrow(
+      'AI_EXTRACTION_INVALID',
+    );
+    await expect(run(envelope(JSON.stringify({ ...extraction, extra: 1 })))).rejects.toThrow(
+      'AI_EXTRACTION_INVALID',
+    );
+    const missing: Record<string, unknown> = { ...extraction };
+    delete missing.warnings;
+    await expect(run(envelope(JSON.stringify(missing)))).rejects.toThrow('AI_EXTRACTION_INVALID');
+    await expect(run(envelope(JSON.stringify({ ...extraction, stake: 10 })))).rejects.toThrow(
+      'AI_EXTRACTION_INVALID',
+    );
+  });
+
+  it('keeps production on the fixed chain while only the evidence path can select one allowed model', async () => {
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const extraction = {
+      bookmaker: null,
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const bodies: Record<string, unknown>[] = [];
+    const mock = (model: string) =>
+      vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return Response.json({
+          id: 'fictional-qualification',
+          model,
+          choices: [
+            {
+              finish_reason: 'stop',
+              // No layouts are sent here, so the content is the extraction itself.
+              message: { content: JSON.stringify(extraction) },
+            },
+          ],
+        });
+      });
+    await extractTicket({ apiKey: 'fictional-key', image, fetchImpl: mock(OPENROUTER_MODEL) });
+    expect(bodies.at(-1)!.models).toEqual([...OPENROUTER_MODELS]);
+    const smuggled = {
+      apiKey: 'fictional-key',
+      image,
+      fetchImpl: mock(OPENROUTER_MODEL),
+      model: OPENROUTER_MODELS[1],
+    };
+    await extractTicket(smuggled as Parameters<typeof extractTicket>[0]);
+    expect(bodies.at(-1)!.models).toEqual([...OPENROUTER_MODELS]);
+    await extractTicketForEvidence({
+      apiKey: 'fictional-key',
+      image,
+      fetchImpl: mock(OPENROUTER_MODELS[1]),
+      model: OPENROUTER_MODELS[1],
+    });
+    expect(bodies.at(-1)!.models).toEqual([OPENROUTER_MODELS[1]]);
+    const before = bodies.length;
+    expect(() =>
+      extractTicketForEvidence({
+        apiKey: 'fictional-key',
+        image,
+        fetchImpl: mock(OPENROUTER_MODEL),
+        model: 'openai/fictional' as never,
+      }),
+    ).toThrow('AI_MODEL_NOT_ALLOWED');
+    expect(bodies.length).toBe(before);
+    await expect(
+      extractTicketForEvidence({
+        apiKey: 'fictional-key',
+        image,
+        fetchImpl: mock(OPENROUTER_MODEL),
+        model: OPENROUTER_MODELS[1],
+      }),
+    ).rejects.toThrow('AI_MODEL_MISMATCH');
+  });
+
+  it('keeps policy digests bound to one model and never reuses them across models', async () => {
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const extraction = {
+      bookmaker: null,
+      reference: null,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'A x B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    const qwenLayout: ValidatedLayout = {
+      ...layout,
+      id: 'synthetic-qwen-layout',
+      model: OPENROUTER_MODELS[1],
+    };
+    const completion = (model: string) =>
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          id: 'fictional-digest',
+          model,
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                content: JSON.stringify({ layoutId: 'synthetic-qwen-layout', extraction }),
+              },
+            },
+          ],
+        }),
+      );
+    const cross = await extractTicket({
+      apiKey: 'fictional-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([qwenLayout]),
+      fetchImpl: completion(OPENROUTER_MODEL),
+    });
+    expect(cross.policyDigest).toBeNull();
+    const own = await extractTicket({
+      apiKey: 'fictional-key',
+      image,
+      layouts: validatedLayoutsSchema.parse([qwenLayout]),
+      fetchImpl: completion(OPENROUTER_MODELS[1]),
+    });
+    expect(own.policyDigest).toBe(layoutDigest(qwenLayout));
+    expect(layoutDigest(qwenLayout)).not.toBe(layoutDigest(layout));
+  });
+
+  it('keeps the evidence-only extraction out of the worker request flow', () => {
+    const sourceDir = fileURLToPath(new URL('../../apps/worker/src/', import.meta.url));
+    const workerFiles = readdirSync(sourceDir).filter((name) => name.endsWith('.ts'));
+    expect(workerFiles).toContain('openrouter.ts');
+    for (const name of workerFiles) {
+      const source = readFileSync(join(sourceDir, name), 'utf8');
+      if (name === 'openrouter.ts') {
+        expect(source).toContain('export function extractTicketForEvidence');
+        continue;
+      }
+      expect(source).not.toContain('extractTicketForEvidence');
+    }
+    const integrations = readFileSync(join(sourceDir, 'integrations.ts'), 'utf8');
+    expect(integrations).toContain('extractTicket(');
+    expect(integrations).not.toContain('extractTicketForEvidence');
+    const replay = readFileSync(
+      fileURLToPath(new URL('../../scripts/validation/corpus-replay.mjs', import.meta.url)),
+      'utf8',
+    );
+    expect(replay).toContain('extractTicketForEvidence');
+    expect(replay).not.toContain('extractTicket(');
   });
 });

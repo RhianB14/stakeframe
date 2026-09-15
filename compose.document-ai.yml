@@ -1,0 +1,17 @@
+# Optional private overlay. Do not include this file unless the Document AI
+# processor and its service-account secret were explicitly provisioned.
+services:
+  worker:
+    environment:
+      GOOGLE_DOCUMENT_AI_ENABLED: 'true'
+      GOOGLE_DOCUMENT_AI_PROJECT_ID: ${GOOGLE_DOCUMENT_AI_PROJECT_ID:?Document AI project required}
+      GOOGLE_DOCUMENT_AI_LOCATION: ${GOOGLE_DOCUMENT_AI_LOCATION:-us}
+      GOOGLE_DOCUMENT_AI_PROCESSOR_ID: ${GOOGLE_DOCUMENT_AI_PROCESSOR_ID:?Document AI processor required}
+      GOOGLE_DOCUMENT_AI_CREDENTIALS_FILE: /run/secrets/google_document_ai_credentials
+      GOOGLE_DOCUMENT_AI_TIMEOUT_MS: '30000'
+    secrets:
+      - google_document_ai_credentials
+
+secrets:
+  google_document_ai_credentials:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/google_document_ai_credentials.json

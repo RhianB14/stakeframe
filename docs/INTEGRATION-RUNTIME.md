@@ -28,11 +28,43 @@ recepção ao Telegram. Telegram não é backup: sua retenção de updates é li
 
 ## Extração
 
-O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 2.048 tokens,
-raciocínio `low`, prazo de 60 segundos e fallback desativado. A saída é validada
-novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
-preservadas como texto, sem inferir ano/fuso. Toda extração vai para revisão;
+Quando explicitamente ativado, o worker executa antes da visão um OCR privado
+do Google Document AI Enterprise OCR. A chamada REST usa a credencial OAuth de
+service account em `GOOGLE_DOCUMENT_AI_CREDENTIALS_FILE` e recebe a imagem
+original; o resultado normalizado contém texto, coordenadas normalizadas,
+blocos, linhas, confiança e qualidade da imagem. A credencial, o texto OCR e
+os resultados não entram em logs, Git, PR ou Kanban. O OCR fica desativado por
+padrão e exige projeto, localização e processor configurados. Se o OCR
+estiver ativado e falhar, o job falha fechado antes da chamada multimodal;
+não há degradação silenciosa para imagem sem OCR.
+
+O modelo multimodal recebe a imagem original preparada para visão e o OCR como
+contexto auxiliar. A imagem continua sendo a fonte de verdade: OCR não pode
+inventar, completar ou corrigir um campo visível. Divergência OCR × modelo,
+baixa confiança ou ausência de evidência mantém o item em revisão. O OCR nunca
+é suficiente sozinho para liberar importação automática.
+
+O runtime usa uma cadeia fixa por precisão:
+`google/gemini-3.8-flash` → `qwen/qwen3-vl-32b-instruct` →
+`deepseek/deepseek-v4-flash-vision-exp`, com schema estrito, 4.096 tokens,
+`seed: 0`, sem raciocínio/temperatura e prazo de 60 segundos. O roteamento
+ocorre dentro de uma única chamada OpenRouter; o worker nunca repete a chamada.
+Modelo e provedor efetivos são registrados, e um fallback sem corpus próprio
+permanece obrigatoriamente em revisão manual. A qualificação individual de cada
+modelo da cadeia roda exclusivamente na ferramenta privada de avaliação
+(`--model` com allowlist exata, sem fallback entre modelos); nenhuma request,
+payload, variável pública ou configuração da aplicação pode escolher o modelo
+do runtime. A saída é validada novamente
+pelo Zod. Valores monetários permanecem strings; datas visíveis são
+preservadas como texto, sem inferir ano/fuso. Esporte não é inferido a partir de nomes de equipes ou
+participantes. Toda extração vai para revisão;
 o lançamento exige confirmação do proprietário pelo comando `import.confirm`.
+
+Antes da chamada, o worker prepara uma visualização transitória da imagem,
+corrigindo orientação EXIF e aplicando contraste/nitidez leves inspirados no
+pipeline legado do SharkTrack. A imagem original e seu SHA-256 permanecem
+inalterados no armazenamento privado; a transformação serve apenas para a
+leitura visual do provedor.
 
 A reserva de cota ocorre em transação antes da chamada externa: até 60 chamadas
 por dia e 1.500 por mês UTC. Falhas e chamadas incertas também contam. Isso limita

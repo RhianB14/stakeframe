@@ -1,5 +1,8 @@
 export class IntegrationError extends Error {
-  constructor(public readonly code: string) {
+  constructor(
+    public readonly code: string,
+    public readonly safeMetadata: Readonly<Record<string, string | number>> = {},
+  ) {
     super(code);
     this.name = 'IntegrationError';
   }

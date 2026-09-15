@@ -1,18 +1,28 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { OPENROUTER_MODEL, parseCaption } from '../../packages/shared/src/index.js';
+import {
+  OPENROUTER_MODEL,
+  OPENROUTER_MODELS,
+  parseCaption,
+} from '../../packages/shared/src/index.js';
 import {
   extractTicket,
   providerStructuredSchema,
+  rateLimitMetadata,
   readAiConfig,
+  TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
+import { prepareVisionImage } from '../../apps/worker/src/vision-image.js';
 import {
   authorizedImage,
   pollTelegramOnce,
   readTelegramConfig,
 } from '../../apps/worker/src/telegram.js';
 import { readBounded } from '../../apps/worker/src/http.js';
+import type { DocumentOcrResult } from '../../apps/worker/src/google-document-ai.js';
 
 const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+const validImage = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 const extraction = {
   bookmaker: 'Casa de teste',
   reference: null,
@@ -37,6 +47,7 @@ const extraction = {
 const completion = {
   id: 'test-completion',
   model: OPENROUTER_MODEL,
+  provider: 'Google AI Studio',
   choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(extraction) } }],
 };
 const config = {
@@ -57,33 +68,55 @@ const update = {
 };
 
 describe('OpenRouter boundary', () => {
+  it('prepares only a provider view and preserves the original attachment bytes', async () => {
+    const prepared = await prepareVisionImage(validImage);
+    expect(prepared.image.length).toBeGreaterThan(0);
+    expect(prepared.mime).toBe('image/png');
+    expect(prepared.image).not.toEqual(validImage);
+    expect(validImage).toEqual(
+      readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url)),
+    );
+  });
   it('is opt-in and refuses unapproved models, fallback and larger limits', () => {
     expect(readAiConfig({})).toBeNull();
     const env = {
       AI_ENABLED: 'true',
       AI_PROVIDER: 'openrouter',
       OPENROUTER_MODEL,
-      OPENROUTER_ALLOW_FALLBACKS: 'false',
+      OPENROUTER_ALLOW_FALLBACKS: 'true',
       OPENROUTER_API_KEY: `sk-or-v1-${'0'.repeat(64)}`,
     };
     expect(readAiConfig(env)).not.toBeNull();
     for (const change of [
       { OPENROUTER_MODEL: 'another-model' },
-      { OPENROUTER_ALLOW_FALLBACKS: 'true' },
-      { OPENROUTER_MAX_OUTPUT_TOKENS: '4096' },
+      { OPENROUTER_ALLOW_FALLBACKS: 'false' },
+      { OPENROUTER_MAX_OUTPUT_TOKENS: '2048' },
+      { OPENROUTER_REASONING_EFFORT: 'medium' },
     ])
       expect(() => readAiConfig({ ...env, ...change })).toThrow();
   });
   it('uses a fixed endpoint and structured schema, preserves unknown dates, requires review', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json(completion));
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json(completion));
     const result = await extractTicket({ apiKey: 'test-key', image, fetchImpl });
     expect(result.extraction.selections[0]?.eventDateText).toBeNull();
     expect(result.requiresReview).toBe(true);
+    expect(result.provider).toBe('Google AI Studio');
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
     const request = JSON.parse(String(init?.body));
-    expect(request.provider).toEqual({ allow_fallbacks: false, require_parameters: true });
-    expect(request.model).toBe(OPENROUTER_MODEL);
+    expect(request.provider).toEqual({
+      allow_fallbacks: true,
+      require_parameters: true,
+      sort: 'throughput',
+    });
+    expect(request.model).toBeUndefined();
+    expect(request.models).toEqual(OPENROUTER_MODELS);
+    expect(request.max_tokens).toBe(4096);
+    expect(request.reasoning).toBeUndefined();
+    expect(request.seed).toBe(0);
+    expect(request.temperature).toBeUndefined();
     expect(request.response_format.json_schema.strict).toBe(true);
     const providerSchema = request.response_format.json_schema.schema;
     expect(JSON.stringify(providerSchema)).not.toMatch(
@@ -94,6 +127,61 @@ describe('OpenRouter boundary', () => {
       required: expect.arrayContaining(['bookmaker', 'selections', 'warnings']),
       additionalProperties: false,
     });
+  });
+  it('sends OCR as auxiliary context while retaining the original image path', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json(completion));
+    const ocr: DocumentOcrResult = {
+      text: 'Casa de teste\nTime A x Time B\nGols\nMais de 2\n10,00\n2,00',
+      pages: [
+        {
+          width: 100,
+          height: 200,
+          unit: 'pixels',
+          qualityScore: 0.96,
+          blocks: [{ text: 'Casa de teste', confidence: 0.99, boundingPoly: [{ x: 0, y: 0 }] }],
+          lines: [
+            { text: 'Retorno potencial 20,00', confidence: 0.98, boundingPoly: [{ x: 0, y: 0 }] },
+          ],
+        },
+      ],
+      averageConfidence: 0.985,
+      averageQualityScore: 0.96,
+    };
+    await extractTicket({ apiKey: 'test-key', image, fetchImpl, ocr });
+    const request = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    const userContent = request.messages[1].content;
+    expect(userContent.some((part: { type: string }) => part.type === 'image_url')).toBe(true);
+    const ocrPart = userContent.find((part: { type: string }) => part.type === 'text');
+    expect(ocrPart.text).toContain('[OCR estruturado auxiliar');
+    expect(ocrPart.text).toContain('Time A x Time B');
+    expect((await extractTicket({ apiKey: 'test-key', image, fetchImpl, ocr })).ocrConsistent).toBe(
+      true,
+    );
+  });
+  it.each(OPENROUTER_MODELS)('accepts the fixed model response %s', async (model) => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ ...completion, model }));
+    const result = await extractTicket({ apiKey: 'test-key', image, fetchImpl });
+    expect(result.model).toBe(model);
+    expect(result.requiresReview).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it('uses a field-specific fail-closed extraction prompt', () => {
+    for (const rule of [
+      '[Procedimento obrigatório]',
+      'inclusive 0.00',
+      'retorno líquido',
+      'Nunca derive potentialReturn',
+      '[Exemplos sintéticos]',
+      'Leia cada seleção uma por uma',
+      'bookmaker é independente do contexto',
+      '[Warnings]',
+      'somente com o objeto JSON',
+    ])
+      expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain(rule);
   });
   it('simplifies provider constraints recursively without weakening local validation', async () => {
     expect(
@@ -128,6 +216,34 @@ describe('OpenRouter boundary', () => {
       .mockResolvedValue(new Response('sensitive provider error', { status }));
     await expect(extractTicket({ apiKey: 'test-key', image, fetchImpl })).rejects.toThrow(/^AI_/);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it('preserves only numeric rate-limit headers and never the provider body', async () => {
+    const response = new Response('secret provider payload', {
+      status: 429,
+      headers: {
+        'retry-after': '60',
+        'x-ratelimit-limit': '200',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': '1789516800',
+        'x-provider-secret': 'must-not-escape',
+      },
+    });
+    const error = await extractTicket({
+      apiKey: 'test-key',
+      image,
+      fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response),
+    }).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      code: 'AI_RATE_LIMITED',
+      safeMetadata: {
+        retryAfterSeconds: 60,
+        limit: 200,
+        remaining: 0,
+        reset: 1789516800,
+      },
+    });
+    expect(JSON.stringify(error)).not.toContain('secret');
+    expect(rateLimitMetadata(new Headers({ 'retry-after': 'private value' }))).toEqual({});
   });
   it.each([400, 422])('classifies HTTP %i as a sanitized invalid request', async (status) => {
     const fetchImpl = vi

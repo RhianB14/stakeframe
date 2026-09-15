@@ -16,7 +16,7 @@ const ai = {
   AI_ENABLED: 'true',
   AI_PROVIDER: 'openrouter',
   OPENROUTER_MODEL,
-  OPENROUTER_ALLOW_FALLBACKS: 'false',
+  OPENROUTER_ALLOW_FALLBACKS: 'true',
   OPENROUTER_API_KEY: `sk-or-v1-${'a'.repeat(64)}`,
 };
 const key = {

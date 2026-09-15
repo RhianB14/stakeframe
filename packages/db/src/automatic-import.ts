@@ -27,6 +27,7 @@ type Evidence = {
   model?: unknown;
   layoutId?: unknown;
   policyDigest?: unknown;
+  ocrConsistent?: unknown;
 };
 const normalized = (value: string) =>
   value
@@ -36,9 +37,35 @@ const normalized = (value: string) =>
     .toLocaleLowerCase('pt-BR')
     .replace(/\s+/g, ' ');
 
+type CaptionContext = {
+  labels: ReturnType<typeof parseCaption>;
+  match: (kind: string, value: string | null) => string | null;
+  bookmakerId: string | null;
+};
+
+async function captionContext(client: PoolClient, caption: string): Promise<CaptionContext> {
+  const labels = parseCaption(caption);
+  const aliases = (
+    await client.query<{ catalog_id: string; kind: string; label: string }>(
+      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where c.active',
+    )
+  ).rows;
+  const match = (kind: string, value: string | null) => {
+    const ids = new Set(
+      aliases
+        .filter(
+          (alias) => value && alias.kind === kind && normalized(alias.label) === normalized(value),
+        )
+        .map((alias) => alias.catalog_id),
+    );
+    return ids.size === 1 ? [...ids][0]! : null;
+  };
+  return { labels, match, bookmakerId: match('bookmaker', labels.bookmaker) };
+}
+
 async function candidate(
   client: PoolClient,
-  caption: string,
+  context: CaptionContext,
   result: Evidence,
   layout: ValidatedLayout,
   now: Date,
@@ -55,30 +82,15 @@ async function candidate(
     !extraction.reference?.trim()
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
-  const labels = parseCaption(caption);
-  if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
-  const aliases = (
-    await client.query<{ catalog_id: string; kind: string; label: string }>(
-      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where c.active',
-    )
-  ).rows;
-  const match = (kind: string, value: string | null) => {
-    const ids = new Set(
-      aliases
-        .filter(
-          (alias) => value && alias.kind === kind && normalized(alias.label) === normalized(value),
-        )
-        .map((alias) => alias.catalog_id),
-    );
-    return ids.size === 1 ? [...ids][0] : null;
-  };
-  const tipsterId = match('tipster', labels.tipster);
-  const bookmakerId = match('bookmaker', labels.bookmaker);
-  if (!tipsterId || !bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };
-  if (
-    bookmakerId !== layout.bookmakerId ||
-    match('bookmaker', extraction.bookmaker) !== bookmakerId
-  )
+  if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
+  if (context.labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
+  const tipsterId = context.match('tipster', context.labels.tipster);
+  if (!tipsterId || !context.bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };
+  // A casa vem do contexto informado. A evidência visual do modelo nunca
+  // substitui esse contexto: só bloqueia quando aponta para OUTRA casa; null
+  // (marca ausente no recorte) não impede um bilhete válido.
+  const visualBookmakerId = context.match('bookmaker', extraction.bookmaker);
+  if (visualBookmakerId !== null && visualBookmakerId !== context.bookmakerId)
     return { reason: 'BOOKMAKER_CONFLICT' };
   const placedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
   if (!placedAt || Date.parse(placedAt) > now.getTime()) return { reason: 'PLACED_AT_UNCERTAIN' };
@@ -95,7 +107,7 @@ async function candidate(
     const credits = (
       await client.query<{ id: string; stake_returned: boolean }>(
         'select id,stake_returned from finance.freebet where bookmaker_id=$1 and amount=$2 and used_by is null and expires_on >= $3::date order by id limit 2 for update',
-        [bookmakerId, stake, saoPauloDate(new Date(placedAt))],
+        [context.bookmakerId, stake, saoPauloDate(new Date(placedAt))],
       )
     ).rows;
     if (credits.length !== 1) return { reason: 'FREEBET_UNRESOLVED' };
@@ -103,7 +115,7 @@ async function candidate(
     stakeReturned = credits[0]!.stake_returned;
   }
   const parsed = betInputSchema.safeParse({
-    bookmakerId,
+    bookmakerId: context.bookmakerId,
     tipsterId,
     stake,
     odds: extraction.odds,
@@ -167,19 +179,28 @@ export function createAutomaticImportService(
           return { state: 'unchanged' as const };
         }
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
-        const layout = layouts.find(
-          (value) =>
-            value.id === result.layoutId &&
-            value.model === result.model &&
-            layoutDigest(value) === result.policyDigest &&
-            Date.parse(value.approvedAt) <= now.getTime(),
-        );
-        let reason: AutomaticReason = 'LAYOUT_NOT_VALIDATED';
+        // O layout é selecionado pela casa informada no contexto; a
+        // classificação visual do modelo (result.layoutId) é evidência, não
+        // gate: um bilhete válido não se perde por ausência de marca no print.
+        const context = await captionContext(client, row.caption);
+        const layout =
+          context.bookmakerId === null
+            ? undefined
+            : layouts.find(
+                (value) =>
+                  value.bookmakerId === context.bookmakerId &&
+                  value.model === result.model &&
+                  Date.parse(value.approvedAt) <= now.getTime(),
+              );
+        let reason: AutomaticReason =
+          context.labels.requiresReview || context.bookmakerId === null
+            ? 'CAPTION_UNRESOLVED'
+            : 'LAYOUT_NOT_VALIDATED';
         let betId: string | null = null;
         if (layout) {
           await client.query('savepoint automatic_finance');
           try {
-            const assessed = await candidate(client, row.caption, result, layout, now);
+            const assessed = await candidate(client, context, result, layout, now);
             reason = assessed.reason;
             if (assessed.bet) {
               const command = financeCommandSchema.parse({
@@ -227,6 +248,11 @@ export function createAutomaticImportService(
           reason,
           policyId: layout?.id ?? null,
           policyDigest: layout ? layoutDigest(layout) : null,
+          // Rastreio: a casa aplicada veio do contexto informado; o layoutId
+          // observado pelo modelo fica registrado à parte como evidência.
+          bookmakerOrigin: layout ? ('context' as const) : null,
+          visualLayoutId:
+            typeof result.layoutId === 'string' ? result.layoutId.slice(0, 200) : null,
         };
         await client.query('update integration.inbox set extraction=$2 where id=$1', [
           id,

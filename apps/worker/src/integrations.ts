@@ -11,6 +11,7 @@ import {
 } from '@stakeframe/db';
 import { probeSchema } from '@stakeframe/shared';
 import { readAiConfig, extractTicket } from './openrouter.js';
+import { extractDocumentOcr, readDocumentAiConfig } from './google-document-ai.js';
 import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
 import { IntegrationError } from './http.js';
 import { readAutomaticLayouts } from './automatic-config.js';
@@ -79,6 +80,8 @@ export async function startIntegrations(
   requireBudget?: () => Promise<void>,
 ) {
   const ai = readAiConfig(env);
+  const documentAi = readDocumentAiConfig(env);
+  if (documentAi && !ai) throw new IntegrationError('DOCUMENT_AI_REQUIRES_AI');
   const layouts = readAutomaticLayouts(env);
   const automatic = createAutomaticImportService(database, layouts);
   const telegram = readTelegramConfig(env);
@@ -112,12 +115,21 @@ export async function startIntegrations(
         if (!claim) return { state: 'unchanged' };
         try {
           if (requireBudget) await requireBudget();
+          const ocr = documentAi
+            ? await extractDocumentOcr({
+                config: documentAi,
+                image: claim.image,
+                fetchImpl,
+                signal: controller.signal,
+              })
+            : undefined;
           const result = await extractTicket({
             apiKey: ai.apiKey,
             image: claim.image,
             fetchImpl,
             signal: controller.signal,
             layouts,
+            ...(ocr ? { ocr } : {}),
           });
           return await automatic.complete(id, claim.attempt, result);
         } catch (error) {
