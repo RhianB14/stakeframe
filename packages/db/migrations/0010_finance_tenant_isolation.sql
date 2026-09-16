@@ -272,107 +272,107 @@ ALTER TABLE "finance"."settings" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."settings" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."settings";
 CREATE POLICY "organization_isolation" ON "finance"."settings"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."catalog" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."catalog" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."catalog";
 CREATE POLICY "organization_isolation" ON "finance"."catalog"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."catalog_alias" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."catalog_alias" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."catalog_alias";
 CREATE POLICY "organization_isolation" ON "finance"."catalog_alias"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."account" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."account" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."account";
 CREATE POLICY "organization_isolation" ON "finance"."account"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."journal" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."journal" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."journal";
 CREATE POLICY "organization_isolation" ON "finance"."journal"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."posting" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."posting" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."posting";
 CREATE POLICY "organization_isolation" ON "finance"."posting"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."monthly_unit" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."monthly_unit" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."monthly_unit";
 CREATE POLICY "organization_isolation" ON "finance"."monthly_unit"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."freebet" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."freebet" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."freebet";
 CREATE POLICY "organization_isolation" ON "finance"."freebet"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."bet" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."bet" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."bet";
 CREATE POLICY "organization_isolation" ON "finance"."bet"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."selection" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."selection" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."selection";
 CREATE POLICY "organization_isolation" ON "finance"."selection"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."settlement" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."settlement" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."settlement";
 CREATE POLICY "organization_isolation" ON "finance"."settlement"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."settlement_reversal" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."settlement_reversal" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."settlement_reversal";
 CREATE POLICY "organization_isolation" ON "finance"."settlement_reversal"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."audit" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."audit" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."audit";
 CREATE POLICY "organization_isolation" ON "finance"."audit"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "finance"."command_receipt" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "finance"."command_receipt" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "finance"."command_receipt";
 CREATE POLICY "organization_isolation" ON "finance"."command_receipt"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "integration"."attachment" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "integration"."attachment" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "integration"."attachment";
 CREATE POLICY "organization_isolation" ON "integration"."attachment"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "integration"."inbox" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "integration"."inbox" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "integration"."inbox";
 CREATE POLICY "organization_isolation" ON "integration"."inbox"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "integration"."extraction_request" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "integration"."extraction_request" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "integration"."extraction_request";
 CREATE POLICY "organization_isolation" ON "integration"."extraction_request"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);
 ALTER TABLE "integration"."event_search" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "integration"."event_search" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "organization_isolation" ON "integration"."event_search";
 CREATE POLICY "organization_isolation" ON "integration"."event_search"
-  USING (organization_id = current_setting('app.organization_id', true)::uuid)
-  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+  USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)
+  WITH CHECK (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid);

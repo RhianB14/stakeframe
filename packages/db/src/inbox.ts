@@ -47,11 +47,7 @@ export function createInboxStore(
         [next],
       );
     },
-    async accept(
-      context: OrganizationContext,
-      input: InboxInput,
-      download: () => Promise<Buffer>,
-    ) {
+    async accept(context: OrganizationContext, input: InboxInput, download: () => Promise<Buffer>) {
       if (!input.sourceKey || input.sourceKey.length > 200 || input.caption.length > 1024)
         throw new Error('INVALID_INBOX_INPUT');
       const existing = await withOrg(context, async (client) => {
@@ -85,7 +81,7 @@ export function createInboxStore(
           return raced.id;
         }
         const capacity = await client.query<{ count: string; bytes: string }>(
-          "select (select count(*) from integration.inbox where state not in ('discarded','imported')) as count, coalesce(sum(octet_length(image)),0) as bytes from integration.attachment",
+          "select (select count(*) from integration.inbox where state not in ('discarded','imported')) as count, coalesce(sum(octet_length(image)),0) as bytes from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid",
         );
         if (
           Number(capacity.rows[0]?.count) >= 2000 ||
@@ -139,7 +135,7 @@ export function createInboxStore(
       const pending = await withOrg(context, async (client) => {
         return (
           await client.query<{ attachment_id: string }>(
-            "select attachment_id from integration.inbox where id=$1 and state='pending'",
+            "select attachment_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='pending'",
             [id],
           )
         ).rows[0];
@@ -154,7 +150,7 @@ export function createInboxStore(
       } catch {
         await withOrg(context, async (client) => {
           await client.query(
-            "update integration.inbox set state='failed',error_code='ATTACHMENT_UNAVAILABLE',version=version+1,updated_at=now() where id=$1 and state='pending'",
+            "update integration.inbox set state='failed',error_code='ATTACHMENT_UNAVAILABLE',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='pending'",
             [id],
           );
         });
@@ -163,7 +159,7 @@ export function createInboxStore(
       return withOrg(context, async (client) => {
         await client.query('select pg_advisory_xact_lock(782341093)');
         const item = await client.query(
-          "select id from integration.inbox where id=$1 and state='pending' for update",
+          "select id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='pending' for update",
           [id],
         );
         if (!item.rows[0]) return null;
@@ -178,7 +174,7 @@ export function createInboxStore(
         );
         if (Number(usage.rows[0]?.daily) >= 60 || Number(usage.rows[0]?.monthly) >= 1500) {
           await client.query(
-            "update integration.inbox set state='failed',error_code='AI_LOCAL_QUOTA_REACHED',version=version+1,updated_at=now() where id=$1",
+            "update integration.inbox set state='failed',error_code='AI_LOCAL_QUOTA_REACHED',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
             [id],
           );
           return null;
@@ -188,7 +184,7 @@ export function createInboxStore(
           [day],
         );
         const claimed = await client.query<{ attempts: number }>(
-          "update integration.inbox set state='processing',attempts=attempts+1,version=version+1,updated_at=now() where id=$1 returning attempts",
+          "update integration.inbox set state='processing',attempts=attempts+1,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning attempts",
           [id],
         );
         return { image, attempt: claimed.rows[0]!.attempts };
@@ -197,7 +193,7 @@ export function createInboxStore(
     async complete(context: OrganizationContext, id: string, attempt: number, result: object) {
       await withOrg(context, async (client) => {
         await client.query(
-          "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3",
+          "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3",
           [id, JSON.stringify(result), attempt],
         );
       });
@@ -206,7 +202,7 @@ export function createInboxStore(
       if (!/^[A-Z_]{3,80}$/.test(code)) throw new Error('INVALID_ERROR_CODE');
       await withOrg(context, async (client) => {
         await client.query(
-          "update integration.inbox set state='failed',error_code=$2,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3",
+          "update integration.inbox set state='failed',error_code=$2,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3",
           [id, code, attempt],
         );
       });
@@ -215,7 +211,7 @@ export function createInboxStore(
     async recoverInterrupted(context: OrganizationContext) {
       await withOrg(context, async (client) => {
         await client.query(
-          "update integration.inbox set state='failed',error_code='AI_OUTCOME_UNCERTAIN',version=version+1,updated_at=now() where state='processing' and updated_at < now()-interval '3 minutes'",
+          "update integration.inbox set state='failed',error_code='AI_OUTCOME_UNCERTAIN',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and state='processing' and updated_at < now()-interval '3 minutes'",
         );
       });
     },

@@ -21,7 +21,7 @@ export async function executeFinancialCommand(
       hash: string;
       result: { id: string; version: number };
     }>(
-      "select actor,hash,result from finance.command_receipt where organization_id=current_setting('app.organization_id', true)::uuid and key=$1",
+      'select actor,hash,result from finance.command_receipt where organization_id=current_setting($$app.organization_id$$, true)::uuid and key=$1',
       [key],
     )
   ).rows[0];
@@ -35,7 +35,7 @@ export async function executeFinancialCommand(
   const applied = await applyFinanceCommand(client, command, actor, settings, now);
   const balances = (
     await client.query<{ kind: string; amount: string }>(
-      'select a.kind,coalesce(sum(p.amount),0)::text as amount from finance.account a left join finance.posting p on p.account_id=a.id group by a.id',
+      'select a.kind,coalesce(sum(p.amount),0)::text as amount from finance.account a left join finance.posting p on p.account_id=a.id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid group by a.id',
     )
   ).rows;
   for (const balance of balances) money(cents(balance.amount));
@@ -46,14 +46,14 @@ export async function executeFinancialCommand(
   );
   const open = (
     await client.query<{ amount: string }>(
-      "select coalesce(sum(remaining),0)::text as amount from finance.bet where state='open' and freebet_id is null",
+      "select coalesce(sum(remaining),0)::text as amount from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and state='open' and freebet_id is null",
     )
   ).rows[0]!.amount;
   if (cents(open) !== cents(balances.find((value) => value.kind === 'exposure')?.amount ?? '0'))
     throw new FinanceError('INVALID_FINANCIAL_OPERATION');
   const result = { id: applied.id, version: settings.version + 1 };
   await client.query(
-    "update finance.settings set version=$1 where organization_id=current_setting('app.organization_id', true)::uuid",
+    'update finance.settings set version=$1 where organization_id=current_setting($$app.organization_id$$, true)::uuid',
     [result.version],
   );
   await client.query(

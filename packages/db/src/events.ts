@@ -15,7 +15,11 @@ import {
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { FinanceError, validateEventDate } from './finance-core.js';
-import { createTenantContext, type OrganizationContext } from './tenant-context.js';
+import {
+  createTenantContext,
+  type OrganizationContext,
+  type WithOrganizationTransactionOptions,
+} from './tenant-context.js';
 
 export const EVENT_LIMITS = {
   thesportsdb: { daily: 60, monthly: 1500, minute: 10 },
@@ -129,7 +133,12 @@ export function createEventService(
   const transaction = <T>(
     context: OrganizationContext,
     action: (client: PoolClient) => Promise<T>,
-  ) => tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
+    options: WithOrganizationTransactionOptions = {},
+  ) => tenant.withOrganizationTransaction(context, action, options);
+  // Reads use a repeatable-read snapshot (never read only: SET LOCAL is rejected there);
+  // writes stay read committed so concurrent duplicate-key serialization works.
+  const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
+    transaction(context, action, { isolation: 'repeatable read' });
   return {
     /** Returns the authenticated user's organization context (provisioning on first use). */
     ensureContext(userId: string) {
@@ -141,7 +150,7 @@ export function createEventService(
         (Date.parse(query.to) - Date.parse(query.from)) / 86_400_000 > 366
       )
         throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-      return transaction(context, async (client) => {
+      return read(context, async (client) => {
         const args = [query.from, query.to, query.view, query.betState ?? null];
         const filter = `where ($4::text is null or b.state=$4) and
           (case when $3='pending' then s.event_date is null or s.schedule_status='postponed'
@@ -158,7 +167,7 @@ export function createEventService(
           await client.query<{ count: number }>(
             `select count(*)::int as count
           from finance.selection s join finance.bet b on b.id=s.bet_id
-          where (s.event_date is null or s.schedule_status='postponed') and ($1::text is null or b.state=$1)`,
+          where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and (s.event_date is null or s.schedule_status='postponed') and ($1::text is null or b.state=$1)`,
             [query.betState ?? null],
           )
         ).rows[0]!.count;
@@ -182,12 +191,12 @@ export function createEventService(
       });
     },
     async selection(context: OrganizationContext, id: string) {
-      return transaction(context, async (client) => {
+      return read(context, async (client) => {
         const row = (
           await client.query<SelectionRow>(
             `select s.*,s.event_date::text as event_date,
         b.reference,b.state as bet_state,c.name as bookmaker from finance.selection s
-        join finance.bet b on b.id=s.bet_id join finance.catalog c on c.id=b.bookmaker_id where s.id=$1`,
+        join finance.bet b on b.id=s.bet_id join finance.catalog c on c.id=b.bookmaker_id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.id=$1`,
             [id],
           )
         ).rows[0];
@@ -196,7 +205,7 @@ export function createEventService(
       });
     },
     async status(context: OrganizationContext) {
-      return transaction(context, async (client) => {
+      return read(context, async (client) => {
         const providers = [];
         for (const provider of ['thesportsdb', 'tavily'] as const) {
           const used = await usage(client, provider);
@@ -213,21 +222,22 @@ export function createEventService(
       });
     },
     async search(context: OrganizationContext, id: string) {
-      return transaction(context, async (client) => {
+      return read(context, async (client) => {
         const row = (
-          await client.query<SearchRow>('select * from integration.event_search where id=$1', [
-            id,
-          ])
+          await client.query<SearchRow>(
+            'select * from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
         ).rows[0];
         if (!row) throw new FinanceError('NOT_FOUND');
         return searchDto(row);
       });
     },
     async searches(context: OrganizationContext, selectionId: string) {
-      return transaction(context, async (client) => {
+      return read(context, async (client) => {
         const rows = (
           await client.query<SearchRow>(
-            'select * from integration.event_search where selection_id=$1 order by created_at desc,id desc limit 20',
+            'select * from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid and selection_id=$1 order by created_at desc,id desc limit 20',
             [selectionId],
           )
         ).rows;
@@ -240,7 +250,10 @@ export function createEventService(
       return transaction(context, async (client) => {
         await client.query('select pg_advisory_xact_lock(783420096)');
         const previous = (
-          await client.query<SearchRow>('select * from integration.event_search where id=$1', [key])
+          await client.query<SearchRow>(
+            'select * from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [key],
+          )
         ).rows[0];
         if (previous) {
           if (previous.actor !== context.userId || previous.hash !== hash)
@@ -250,7 +263,7 @@ export function createEventService(
         if (!config[command.provider]) throw new Error('EVENT_PROVIDER_DISABLED');
         const selection = (
           await client.query<{ event: string; sport: string | null }>(
-            'select event,sport from finance.selection where id=$1',
+            'select event,sport from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
             [command.selectionId],
           )
         ).rows[0];
@@ -270,7 +283,7 @@ export function createEventService(
         if (!cached) {
           const active = (
             await client.query<{ count: number }>(
-              "select count(*)::int as count from integration.event_search where state in ('pending','processing')",
+              "select count(*)::int as count from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid and state in ('pending','processing')",
             )
           ).rows[0]!.count;
           if (active >= 100) throw new Error('EVENT_QUEUE_FULL');
@@ -305,7 +318,7 @@ export function createEventService(
         await client.query('select pg_advisory_xact_lock(783420096)');
         // An interrupted external call is never retried automatically or charged again.
         await client.query(
-          "update integration.event_search set state='failed',error_code='EVENT_OUTCOME_UNCERTAIN',completed_at=now() where state='processing' and started_at < now()-interval '5 minutes'",
+          "update integration.event_search set state='failed',error_code='EVENT_OUTCOME_UNCERTAIN',completed_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and state='processing' and started_at < now()-interval '5 minutes'",
         );
         const enabled = (['thesportsdb', 'tavily'] as const).filter((provider) => config[provider]);
         for (const provider of enabled) {
@@ -313,7 +326,7 @@ export function createEventService(
           if (used.minute >= EVENT_LIMITS[provider].minute) continue;
           const row = (
             await client.query<SearchRow>(
-              "select * from integration.event_search where state='pending' and provider=$1 order by created_at,id for update skip locked limit 1",
+              "select * from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid and state='pending' and provider=$1 order by created_at,id for update skip locked limit 1",
               [provider],
             )
           ).rows[0];
@@ -323,13 +336,13 @@ export function createEventService(
             used.monthly >= EVENT_LIMITS[provider].monthly
           ) {
             await client.query(
-              "update integration.event_search set state='failed',error_code='EVENT_QUOTA_REACHED',completed_at=now() where id=$1",
+              "update integration.event_search set state='failed',error_code='EVENT_QUOTA_REACHED',completed_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
               [row.id],
             );
             continue;
           }
           await client.query(
-            "update integration.event_search set state='processing',started_at=now() where id=$1",
+            "update integration.event_search set state='processing',started_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
             [row.id],
           );
           return searchDto({ ...row, state: 'processing' });
@@ -342,7 +355,7 @@ export function createEventService(
       const parsed = candidates.map((item) => eventCandidateSchema.parse(item));
       await tenant.withOrganizationTransaction(context, async (client) => {
         await client.query(
-          "update integration.event_search set state='complete',candidates=$2,completed_at=now() where id=$1 and state='processing'",
+          "update integration.event_search set state='complete',candidates=$2,completed_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing'",
           [id, JSON.stringify(parsed)],
         );
       });
@@ -356,7 +369,7 @@ export function createEventService(
       ];
       await tenant.withOrganizationTransaction(context, async (client) => {
         await client.query(
-          "update integration.event_search set state='failed',error_code=$2,completed_at=now() where id=$1 and state='processing'",
+          "update integration.event_search set state='failed',error_code=$2,completed_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing'",
           [id, allowed.includes(code) ? code : 'EVENT_CONNECTION_FAILED'],
         );
       });
@@ -377,7 +390,7 @@ export async function updateEvent(
     throw new FinanceError('INVALID_FINANCIAL_OPERATION');
   const before = (
     await client.query<SelectionRow>(
-      'select *,event_date::text as event_date from finance.selection where id=$1 for update',
+      'select *,event_date::text as event_date from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
       [command.selectionId],
     )
   ).rows[0];
@@ -387,7 +400,7 @@ export async function updateEvent(
     const row = (
       await client.query<{ candidate: unknown }>(
         `select candidate from integration.event_search s,
-      lateral jsonb_array_elements(s.candidates) candidate where s.selection_id=$1 and s.state='complete'
+      lateral jsonb_array_elements(s.candidates) candidate where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.selection_id=$1 and s.state='complete'
       and s.event_fingerprint=$2 and candidate->>'id'=$3 order by s.created_at desc limit 1`,
         [before.id, eventFingerprint(before.event, before.sport), command.candidateId],
       )
@@ -397,7 +410,7 @@ export async function updateEvent(
   }
   await client.query(
     `update finance.selection set event_date=$2,event_at=$3,date_status=$4,
-    schedule_status=$5,date_source=$6,date_evidence=$7 where id=$1`,
+    schedule_status=$5,date_source=$6,date_evidence=$7 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1`,
     [
       before.id,
       command.eventDate ?? (command.eventAt ? saoPauloDate(new Date(command.eventAt)) : null),

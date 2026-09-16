@@ -58,7 +58,9 @@ const candidate = (): EventCandidate => ({
   postponed: false,
 });
 async function makeBet(selections: BetInput['selections'] = [selection]) {
-  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find((row) => row.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   return run({
     type: 'bet.create',
     bookmakerId,
@@ -81,9 +83,14 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   finance = createFinanceService(database);
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
   tenantContext = await finance.ensureContext('fixture-owner');
   events = createEventService(database, { thesportsdb: true, tavily: true });
-  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find((row) => row.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   await run({
     type: 'bankroll.initialize',
     reserve: '500.00',
@@ -306,9 +313,9 @@ describe('calendar and event search persistence', () => {
     const bet = await makeBet();
     const id = (await finance.bet(tenantContext, bet.id)).bet.selections[0]!.id!;
     await database.pool.query(
-      `insert into integration.event_search(id,actor,hash,selection_id,provider,query,event_fingerprint,state,started_at)
-      select gen_random_uuid(),'fixture-owner','quota',$1,'tavily','fixture','fixture','failed',now()-interval '2 minutes' from generate_series(1,20)`,
-      [id],
+      `insert into integration.event_search(organization_id,id,actor,hash,selection_id,provider,query,event_fingerprint,state,started_at)
+      select $2,gen_random_uuid(),'fixture-owner','quota',$1,'tavily','fixture','fixture','failed',now()-interval '2 minutes' from generate_series(1,20)`,
+      [id, tenantContext.organizationId],
     );
     const blocked = await events.request(tenantContext, randomUUID(), {
       selectionId: id,

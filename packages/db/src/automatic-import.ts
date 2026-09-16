@@ -60,7 +60,7 @@ async function candidate(
   if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
   const aliases = (
     await client.query<{ catalog_id: string; kind: string; label: string }>(
-      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where c.active',
+      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
     )
   ).rows;
   const match = (kind: string, value: string | null) => {
@@ -95,7 +95,7 @@ async function candidate(
     if (!layout.allowFreebet) return { reason: 'FREEBET_UNRESOLVED' };
     const credits = (
       await client.query<{ id: string; stake_returned: boolean }>(
-        'select id,stake_returned from finance.freebet where bookmaker_id=$1 and amount=$2 and used_by is null and expires_on >= $3::date order by id limit 2 for update',
+        'select id,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and bookmaker_id=$1 and amount=$2 and used_by is null and expires_on >= $3::date order by id limit 2 for update',
         [bookmakerId, stake, saoPauloDate(new Date(placedAt))],
       )
     ).rows;
@@ -160,12 +160,12 @@ export function createAutomaticImportService(
         // All financial writers acquire locks in this order: settings, inbox, attachment.
         const settings = (
           await client.query<SettingsRow>(
-            "select * from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid for update",
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
           )
         ).rows[0]!;
         const row = (
           await client.query<{ caption: string; version: number }>(
-            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3 returning caption,version",
+            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version",
             [id, JSON.stringify(result), attempt],
           )
         ).rows[0];
@@ -232,10 +232,10 @@ export function createAutomaticImportService(
           policyId: layout?.id ?? null,
           policyDigest: layout ? layoutDigest(layout) : null,
         };
-        await client.query('update integration.inbox set extraction=$2 where id=$1', [
-          id,
-          JSON.stringify({ ...result, automatic }),
-        ]);
+        await client.query(
+          'update integration.inbox set extraction=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+          [id, JSON.stringify({ ...result, automatic })],
+        );
         await client.query(
           "insert into finance.audit(type,actor,entity_id,after) values('import.automatic','system:automatic-import',$1,$2)",
           [id, JSON.stringify({ attempt, ...automatic, betId })],

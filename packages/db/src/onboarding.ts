@@ -89,10 +89,10 @@ export function createOnboardingService(database: Database) {
       // The financial core answers for THIS organization (RLS inside the transaction context).
       tenant.withOrganizationTransaction(context, async (client) => {
         const settings = await client.query<{ initialized: boolean }>(
-          "select initialized from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid",
+          'select initialized from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
         );
         const bets = await client.query<{ recorded: boolean }>(
-          'select exists(select 1 from finance.bet) as recorded',
+          'select exists(select 1 from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid) as recorded',
         );
         return {
           initialized: settings.rows[0]?.initialized === true,
@@ -174,13 +174,13 @@ export function createOnboardingService(database: Database) {
       if (row?.profile_completed_at == null) throw new OnboardingError('ONBOARDING_PREREQUISITE');
 
       const settings = await client.query<{ initialized: boolean }>(
-        "select initialized from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid",
+        'select initialized from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
       );
       if (settings.rows[0]?.initialized !== true)
         throw new OnboardingError('ONBOARDING_PREREQUISITE');
 
       const bets = await client.query<{ recorded: boolean }>(
-        'select exists(select 1 from finance.bet) as recorded',
+        'select exists(select 1 from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid) as recorded',
       );
       const hasBet = bets.rows[0]?.recorded === true;
       // "registered" must be backed by a real bet; "deferred" is the explicit choice and is

@@ -29,7 +29,7 @@ export async function claimExpiredAttachmentsForBackup(
     context,
     async (connection) => {
       await connection.query(
-        "select id from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid for update",
+        'select id from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
       );
       await connection.query('select pg_advisory_xact_lock(782341092)');
       await connection.query(`with expired as (

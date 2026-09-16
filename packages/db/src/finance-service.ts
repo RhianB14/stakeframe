@@ -19,7 +19,7 @@ export { FinanceError } from './finance-core.js';
 
 /** The organization-scoped settings lock: PK lookup, resolved from the authenticated context. */
 const LOCK_SETTINGS_SQL = `select * from finance.settings
-  where organization_id=current_setting('app.organization_id', true)::uuid for update`;
+  where organization_id=current_setting($$app.organization_id$$, true)::uuid for update`;
 
 export function createFinanceService(database: Database) {
   const tenant = createTenantContext(database);
@@ -35,20 +35,24 @@ export function createFinanceService(database: Database) {
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
         const month = saoPauloDate(now).slice(0, 7);
         if (
-          !(await client.query('select month from finance.monthly_unit where month=$1', [month]))
-            .rowCount
+          !(
+            await client.query(
+              'select month from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid and month=$1',
+              [month],
+            )
+          ).rowCount
         ) {
           // PostgreSQL resolves the calendar boundary using the IANA zone, including historical DST.
           // Late backdated entries never change a frozen unit or pretend to have existed at rollover.
           const base = (
             await client.query<{ amount: string }>(
-              "select coalesce(sum(p.amount),0)::numeric(16,2)::text as amount from finance.posting p join finance.account a on a.id=p.account_id join finance.journal j on j.id=p.journal_id where a.kind<>'counter' and j.effective_at < ($1::date::timestamp at time zone 'America/Sao_Paulo') and j.created_at < ($1::date::timestamp at time zone 'America/Sao_Paulo')",
+              "select coalesce(sum(p.amount),0)::numeric(16,2)::text as amount from finance.posting p join finance.account a on a.id=p.account_id join finance.journal j on j.id=p.journal_id where p.organization_id=current_setting($$app.organization_id$$, true)::uuid and a.kind<>'counter' and j.effective_at < ($1::date::timestamp at time zone 'America/Sao_Paulo') and j.created_at < ($1::date::timestamp at time zone 'America/Sao_Paulo')",
               [`${month}-01`],
             )
           ).rows[0]!.amount;
           await insertUnit(client, month, cents(base), settings.unit_percent, 'automatic');
           await client.query(
-            "update finance.settings set version=version+1 where organization_id=current_setting('app.organization_id', true)::uuid",
+            'update finance.settings set version=version+1 where organization_id=current_setting($$app.organization_id$$, true)::uuid',
           );
           await client.query(
             "insert into finance.audit(type,actor,entity_id,after) values('unit.automatic','system',$1,$2)",

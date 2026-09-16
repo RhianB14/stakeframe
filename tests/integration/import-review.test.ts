@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { beforeEach, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
 import {
   createDatabase,
@@ -49,7 +49,9 @@ const run = async (input: CommandInput) =>
 const upload = async (key = randomUUID(), caption = 'Tipster\nBet365') =>
   imports.upload(tenantContext, key, { image: image.toString('base64'), caption });
 async function betInput(): Promise<BetInput> {
-  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find((c) => c.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (c) => c.name === 'Bet365',
+  )!.id;
   return {
     bookmakerId,
     tipsterId: null,
@@ -90,14 +92,19 @@ beforeEach(async (context) => {
   const url = new URL(source);
   url.pathname = `/${name}`;
   database = createDatabase(url.toString());
+  finance = createFinanceService(database);
   if (context.task.name.startsWith('upgrades existing inbox')) {
     for (const file of ['0000_owner_auth', '0001_integration_inbox', '0002_financial_core'])
       await database.pool.query(
         readFileSync(new URL(`../../packages/db/migrations/${file}.sql`, import.meta.url), 'utf8'),
       );
-  } else await migrateLocalDatabase(database);
-  finance = createFinanceService(database);
-  tenantContext = await finance.ensureContext('fixture-owner');
+  } else {
+    await migrateLocalDatabase(database);
+    await database.pool.query(
+      "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+    );
+    tenantContext = await finance.ensureContext('fixture-owner');
+  }
   imports = createImportService(database);
 });
 afterEach(async () => {
@@ -132,6 +139,18 @@ describe('private import review', () => {
     } finally {
       client.release();
     }
+    // Finish the upgrade to the current schema (0004..0010) and provision the organization:
+    // the legacy rows must be backfilled into the founding organization without losing bytes.
+    await database.pool.query(
+      "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+    );
+    for (const file of readdirSync(new URL('../../packages/db/migrations', import.meta.url))
+      .filter((f) => f.endsWith('.sql') && Number(f.slice(0, 4)) >= 4)
+      .sort())
+      await database.pool.query(
+        readFileSync(new URL(`../../packages/db/migrations/${file}`, import.meta.url), 'utf8'),
+      );
+    tenantContext = await finance.ensureContext('fixture-owner');
     expect((await imports.image(tenantContext, first)).image).toEqual(image);
     expect((await imports.image(tenantContext, second)).image).toEqual(image);
     expect(
@@ -215,9 +234,9 @@ describe('private import review', () => {
     });
     expect((await finance.bet(tenantContext, created.id)).bet.state).toBe('open');
     expect((await imports.detail(tenantContext, id)).item.imageAvailable).toBe(false);
-    expect((await imports.list(tenantContext, { page: 1, pageSize: 25, betId: created.id })).items).toHaveLength(
-      1,
-    );
+    expect(
+      (await imports.list(tenantContext, { page: 1, pageSize: 25, betId: created.id })).items,
+    ).toHaveLength(1);
   });
   it('validates full image decoding, enforces exact upload replay and shares bytes without merging entries', async () => {
     const key = randomUUID();
@@ -386,7 +405,10 @@ describe('private import review', () => {
       expect(await drainExtractionRequest(database, boss)).toBe(true);
       expect(await drainExtractionRequest(database, boss)).toBe(false);
       for (const row of pending)
-        expect((await boss.getJobById(EXTRACTION_QUEUE, row.id))?.data).toEqual({ nonce: id });
+        expect((await boss.getJobById(EXTRACTION_QUEUE, row.id))?.data).toEqual({
+          nonce: id,
+          organizationId: tenantContext.organizationId,
+        });
     } finally {
       await boss.stop({ graceful: true, timeout: 5000 });
     }
@@ -406,7 +428,9 @@ describe('private import review', () => {
     const first = await upload();
     const second = await upload();
     expect(await files.uploadOne(tenantContext)).toBe(true);
-    expect((await createImportService(database, storage).image(tenantContext, first.id)).image).toEqual(image);
+    expect(
+      (await createImportService(database, storage).image(tenantContext, first.id)).image,
+    ).toEqual(image);
     expect(
       (await database.pool.query('select image,state from integration.attachment')).rows[0],
     ).toEqual({ image: null, state: 'remote' });

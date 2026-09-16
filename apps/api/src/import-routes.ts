@@ -144,7 +144,10 @@ export function registerImportRoutes(
     },
     (request, reply) =>
       execute(request, reply, async () => {
-        const result = await service!.image(contexts.get(request)!, params.parse(request.params).id);
+        const result = await service!.image(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+        );
         reply
           .type(result.mime)
           .header('content-disposition', 'inline')

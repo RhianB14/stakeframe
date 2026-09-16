@@ -43,6 +43,9 @@ beforeAll(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   // The single-tenant founding organization that owns the Telegram consumer (STK-F1-13).
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
   tenantContext = await createTenantContext(database).ensureOrganizationMembership('fixture-owner');
   boss = await startWorker(url.toString());
   await prepareExtractionQueue(boss);
@@ -109,7 +112,9 @@ describe('durable extraction inbox', () => {
     const store = createInboxStore(database, async () => {
       throw new Error('queue unavailable');
     });
-    await expect(store.accept(tenantContext, data, async () => image)).rejects.toThrow('queue unavailable');
+    await expect(store.accept(tenantContext, data, async () => image)).rejects.toThrow(
+      'queue unavailable',
+    );
     expect(
       (
         await database.pool.query('select id from integration.inbox where source_key=$1', [
@@ -121,7 +126,10 @@ describe('durable extraction inbox', () => {
   it('claims once under concurrency and does not release a consumed quota after failure', async () => {
     const store = integrationStore(database, boss);
     const id = await store.accept(tenantContext, input(), async () => image);
-    const results = await Promise.all([store.claim(tenantContext, id), store.claim(tenantContext, id)]);
+    const results = await Promise.all([
+      store.claim(tenantContext, id),
+      store.claim(tenantContext, id),
+    ]);
     expect(results.filter(Boolean)).toHaveLength(1);
     await store.fail(tenantContext, id, results.find(Boolean)!.attempt, 'AI_CONNECTION_FAILED');
     expect(await store.claim(tenantContext, id)).toBeNull();
@@ -243,7 +251,11 @@ describe('durable extraction inbox', () => {
       requireBudget,
     );
     try {
-      const id = await integrationStore(database, boss).accept(tenantContext, input(), async () => image);
+      const id = await integrationStore(database, boss).accept(
+        tenantContext,
+        input(),
+        async () => image,
+      );
       await expect
         .poll(
           async () =>
@@ -259,7 +271,11 @@ describe('durable extraction inbox', () => {
       expect(saved.requiresReview).toBe(true);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
       requireBudget.mockRejectedValueOnce(new IntegrationError('AI_BUDGET_UNAVAILABLE'));
-      const blocked = await integrationStore(database, boss).accept(tenantContext, input(), async () => image);
+      const blocked = await integrationStore(database, boss).accept(
+        tenantContext,
+        input(),
+        async () => image,
+      );
       await expect
         .poll(
           async () =>

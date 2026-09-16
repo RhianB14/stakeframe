@@ -11,7 +11,11 @@ import {
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
-import { createTenantContext, ORGANIZATION_CONTEXT_SETTING, type OrganizationContext } from './tenant-context.js';
+import {
+  createTenantContext,
+  ORGANIZATION_CONTEXT_SETTING,
+  type OrganizationContext,
+} from './tenant-context.js';
 import {
   reportRange,
   reportPopulation,
@@ -60,7 +64,7 @@ export function createReportService(database: Database) {
       return read(context, async (client) => {
         const version = (
           await client.query(
-            "select version from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid",
+            'select version from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
           )
         ).rows[0].version;
         const current = await metrics(client, query);
@@ -213,7 +217,7 @@ export function createReportService(database: Database) {
           if (kind === 'json') {
             const version = (
               await client.query(
-                "select version from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid",
+                'select version from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
               )
             ).rows[0].version;
             yield JSON.stringify({

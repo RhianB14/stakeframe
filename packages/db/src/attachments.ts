@@ -151,14 +151,19 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
           context,
           async (connection) => {
             const row = (
-              await connection.query<{ id: string; image: Buffer; mime: string; object_key: string }>(
-                "select id,image,mime,object_key from integration.attachment where state='local' and (not remote_attempted or updated_at<now()-interval '2 minutes') order by created_at limit 1",
+              await connection.query<{
+                id: string;
+                image: Buffer;
+                mime: string;
+                object_key: string;
+              }>(
+                "select id,image,mime,object_key from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and state='local' and (not remote_attempted or updated_at<now()-interval '2 minutes') order by created_at limit 1",
               )
             ).rows[0];
             if (!row) return null;
             // Persist intent before PUT: an interrupted response may still have stored the object.
             await connection.query(
-              'update integration.attachment set remote_attempted=true,updated_at=now() where id=$1',
+              'update integration.attachment set remote_attempted=true,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
               [row.id],
             );
             return row;
@@ -171,7 +176,7 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
           context,
           async (connection) => {
             await connection.query(
-              "update integration.attachment set state='remote',image=null,updated_at=now() where id=$1 and state='local'",
+              "update integration.attachment set state='remote',image=null,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='local'",
               [claimed.id],
             );
           },
@@ -198,7 +203,7 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
           context,
           async (connection) => {
             await connection.query(
-              "select id from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid for update",
+              'select id from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
             );
             await connection.query('select pg_advisory_xact_lock(782341092)');
             // Every inbox reference must be terminal and every linked bet closed for 30 days.
@@ -212,7 +217,8 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
               }>(
                 `
           select a.id,a.object_key,a.state,a.remote_attempted from integration.attachment a
-          where ($1::boolean or not a.remote_attempted)
+          where a.organization_id=current_setting($$app.organization_id$$, true)::uuid
+            and ($1::boolean or not a.remote_attempted)
             and (not a.remote_attempted or a.updated_at<now()-interval '2 minutes')
             and (a.state='deleting' or (a.state in ('local','remote')
             and (${attachmentExpiredSql}))) order by a.updated_at limit 1 for update of a`,
@@ -221,7 +227,7 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
             ).rows[0];
             if (!candidate) return null;
             await connection.query(
-              "update integration.attachment set state='deleting',updated_at=now() where id=$1",
+              "update integration.attachment set state='deleting',updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
               [candidate.id],
             );
             return candidate;

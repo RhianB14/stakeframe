@@ -55,7 +55,7 @@ export async function accountByKind(
   bookmakerId?: string,
 ): Promise<AccountRow> {
   const result = await client.query<AccountRow>(
-    'select * from finance.account where organization_id=current_setting('app.organization_id', true)::uuid and kind=$1 and ($2::uuid is null or bookmaker_id=$2)',
+    'select * from finance.account where organization_id=current_setting($$app.organization_id$$, true)::uuid and kind=$1 and ($2::uuid is null or bookmaker_id=$2)',
     [kind, bookmakerId ?? null],
   );
   if (result.rowCount !== 1) throw new FinanceError('NOT_FOUND');
@@ -63,7 +63,7 @@ export async function accountByKind(
 }
 export async function cashAccount(client: PoolClient, id: string) {
   const result = await client.query<AccountRow>(
-    "select * from finance.account where organization_id=current_setting('app.organization_id', true)::uuid and id=$1 and kind in ('reserve','bookmaker')",
+    "select * from finance.account where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind in ('reserve','bookmaker')",
     [id],
   );
   if (!result.rows[0]) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
@@ -71,14 +71,14 @@ export async function cashAccount(client: PoolClient, id: string) {
 }
 export async function accountBalance(client: PoolClient, id: string, at?: Date) {
   const result = await client.query<{ balance: string }>(
-    'select coalesce(sum(p.amount),0)::numeric(16,2)::text as balance from finance.posting p join finance.journal j on j.id=p.journal_id where p.account_id=$1 and ($2::timestamptz is null or j.effective_at<=$2)',
+    'select coalesce(sum(p.amount),0)::numeric(16,2)::text as balance from finance.posting p join finance.journal j on j.id=p.journal_id where p.organization_id=current_setting($$app.organization_id$$, true)::uuid and p.account_id=$1 and ($2::timestamptz is null or j.effective_at<=$2)',
     [id, at ?? null],
   );
   return cents(result.rows[0]!.balance);
 }
 export async function activeCatalog(client: PoolClient, id: string, kind: 'bookmaker' | 'tipster') {
   const result = await client.query(
-    'select id from finance.catalog where organization_id=current_setting('app.organization_id', true)::uuid and id=$1 and kind=$2 and active',
+    'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind=$2 and active',
     [id, kind],
   );
   if (!result.rowCount) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
@@ -101,12 +101,15 @@ export async function replaceAliases(
   const unique = new Map([name, ...aliases].map((label) => [normalizeAlias(label), label]));
   for (const alias of unique.keys()) {
     const existing = await client.query(
-      'select catalog_id from finance.catalog_alias where organization_id=current_setting('app.organization_id', true)::uuid and kind=$1 and alias=$2 and catalog_id<>$3',
+      'select catalog_id from finance.catalog_alias where organization_id=current_setting($$app.organization_id$$, true)::uuid and kind=$1 and alias=$2 and catalog_id<>$3',
       [kind, alias, id],
     );
     if (existing.rowCount) throw new FinanceError('ALIAS_CONFLICT');
   }
-  await client.query('delete from finance.catalog_alias where organization_id=current_setting('app.organization_id', true)::uuid and catalog_id=$1', [id]);
+  await client.query(
+    'delete from finance.catalog_alias where organization_id=current_setting($$app.organization_id$$, true)::uuid and catalog_id=$1',
+    [id],
+  );
   for (const [alias, label] of unique)
     await client.query(
       'insert into finance.catalog_alias(kind,alias,label,catalog_id) values($1,$2,$3,$4)',
@@ -161,16 +164,19 @@ export async function reverseJournal(
 ) {
   const original = (
     await client.query<{ effective_at: Date }>(
-      'select effective_at from finance.journal where organization_id=current_setting('app.organization_id', true)::uuid and id=$1',
+      'select effective_at from finance.journal where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
       [id],
     )
   ).rows[0];
   if (!original) throw new FinanceError('NOT_FOUND');
   if (effectiveAt < original.effective_at) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-  const existing = await client.query('select id from finance.journal where organization_id=current_setting('app.organization_id', true)::uuid and reversal_of=$1', [id]);
+  const existing = await client.query(
+    'select id from finance.journal where organization_id=current_setting($$app.organization_id$$, true)::uuid and reversal_of=$1',
+    [id],
+  );
   if (existing.rowCount) throw new FinanceError('STATE_CONFLICT');
   const postings = await client.query<{ account_id: string; amount: string }>(
-    'select account_id,amount from finance.posting where organization_id=current_setting('app.organization_id', true)::uuid and journal_id=$1',
+    'select account_id,amount from finance.posting where organization_id=current_setting($$app.organization_id$$, true)::uuid and journal_id=$1',
     [id],
   );
   return writeJournal(client, {
@@ -198,7 +204,10 @@ export async function saveSelections(
       event_date: string | null;
       event_at: Date | null;
       date_status: string;
-    }>('select *,event_date::text as event_date from finance.selection where organization_id=current_setting('app.organization_id', true)::uuid and bet_id=$1', [betId])
+    }>(
+      'select *,event_date::text as event_date from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1',
+      [betId],
+    )
   ).rows;
   const retained = selections.flatMap((selection) => (selection.id ? [selection.id] : []));
   if (
@@ -209,12 +218,15 @@ export async function saveSelections(
   for (const selection of selections) {
     validateEventDate(selection);
   }
-  await client.query('delete from finance.selection where organization_id=current_setting('app.organization_id', true)::uuid and bet_id=$1 and not(id=any($2::uuid[]))', [
-    betId,
-    retained,
-  ]);
+  await client.query(
+    'delete from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 and not(id=any($2::uuid[]))',
+    [betId, retained],
+  );
   // Avoid transient unique-position collisions when reordering existing selections.
-  await client.query('update finance.selection set position=-position-1 where organization_id=current_setting('app.organization_id', true)::uuid and bet_id=$1', [betId]);
+  await client.query(
+    'update finance.selection set position=-position-1 where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1',
+    [betId],
+  );
   for (const [position, selection] of selections.entries()) {
     const date =
       selection.eventDate ?? (selection.eventAt ? saoPauloDate(new Date(selection.eventAt)) : null);
@@ -245,7 +257,7 @@ export async function saveSelections(
         date_source=case when $12 then date_source else 'manual' end,
         date_evidence=case when $12 then date_evidence else null end,
         schedule_status=case when $12 then schedule_status else 'scheduled' end
-        where bet_id=$1 and id=$11`,
+        where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 and id=$11`,
         [...values, selection.id, sameSchedule],
       );
     } else
@@ -268,8 +280,12 @@ export function validateEventDate(value: {
     throw new FinanceError('INVALID_FINANCIAL_OPERATION');
 }
 export async function getBetRow(client: PoolClient, id: string) {
-  const row = (await client.query<BetRow>('select * from finance.bet where organization_id=current_setting('app.organization_id', true)::uuid and id=$1 for update', [id]))
-    .rows[0];
+  const row = (
+    await client.query<BetRow>(
+      'select * from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+      [id],
+    )
+  ).rows[0];
   if (!row) throw new FinanceError('NOT_FOUND');
   return row;
 }

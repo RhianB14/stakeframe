@@ -90,6 +90,9 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   service = createFinanceService(database);
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
   tenantContext = await service.ensureContext('fixture-owner');
 });
 afterEach(async () => {
@@ -148,13 +151,13 @@ describe('financial core with PostgreSQL', () => {
       ]) {
         const id = randomUUID();
         await client.query(
-          "insert into finance.journal(id,kind,effective_at,created_at,actor,reason) values($1,'fixture',$2,$3,'fixture','Rollover fixture')",
-          [id, entry.effective, entry.created],
+          "insert into finance.journal(organization_id,id,kind,effective_at,created_at,actor,reason) values($4,$1,'fixture',$2,$3,'fixture','Rollover fixture')",
+          [id, entry.effective, entry.created, tenantContext.organizationId],
         );
         for (const [accountId, amount] of entry.postings)
           await client.query(
-            'insert into finance.posting(journal_id,account_id,amount) values($1,$2,$3)',
-            [id, accountId, amount],
+            'insert into finance.posting(organization_id,journal_id,account_id,amount) values($4,$1,$2,$3)',
+            [id, accountId, amount, tenantContext.organizationId],
           );
       }
       await client.query('commit');
@@ -164,7 +167,10 @@ describe('financial core with PostgreSQL', () => {
     } finally {
       client.release();
     }
-    await Promise.all([service.ensureCurrentUnit(tenantContext), service.ensureCurrentUnit(tenantContext)]);
+    await Promise.all([
+      service.ensureCurrentUnit(tenantContext),
+      service.ensureCurrentUnit(tenantContext),
+    ]);
     const workspace = await service.workspace(tenantContext);
     expect(workspace.units).toEqual([
       { month, amount: '20.00', base: '1000.00', percent: '2.00', source: 'automatic' },
@@ -268,7 +274,10 @@ describe('financial core with PostgreSQL', () => {
       settledAt: now(),
       reason: 'Resultado conferido',
     });
-    expect(await service.workspace(tenantContext)).toMatchObject({ bankroll: '1085.00', exposure: '0.00' });
+    expect(await service.workspace(tenantContext)).toMatchObject({
+      bankroll: '1085.00',
+      exposure: '0.00',
+    });
     expect((await service.bet(tenantContext, bet.id)).bet).toMatchObject({
       profit: '85.00',
       returnAmount: '185.00',
@@ -299,7 +308,10 @@ describe('financial core with PostgreSQL', () => {
       settledAt: now(),
       reason: 'Cashout parcial conferido',
     });
-    expect(await service.workspace(tenantContext)).toMatchObject({ bankroll: '985.00', exposure: '60.00' });
+    expect(await service.workspace(tenantContext)).toMatchObject({
+      bankroll: '985.00',
+      exposure: '60.00',
+    });
     await command({
       type: 'bet.settle',
       id: bet.id,
@@ -320,7 +332,10 @@ describe('financial core with PostgreSQL', () => {
     expect(detail.bet).toMatchObject({ state: 'open', remaining: '40.00', profit: '20.00' });
     expect(detail.settlements).toHaveLength(2);
     expect(detail.settlements.find((row) => row.id === partial.id)?.reversed).toBe(true);
-    expect(await service.workspace(tenantContext)).toMatchObject({ bankroll: '1020.00', exposure: '40.00' });
+    expect(await service.workspace(tenantContext)).toMatchObject({
+      bankroll: '1020.00',
+      exposure: '40.00',
+    });
   });
   it('keeps freebet principal out of the bank and credits only real payout', async () => {
     const { bookmakerId } = await initialized();
@@ -409,7 +424,9 @@ describe('financial core with PostgreSQL', () => {
       warnings: ['NEGATIVE_BALANCE'],
     });
     expect(
-      (await service.journal(tenantContext, { page: 1, pageSize: 20 })).items.map((row) => row.kind),
+      (await service.journal(tenantContext, { page: 1, pageSize: 20 })).items.map(
+        (row) => row.kind,
+      ),
     ).not.toContain('deposit');
   });
   it('freezes the current unit and requires review for absent historical units', async () => {
@@ -425,9 +442,9 @@ describe('financial core with PostgreSQL', () => {
       reason: 'Aporte no meio do mês',
     });
     await command({ type: 'settings.update', unitPercent: '2.00' });
-    expect((await service.workspace(tenantContext)).units.find((unit) => unit.month === month)?.amount).toBe(
-      '10.00',
-    );
+    expect(
+      (await service.workspace(tenantContext)).units.find((unit) => unit.month === month)?.amount,
+    ).toBe('10.00');
     await expect(createBet(bookmakerId, { placedAt: '2020-01-15T12:00:00-03:00' })).rejects.toThrow(
       'UNIT_REQUIRED',
     );
@@ -489,12 +506,12 @@ describe('financial core with PostgreSQL', () => {
       await client.query('begin');
       const id = randomUUID();
       await client.query(
-        "insert into finance.journal(id,kind,effective_at,actor,reason) values($1,'test',now(),'fixture','unbalanced')",
-        [id],
+        "insert into finance.journal(organization_id,id,kind,effective_at,actor,reason) values($2,$1,'test',now(),'fixture','unbalanced')",
+        [id, tenantContext.organizationId],
       );
       await client.query(
-        'insert into finance.posting(journal_id,account_id,amount) values($1,$2,1)',
-        [id, reserve],
+        'insert into finance.posting(organization_id,journal_id,account_id,amount) values($3,$1,$2,1)',
+        [id, reserve, tenantContext.organizationId],
       );
       await expect(client.query('commit')).rejects.toThrow('JOURNAL_NOT_BALANCED');
       await client.query('rollback');
@@ -536,7 +553,9 @@ describe('financial core with PostgreSQL', () => {
         },
       });
       expect(response.statusCode).toBe(200);
-      expect((await service.workspace(tenantContext)).catalog.some((item) => item.name === 'Teste')).toBe(true);
+      expect(
+        (await service.workspace(tenantContext)).catalog.some((item) => item.name === 'Teste'),
+      ).toBe(true);
     } finally {
       await app.close();
     }

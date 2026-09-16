@@ -102,8 +102,7 @@ export function registerReportRoutes(
         response: { 200: reportOptionsSchema, ...errors },
       },
     },
-    (request, reply) =>
-      execute(request, reply, () => service!.options(contexts.get(request)!)),
+    (request, reply) => execute(request, reply, () => service!.options(contexts.get(request)!)),
   );
   for (const kind of ['csv', 'json'] as const) {
     app.get(

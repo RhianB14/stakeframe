@@ -57,7 +57,8 @@ export const reportPopulation = `with selection_rollup as (
   left join finance.catalog t on t.id=b.tipster_id
   left join selection_rollup sr on sr.bet_id=b.id
   left join settlement_rollup st on st.bet_id=b.id
-  where b.state<>'cancelled'
+  where b.organization_id=current_setting($$app.organization_id$$, true)::uuid
+    and b.state<>'cancelled'
     and ($3::uuid is null or b.bookmaker_id=$3)
     and ($4::text is null or coalesce(b.tipster_id::text,'none')=$4)
     and ($5::text is null or coalesce(sr.sport_key,'unknown')=$5)

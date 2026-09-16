@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { PoolClient } from 'pg';
 import { membership, membershipRole, type MembershipRole } from './core-schema.js';
 import type { Database } from './index.js';

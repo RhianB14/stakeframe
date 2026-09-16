@@ -87,8 +87,7 @@ export function registerFinanceRoutes(
         response: { 200: workspaceSchema, ...errors },
       },
     },
-    (request, reply) =>
-      execute(request, reply, () => service!.workspace(contexts.get(request)!)),
+    (request, reply) => execute(request, reply, () => service!.workspace(contexts.get(request)!)),
   );
   app.post(
     '/api/v1/commands',

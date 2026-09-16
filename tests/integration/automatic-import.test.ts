@@ -52,8 +52,13 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   finance = createFinanceService(database);
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
   tenantContext = await finance.ensureContext('fixture-owner');
-  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find((row) => row.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   await run({
     type: 'bankroll.initialize',
     reserve: '500.00',
@@ -302,9 +307,9 @@ describe('automatic import financial boundary', () => {
   ] as const)('retains evidence with reason %s / %s', async (changes, reason) => {
     const value = await input(changes as Partial<TicketExtraction>);
     expect(await complete(value)).toMatchObject({ state: 'review', reason });
-    expect((await createImportService(database).detail(tenantContext, value.id)).extraction).toEqual(
-      value.result.extraction,
-    );
+    expect(
+      (await createImportService(database).detail(tenantContext, value.id)).extraction,
+    ).toEqual(value.result.extraction);
     expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
@@ -373,7 +378,9 @@ describe('automatic import financial boundary', () => {
       create trigger fail_automatic_audit before insert on finance.audit for each row execute function finance.fail_automatic_audit()`);
     await expect(complete(value)).rejects.toThrow('SYNTHETIC_FAILURE');
     expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
-    expect((await createImportService(database).detail(tenantContext, value.id)).item.state).toBe('processing');
+    expect((await createImportService(database).detail(tenantContext, value.id)).item.state).toBe(
+      'processing',
+    );
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
     );
@@ -386,6 +393,8 @@ describe('automatic import financial boundary', () => {
       value.id,
     ]);
     expect(await complete(value)).toEqual({ state: 'unchanged' });
-    expect((await createImportService(database).detail(tenantContext, value.id)).item.state).toBe('processing');
+    expect((await createImportService(database).detail(tenantContext, value.id)).item.state).toBe(
+      'processing',
+    );
   });
 });

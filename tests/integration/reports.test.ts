@@ -93,9 +93,14 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   finance = createFinanceService(database);
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
   tenantContext = await finance.ensureContext('fixture-owner');
   reports = createReportService(database);
-  bookmakerId = (await finance.workspace(tenantContext)).catalog.find((row) => row.name === 'Bet365')!.id;
+  bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   await run({
     type: 'bankroll.initialize',
     reserve: '5000.00',
@@ -112,7 +117,11 @@ afterAll(async () => admin.close());
 
 describe('performance cohorts and portability', () => {
   it('bounds the final supported calendar year without looping past four-digit dates', async () => {
-    const report = await reports.report(tenantContext, { ...query, from: '9999-12-31', to: '9999-12-31' });
+    const report = await reports.report(tenantContext, {
+      ...query,
+      from: '9999-12-31',
+      to: '9999-12-31',
+    });
     expect(report.timeline.map((row) => row.date)).toEqual(['9999-12-31']);
     expect(report.metrics.bets).toBe(0);
   });
@@ -150,7 +159,9 @@ describe('performance cohorts and portability', () => {
     expect(result.metrics.bets).toBe(0);
     expect(result.exclusions).toEqual({ unknownDateBets: 1, estimatedDateBets: 1 });
     expect(result.previous.metrics.bets).toBe(1);
-    expect((await reports.report(tenantContext, { ...query, includeEstimated: 'true' })).metrics.bets).toBe(1);
+    expect(
+      (await reports.report(tenantContext, { ...query, includeEstimated: 'true' })).metrics.bets,
+    ).toBe(1);
   });
   it('separates promotions, excludes reversed settlements and cashout from hit rate', async () => {
     const real = await bet();
@@ -239,7 +250,9 @@ describe('performance cohorts and portability', () => {
       /object_key|creation_transaction|access_token|refresh_token/,
     );
     const held = await reports.export('json', tenantContext);
-    await expect(reports.export('json', tenantContext)).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+    await expect(reports.export('json', tenantContext)).rejects.toMatchObject({
+      code: 'STATE_CONFLICT',
+    });
     await new Promise<void>((resolve) => {
       held.once('close', resolve);
       held.destroy();
@@ -308,14 +321,22 @@ describe('performance cohorts and portability', () => {
     const all = await reports.report(tenantContext, query);
     expect(all.metrics).toMatchObject({ bets: 2, realStake: '200.00', exposure: '200.00' });
     expect(all.bySport.map((row) => row.key).sort()).toEqual(['mixed', 'unknown']);
-    expect((await reports.report(tenantContext, { ...query, sport: 'sport:futebol' })).metrics.bets).toBe(0);
-    expect((await reports.report(tenantContext, { ...query, sport: 'mixed' })).metrics.bets).toBe(1);
-    expect((await reports.report(tenantContext, { ...query, tipsterId: 'none' })).metrics.bets).toBe(2);
+    expect(
+      (await reports.report(tenantContext, { ...query, sport: 'sport:futebol' })).metrics.bets,
+    ).toBe(0);
+    expect((await reports.report(tenantContext, { ...query, sport: 'mixed' })).metrics.bets).toBe(
+      1,
+    );
+    expect(
+      (await reports.report(tenantContext, { ...query, tipsterId: 'none' })).metrics.bets,
+    ).toBe(2);
     await run({
       type: 'money.move',
       kind: 'deposit',
       targetAccountId: null,
-      accountId: (await finance.workspace(tenantContext)).accounts.find((row) => row.kind === 'reserve')!.id,
+      accountId: (await finance.workspace(tenantContext)).accounts.find(
+        (row) => row.kind === 'reserve',
+      )!.id,
       amount: '500.00',
       effectiveAt: new Date().toISOString(),
       reason: 'Aporte sem desempenho',
@@ -327,20 +348,23 @@ describe('performance cohorts and portability', () => {
     const client = await database.pool.connect();
     try {
       await client.query('begin');
+      await client.query("select set_config('app.organization_id', $1, true)", [
+        tenantContext.organizationId,
+      ]);
       await client.query(
         `with journals as (
-        insert into finance.journal(tenantContext, kind,effective_at,actor,reason)
+        insert into finance.journal(kind,effective_at,actor,reason)
         select 'bet_stake',now(),'fixture-owner','Export pagination fixture' from generate_series(1,510) returning id
       ), bets as (
-        insert into finance.bet(tenantContext, bookmaker_id,stake,odds,placed_at,reference,remaining,unit_month,unit_amount,stake_journal_id)
+        insert into finance.bet(bookmaker_id,stake,odds,placed_at,reference,remaining,unit_month,unit_amount,stake_journal_id)
         select b.bookmaker_id,b.stake,b.odds,b.placed_at,'batch-'||j.id,b.stake,b.unit_month,b.unit_amount,j.id
         from journals j cross join finance.bet b where b.id=$1 returning stake_journal_id,stake,bookmaker_id
-      ) insert into finance.posting(tenantContext, journal_id,account_id,amount)
+      ) insert into finance.posting(journal_id,account_id,amount)
         select b.stake_journal_id,a.id,case when a.kind='exposure' then b.stake else -b.stake end
         from bets b join finance.account a on a.kind='exposure' or a.bookmaker_id=b.bookmaker_id`,
         [template.id],
       );
-      await client.query(`insert into finance.selection(tenantContext, bet_id,position,event,sport,market,selection,event_date,date_status)
+      await client.query(`insert into finance.selection(bet_id,position,event,sport,market,selection,event_date,date_status)
         select id,0,'Fixture em lote','Futebol','Resultado','Aurora','2026-09-05','confirmed'
         from finance.bet where reference like 'batch-%'`);
       await client.query(
