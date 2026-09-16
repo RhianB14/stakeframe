@@ -66,7 +66,7 @@ export async function drainExtractionRequest(database: Database, boss: PgBoss) {
     const progressed = await tenant.withOrganizationTransaction(context, async (client) => {
       const row = (
         await client.query<{ id: string; inbox_id: string }>(
-          'select id,inbox_id from integration.extraction_request order by created_at limit 1 for update skip locked',
+          'select id,inbox_id from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid order by created_at limit 1 for update skip locked',
         )
       ).rows[0];
       if (!row) return false;
@@ -76,7 +76,10 @@ export async function drainExtractionRequest(database: Database, boss: PgBoss) {
         { id: row.id, db: { executeSql: (text, values) => client.query(text, values) } },
       );
       if (!queued) throw new IntegrationError('EXTRACTION_ENQUEUE_FAILED');
-      await client.query('delete from integration.extraction_request where id=$1', [row.id]);
+      await client.query(
+        'delete from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [row.id],
+      );
       return true;
     });
     if (progressed) return true;

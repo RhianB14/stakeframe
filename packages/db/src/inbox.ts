@@ -53,7 +53,7 @@ export function createInboxStore(
       const existing = await withOrg(context, async (client) => {
         return (
           await client.query<{ id: string; request_hash: string | null }>(
-            'select id,request_hash from integration.inbox where source_key=$1',
+            'select id,request_hash from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and source_key=$1',
             [input.sourceKey],
           )
         ).rows[0];
@@ -71,7 +71,7 @@ export function createInboxStore(
         await client.query('select pg_advisory_xact_lock(782341092)');
         const raced = (
           await client.query<{ id: string; request_hash: string | null }>(
-            'select id,request_hash from integration.inbox where source_key=$1',
+            'select id,request_hash from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and source_key=$1',
             [input.sourceKey],
           )
         ).rows[0];
@@ -81,7 +81,7 @@ export function createInboxStore(
           return raced.id;
         }
         const capacity = await client.query<{ count: string; bytes: string }>(
-          "select (select count(*) from integration.inbox where state not in ('discarded','imported')) as count, coalesce(sum(octet_length(image)),0) as bytes from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid",
+          "select (select count(*) from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and state not in ('discarded','imported')) as count, coalesce(sum(octet_length(image)),0) as bytes from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid",
         );
         if (
           Number(capacity.rows[0]?.count) >= 2000 ||
@@ -91,7 +91,7 @@ export function createInboxStore(
         const id = randomUUID();
         const shared = (
           await client.query<{ id: string }>(
-            "select id from integration.attachment where sha256=$1 and state not in ('deleting','deleted')",
+            "select id from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and sha256=$1 and state not in ('deleting','deleted')",
             [info.sha256],
           )
         ).rows[0];
@@ -111,7 +111,7 @@ export function createInboxStore(
             ],
           );
         const inserted = await client.query<{ id: string }>(
-          'insert into integration.inbox(id,source_key,attachment_id,sha256,caption,metadata,request_hash) values($1,$2,$3,$4,$5,$6,$7) on conflict(source_key) do nothing returning id',
+          'insert into integration.inbox(id,source_key,attachment_id,sha256,caption,metadata,request_hash) values($1,$2,$3,$4,$5,$6,$7) on conflict(organization_id, source_key) do nothing returning id',
           [
             id,
             input.sourceKey,
@@ -124,7 +124,7 @@ export function createInboxStore(
         );
         if (inserted.rowCount) await enqueue(client, id, context.organizationId);
         const result = await client.query<{ id: string }>(
-          'select id from integration.inbox where source_key=$1',
+          'select id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and source_key=$1',
           [input.sourceKey],
         );
         return result.rows[0]!.id;

@@ -1,4 +1,9 @@
 // Explicit columns: additions to auth/storage schemas can never silently leak into exports.
+// Every table below is tenant data and MUST be filtered by the current organization in the
+// export query — the app role owns the schema and the migrations use NO FORCE RLS, so RLS
+// alone would not contain a cross-tenant read. Global infrastructure tables
+// (integration.cursor, integration.ai_usage_day) are deliberately excluded: they are not
+// part of a user's private file.
 export const portabilityTables = [
   {
     name: 'finance.settings',
@@ -72,9 +77,11 @@ export const portabilityTables = [
     keys: ['id'],
     columns: 'id,sha256,mime,size,width,height,state,created_at,updated_at',
   },
-  { name: 'integration.extraction_request', keys: ['id'], columns: 'id,inbox_id,created_at' },
-  { name: 'integration.cursor', keys: ['name'], columns: 'name,next_offset' },
-  { name: 'integration.ai_usage_day', keys: ['day'], columns: 'day,requests' },
+  {
+    name: 'integration.extraction_request',
+    keys: ['id'],
+    columns: 'id,inbox_id,created_at',
+  },
   {
     name: 'integration.event_search',
     keys: ['id'],

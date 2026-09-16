@@ -107,6 +107,7 @@ ALTER TABLE "finance"."settlement_reversal" DROP CONSTRAINT IF EXISTS "settlemen
 --> statement-breakpoint
 ALTER TABLE "finance"."settlement_reversal" DROP CONSTRAINT IF EXISTS "settlement_reversal_journal_id_journal_id_fk";
 --> statement-breakpoint
+ALTER TABLE "integration"."inbox" DROP CONSTRAINT IF EXISTS "inbox_source_key_unique";--> statement-breakpoint
 DROP INDEX IF EXISTS "integration"."attachment_live_hash_idx";--> statement-breakpoint
 DROP INDEX IF EXISTS "finance"."selection_bet_position_idx";--> statement-breakpoint
 DROP INDEX IF EXISTS "finance"."account_bookmaker_idx";--> statement-breakpoint
@@ -215,6 +216,8 @@ DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='settlement
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='event_search_selection_fk' AND conrelid='integration.event_search'::regclass) THEN ALTER TABLE "integration"."event_search" ADD CONSTRAINT "event_search_selection_fk" FOREIGN KEY ("organization_id","selection_id") REFERENCES "finance"."selection"("organization_id","id") ON DELETE no action ON UPDATE no action; END IF; END $$;--> statement-breakpoint
 DROP INDEX IF EXISTS "attachment_live_hash_idx";
 CREATE UNIQUE INDEX "attachment_live_hash_idx" ON "integration"."attachment" USING btree ("organization_id","sha256") WHERE "integration"."attachment"."state" not in ('deleting','deleted');--> statement-breakpoint
+DROP INDEX IF EXISTS "integration"."inbox_organization_id_source_key_idx";
+CREATE UNIQUE INDEX "inbox_organization_id_source_key_idx" ON "integration"."inbox" USING btree ("organization_id","source_key");--> statement-breakpoint
 DROP INDEX IF EXISTS "selection_bet_position_idx";
 CREATE UNIQUE INDEX "selection_bet_position_idx" ON "finance"."selection" USING btree ("organization_id","bet_id","position");--> statement-breakpoint
 DROP INDEX IF EXISTS "account_bookmaker_idx";
@@ -262,6 +265,9 @@ BEGIN
   UPDATE integration.event_search SET organization_id = founder
     WHERE organization_id IS NULL OR organization_id <> founder;
 END $$;
+
+-- The settings row anchors each organization; after the backfill it must always carry one.
+ALTER TABLE "finance"."settings" ALTER COLUMN "organization_id" SET NOT NULL;--> statement-breakpoint
 
 
 

@@ -232,17 +232,31 @@ try {
   );
   try {
     const restoredStore = createAttachmentStore(target);
-    for (let index = 0; index < 2; index++)
-      assert.deepEqual(
-        (
-          await restoredStore.read(
-            target.pool,
-            rows.find((row) => row.id === inbox[index]).attachment_id,
-          )
-        ).image,
-        images[index],
-      );
-    await assert.rejects(restoredStore.read(target.pool, expiredId));
+    // The read is organization-scoped (STK-F1-13): run it inside a transaction that carries the
+    // restored organization context, like every runtime caller does.
+    const restoredContext =
+      await createTenantContext(target).ensureOrganizationMembership('fixture-owner');
+    const restoredClient = await target.pool.connect();
+    try {
+      await restoredClient.query('begin');
+      await restoredClient.query("select set_config('app.organization_id', $1, true)", [
+        restoredContext.organizationId,
+      ]);
+      for (let index = 0; index < 2; index++)
+        assert.deepEqual(
+          (
+            await restoredStore.read(
+              restoredClient,
+              rows.find((row) => row.id === inbox[index]).attachment_id,
+            )
+          ).image,
+          images[index],
+        );
+      await assert.rejects(restoredStore.read(restoredClient, expiredId));
+      await restoredClient.query('commit');
+    } finally {
+      restoredClient.release();
+    }
     assert.equal(
       (
         await target.pool.query(

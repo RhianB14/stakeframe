@@ -1,9 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabase,
   createFinanceService,
   createImportService,
+  createInboxStore,
   createOnboardingService,
   createReportService,
   createTenantContext,
@@ -14,7 +16,10 @@ import {
   type OrganizationContext,
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
+import { drainExtractionRequest } from '../../apps/worker/src/integrations.js';
 import type { FinanceCommand } from '../../packages/shared/src/index.js';
+
+const image = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 
 const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
 const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
@@ -68,6 +73,7 @@ async function registerBet(
     ).id;
   }
   const current = await finance.workspace(context);
+  const reference = 'ISO-' + randomUUID().slice(0, 8);
   const bet = await finance.command(context, randomUUID(), {
     type: 'bet.create',
     expectedVersion: current.version,
@@ -77,7 +83,7 @@ async function registerBet(
     odds: '2.00',
     placedAt: new Date().toISOString(),
     freebetId: freebetId ?? null,
-    reference: 'ISO-' + randomUUID().slice(0, 8),
+    reference,
     allowMissingUnit: false,
     selections: [
       {
@@ -92,7 +98,7 @@ async function registerBet(
       },
     ],
   } as FinanceCommand);
-  return { betId: bet.id, freebetId };
+  return { betId: bet.id, freebetId, reference };
 }
 
 beforeEach(async () => {
@@ -144,6 +150,11 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
               (select count(*) from finance.account) accounts`,
     );
     expect(counts.rows[0]).toEqual({ settings: '2', catalog: '6', accounts: '12' });
+    const column = await database.pool.query<{ is_nullable: string }>(
+      "select is_nullable from information_schema.columns where table_schema='finance' and table_name='settings' and column_name='organization_id'",
+    );
+    // The 0010 migration ends with SET NOT NULL: the settings anchor can never be orphaned.
+    expect(column.rows[0]!.is_nullable).toBe('NO');
   });
 
   it('blocks cross-organization reads, settlements, cancellations and reversals', async () => {
@@ -334,6 +345,11 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     const metricsB = await reports.report(contextB, range);
     expect(metricsA.metrics.bets).toBe(1);
     expect(metricsB.metrics.bets).toBe(0);
+    // The detail list (selection/settlement CTEs and catalog joins) is organization-scoped too.
+    const detailA = await reports.bets(contextA, { ...range, page: 1, pageSize: 20 });
+    const detailB = await reports.bets(contextB, { ...range, page: 1, pageSize: 20 });
+    expect(detailA.total).toBe(1);
+    expect(detailB.total).toBe(0);
     void bookmaker;
 
     const imports = createImportService(database);
@@ -356,5 +372,115 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     const journal = await finance.journal(contextA, { page: 1, pageSize: 10 });
     expect(journal.items[0]).toMatchObject({ kind: 'opening' });
     expect(FinanceError).toBeDefined();
+  });
+
+  it('exports only the current organization through CSV and JSON, never infrastructure tables', async () => {
+    const { contextA, contextB } = await setup();
+    const bookmakerA = await initialize(contextA);
+    const betA = await registerBet(contextA, bookmakerA.id);
+    const bookmakerB = await initialize(contextB);
+    const betB = await registerBet(contextB, bookmakerB.id);
+    // B also owns an imported ticket: its rows must never surface in A's file.
+    const store = createInboxStore(database);
+    await store.accept(
+      contextB,
+      { sourceKey: `export:${randomUUID()}`, caption: 'B', metadata: { source: 'test' } },
+      async () => image,
+    );
+    const reports = createReportService(database);
+    const drainStream = async (stream: AsyncIterable<unknown>) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
+      return Buffer.concat(chunks).toString('utf8');
+    };
+    const json = JSON.parse(await drainStream(await reports.export('json', contextA))) as Record<
+      string,
+      Array<{ id?: string }>
+    >;
+    expect(json['finance.bet']!.map((row) => row.id)).toEqual([betA.betId]);
+    expect(json['integration.cursor']).toBeUndefined();
+    expect(json['integration.ai_usage_day']).toBeUndefined();
+    // No record of B — bet, journal, inbox or attachment — may travel in A's export.
+    const foreign = await database.pool.query<{ id: string }>(
+      `select id from finance.bet where organization_id=$1
+       union select id from finance.journal where organization_id=$1
+       union select id from integration.inbox where organization_id=$1
+       union select id from integration.attachment where organization_id=$1`,
+      [contextB.organizationId],
+    );
+    expect(foreign.rows.length).toBeGreaterThan(0);
+    const serialized = JSON.stringify(json);
+    expect(serialized).not.toContain(betB.betId);
+    for (const row of foreign.rows) expect(serialized).not.toContain(row.id);
+    const range = {
+      from: '2000-01-01',
+      to: '2100-01-01',
+      kind: 'all',
+      includeEstimated: 'true',
+    } as const;
+    const csv = await drainStream(await reports.export('csv', contextA, range));
+    expect(csv).toContain(betA.reference);
+    expect(csv).not.toContain(betB.reference);
+  });
+
+  it('dispatches extraction requests per organization, never mixing tenants', async () => {
+    const { contextA, contextB } = await setup();
+    const store = createInboxStore(database);
+    // B's request is created first: a context-blind drain would pick it up while serving A.
+    const inboxB = await store.accept(
+      contextB,
+      { sourceKey: `drain:${randomUUID()}`, caption: 'B', metadata: { source: 'test' } },
+      async () => image,
+    );
+    const inboxA = await store.accept(
+      contextA,
+      { sourceKey: `drain:${randomUUID()}`, caption: 'A', metadata: { source: 'test' } },
+      async () => image,
+    );
+    const dispatched: Array<{ nonce: string; organizationId: string }> = [];
+    const boss = {
+      send: async (_queue: string, data: { nonce: string; organizationId: string }) => {
+        dispatched.push(data);
+        return randomUUID();
+      },
+    };
+    const drain = () =>
+      drainExtractionRequest(
+        database,
+        boss as unknown as Parameters<typeof drainExtractionRequest>[1],
+      );
+    expect(await drain()).toBe(true);
+    expect(await drain()).toBe(true);
+    expect(await drain()).toBe(false);
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched).toContainEqual({ nonce: inboxA, organizationId: contextA.organizationId });
+    expect(dispatched).toContainEqual({ nonce: inboxB, organizationId: contextB.organizationId });
+  });
+
+  it('deduplicates source keys and attachment hashes per organization', async () => {
+    const { contextA, contextB } = await setup();
+    const store = createInboxStore(database);
+    const sourceKey = `dup:${randomUUID()}`;
+    const input = { sourceKey, caption: 'Dup', metadata: { source: 'test' } };
+    const firstA = await store.accept(contextA, input, async () => image);
+    const replayA = await store.accept(contextA, input, async () => image);
+    expect(replayA).toBe(firstA);
+    // The same source key is a distinct import in the other organization.
+    const firstB = await store.accept(contextB, input, async () => image);
+    expect(firstB).not.toBe(firstA);
+    const hash = createHash('sha256').update(image).digest('hex');
+    const rows = await database.pool.query<{ organization_id: string }>(
+      'select organization_id from integration.attachment where sha256=$1 order by organization_id',
+      [hash],
+    );
+    // Identical bytes hash to a separate attachment row per organization (no cross-tenant reuse).
+    expect(rows.rows.map((row) => row.organization_id).sort()).toEqual(
+      [contextA.organizationId, contextB.organizationId].sort(),
+    );
+    const inboxes = await database.pool.query<{ organization_id: string }>(
+      'select organization_id from integration.inbox where source_key=$1 order by organization_id',
+      [sourceKey],
+    );
+    expect(inboxes.rows).toHaveLength(2);
   });
 });

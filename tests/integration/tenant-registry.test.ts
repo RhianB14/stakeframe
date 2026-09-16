@@ -217,6 +217,15 @@ describe('core tenant registry backfill with a single pre-existing user', () => 
       role: 'owner',
     });
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(recordedBefore);
+    // The 0010 replay ends with SET NOT NULL on finance.settings: a NULL anchor would leave the
+    // registry inconsistent, so the column and the data are verified after the replay.
+    const settingsColumn = await database.pool.query<{ is_nullable: string }>(
+      "SELECT is_nullable FROM information_schema.columns WHERE table_schema='finance' AND table_name='settings' AND column_name='organization_id'",
+    );
+    expect(settingsColumn.rows[0]!.is_nullable).toBe('NO');
+    expect(await count('SELECT count(*) FROM finance.settings WHERE organization_id IS NULL')).toBe(
+      0,
+    );
   });
 });
 

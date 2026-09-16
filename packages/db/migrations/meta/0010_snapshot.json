@@ -1401,6 +1401,28 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "inbox_organization_id_source_key_idx": {
+          "name": "inbox_organization_id_source_key_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": null
         }
       },
       "foreignKeys": {
@@ -1427,11 +1449,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "inbox_source_key_unique": {
-          "name": "inbox_source_key_unique",
-          "nullsNotDistinct": false,
-          "columns": ["source_key"]
-        },
         "inbox_organization_id_id_idx": {
           "name": "inbox_organization_id_id_idx",
           "nullsNotDistinct": false,

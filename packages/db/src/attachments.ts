@@ -122,9 +122,10 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
           object_key: string;
           state: string;
           sha256: string;
-        }>('select image,mime,object_key,state,sha256 from integration.attachment where id=$1', [
-          id,
-        ])
+        }>(
+          'select image,mime,object_key,state,sha256 from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+          [id],
+        )
       ).rows[0];
       if (!row || ['deleting', 'deleted'].includes(row.state))
         throw new Error('ATTACHMENT_UNAVAILABLE');
@@ -240,7 +241,7 @@ export function createAttachmentStore(database: Database, storage?: ObjectStorag
           context,
           async (connection) => {
             await connection.query(
-              "update integration.attachment set state='deleted',image=null,updated_at=now() where id=$1 and state='deleting'",
+              "update integration.attachment set state='deleted',image=null,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='deleting'",
               [row.id],
             );
             await connection.query(

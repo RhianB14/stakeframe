@@ -103,9 +103,9 @@ export function createOperationsService(
                       attachments_late: boolean;
                       events_late: boolean;
                     }>(`select
-            exists(select 1 from integration.inbox where (state='pending' and updated_at<now()-interval '5 minutes') or (state='processing' and updated_at<now()-interval '3 minutes')) as imports_late,
-            exists(select 1 from integration.attachment where state in ('local','deleting') and updated_at<now()-interval '15 minutes') as attachments_late,
-            exists(select 1 from integration.event_search where state in ('pending','processing') and created_at<now()-interval '5 minutes') as events_late`)
+            exists(select 1 from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and ((state='pending' and updated_at<now()-interval '5 minutes') or (state='processing' and updated_at<now()-interval '3 minutes'))) as imports_late,
+            exists(select 1 from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and state in ('local','deleting') and updated_at<now()-interval '15 minutes') as attachments_late,
+            exists(select 1 from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid and state in ('pending','processing') and created_at<now()-interval '5 minutes') as events_late`)
                   ).rows[0]!;
                 },
               );

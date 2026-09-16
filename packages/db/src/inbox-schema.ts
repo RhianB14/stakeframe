@@ -61,7 +61,7 @@ export const inbox = integrationNamespace.table(
   {
     id: uuid('id').primaryKey(),
     organizationId: organizationId(),
-    sourceKey: text('source_key').notNull().unique(),
+    sourceKey: text('source_key').notNull(),
     image: bytea('image'),
     attachmentId: uuid('attachment_id'),
     importedBetId: uuid('imported_bet_id'),
@@ -79,6 +79,8 @@ export const inbox = integrationNamespace.table(
   },
   (table) => [
     unique('inbox_organization_id_id_idx').on(table.organizationId, table.id),
+    // Deduplication is per organization: the same source key may exist once in each tenant.
+    uniqueIndex('inbox_organization_id_source_key_idx').on(table.organizationId, table.sourceKey),
     check(
       'inbox_state_check',
       sql`${table.state} in ('pending', 'processing', 'review', 'failed', 'discarded', 'imported')`,

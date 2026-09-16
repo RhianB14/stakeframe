@@ -232,9 +232,12 @@ export function createReportService(database: Database) {
               let cursor: unknown[] | undefined;
               let first = true;
               for (;;) {
+                // The organization predicate is explicit: the app role owns the schema with
+                // NO FORCE RLS, so a table scan cannot rely on row-level security alone.
+                const organization = `where organization_id=current_setting($$app.organization_id$$, true)::uuid`;
                 const where = cursor
-                  ? `where (${table.keys.join(',')}) > (${table.keys.map((_, i) => '$' + (i + 1)).join(',')})`
-                  : '';
+                  ? `${organization} and (${table.keys.join(',')}) > (${table.keys.map((_, i) => '$' + (i + 1)).join(',')})`
+                  : organization;
                 const rows = (
                   await client.query(
                     `select ${table.columns} from ${table.name} ${where} order by ${table.keys.join(',')} limit 500`,
