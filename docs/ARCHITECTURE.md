@@ -49,6 +49,12 @@ e logout são as únicas rotas de autenticação expostas. A interface permite
 entrar/sair e trata falhas de sessão sem exibir conteúdo privado. Política e
 configuração em [AUTHENTICATION.md](AUTHENTICATION.md).
 
+A STK-F1-09 acrescenta os primeiros passos do beta: `core.onboarding_state`
+(escopo por organização) mais `GET/POST /api/v1/onboarding`, com o passo da
+banca delegado ao comando financeiro existente e a primeira aposta usando o
+formulário manual já existente. Estado, contrato, testes e limites em
+[F1-09-ONBOARDING.md](F1-09-ONBOARDING.md).
+
 `compose.local.yml` executa PostgreSQL 18.4, API, worker e Caddy com os assets
 da web. O worker usa apenas a rede interna; a API também usa uma bridge de saída
 para o Google, sem publicar portas no host. Web e PostgreSQL também usam

@@ -1,0 +1,1 @@
+ALTER TABLE "core"."onboarding_state" ADD COLUMN "first_bet_deferred_at" timestamp with time zone;

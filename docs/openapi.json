@@ -2629,6 +2629,82 @@
         "required": ["checkedAt", "status", "checks"],
         "additionalProperties": false
       },
+      "TimeZoneInput": { "type": "string", "minLength": 1, "maxLength": 64 },
+      "OnboardingStatusInput": {
+        "type": "object",
+        "properties": {
+          "displayName": { "type": "string" },
+          "timezone": { "nullable": true, "type": "string" },
+          "steps": {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "type": "object",
+                "properties": {
+                  "completed": { "type": "boolean" },
+                  "completedAt": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": ["completed", "completedAt"]
+              },
+              "bankroll": {
+                "type": "object",
+                "properties": { "completed": { "type": "boolean" } },
+                "required": ["completed"]
+              },
+              "firstBet": {
+                "type": "object",
+                "properties": {
+                  "completed": { "type": "boolean" },
+                  "resolution": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": ["registered", "deferred"]
+                  }
+                },
+                "required": ["completed", "resolution"]
+              }
+            },
+            "required": ["profile", "bankroll", "firstBet"]
+          },
+          "completedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["displayName", "timezone", "steps", "completedAt"]
+      },
+      "OnboardingProfileUpdateInput": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "string", "enum": ["profile"] },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "timezone": { "$ref": "#/components/schemas/TimeZoneInput" }
+        },
+        "required": ["step", "displayName", "timezone"],
+        "additionalProperties": false
+      },
+      "OnboardingFinishInput": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "string", "enum": ["finish"] },
+          "firstBet": { "type": "string", "enum": ["registered", "deferred"] }
+        },
+        "required": ["step", "firstBet"],
+        "additionalProperties": false
+      },
+      "OnboardingUpdateInput": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/OnboardingProfileUpdateInput" },
+          { "$ref": "#/components/schemas/OnboardingFinishInput" }
+        ]
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -2664,6 +2740,7 @@
                   "EMAIL_NOT_VERIFIED",
                   "CONSENT_REQUIRED",
                   "CONSENT_INVALID",
+                  "ONBOARDING_PREREQUISITE",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -5608,6 +5685,87 @@
         "required": ["checkedAt", "status", "checks"],
         "additionalProperties": false
       },
+      "TimeZone": { "type": "string", "minLength": 1, "maxLength": 64 },
+      "OnboardingStatus": {
+        "type": "object",
+        "properties": {
+          "displayName": { "type": "string" },
+          "timezone": { "nullable": true, "type": "string" },
+          "steps": {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "type": "object",
+                "properties": {
+                  "completed": { "type": "boolean" },
+                  "completedAt": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": ["completed", "completedAt"],
+                "additionalProperties": false
+              },
+              "bankroll": {
+                "type": "object",
+                "properties": { "completed": { "type": "boolean" } },
+                "required": ["completed"],
+                "additionalProperties": false
+              },
+              "firstBet": {
+                "type": "object",
+                "properties": {
+                  "completed": { "type": "boolean" },
+                  "resolution": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": ["registered", "deferred"]
+                  }
+                },
+                "required": ["completed", "resolution"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["profile", "bankroll", "firstBet"],
+            "additionalProperties": false
+          },
+          "completedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["displayName", "timezone", "steps", "completedAt"],
+        "additionalProperties": false
+      },
+      "OnboardingProfileUpdate": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "string", "enum": ["profile"] },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "timezone": { "$ref": "#/components/schemas/TimeZone" }
+        },
+        "required": ["step", "displayName", "timezone"],
+        "additionalProperties": false
+      },
+      "OnboardingFinish": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "string", "enum": ["finish"] },
+          "firstBet": { "type": "string", "enum": ["registered", "deferred"] }
+        },
+        "required": ["step", "firstBet"],
+        "additionalProperties": false
+      },
+      "OnboardingUpdate": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/OnboardingProfileUpdate" },
+          { "$ref": "#/components/schemas/OnboardingFinish" }
+        ]
+      },
       "SystemStatus": {
         "type": "object",
         "properties": {
@@ -5644,6 +5802,7 @@
                   "EMAIL_NOT_VERIFIED",
                   "CONSENT_REQUIRED",
                   "CONSENT_INVALID",
+                  "ONBOARDING_PREREQUISITE",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -7450,6 +7609,130 @@
             }
           },
           "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding": {
+      "get": {
+        "operationId": "getOnboarding",
+        "summary": "Consultar o progresso dos primeiros passos",
+        "tags": ["Onboarding"],
+        "description": "Estado do onboarding do próprio usuário autenticado: nome exibido, fuso horário e os três passos (perfil, banca inicial e primeira aposta). O passo da banca reflete o núcleo financeiro e o da primeira aposta reflete apostas registradas — o servidor é a fonte da verdade; nada é gravado por esta consulta. Exige sessão válida e consentimento vigente.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/OnboardingStatus" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateOnboarding",
+        "summary": "Atualizar o progresso dos primeiros passos",
+        "tags": ["Onboarding"],
+        "description": "Atualizações idempotentes do próprio usuário: `profile` grava o nome exibido e um fuso horário IANA válido; `finish` conclui explicitamente os primeiros passos e exige, no servidor, perfil concluído, banca inicial configurada para a organização e a decisão explícita da primeira aposta (`registered`, verificado contra apostas registradas, ou `deferred`, a escolha de continuar sem aposta). O fuso é validado no servidor, o nome exibido atualiza a identidade do usuário e repetir a operação não duplica estado. Exige Origin da aplicação, sessão válida e consentimento vigente; pré-requisitos não satisfeitos respondem `409 ONBOARDING_PREREQUISITE`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OnboardingUpdateInput" }
+            }
+          }
+        },
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/OnboardingStatus" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

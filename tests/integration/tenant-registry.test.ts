@@ -39,7 +39,7 @@ async function dropCurrentDatabase() {
 /**
  * Returns the database to the state before migration 0005: the core schema does not exist and
  * the recorded migrations stop at 0004, so the next migrator run must replay the 0005 chain
- * (0005 and every later core migration, e.g. 0006, 0007) for real.
+ * (0005 and every later core migration, e.g. 0006, 0007, 0008, 0009) for real.
  */
 async function reopenCoreMigration() {
   await database.pool.query('DROP SCHEMA "core" CASCADE');
@@ -96,6 +96,7 @@ describe('core tenant registry on a fresh database without users', () => {
       'consent_record',
       'legal_document',
       'membership',
+      'onboarding_state',
       'organization',
     ]);
     const enums = await count(
@@ -242,9 +243,9 @@ describe('core tenant registry backfill with more than one pre-existing user', (
       await count("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'core'"),
     ).toBe(0);
     // reopenCoreMigration removed the markers of 0005 and every later core migration
-    // (0006, 0007); the failed 0005 replay must not add any marker back.
+    // (0006, 0007, 0008, 0009); the failed 0005 replay must not add any marker back.
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(
-      recordedBefore - 3,
+      recordedBefore - 5,
     );
     expect(await count('SELECT count(*) FROM auth."user"')).toBe(2);
   });

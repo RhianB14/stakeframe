@@ -15,11 +15,18 @@ import type { OwnerAuth } from './auth.js';
 import { registerApiContracts } from './openapi.js';
 import { sendApiError } from './api-errors.js';
 import { registerFinanceRoutes } from './finance-routes.js';
-import type { FinanceService, ImportService, EventService, ReportService } from '@stakeframe/db';
+import type {
+  FinanceService,
+  ImportService,
+  EventService,
+  ReportService,
+  OnboardingService,
+} from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
 import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
+import { registerOnboardingRoutes } from './onboarding-routes.js';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
@@ -32,6 +39,7 @@ export function createApp(options: {
   events?: EventService;
   reports?: ReportService;
   operations?: OperationsService;
+  onboarding?: OnboardingService;
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
@@ -116,6 +124,7 @@ export function createApp(options: {
     registerAuthRoutes(app, options.ownerAuth);
     registerConsentRoutes(app, options.ownerAuth);
     registerFinanceRoutes(app, options.ownerAuth, options.finance);
+    registerOnboardingRoutes(app, options.ownerAuth, options.onboarding);
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerReportRoutes(app, options.ownerAuth, options.reports);

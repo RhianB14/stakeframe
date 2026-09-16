@@ -33,6 +33,7 @@ export const apiErrorCodeSchema = z.enum([
   'EMAIL_NOT_VERIFIED',
   'CONSENT_REQUIRED',
   'CONSENT_INVALID',
+  'ONBOARDING_PREREQUISITE',
   'STATE_CONFLICT',
   'VERSION_CONFLICT',
   'IDEMPOTENCY_CONFLICT',
@@ -188,3 +189,4 @@ export * from './events.js';
 export * from './reports.js';
 export * from './automatic.js';
 export * from './operations.js';
+export * from './onboarding.js';

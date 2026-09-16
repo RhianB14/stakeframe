@@ -71,6 +71,15 @@ export {
 } from './attachments.js';
 export type { PoolClient } from 'pg';
 export { createFinanceService, FinanceError, type FinanceService } from './finance-service.js';
+export {
+  createOnboardingService,
+  OnboardingError,
+  type OnboardingService,
+  type OnboardingStatus,
+  type OnboardingProfileUpdate,
+  type OnboardingErrorCode,
+  type FirstBetResolution,
+} from './onboarding.js';
 export { createReportService, type ReportService } from './reports.js';
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
