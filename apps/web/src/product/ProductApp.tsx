@@ -124,8 +124,10 @@ function ProductShell({
     refetchInterval: 30_000,
   });
   // First login lands on the first-steps flow; the server state decides, and finishing it
-  // (or having it already finished) restores the regular overview.
-  const onboardingActive = page === 'overview' && !onboarding.data?.completedAt;
+  // (or having it already finished) restores the regular overview. A failed lookup degrades to
+  // the regular overview instead of blocking the product behind an unreachable flow.
+  const onboardingActive =
+    page === 'overview' && !onboarding.isError && !onboarding.data?.completedAt;
   const logout = useMutation({
     mutationFn: () => authAction('sign-out'),
     onSuccess: async () => {

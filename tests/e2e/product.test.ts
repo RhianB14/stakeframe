@@ -134,6 +134,21 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
       },
     }),
   );
+  // Already-onboarded fixture: the first-steps flow is not shown and the overview stays regular.
+  await page.route('**/api/v1/onboarding', (route) =>
+    route.fulfill({
+      json: {
+        displayName: 'Fixture Owner',
+        timezone: 'America/Sao_Paulo',
+        steps: {
+          profile: { completed: true, completedAt: '2026-09-14T12:00:00.000Z' },
+          bankroll: { completed: true },
+          firstBet: { completed: true },
+        },
+        completedAt: '2026-09-14T12:30:00.000Z',
+      },
+    }),
+  );
   await page.route('**/api/v1/me', (route) =>
     route.fulfill({
       json: {
