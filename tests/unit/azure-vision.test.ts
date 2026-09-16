@@ -209,6 +209,88 @@ describe('Azure Vision OCR boundary', () => {
     ).rejects.toThrow('AZURE_VISION_PROVIDER_UNAVAILABLE');
   });
 
+  it('keeps polling until the analysis completes within the configured timeout', async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    fetchImpl
+      .mockResolvedValueOnce(accepted())
+      .mockResolvedValueOnce(Response.json({ status: 'notStarted' }))
+      .mockResolvedValueOnce(Response.json({ status: 'running' }))
+      .mockResolvedValueOnce(Response.json(analysisFixture));
+    const result = await extractAzureVisionOcr({
+      config: { endpoint: ENDPOINT, apiKey: API_KEY, timeoutMs: 5_000 },
+      image,
+      fetchImpl,
+    });
+    expect(result.text).toContain('Retorno potencial');
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    // The submission POST happens exactly once: no application-level retry.
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('stops polling at the deadline when the analysis never completes', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (_url, init) =>
+        init?.method === 'POST' ? accepted() : Response.json({ status: 'running' }),
+      );
+    const started = Date.now();
+    await expect(
+      extractAzureVisionOcr({
+        config: { endpoint: ENDPOINT, apiKey: API_KEY, timeoutMs: 800 },
+        image,
+        fetchImpl,
+      }),
+    ).rejects.toThrow('AZURE_VISION_INTERRUPTED');
+    const elapsed = Date.now() - started;
+    // The loop honored the effective deadline instead of ending ~18 s early.
+    expect(elapsed).toBeGreaterThanOrEqual(700);
+    expect(elapsed).toBeLessThan(5_000);
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    // Only the polls that fit inside the deadline happened (never the old cap of 24).
+    expect(
+      fetchImpl.mock.calls.filter(([, init]) => init?.method === 'GET').length,
+    ).toBeLessThanOrEqual(3);
+  });
+
+  it('makes no additional calls after the deadline', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (_url, init) =>
+        init?.method === 'POST' ? accepted() : Response.json({ status: 'running' }),
+      );
+    await expect(
+      extractAzureVisionOcr({
+        config: { endpoint: ENDPOINT, apiKey: API_KEY, timeoutMs: 800 },
+        image,
+        fetchImpl,
+      }),
+    ).rejects.toThrow('AZURE_VISION_INTERRUPTED');
+    const callsAfterDeadline = fetchImpl.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(fetchImpl.mock.calls.length).toBe(callsAfterDeadline);
+  });
+
+  it('cancels the polling on external interruption without further calls', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (_url, init) =>
+        init?.method === 'POST' ? accepted() : Response.json({ status: 'running' }),
+      );
+    const pending = extractAzureVisionOcr({
+      config: { endpoint: ENDPOINT, apiKey: API_KEY, timeoutMs: 30_000 },
+      image,
+      fetchImpl,
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 200);
+    await expect(pending).rejects.toThrow('AZURE_VISION_INTERRUPTED');
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    const callsAfterAbort = fetchImpl.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(fetchImpl.mock.calls.length).toBe(callsAfterAbort);
+  });
+
   it('treats an empty analysis as sanitized empty evidence', async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     fetchImpl
