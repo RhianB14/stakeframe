@@ -328,8 +328,8 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
       kind: 'all',
       includeEstimated: 'true',
     } as const;
-    const metricsA = await reports.report(contextA, { ...range, page: 1, pageSize: 20 });
-    const metricsB = await reports.report(contextB, { ...range, page: 1, pageSize: 20 });
+    const metricsA = await reports.report(contextA, range);
+    const metricsB = await reports.report(contextB, range);
     expect(metricsA.metrics.bets).toBe(1);
     expect(metricsB.metrics.bets).toBe(0);
     void bookmaker;
