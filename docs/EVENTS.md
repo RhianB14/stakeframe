@@ -65,6 +65,11 @@ não renova a validade ao ser reutilizado. Limites são persistidos no PostgreSQ
 antes da chamada, contando também falhas e resultados incertos. Não equivalem
 a um limite remoto de cobrança e não concedem permissão de assinatura paga.
 
+As cotas são **globais por provedor**: a contagem soma as buscas de todas as
+organizações, para que nenhum tenant multiplique silenciosamente o limite real
+do provedor externo. Fila, cache, resultados, calendário e histórico
+permanecem estritamente privados por organização.
+
 Referências consultadas em 07/09/2026:
 
 - [TheSportsDB — documentação e acesso gratuito](https://www.thesportsdb.com/documentation).

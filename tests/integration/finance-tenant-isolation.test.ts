@@ -601,5 +601,61 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     // B has the same fingerprint but must stay fresh: A's cache is never reused across tenants.
     const freshB = await events.request(contextB, randomUUID(), input(selectionB));
     expect(freshB.state).toBe('pending');
+    // Neither A's selection nor its search history is reachable from B.
+    await expect(events.selection(contextB, selectionA)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(events.search(contextB, firstKey)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('counts provider usage globally across organizations and refuses work when exhausted', async () => {
+    const { contextA, contextB } = await setup();
+    const bookmakerA = await initialize(contextA);
+    const betA = await registerBet(contextA, bookmakerA.id);
+    const bookmakerB = await initialize(contextB);
+    const betB = await registerBet(contextB, bookmakerB.id);
+    const selectionOf = async (context: OrganizationContext, betId: string) =>
+      (
+        await database.pool.query<{ id: string }>(
+          'select id from finance.selection where organization_id=$1 and bet_id=$2 order by position limit 1',
+          [context.organizationId, betId],
+        )
+      ).rows[0]!.id;
+    const selectionA = await selectionOf(contextA, betA.betId);
+    const selectionB = await selectionOf(contextB, betB.betId);
+    // Seed completed searches in both organizations, backdated past the minute window.
+    for (const [selection, context, count, tag] of [
+      [selectionA, contextA, 12, 'a'],
+      [selectionB, contextB, 8, 'b'],
+    ] as const) {
+      await database.pool.query(
+        `insert into integration.event_search
+           (id,actor,hash,selection_id,provider,query,event_fingerprint,state,started_at,completed_at,organization_id)
+         select gen_random_uuid(),$1,md5(g::text||$2),$3,'tavily','seed','seed-'||$2,'complete',
+           now()-interval '2 minutes',now()-interval '2 minutes',$4
+         from generate_series(1,$5::int) g`,
+        ['seed-' + tag, tag, selection, context.organizationId, count],
+      );
+    }
+    const events = createEventService(database, { thesportsdb: false, tavily: true });
+    // Status reflects the combined global quota (12 + 8 of 20), in both organizations.
+    for (const context of [contextA, contextB]) {
+      const status = await events.status(context);
+      const tavily = status.providers.find((item) => item.provider === 'tavily')!;
+      expect(tavily.dailyUsed).toBe(20);
+      expect(tavily.dailyLimit).toBe(20);
+    }
+    // A new search from A is refused while the combined daily quota is exhausted.
+    const pendingKey = randomUUID();
+    await events.request(contextA, pendingKey, {
+      selectionId: selectionA,
+      provider: 'tavily',
+      dateHint: '2026-09-10',
+    });
+    expect(await events.claim(contextA)).toBeNull();
+    expect(await events.search(contextA, pendingKey)).toMatchObject({
+      state: 'failed',
+      errorCode: 'EVENT_QUOTA_REACHED',
+    });
   });
 });

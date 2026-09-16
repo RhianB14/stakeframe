@@ -109,9 +109,11 @@ function calendarDto(row: SelectionRow) {
   };
 }
 /**
- * Provider usage is counted per organization: the provider quota is shared infrastructure, but
- * with the financial core now multi-tenant each organization's searches are isolated; the limit
- * multiplication across tenants is a declared limitation of the single-worker setup (beta).
+ * Provider usage is global infrastructure: the local limits exist to protect the real
+ * TheSportsDB/Tavily quota, which is shared by every organization — counting per organization
+ * would let tenants silently multiply the external limit. This read therefore intentionally
+ * spans all organizations (a documented exception to the per-organization predicate rule).
+ * Queue, cache, results, calendar and history over the same data stay organization-scoped.
  */
 async function usage(client: Pick<PoolClient, 'query'>, provider: EventProvider) {
   return (
@@ -120,8 +122,7 @@ async function usage(client: Pick<PoolClient, 'query'>, provider: EventProvider)
     select count(*) filter(where started_at >= date_trunc('day',now() at time zone 'UTC') at time zone 'UTC')::int as daily,
       count(*)::int as monthly,
       count(*) filter(where started_at > now()-interval '1 minute')::int as minute
-    from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid
-      and provider=$1 and started_at >= date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`,
+    from integration.event_search where provider=$1 and started_at >= date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`,
       [provider],
     )
   ).rows[0]!;
@@ -199,7 +200,7 @@ export function createEventService(
           await client.query<SelectionRow>(
             `select s.*,s.event_date::text as event_date,
         b.reference,b.state as bet_state,c.name as bookmaker from finance.selection s
-        join finance.bet b on b.id=s.bet_id join finance.catalog c on c.id=b.bookmaker_id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.id=$1`,
+        join finance.bet b on b.id=s.bet_id and b.organization_id=s.organization_id join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.id=$1`,
             [id],
           )
         ).rows[0];

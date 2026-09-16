@@ -29,11 +29,11 @@ export async function findDuplicates(
       similar: boolean;
     }>(
       `select b.id as bet_id,b.reference,b.bookmaker_id,b.stake,b.placed_at,
-    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id) as image,
+    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 and current.organization_id=other.organization_id where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id) as image,
     ($3::text<>'' and b.bookmaker_id=$2 and lower(trim(b.reference))=lower(trim($3))) as ref,
     (b.bookmaker_id=$2 and b.stake=$4::numeric and b.odds=$5::numeric and (b.placed_at at time zone 'America/Sao_Paulo')::date=($6::timestamptz at time zone 'America/Sao_Paulo')::date) as similar
     from finance.bet b where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and
-    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id)
+    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 and current.organization_id=other.organization_id where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id)
     or ($3::text<>'' and b.bookmaker_id=$2 and lower(trim(b.reference))=lower(trim($3)))
     or (b.bookmaker_id=$2 and b.stake=$4::numeric and b.odds=$5::numeric and (b.placed_at at time zone 'America/Sao_Paulo')::date=($6::timestamptz at time zone 'America/Sao_Paulo')::date)
     order by b.created_at desc limit 101`,
@@ -145,7 +145,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
     ) {
       return read(context, async (client) => {
         const rows = await client.query<InboxRow & { total: string }>(
-          `select ${columns},count(*) over() as total from integration.inbox i join integration.attachment a on a.id=i.attachment_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and ($1::text is null or i.state=$1) and ($4::uuid is null or i.imported_bet_id=$4) order by i.created_at desc,i.id desc limit $2 offset $3`,
+          `select ${columns},count(*) over() as total from integration.inbox i join integration.attachment a on a.id=i.attachment_id and a.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and ($1::text is null or i.state=$1) and ($4::uuid is null or i.imported_bet_id=$4) order by i.created_at desc,i.id desc limit $2 offset $3`,
           [
             query.state ?? null,
             query.pageSize,
@@ -173,7 +173,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       return read(context, async (client) => {
         const row = (
           await client.query<InboxRow>(
-            `select ${columns} from integration.inbox i join integration.attachment a on a.id=i.attachment_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1`,
+            `select ${columns} from integration.inbox i join integration.attachment a on a.id=i.attachment_id and a.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1`,
             [id],
           )
         ).rows[0];
@@ -192,7 +192,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         );
         const aliases = (
           await client.query<{ catalog_id: string; kind: string; label: string }>(
-            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
           )
         ).rows;
         const match = (kind: string, label: string | null) =>

@@ -60,7 +60,7 @@ async function candidate(
   if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
   const aliases = (
     await client.query<{ catalog_id: string; kind: string; label: string }>(
-      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
     )
   ).rows;
   const match = (kind: string, value: string | null) => {

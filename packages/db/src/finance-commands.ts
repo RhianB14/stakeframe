@@ -395,7 +395,7 @@ export async function applyFinanceCommand(
     const before = await getBetRow(client, command.id);
     const active = (
       await client.query(
-        'select s.id from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=$1 and r.settlement_id is null',
+        'select s.id from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id and r.organization_id=s.organization_id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=$1 and r.settlement_id is null',
         [command.id],
       )
     ).rowCount;
@@ -483,7 +483,7 @@ export async function applyFinanceCommand(
   if (type === 'settlement.reverse') {
     // Retention takes the settings lock first, then claims the attachment before external deletion.
     const deleting = await client.query(
-      "select 1 from integration.inbox i join integration.attachment a on a.id=i.attachment_id join finance.settlement s on s.bet_id=i.imported_bet_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.id=$1 and a.state='deleting'",
+      "select 1 from integration.inbox i join integration.attachment a on a.id=i.attachment_id and a.organization_id=i.organization_id join finance.settlement s on s.bet_id=i.imported_bet_id and s.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.id=$1 and a.state='deleting'",
       [command.id],
     );
     if (deleting.rowCount) throw new FinanceError('STATE_CONFLICT');

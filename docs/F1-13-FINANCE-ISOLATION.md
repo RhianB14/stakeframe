@@ -106,9 +106,12 @@ Varredura mecânica de toda referência a `finance.*`/`integration.*` em `packag
   `NOT NULL`): journal, posting, monthly_unit, account, bet, freebet, settlement, command_receipt,
   event_search, extraction_request. Todos os call sites rodam dentro de uma transação de organização.
 - **Fluxos operacionais globais explícitos** (preservados por contrato): `integration.cursor` e
-  `integration.ai_usage_day` (infraestrutura sem dono), e as rotinas de backup/bundle/restore de
-  `apps/ops` — que varrem todas as organizações de propósito e usam a expressão de retenção
-  correlacionada pelo dono (`a.organization_id`), sem depender do contexto de sessão.
+  `integration.ai_usage_day` (infraestrutura sem dono); a leitura de cotas de provedor de eventos
+  em `integration.event_search` (`usage()`) — intencionalmente global, pois os limites protegem o
+  consumo real compartilhado do TheSportsDB/Tavily (documentado em `docs/EVENTS.md`); e as rotinas
+  de backup/bundle/restore de `apps/ops` — que varrem todas as organizações de propósito e usam a
+  expressão de retenção correlacionada pelo dono (`a.organization_id`), sem depender do contexto
+  de sessão.
 
 Nenhuma consulta privada ficou sem predicado ou justificativa após a varredura.
 
@@ -120,6 +123,6 @@ Nenhuma consulta privada ficou sem predicado ou justificativa após a varredura.
 - O consumidor Telegram opera em nome da organização fundadora (o binding por organização do
   Telegram é unidade futura); os workers de retenção e de busca de eventos iteram todas as
   organizações, cada uma dentro do próprio contexto.
-- As cotas de provedores externos de busca de eventos são contadas por organização (cada tenant
-  tem a própria cota; a multiplicação de chamadas entre organizações é limitação do beta com um
-  único worker).
+- As cotas de provedores externos de busca de eventos são globais por provedor: a contagem soma
+  as buscas de todas as organizações para proteger o limite real compartilhado (fila, cache,
+  resultados e histórico continuam privados por organização).
