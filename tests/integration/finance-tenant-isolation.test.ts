@@ -288,10 +288,12 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
       "select count(*) from pg_policies where schemaname in ('finance','integration')",
     );
     expect(policies.rows[0].count).toBe('18');
-    const forced = await database.pool.query(
-      "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relforcerowsecurity",
+    // Policies exist (fail-closed for non-owner roles). FORCE is deliberately absent so the
+    // owner-run backup/restore cycle keeps working with a single database role.
+    const enabled = await database.pool.query(
+      "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relrowsecurity",
     );
-    expect(forced.rows[0].count).toBe('18');
+    expect(enabled.rows[0].count).toBe('18');
   });
 
   it('runs onboarding per organization without the founding anchor', async () => {

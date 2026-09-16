@@ -8,6 +8,7 @@ import {
   createFinanceService,
   createImportService,
   createAttachmentStore,
+  createTenantContext,
 } from '@stakeframe/db';
 import { migrateLocalDatabase } from './node_modules/@stakeframe/db/dist/migrate.js';
 import { backup, restic, snapshots } from './src/backup.mjs';
@@ -64,12 +65,17 @@ try {
   checked('unexpected-acls-defaults-owners-and-both-role-memberships-refused');
   const finance = createFinanceService(database);
   const imports = createImportService(database);
+  // STK-F1-13: the financial core is organization-scoped; the drill acts as the fixture owner.
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
+  const context = await createTenantContext(database).ensureOrganizationMembership('fixture-owner');
   const execute = async (input) =>
-    finance.command('fixture-owner', randomUUID(), {
+    finance.command(context, randomUUID(), {
       ...input,
-      expectedVersion: (await finance.workspace()).version,
+      expectedVersion: (await finance.workspace(context)).version,
     });
-  const house = (await finance.workspace()).catalog.find((row) => row.name === 'Bet365').id;
+  const house = (await finance.workspace(context)).catalog.find((row) => row.name === 'Bet365').id;
   await execute({
     type: 'bankroll.initialize',
     reserve: '500.00',
@@ -126,7 +132,7 @@ try {
   for (const image of images)
     inbox.push(
       (
-        await imports.upload('fixture-owner', randomUUID(), {
+        await imports.upload(context, randomUUID(), {
           caption: 'Tipster fictício\nBet365',
           image: image.toString('base64'),
         })

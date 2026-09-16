@@ -28,10 +28,11 @@ válidos de outra organização; a organização nunca é aceita do cliente como
    `READ COMMITTED` para preservar a serialização de chaves idempotentes.
 4. **Predicado explícito** — toda consulta dos serviços carrega
    `organization_id = current_setting($$app.organization_id$$, true)::uuid`. O RLS com
-   `FORCE ROW LEVEL SECURITY` é mantido como defesa em profundidade (a política
-   `organization_isolation` usa `nullif(…, '')` para falhar fechada e existir para papéis
-   futuros sem privilégios), porém a defesa primária hoje são os predicados, porque o papel de
-   conexão atual é o proprietário do banco e superusuários não são sujeitos ao RLS.
+   `ENABLE ROW LEVEL SECURITY` e a política `organization_isolation` (`nullif(…, '')` para
+   falhar fechada) é mantido como defesa para papéis futuros sem privilégios; `FORCE` é
+   deliberadamente ausente porque o ciclo de backup/restore do projeto usa um único papel
+   proprietário — o `FORCE` faria o `COPY` do restore violar o `WITH CHECK` sem contexto. A
+   defesa efetiva hoje são os predicados por organização.
 5. **Chaves e índices** — índices únicos passam a incluir a organização: `settings(organization_id)`
    única, `catalog_alias(organization_id, kind, alias)`, `account(organization_id, bookmaker_id)`,
    `account(organization_id, kind)` (contas de sistema), `freebet(organization_id, used_by)`,
