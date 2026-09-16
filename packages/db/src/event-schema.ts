@@ -1,11 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { check, index, jsonb, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, foreignKey, index, jsonb, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { integrationNamespace } from './inbox-schema.js';
+import { betSelection } from './finance-schema.js';
 
 export const eventSearchRequest = integrationNamespace.table(
   'event_search',
   {
     id: uuid('id').primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .default(sql`current_setting('app.organization_id', true)::uuid`),
     actor: text('actor').notNull(),
     hash: text('hash').notNull(),
     selectionId: uuid('selection_id').notNull(),
@@ -32,5 +36,10 @@ export const eventSearchRequest = integrationNamespace.table(
     index('event_search_usage_idx')
       .on(t.provider, t.startedAt)
       .where(sql`${t.startedAt} is not null`),
+    foreignKey({
+      name: 'event_search_selection_fk',
+      columns: [t.organizationId, t.selectionId],
+      foreignColumns: [betSelection.organizationId, betSelection.id],
+    }),
   ],
 );

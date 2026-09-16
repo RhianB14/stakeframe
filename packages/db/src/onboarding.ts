@@ -1,5 +1,5 @@
 /**
- * Onboarding service (STK-F1-09).
+ * Onboarding service (STK-F1-09; organization-scoped since STK-F1-13).
  *
  * - Persisted state: `core.onboarding_state` (one row per user, scoped by the user's
  *   organization). Only what the financial records cannot answer is stored here — the display
@@ -7,18 +7,14 @@
  *   in the onboarding row.
  * - Derived steps: the bankroll step reflects `finance.settings.initialized` and the first-bet
  *   step reflects a registered bet (or the explicit deferral). Both are read from the financial
- *   core (single source of truth); this service never duplicates balances, bets or any
- *   accounting rule and never invents financial data.
- * - Tenant boundary: the financial core is still single-tenant (the plenitude is STK-F1-13).
- *   Until then, the financial flags belong to the anchored space — the organization of the
- *   oldest `owner` membership — and are only reported for that organization; every other
- *   organization sees both steps as not configured (its own bankroll does not exist yet) and
- *   its `finish` is refused fail-closed. This prevents the onboarding from exposing another
- *   organization's financial state.
+ *   core inside the authenticated organization context — RLS scopes the reads — so the
+ *   onboarding consumes exactly the organization's own financial state (no anchor, no
+ *   suppressions, no duplicated accounting).
  * - The `finish` gate is enforced on the server (a direct API call cannot bypass it): the
- *   profile must be complete, the bankroll must be configured for the anchored organization,
- *   and the first-bet step must be resolved by a registered bet (`firstBet: "registered"`,
- *   verified, never trusted) or by the explicit deferral (`firstBet: "deferred"`).
+ *   profile must be complete, the bankroll must be configured for the authenticated
+ *   organization, and the first-bet step must be resolved by a registered bet
+ *   (`firstBet: "registered"`, verified, never trusted) or by the explicit deferral
+ *   (`firstBet: "deferred"`).
  * - Every error is the sanitized code itself — no SQL, table, host or personal data.
  */
 import { and, eq } from 'drizzle-orm';
@@ -51,21 +47,12 @@ export type OnboardingStatus = {
 
 export type OnboardingProfileUpdate = { displayName: string; timezone: string };
 
-const ANCHOR_QUERY = `SELECT organization_id FROM core.membership
-  WHERE role = 'owner'
-  ORDER BY created_at ASC, organization_id ASC
-  LIMIT 1`;
-
 export function createOnboardingService(database: Database) {
   const tenant = createTenantContext(database);
 
-  /**
-   * The anchored organization of the single-tenant financial core: the organization of the
-   * oldest `owner` membership. Deterministic across runs (created_at, organization_id).
-   */
-  async function anchoredOrganizationId(): Promise<string | null> {
-    const rows = await database.pool.query<{ organization_id: string }>(ANCHOR_QUERY);
-    return rows.rows[0]?.organization_id ?? null;
+  /** Returns the authenticated user's organization context (provisioning on first use). */
+  function ensureContext(userId: string) {
+    return tenant.ensureOrganizationMembership(userId);
   }
 
   async function displayNameOf(userId: string): Promise<string> {
@@ -75,28 +62,6 @@ export function createOnboardingService(database: Database) {
       .where(eq(authSchema.user.id, userId))
       .limit(1);
     return rows[0]?.name ?? '';
-  }
-
-  /**
-   * Financial flags for the anchored organization only. A different organization gets
-   * `{ initialized: false, firstBet: false }` — the single-tenant core cannot answer for it,
-   * and its state is not exposed.
-   */
-  async function financialFlags(isAnchored: boolean): Promise<{
-    initialized: boolean;
-    firstBet: boolean;
-  }> {
-    if (!isAnchored) return { initialized: false, firstBet: false };
-    const settings = await database.pool.query<{ initialized: boolean }>(
-      'select initialized from finance.settings where id = 1',
-    );
-    const bets = await database.pool.query<{ recorded: boolean }>(
-      'select exists(select 1 from finance.bet limit 1) as recorded',
-    );
-    return {
-      initialized: settings.rows[0]?.initialized === true,
-      firstBet: bets.rows[0]?.recorded === true,
-    };
   }
 
   async function statusFor(userId: string): Promise<OnboardingStatus> {
@@ -119,11 +84,22 @@ export function createOnboardingService(database: Database) {
       )
       .limit(1);
     const row = rows[0];
-    const [displayName, anchored] = await Promise.all([
+    const [displayName, flags] = await Promise.all([
       displayNameOf(userId),
-      anchoredOrganizationId(),
+      // The financial core answers for THIS organization (RLS inside the transaction context).
+      tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = await client.query<{ initialized: boolean }>(
+          'select initialized from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+        );
+        const bets = await client.query<{ recorded: boolean }>(
+          'select exists(select 1 from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid) as recorded',
+        );
+        return {
+          initialized: settings.rows[0]?.initialized === true,
+          firstBet: bets.rows[0]?.recorded === true,
+        };
+      }),
     ]);
-    const flags = await financialFlags(anchored === context.organizationId);
     const resolution: FirstBetResolution | null = flags.firstBet
       ? 'registered'
       : row?.firstBetDeferredAt != null
@@ -174,10 +150,11 @@ export function createOnboardingService(database: Database) {
 
   /**
    * Explicit conclusion, gated on the server inside the same transaction as the write:
-   * profile complete, bankroll configured for the anchored organization, and the first-bet
-   * step resolved either by a registered bet (verified here, never trusted from the payload)
-   * or by the user's explicit `deferred` choice. Repeating is idempotent (`coalesce` keeps the
-   * first instants) and concurrent repetitions serialize on the same row without duplicating.
+   * profile complete, bankroll configured for the authenticated organization, and the
+   * first-bet step resolved either by a registered bet (verified here, never trusted from the
+   * payload) or by the user's explicit `deferred` choice. Repeating is idempotent (`coalesce`
+   * keeps the first instants) and concurrent repetitions serialize on the same row without
+   * duplicating.
    */
   async function finish(userId: string, firstBet: FirstBetResolution): Promise<OnboardingStatus> {
     const context = await tenant.ensureOrganizationMembership(userId);
@@ -196,16 +173,14 @@ export function createOnboardingService(database: Database) {
       const row = state.rows[0];
       if (row?.profile_completed_at == null) throw new OnboardingError('ONBOARDING_PREREQUISITE');
 
-      const anchor = await client.query<{ organization_id: string }>(ANCHOR_QUERY);
-      const isAnchored = anchor.rows[0]?.organization_id === context.organizationId;
       const settings = await client.query<{ initialized: boolean }>(
-        'select initialized from finance.settings where id = 1',
+        'select initialized from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
       );
-      if (!isAnchored || settings.rows[0]?.initialized !== true)
+      if (settings.rows[0]?.initialized !== true)
         throw new OnboardingError('ONBOARDING_PREREQUISITE');
 
       const bets = await client.query<{ recorded: boolean }>(
-        'select exists(select 1 from finance.bet limit 1) as recorded',
+        'select exists(select 1 from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid) as recorded',
       );
       const hasBet = bets.rows[0]?.recorded === true;
       // "registered" must be backed by a real bet; "deferred" is the explicit choice and is
@@ -232,7 +207,7 @@ export function createOnboardingService(database: Database) {
     return statusFor(userId);
   }
 
-  return { statusFor, updateProfile, finish };
+  return { ensureContext, statusFor, updateProfile, finish };
 }
 
 export type OnboardingService = ReturnType<typeof createOnboardingService>;

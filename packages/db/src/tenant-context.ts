@@ -35,10 +35,35 @@ export type OrganizationContext = {
 export type WithOrganizationTransactionOptions = {
   /** Optional expected organization from the internal contract; divergences are refused. */
   expectedOrganizationId?: string;
+  /**
+   * Transaction isolation for read flows. Kept separate from READ ONLY on purpose: a read-only
+   * transaction rejects `set_config`, and the organization context must be visible to every
+   * statement inside the transaction (RLS policies read it).
+   */
+  isolation?: 'repeatable read';
+  /**
+   * Run inside an already-connected client (the caller owns connect/release — used by workers
+   * that hold a session advisory lock on the same connection).
+   */
+  client?: PoolClient;
 };
 
-/** Transaction-local PostgreSQL variable read by future RLS policies. */
+/** Transaction-local PostgreSQL variable read by the RLS policies. */
 export const ORGANIZATION_CONTEXT_SETTING = 'app.organization_id';
+
+/**
+ * Context used by infrastructure workers that act on behalf of the system (never on behalf of a
+ * request): extraction/retention/event jobs that belong to one organization but have no session.
+ */
+export function systemOrganizationContext(organizationId: string): OrganizationContext {
+  return { organizationId, role: 'owner', userId: 'system:worker' };
+}
+
+/**
+ * Default bookmaker catalog created for every new organization (same seed migration 0002 applied
+ * to the founding organization before the multi-tenant phase).
+ */
+const DEFAULT_BOOKMAKERS = ['Bet365', 'Superbet', 'Novibet'] as const;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_ROLES = new Set<string>(membershipRole.enumValues);
@@ -57,15 +82,6 @@ async function rollback(client: PoolClient) {
   }
 }
 
-/**
- * Reusable organization-context foundation for the multi-tenant phase.
- *
- * - The organization is always derived from the authenticated user
- *   (`auth.user` -> `core.membership` -> `organization`); callers never supply it.
- * - The transaction context uses `set_config('app.organization_id', ..., true)`, which is
- *   local to the transaction and is discarded on COMMIT/ROLLBACK, so pool connections never
- *   carry a previous request's context.
- */
 export function createTenantContext(database: Database) {
   async function resolveOrganizationContext(userId: string): Promise<OrganizationContext> {
     if (typeof userId !== 'string' || userId.length === 0)
@@ -97,14 +113,23 @@ export function createTenantContext(database: Database) {
       if (expected !== organizationId) throw new TenantContextError('ORGANIZATION_MISMATCH');
     }
     let client: PoolClient;
-    try {
-      client = await database.pool.connect();
-    } catch {
-      throw new TenantContextError('TRANSACTION_FAILED');
+    const ownsClient = options.client === undefined;
+    if (options.client) {
+      client = options.client;
+    } else {
+      try {
+        client = await database.pool.connect();
+      } catch {
+        throw new TenantContextError('TRANSACTION_FAILED');
+      }
     }
     try {
       try {
-        await client.query('BEGIN');
+        await client.query(
+          options.isolation === 'repeatable read'
+            ? 'BEGIN ISOLATION LEVEL REPEATABLE READ'
+            : 'BEGIN',
+        );
       } catch {
         throw new TenantContextError('TRANSACTION_FAILED');
       }
@@ -132,15 +157,16 @@ export function createTenantContext(database: Database) {
       }
       return result;
     } finally {
-      client.release();
+      if (ownsClient) client.release();
     }
   }
 
   /**
    * Idempotent provisioning: guarantees exactly one organization and one membership for the
-   * authenticated user. Serialized per user with a transaction-scoped advisory lock, so
-   * concurrent requests cannot create duplicates; an existing membership (and its role) is
-   * returned untouched.
+   * authenticated user, plus the organization's own financial space (settings row, system
+   * accounts and the default bookmaker catalog) — the same seed migration 0002 applied to the
+   * founding organization. Serialized per user with a transaction-scoped advisory lock, so
+   * concurrent requests cannot create duplicates; existing rows are returned untouched.
    */
   async function ensureOrganizationMembership(userId: string): Promise<OrganizationContext> {
     if (typeof userId !== 'string' || userId.length === 0)
@@ -198,6 +224,48 @@ export function createTenantContext(database: Database) {
           );
           result = { organizationId, role: 'owner', userId };
         }
+        // The financial space of the organization: RLS requires the transaction-local context.
+        await client.query('SELECT set_config($1, $2, true)', [
+          ORGANIZATION_CONTEXT_SETTING,
+          result.organizationId,
+        ]);
+        const settings = await client.query(
+          'SELECT 1 FROM finance.settings WHERE organization_id = $1',
+          [result.organizationId],
+        );
+        if (!settings.rowCount) {
+          await client.query('INSERT INTO finance.settings(organization_id) VALUES($1)', [
+            result.organizationId,
+          ]);
+          await client.query(
+            "INSERT INTO finance.account(organization_id,kind,name) VALUES($1,'reserve','Reserva'),($1,'exposure','Principal em aberto'),($1,'counter','Contrapartida')",
+            [result.organizationId],
+          );
+          const inserted = await client.query<{ id: string; name: string }>(
+            `INSERT INTO finance.catalog(organization_id,kind,name)
+             SELECT $1,'bookmaker',name FROM unnest($2::text[]) AS name
+             RETURNING id,name`,
+            [result.organizationId, [...DEFAULT_BOOKMAKERS]],
+          );
+          await client.query(
+            `INSERT INTO finance.catalog_alias(organization_id,kind,alias,label,catalog_id)
+             SELECT $1,'bookmaker',lower(name),name,id FROM unnest($2::uuid[],$3::text[]) AS t(id,name)`,
+            [
+              result.organizationId,
+              inserted.rows.map((row) => row.id),
+              inserted.rows.map((row) => row.name),
+            ],
+          );
+          await client.query(
+            `INSERT INTO finance.account(organization_id,kind,name,bookmaker_id)
+             SELECT $1,'bookmaker',name,id FROM unnest($2::uuid[],$3::text[]) AS t(id,name)`,
+            [
+              result.organizationId,
+              inserted.rows.map((row) => row.id),
+              inserted.rows.map((row) => row.name),
+            ],
+          );
+        }
       } catch (error) {
         await rollback(client);
         throw error instanceof TenantContextError
@@ -216,5 +284,39 @@ export function createTenantContext(database: Database) {
     }
   }
 
-  return { resolveOrganizationContext, withOrganizationTransaction, ensureOrganizationMembership };
+  /**
+   * The organization of the oldest `owner` membership — the founding organization that held the
+   * single-tenant financial core before STK-F1-13. Deterministic across runs (created_at,
+   * organization_id) and used by the migration backfill and by infrastructure workers that
+   * predate per-organization bindings (Telegram owner). Never used for authorization decisions.
+   */
+  async function founderOrganizationId(): Promise<string | null> {
+    const rows = await database.pool.query<{ organization_id: string }>(
+      `SELECT organization_id FROM core.membership
+       WHERE role = 'owner'
+       ORDER BY created_at ASC, organization_id ASC
+       LIMIT 1`,
+    );
+    return rows.rows[0]?.organization_id ?? null;
+  }
+
+  /**
+   * Every organization, for infrastructure workers that must iterate tenants (retention, event
+   * search, monthly units). `core.organization` is registry data, not tenant data. The returned
+   * contexts identify the system worker (never a request session).
+   */
+  async function listOrganizations(): Promise<OrganizationContext[]> {
+    const rows = await database.pool.query<{ id: string }>(
+      'SELECT id FROM core.organization ORDER BY created_at ASC, id ASC',
+    );
+    return rows.rows.map((row) => systemOrganizationContext(row.id));
+  }
+
+  return {
+    resolveOrganizationContext,
+    withOrganizationTransaction,
+    ensureOrganizationMembership,
+    founderOrganizationId,
+    listOrganizations,
+  };
 }

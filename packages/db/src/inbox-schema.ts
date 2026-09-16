@@ -3,6 +3,7 @@ import {
   bigint,
   check,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -12,15 +13,28 @@ import {
   uuid,
   uniqueIndex,
   boolean,
+  unique,
 } from 'drizzle-orm/pg-core';
 import { bet } from './finance-schema.js';
 
 export const integrationNamespace = pgSchema('integration');
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+/**
+ * Multi-tenant isolation (STK-F1-13): private import artifacts carry their organization the same
+ * way the financial tables do — DEFAULT from the transaction-local setting, fail-closed without
+ * context. `cursor` and `ai_usage_day` stay global infrastructure of the workers.
+ */
+const organizationId = () =>
+  uuid('organization_id')
+    .notNull()
+    .default(sql`current_setting('app.organization_id', true)::uuid`);
+
 export const attachment = integrationNamespace.table(
   'attachment',
   {
     id: uuid('id').primaryKey(),
+    organizationId: organizationId(),
     sha256: text('sha256').notNull(),
     image: bytea('image'),
     mime: text('mime').notNull(),
@@ -34,8 +48,9 @@ export const attachment = integrationNamespace.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    unique('attachment_organization_id_id_idx').on(table.organizationId, table.id),
     uniqueIndex('attachment_live_hash_idx')
-      .on(table.sha256)
+      .on(table.organizationId, table.sha256)
       .where(sql`${table.state} not in ('deleting','deleted')`),
     check('attachment_state_check', sql`${table.state} in ('local','remote','deleting','deleted')`),
     check('attachment_size_check', sql`${table.size} between 1 and 8388608`),
@@ -45,10 +60,11 @@ export const inbox = integrationNamespace.table(
   'inbox',
   {
     id: uuid('id').primaryKey(),
-    sourceKey: text('source_key').notNull().unique(),
+    organizationId: organizationId(),
+    sourceKey: text('source_key').notNull(),
     image: bytea('image'),
-    attachmentId: uuid('attachment_id').references(() => attachment.id),
-    importedBetId: uuid('imported_bet_id').references(() => bet.id),
+    attachmentId: uuid('attachment_id'),
+    importedBetId: uuid('imported_bet_id'),
     requestHash: text('request_hash'),
     sha256: text('sha256').notNull(),
     caption: text('caption').notNull(),
@@ -62,6 +78,9 @@ export const inbox = integrationNamespace.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    unique('inbox_organization_id_id_idx').on(table.organizationId, table.id),
+    // Deduplication is per organization: the same source key may exist once in each tenant.
+    uniqueIndex('inbox_organization_id_source_key_idx').on(table.organizationId, table.sourceKey),
     check(
       'inbox_state_check',
       sql`${table.state} in ('pending', 'processing', 'review', 'failed', 'discarded', 'imported')`,
@@ -72,15 +91,34 @@ export const inbox = integrationNamespace.table(
     index('inbox_image_hash_idx').on(table.sha256),
     index('inbox_attachment_idx').on(table.attachmentId),
     index('inbox_imported_bet_idx').on(table.importedBetId),
+    foreignKey({
+      name: 'inbox_attachment_fk',
+      columns: [table.organizationId, table.attachmentId],
+      foreignColumns: [attachment.organizationId, attachment.id],
+    }),
+    foreignKey({
+      name: 'inbox_imported_bet_fk',
+      columns: [table.organizationId, table.importedBetId],
+      foreignColumns: [bet.organizationId, bet.id],
+    }),
   ],
 );
-export const extractionRequest = integrationNamespace.table('extraction_request', {
-  id: uuid('id').primaryKey(),
-  inboxId: uuid('inbox_id')
-    .notNull()
-    .references(() => inbox.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const extractionRequest = integrationNamespace.table(
+  'extraction_request',
+  {
+    id: uuid('id').primaryKey(),
+    organizationId: organizationId(),
+    inboxId: uuid('inbox_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'extraction_request_inbox_fk',
+      columns: [table.organizationId, table.inboxId],
+      foreignColumns: [inbox.organizationId, inbox.id],
+    }),
+  ],
+);
 export const integrationCursor = integrationNamespace.table('cursor', {
   name: text('name').primaryKey(),
   nextOffset: bigint('next_offset', { mode: 'number' }).notNull().default(0),

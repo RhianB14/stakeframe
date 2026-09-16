@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { FinanceError, type ReportService } from '@stakeframe/db';
+import type { OrganizationContext } from '@stakeframe/db';
 import {
   apiErrorSchema,
   reportQuerySchema,
@@ -18,6 +19,7 @@ export function registerReportRoutes(
   auth: OwnerAuth | undefined,
   service: ReportService | undefined,
 ) {
+  const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const authorize = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!auth) return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
     const owner = await auth.getOwner(fromNodeHeaders({ cookie: request.headers.cookie }));
@@ -25,6 +27,8 @@ export function registerReportRoutes(
     if (owner.status === 'consent_required')
       return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
+    // The organization always comes from the authenticated user — never from the client.
+    contexts.set(request, await service.ensureContext(owner.user.id));
   };
   const execute = async (
     request: FastifyRequest,
@@ -66,7 +70,9 @@ export function registerReportRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.report(reportQuerySchema.parse(request.query))),
+      execute(request, reply, () =>
+        service!.report(contexts.get(request)!, reportQuerySchema.parse(request.query)),
+      ),
   );
   app.get(
     '/api/v1/reports/bets',
@@ -81,7 +87,9 @@ export function registerReportRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.bets(reportDetailQuerySchema.parse(request.query))),
+      execute(request, reply, () =>
+        service!.bets(contexts.get(request)!, reportDetailQuerySchema.parse(request.query)),
+      ),
   );
   app.get(
     '/api/v1/reports/options',
@@ -94,7 +102,7 @@ export function registerReportRoutes(
         response: { 200: reportOptionsSchema, ...errors },
       },
     },
-    (request, reply) => execute(request, reply, () => service!.options()),
+    (request, reply) => execute(request, reply, () => service!.options(contexts.get(request)!)),
   );
   for (const kind of ['csv', 'json'] as const) {
     app.get(
@@ -115,7 +123,7 @@ export function registerReportRoutes(
       async (request, reply) => {
         try {
           const query = kind === 'csv' ? reportQuerySchema.parse(request.query) : undefined;
-          const stream = await service!.export(kind, query);
+          const stream = await service!.export(kind, contexts.get(request)!, query);
           const filename =
             kind === 'csv'
               ? `stakeframe-apostas-${query!.from}-${query!.to}.csv`

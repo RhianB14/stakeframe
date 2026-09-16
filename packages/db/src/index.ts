@@ -48,6 +48,7 @@ export {
 } from './transaction-scope.js';
 export {
   createTenantContext,
+  systemOrganizationContext,
   ORGANIZATION_CONTEXT_SETTING,
   TenantContextError,
   type OrganizationContext,

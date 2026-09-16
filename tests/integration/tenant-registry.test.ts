@@ -217,6 +217,15 @@ describe('core tenant registry backfill with a single pre-existing user', () => 
       role: 'owner',
     });
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(recordedBefore);
+    // The 0010 replay ends with SET NOT NULL on finance.settings: a NULL anchor would leave the
+    // registry inconsistent, so the column and the data are verified after the replay.
+    const settingsColumn = await database.pool.query<{ is_nullable: string }>(
+      "SELECT is_nullable FROM information_schema.columns WHERE table_schema='finance' AND table_name='settings' AND column_name='organization_id'",
+    );
+    expect(settingsColumn.rows[0]!.is_nullable).toBe('NO');
+    expect(await count('SELECT count(*) FROM finance.settings WHERE organization_id IS NULL')).toBe(
+      0,
+    );
   });
 });
 
@@ -242,10 +251,10 @@ describe('core tenant registry backfill with more than one pre-existing user', (
     expect(
       await count("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'core'"),
     ).toBe(0);
-    // reopenCoreMigration removed the markers of 0005 and every later core migration
-    // (0006, 0007, 0008, 0009); the failed 0005 replay must not add any marker back.
+    // reopenCoreMigration removed the markers of 0005 and every later…
+    // (0006, 0007, 0008, 0009, 0010); the failed 0005 replay must not add a…
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(
-      recordedBefore - 5,
+      recordedBefore - 6,
     );
     expect(await count('SELECT count(*) FROM auth."user"')).toBe(2);
   });

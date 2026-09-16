@@ -8,6 +8,7 @@ import {
   createFinanceService,
   createImportService,
   createAttachmentStore,
+  createTenantContext,
 } from '@stakeframe/db';
 import { migrateLocalDatabase } from './node_modules/@stakeframe/db/dist/migrate.js';
 import { backup, restic, snapshots } from './src/backup.mjs';
@@ -64,12 +65,17 @@ try {
   checked('unexpected-acls-defaults-owners-and-both-role-memberships-refused');
   const finance = createFinanceService(database);
   const imports = createImportService(database);
+  // STK-F1-13: the financial core is organization-scoped; the drill acts as the fixture owner.
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
+  const context = await createTenantContext(database).ensureOrganizationMembership('fixture-owner');
   const execute = async (input) =>
-    finance.command('fixture-owner', randomUUID(), {
+    finance.command(context, randomUUID(), {
       ...input,
-      expectedVersion: (await finance.workspace()).version,
+      expectedVersion: (await finance.workspace(context)).version,
     });
-  const house = (await finance.workspace()).catalog.find((row) => row.name === 'Bet365').id;
+  const house = (await finance.workspace(context)).catalog.find((row) => row.name === 'Bet365').id;
   await execute({
     type: 'bankroll.initialize',
     reserve: '500.00',
@@ -126,7 +132,7 @@ try {
   for (const image of images)
     inbox.push(
       (
-        await imports.upload('fixture-owner', randomUUID(), {
+        await imports.upload(context, randomUUID(), {
           caption: 'Tipster fictício\nBet365',
           image: image.toString('base64'),
         })
@@ -151,7 +157,7 @@ try {
     },
   };
   const attachments = createAttachmentStore(database, storage);
-  await attachments.uploadOne();
+  await attachments.uploadOne(context);
   assert.equal(remote.size, 1);
   await execute({
     type: 'import.discard',
@@ -226,12 +232,31 @@ try {
   );
   try {
     const restoredStore = createAttachmentStore(target);
-    for (let index = 0; index < 2; index++)
-      assert.deepEqual(
-        (await restoredStore.read(rows.find((row) => row.id === inbox[index]).attachment_id)).image,
-        images[index],
-      );
-    await assert.rejects(restoredStore.read(expiredId));
+    // The read is organization-scoped (STK-F1-13): run it inside a transaction that carries the
+    // restored organization context, like every runtime caller does.
+    const restoredContext =
+      await createTenantContext(target).ensureOrganizationMembership('fixture-owner');
+    const restoredClient = await target.pool.connect();
+    try {
+      await restoredClient.query('begin');
+      await restoredClient.query("select set_config('app.organization_id', $1, true)", [
+        restoredContext.organizationId,
+      ]);
+      for (let index = 0; index < 2; index++)
+        assert.deepEqual(
+          (
+            await restoredStore.read(
+              restoredClient,
+              rows.find((row) => row.id === inbox[index]).attachment_id,
+            )
+          ).image,
+          images[index],
+        );
+      await assert.rejects(restoredStore.read(restoredClient, expiredId));
+      await restoredClient.query('commit');
+    } finally {
+      restoredClient.release();
+    }
     assert.equal(
       (
         await target.pool.query(

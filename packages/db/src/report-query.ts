@@ -33,13 +33,16 @@ export const reportPopulation = `with selection_rollup as (
         'áàâãäéèêëíìîïóòôõöúùûüç','aaaaaeeeeiiiiooooouuuuc'))>1 then 'mixed'
       else 'sport:' || min(translate(lower(regexp_replace(trim(sport),'\\s+',' ','g')),
         'áàâãäéèêëíìîïóòôõöúùûüç','aaaaaeeeeiiiiooooouuuuc')) end sport_key
-  from finance.selection group by bet_id
+  from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid
+  group by bet_id
 ), settlement_rollup as (
   select s.bet_id, sum(s.return_amount) returns, sum(s.real_principal_closed) principal,
     count(*) settlements, bool_and(s.outcome in ('win','loss','half_win','half_loss')) hit_eligible,
     bool_or(s.outcome in ('win','half_win')) hit_win
   from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id
-  where r.settlement_id is null group by s.bet_id
+    and r.organization_id=s.organization_id
+  where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and r.settlement_id is null
+  group by s.bet_id
 ), population as (
   select b.id,b.reference,b.bookmaker_id,c.name bookmaker,b.tipster_id,coalesce(t.name,'Sem tipster') tipster,
     b.stake,b.remaining,b.state,b.placed_at,b.unit_amount,b.freebet_id is not null freebet,
@@ -53,11 +56,12 @@ export const reportPopulation = `with selection_rollup as (
     coalesce(st.settlements,0) settlements,
     b.freebet_id is null and b.state='settled' and coalesce(st.hit_eligible,false) hit_eligible,
     coalesce(st.hit_win,false) hit_win
-  from finance.bet b join finance.catalog c on c.id=b.bookmaker_id
-  left join finance.catalog t on t.id=b.tipster_id
+  from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id
+  left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id
   left join selection_rollup sr on sr.bet_id=b.id
   left join settlement_rollup st on st.bet_id=b.id
-  where b.state<>'cancelled'
+  where b.organization_id=current_setting($$app.organization_id$$, true)::uuid
+    and b.state<>'cancelled'
     and ($3::uuid is null or b.bookmaker_id=$3)
     and ($4::text is null or coalesce(b.tipster_id::text,'none')=$4)
     and ($5::text is null or coalesce(sr.sport_key,'unknown')=$5)

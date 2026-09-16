@@ -35,16 +35,15 @@ export async function applyFinanceCommand(
     const month = saoPauloDate(before.placed_at).slice(0, 7);
     const unit = (
       await client.query<{ amount: string }>(
-        'select amount from finance.monthly_unit where month=$1',
+        'select amount from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid and month=$1',
         [month],
       )
     ).rows[0];
     if (!unit || cents(unit.amount) <= 0n) throw new FinanceError('UNIT_REQUIRED');
-    await client.query('update finance.bet set unit_month=$2,unit_amount=$3 where id=$1', [
-      before.id,
-      month,
-      unit.amount,
-    ]);
+    await client.query(
+      'update finance.bet set unit_month=$2,unit_amount=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [before.id, month, unit.amount],
+    );
     return { id: before.id, before };
   }
   if (type === 'event.update') return updateEvent(client, command);
@@ -57,7 +56,7 @@ export async function applyFinanceCommand(
         attachment_id: string;
         extraction: unknown;
       }>(
-        'select id,state,version,attachment_id,extraction from integration.inbox where id=$1 for update',
+        'select id,state,version,attachment_id,extraction from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
         [command.importId],
       )
     ).rows[0];
@@ -66,16 +65,19 @@ export async function applyFinanceCommand(
     if (!['pending', 'review', 'failed'].includes(row.state))
       throw new FinanceError('STATE_CONFLICT');
     if (type === 'import.discard') {
-      await client.query('delete from integration.extraction_request where inbox_id=$1', [row.id]);
       await client.query(
-        "update integration.inbox set state='discarded',version=version+1,updated_at=now() where id=$1",
+        'delete from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid and inbox_id=$1',
+        [row.id],
+      );
+      await client.query(
+        "update integration.inbox set state='discarded',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
         [row.id],
       );
       return { id: row.id, before: row };
     }
     const attachment = (
       await client.query<{ state: string }>(
-        'select state from integration.attachment where id=$1 for update',
+        'select state from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
         [row.attachment_id],
       )
     ).rows[0];
@@ -84,7 +86,7 @@ export async function applyFinanceCommand(
     if (type === 'import.retry') {
       if (row.state === 'pending') throw new FinanceError('STATE_CONFLICT');
       await client.query(
-        "update integration.inbox set state='pending',error_code=null,version=version+1,updated_at=now() where id=$1",
+        "update integration.inbox set state='pending',error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
         [row.id],
       );
       await enqueueExtraction(client, row.id);
@@ -108,9 +110,12 @@ export async function applyFinanceCommand(
       );
       betId = created.id;
     }
-    await client.query('delete from integration.extraction_request where inbox_id=$1', [row.id]);
     await client.query(
-      "update integration.inbox set state='imported',imported_bet_id=$2,version=version+1,updated_at=now() where id=$1",
+      'delete from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid and inbox_id=$1',
+      [row.id],
+    );
+    await client.query(
+      "update integration.inbox set state='imported',imported_bet_id=$2,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
       [row.id, betId],
     );
     return { id: betId, before: row };
@@ -132,26 +137,27 @@ export async function applyFinanceCommand(
   }
   if (type === 'catalog.update') {
     const before = (
-      await client.query<{ kind: string }>('select * from finance.catalog where id=$1', [
-        command.id,
-      ])
+      await client.query<{ kind: string }>(
+        'select * from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.id],
+      )
     ).rows[0];
     if (!before) throw new FinanceError('NOT_FOUND');
     const aliases = (
-      await client.query('select label from finance.catalog_alias where catalog_id=$1', [
-        command.id,
-      ])
+      await client.query(
+        'select label from finance.catalog_alias where organization_id=current_setting($$app.organization_id$$, true)::uuid and catalog_id=$1',
+        [command.id],
+      )
     ).rows;
     await replaceAliases(client, command.id, before.kind, command.name, command.aliases);
-    await client.query('update finance.catalog set name=$2,active=$3 where id=$1', [
-      command.id,
-      command.name,
-      command.active,
-    ]);
-    await client.query('update finance.account set name=$2 where bookmaker_id=$1', [
-      command.id,
-      command.name,
-    ]);
+    await client.query(
+      'update finance.catalog set name=$2,active=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [command.id, command.name, command.active],
+    );
+    await client.query(
+      'update finance.account set name=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and bookmaker_id=$1',
+      [command.id, command.name],
+    );
     return { id: command.id, before: { ...before, aliases } };
   }
   if (type === 'bankroll.initialize') {
@@ -179,7 +185,7 @@ export async function applyFinanceCommand(
       postings,
     });
     await client.query(
-      'update finance.settings set initialized=true,unit_percent=$1,opened_at=$2 where id=1',
+      'update finance.settings set initialized=true,unit_percent=$1,opened_at=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid',
       [money(cents(command.unitPercent)), now],
     );
     await insertUnit(client, saoPauloDate(now).slice(0, 7), total, command.unitPercent, 'initial');
@@ -188,17 +194,22 @@ export async function applyFinanceCommand(
   if (!settings.initialized) throw new FinanceError('NOT_INITIALIZED');
   if (type === 'settings.update') {
     if (cents(command.unitPercent) > 10_000n) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-    await client.query('update finance.settings set unit_percent=$1 where id=1', [
-      money(cents(command.unitPercent)),
-    ]);
+    await client.query(
+      'update finance.settings set unit_percent=$1 where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+      [money(cents(command.unitPercent))],
+    );
     return { id: 'settings', before: settings };
   }
   if (type === 'unit.set') {
     if (command.month > saoPauloDate(now).slice(0, 7))
       throw new FinanceError('INVALID_FINANCIAL_OPERATION');
     if (
-      (await client.query('select month from finance.monthly_unit where month=$1', [command.month]))
-        .rowCount
+      (
+        await client.query(
+          'select month from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid and month=$1',
+          [command.month],
+        )
+      ).rowCount
     )
       throw new FinanceError('STATE_CONFLICT');
     // The base is an explicitly derived equivalent, not a reconstructed historical balance.
@@ -254,7 +265,7 @@ export async function applyFinanceCommand(
   if (type === 'journal.reverse') {
     const row = (
       await client.query<{ kind: string; reversal_of: string | null }>(
-        'select * from finance.journal where id=$1',
+        'select * from finance.journal where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
         [command.id],
       )
     ).rows[0];
@@ -293,7 +304,7 @@ export async function applyFinanceCommand(
     const month = saoPauloDate(placedAt).slice(0, 7);
     const unit = (
       await client.query<{ month: string; amount: string }>(
-        'select month,amount from finance.monthly_unit where month=$1',
+        'select month,amount from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid and month=$1',
         [month],
       )
     ).rows[0];
@@ -310,9 +321,10 @@ export async function applyFinanceCommand(
           used_by: string | null;
           expires_on: string;
           stake_returned: boolean;
-        }>('select *, expires_on::text as expires_on from finance.freebet where id=$1 for update', [
-          command.freebetId,
-        ])
+        }>(
+          'select *, expires_on::text as expires_on from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          [command.freebetId],
+        )
       ).rows[0];
       if (
         !promo ||
@@ -355,10 +367,10 @@ export async function applyFinanceCommand(
       ],
     );
     if (command.freebetId)
-      await client.query('update finance.freebet set used_by=$2 where id=$1', [
-        command.freebetId,
-        id,
-      ]);
+      await client.query(
+        'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.freebetId, id],
+      );
     await saveSelections(client, id, command.selections);
     return { id, before: null };
   }
@@ -367,15 +379,15 @@ export async function applyFinanceCommand(
     if (before.state === 'cancelled') throw new FinanceError('STATE_CONFLICT');
     if (command.tipsterId) await activeCatalog(client, command.tipsterId, 'tipster');
     const selections = (
-      await client.query('select * from finance.selection where bet_id=$1 order by position', [
-        command.id,
-      ])
+      await client.query(
+        'select * from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+        [command.id],
+      )
     ).rows;
-    await client.query('update finance.bet set tipster_id=$2,reference=$3 where id=$1', [
-      command.id,
-      command.tipsterId,
-      command.reference,
-    ]);
+    await client.query(
+      'update finance.bet set tipster_id=$2,reference=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [command.id, command.tipsterId, command.reference],
+    );
     await saveSelections(client, command.id, command.selections);
     return { id: command.id, before: { ...before, selections } };
   }
@@ -383,7 +395,7 @@ export async function applyFinanceCommand(
     const before = await getBetRow(client, command.id);
     const active = (
       await client.query(
-        'select s.id from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.bet_id=$1 and r.settlement_id is null',
+        'select s.id from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id and r.organization_id=s.organization_id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=$1 and r.settlement_id is null',
         [command.id],
       )
     ).rowCount;
@@ -395,14 +407,15 @@ export async function applyFinanceCommand(
       actor,
       command.reason,
     );
-    await client.query("update finance.bet set state='cancelled',remaining=0 where id=$1", [
-      command.id,
-    ]);
+    await client.query(
+      "update finance.bet set state='cancelled',remaining=0 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+      [command.id],
+    );
     if (before.freebet_id)
-      await client.query('update finance.freebet set used_by=null where id=$1 and used_by=$2', [
-        before.freebet_id,
-        command.id,
-      ]);
+      await client.query(
+        'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
+        [before.freebet_id, command.id],
+      );
     return { id: command.id, before };
   }
   if (type === 'bet.settle') {
@@ -450,11 +463,10 @@ export async function applyFinanceCommand(
       ],
     );
     const remaining = cents(before.remaining) - principal;
-    await client.query('update finance.bet set remaining=$2,state=$3 where id=$1', [
-      command.id,
-      money(remaining),
-      remaining === 0n ? 'settled' : 'open',
-    ]);
+    await client.query(
+      'update finance.bet set remaining=$2,state=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [command.id, money(remaining), remaining === 0n ? 'settled' : 'open'],
+    );
     // A full unused promotional stake voided without real payout can be used again.
     if (
       before.freebet_id &&
@@ -462,16 +474,16 @@ export async function applyFinanceCommand(
       amount === 0n &&
       principal === cents(before.stake)
     )
-      await client.query('update finance.freebet set used_by=null where id=$1 and used_by=$2', [
-        before.freebet_id,
-        command.id,
-      ]);
+      await client.query(
+        'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
+        [before.freebet_id, command.id],
+      );
     return { id, before };
   }
   if (type === 'settlement.reverse') {
     // Retention takes the settings lock first, then claims the attachment before external deletion.
     const deleting = await client.query(
-      "select 1 from integration.inbox i join integration.attachment a on a.id=i.attachment_id join finance.settlement s on s.bet_id=i.imported_bet_id where s.id=$1 and a.state='deleting'",
+      "select 1 from integration.inbox i join integration.attachment a on a.id=i.attachment_id and a.organization_id=i.organization_id join finance.settlement s on s.bet_id=i.imported_bet_id and s.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.id=$1 and a.state='deleting'",
       [command.id],
     );
     if (deleting.rowCount) throw new FinanceError('STATE_CONFLICT');
@@ -481,13 +493,16 @@ export async function applyFinanceCommand(
         bet_id: string;
         closed_principal: string;
         journal_id: string;
-      }>('select * from finance.settlement where id=$1', [command.id])
+      }>(
+        'select * from finance.settlement where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.id],
+      )
     ).rows[0];
     if (!row) throw new FinanceError('NOT_FOUND');
     if (
       (
         await client.query(
-          'select settlement_id from finance.settlement_reversal where settlement_id=$1',
+          'select settlement_id from finance.settlement_reversal where organization_id=current_setting($$app.organization_id$$, true)::uuid and settlement_id=$1',
           [command.id],
         )
       ).rowCount
@@ -498,15 +513,15 @@ export async function applyFinanceCommand(
     if (before.freebet_id) {
       const credit = (
         await client.query<{ used_by: string | null }>(
-          'select used_by from finance.freebet where id=$1',
+          'select used_by from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
           [before.freebet_id],
         )
       ).rows[0]!;
       if (credit.used_by && credit.used_by !== before.id) throw new FinanceError('STATE_CONFLICT');
-      await client.query('update finance.freebet set used_by=$2 where id=$1', [
-        before.freebet_id,
-        before.id,
-      ]);
+      await client.query(
+        'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [before.freebet_id, before.id],
+      );
     }
     const journalId = await reverseJournal(
       client,
@@ -519,10 +534,10 @@ export async function applyFinanceCommand(
       'insert into finance.settlement_reversal(settlement_id,journal_id) values($1,$2)',
       [command.id, journalId],
     );
-    await client.query("update finance.bet set remaining=remaining+$2,state='open' where id=$1", [
-      before.id,
-      row.closed_principal,
-    ]);
+    await client.query(
+      "update finance.bet set remaining=remaining+$2,state='open' where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+      [before.id, row.closed_principal],
+    );
     return { id: journalId, before: { settlement: row, bet: before } };
   }
   throw new FinanceError('INVALID_FINANCIAL_OPERATION');

@@ -8,6 +8,7 @@ import {
   type Database,
   type FinanceService,
   type EventService,
+  type OrganizationContext,
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
@@ -22,6 +23,7 @@ const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
 const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 let database: Database;
 let finance: FinanceService;
+let tenantContext: OrganizationContext;
 let events: EventService;
 let name: string;
 type Input = FinanceCommand extends infer C
@@ -30,9 +32,9 @@ type Input = FinanceCommand extends infer C
     : never
   : never;
 const run = async (input: Input) =>
-  finance.command('fixture-owner', randomUUID(), {
+  finance.command(tenantContext, randomUUID(), {
     ...input,
-    expectedVersion: (await finance.workspace()).version,
+    expectedVersion: (await finance.workspace(tenantContext)).version,
   } as FinanceCommand);
 const selection = {
   event: 'Aurora × Central',
@@ -56,7 +58,9 @@ const candidate = (): EventCandidate => ({
   postponed: false,
 });
 async function makeBet(selections: BetInput['selections'] = [selection]) {
-  const bookmakerId = (await finance.workspace()).catalog.find((row) => row.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   return run({
     type: 'bet.create',
     bookmakerId,
@@ -79,8 +83,14 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   finance = createFinanceService(database);
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
+  tenantContext = await finance.ensureContext('fixture-owner');
   events = createEventService(database, { thesportsdb: true, tavily: true });
-  const bookmakerId = (await finance.workspace()).catalog.find((row) => row.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   await run({
     type: 'bankroll.initialize',
     reserve: '500.00',
@@ -102,7 +112,7 @@ describe('calendar and event search persistence', () => {
       { ...selection, event: 'Aurora × Norte', eventDate: '2026-09-02', dateStatus: 'estimated' },
       { ...selection, event: 'Aurora × Sul' },
     ]);
-    const august = await events.calendar({
+    const august = await events.calendar(tenantContext, {
       from: '2026-08-01',
       to: '2026-08-31',
       view: 'scheduled',
@@ -114,7 +124,7 @@ describe('calendar and event search persistence', () => {
       eventDate: '2026-08-31',
       eventAt: '2026-09-01T00:30:00.000Z',
     });
-    const all = await events.calendar({
+    const all = await events.calendar(tenantContext, {
       from: '2026-08-01',
       to: '2026-09-30',
       view: 'scheduled',
@@ -127,7 +137,7 @@ describe('calendar and event search persistence', () => {
       eventDate: '2026-09-02',
       dateStatus: 'estimated',
     });
-    const pending = await events.calendar({
+    const pending = await events.calendar(tenantContext, {
       from: '2030-01-01',
       to: '2030-01-31',
       view: 'pending',
@@ -138,7 +148,7 @@ describe('calendar and event search persistence', () => {
     expect(pending.items[0]?.betId).toBe(bet.id);
     expect(all.items[0]).not.toHaveProperty('stake');
     expect(() =>
-      events.calendar({
+      events.calendar(tenantContext, {
         from: '2026-09-30',
         to: '2026-09-01',
         view: 'scheduled',
@@ -149,17 +159,17 @@ describe('calendar and event search persistence', () => {
   });
   it('keeps selection IDs and source evidence through reorder/market correction, rejecting foreign IDs atomically', async () => {
     const bet = await makeBet([selection, { ...selection, event: 'Aurora × Norte' }]);
-    const original = (await finance.bet(bet.id)).bet;
+    const original = (await finance.bet(tenantContext, bet.id)).bet;
     const id = original.selections[0]!.id!;
     const found = candidate();
-    const request = await events.request('fixture-owner', randomUUID(), {
+    const request = await events.request(tenantContext, randomUUID(), {
       selectionId: id,
       provider: 'thesportsdb',
       dateHint: null,
     });
-    expect((await events.claim())?.id).toBe(request.id);
-    await events.complete(request.id, [found]);
-    const before = await finance.workspace();
+    expect((await events.claim(tenantContext))?.id).toBe(request.id);
+    await events.complete(tenantContext, request.id, [found]);
+    const before = await finance.workspace(tenantContext);
     await run({
       type: 'event.update',
       selectionId: id,
@@ -170,13 +180,13 @@ describe('calendar and event search persistence', () => {
       candidateId: found.id,
       reason: 'Conferência da fonte e do fuso',
     });
-    expect(await finance.workspace()).toMatchObject({
+    expect(await finance.workspace(tenantContext)).toMatchObject({
       bankroll: before.bankroll,
       exposure: before.exposure,
       available: before.available,
       units: before.units,
     });
-    const updated = (await finance.bet(bet.id)).bet;
+    const updated = (await finance.bet(tenantContext, bet.id)).bet;
     await run({
       type: 'bet.update',
       id: bet.id,
@@ -185,15 +195,15 @@ describe('calendar and event search persistence', () => {
       reason: 'Corrigir ordem e mercado',
       selections: [updated.selections[1]!, { ...updated.selections[0]!, market: 'Vencedor' }],
     });
-    expect((await finance.bet(bet.id)).bet.selections.map((s) => s.id)).toEqual([
+    expect((await finance.bet(tenantContext, bet.id)).bet.selections.map((s) => s.id)).toEqual([
       original.selections[1]!.id,
       id,
     ]);
-    expect(await events.selection(id)).toMatchObject({
+    expect(await events.selection(tenantContext, id)).toMatchObject({
       dateSource: 'thesportsdb',
       dateEvidence: { id: found.id },
     });
-    const current = (await finance.bet(bet.id)).bet;
+    const current = (await finance.bet(tenantContext, bet.id)).bet;
     await expect(
       run({
         type: 'bet.update',
@@ -204,7 +214,7 @@ describe('calendar and event search persistence', () => {
         selections: [{ ...current.selections[0]!, id: randomUUID() }],
       }),
     ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
-    expect((await finance.bet(bet.id)).bet.reference).toBe('corrigida');
+    expect((await finance.bet(tenantContext, bet.id)).bet.reference).toBe('corrigida');
     const audit = await database.pool.query(
       "select * from finance.audit where type='event.update' and entity_id=$1",
       [bet.id],
@@ -213,41 +223,41 @@ describe('calendar and event search persistence', () => {
   });
   it('deduplicates concurrent request keys, shares cache without spending a quota, and never changes confirmed manual dates', async () => {
     const bet = await makeBet([{ ...selection, eventDate: '2026-09-05', dateStatus: 'confirmed' }]);
-    const id = (await finance.bet(bet.id)).bet.selections[0]!.id!;
+    const id = (await finance.bet(tenantContext, bet.id)).bet.selections[0]!.id!;
     const input = { selectionId: id, provider: 'thesportsdb' as const, dateHint: null };
     const key = randomUUID();
     const responses = await Promise.all([
-      events.request('fixture-owner', key, input),
-      events.request('fixture-owner', key, input),
+      events.request(tenantContext, key, input),
+      events.request(tenantContext, key, input),
     ]);
     expect(responses[0]).toEqual(responses[1]);
     await expect(
-      events.request('fixture-owner', key, { ...input, dateHint: '2026-09-01' }),
+      events.request(tenantContext, key, { ...input, dateHint: '2026-09-01' }),
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
-    const claims = await Promise.all([events.claim(), events.claim()]);
+    const claims = await Promise.all([events.claim(tenantContext), events.claim(tenantContext)]);
     expect(claims.filter(Boolean)).toHaveLength(1);
-    await events.complete(key, [candidate()]);
-    const cached = await events.request('fixture-owner', randomUUID(), input);
+    await events.complete(tenantContext, key, [candidate()]);
+    const cached = await events.request(tenantContext, randomUUID(), input);
     expect(cached).toMatchObject({ state: 'complete', cached: true });
-    expect((await events.status()).providers[0]?.dailyUsed).toBe(1);
-    expect(await events.selection(id)).toMatchObject({
+    expect((await events.status(tenantContext)).providers[0]?.dailyUsed).toBe(1);
+    expect(await events.selection(tenantContext, id)).toMatchObject({
       selection: { eventDate: '2026-09-05', eventAt: null, dateStatus: 'confirmed' },
       dateSource: 'manual',
     });
-    const refresh = await events.request('fixture-owner', randomUUID(), {
+    const refresh = await events.request(tenantContext, randomUUID(), {
       ...input,
       refresh: true,
     });
     expect(refresh).toMatchObject({ state: 'pending', cached: false });
     const disabled = createEventService(database);
-    await expect(disabled.request('fixture-owner', randomUUID(), input)).rejects.toThrow(
+    await expect(disabled.request(tenantContext, randomUUID(), input)).rejects.toThrow(
       'EVENT_PROVIDER_DISABLED',
     );
   });
   it('audits postponement and manual rescheduling, rejects stale versions and impossible date combinations', async () => {
     const bet = await makeBet([{ ...selection, eventDate: '2026-09-05', dateStatus: 'confirmed' }]);
-    const id = (await finance.bet(bet.id)).bet.selections[0]!.id!;
-    const version = (await finance.workspace()).version;
+    const id = (await finance.bet(tenantContext, bet.id)).bet.selections[0]!.id!;
+    const version = (await finance.workspace(tenantContext)).version;
     const update: FinanceCommand = {
       type: 'event.update',
       expectedVersion: version,
@@ -260,12 +270,12 @@ describe('calendar and event search persistence', () => {
       reason: 'Adiamento informado pela organização',
     };
     const key = randomUUID();
-    const first = await finance.command('fixture-owner', key, update);
-    expect(await finance.command('fixture-owner', key, update)).toEqual(first);
-    await expect(finance.command('fixture-owner', randomUUID(), update)).rejects.toMatchObject({
+    const first = await finance.command(tenantContext, key, update);
+    expect(await finance.command(tenantContext, key, update)).toEqual(first);
+    await expect(finance.command(tenantContext, randomUUID(), update)).rejects.toMatchObject({
       code: 'VERSION_CONFLICT',
     });
-    expect(await events.selection(id)).toMatchObject({
+    expect(await events.selection(tenantContext, id)).toMatchObject({
       scheduleStatus: 'postponed',
       selection: { eventDate: null, eventAt: null, dateStatus: 'pending' },
     });
@@ -282,7 +292,7 @@ describe('calendar and event search persistence', () => {
       candidateId: null,
       reason: 'Nova data confirmada sem horário',
     });
-    expect(await events.selection(id)).toMatchObject({
+    expect(await events.selection(tenantContext, id)).toMatchObject({
       selection: { eventDate: '2026-09-09', eventAt: null },
       scheduleStatus: 'scheduled',
     });
@@ -301,53 +311,53 @@ describe('calendar and event search persistence', () => {
   });
   it('enforces persistent quota and fences interrupted calls instead of retrying or accepting late results', async () => {
     const bet = await makeBet();
-    const id = (await finance.bet(bet.id)).bet.selections[0]!.id!;
+    const id = (await finance.bet(tenantContext, bet.id)).bet.selections[0]!.id!;
     await database.pool.query(
-      `insert into integration.event_search(id,actor,hash,selection_id,provider,query,event_fingerprint,state,started_at)
-      select gen_random_uuid(),'fixture-owner','quota',$1,'tavily','fixture','fixture','failed',now()-interval '2 minutes' from generate_series(1,20)`,
-      [id],
+      `insert into integration.event_search(organization_id,id,actor,hash,selection_id,provider,query,event_fingerprint,state,started_at)
+      select $2,gen_random_uuid(),'fixture-owner','quota',$1,'tavily','fixture','fixture','failed',now()-interval '2 minutes' from generate_series(1,20)`,
+      [id, tenantContext.organizationId],
     );
-    const blocked = await events.request('fixture-owner', randomUUID(), {
+    const blocked = await events.request(tenantContext, randomUUID(), {
       selectionId: id,
       provider: 'tavily',
       dateHint: null,
     });
-    expect(await events.claim()).toBeNull();
-    expect(await events.search(blocked.id)).toMatchObject({
+    expect(await events.claim(tenantContext)).toBeNull();
+    expect(await events.search(tenantContext, blocked.id)).toMatchObject({
       state: 'failed',
       errorCode: 'EVENT_QUOTA_REACHED',
     });
-    const interrupted = await events.request('fixture-owner', randomUUID(), {
+    const interrupted = await events.request(tenantContext, randomUUID(), {
       selectionId: id,
       provider: 'thesportsdb',
       dateHint: null,
     });
-    expect((await events.claim())?.id).toBe(interrupted.id);
+    expect((await events.claim(tenantContext))?.id).toBe(interrupted.id);
     await database.pool.query(
       "update integration.event_search set started_at=now()-interval '6 minutes' where id=$1",
       [interrupted.id],
     );
-    expect(await events.claim()).toBeNull();
-    await events.complete(interrupted.id, [candidate()]);
-    expect(await events.search(interrupted.id)).toMatchObject({
+    expect(await events.claim(tenantContext)).toBeNull();
+    await events.complete(tenantContext, interrupted.id, [candidate()]);
+    expect(await events.search(tenantContext, interrupted.id)).toMatchObject({
       state: 'failed',
       errorCode: 'EVENT_OUTCOME_UNCERTAIN',
       candidates: [],
     });
-    expect((await events.status()).providers[0]?.dailyUsed).toBe(1);
+    expect((await events.status(tenantContext)).providers[0]?.dailyUsed).toBe(1);
   });
   it('refuses evidence belonging to another or renamed event', async () => {
     const bet = await makeBet();
-    const id = (await finance.bet(bet.id)).bet.selections[0]!.id!;
-    const search = await events.request('fixture-owner', randomUUID(), {
+    const id = (await finance.bet(tenantContext, bet.id)).bet.selections[0]!.id!;
+    const search = await events.request(tenantContext, randomUUID(), {
       selectionId: id,
       provider: 'thesportsdb',
       dateHint: null,
     });
-    await events.claim();
+    await events.claim(tenantContext);
     const found = candidate();
-    await events.complete(search.id, [found]);
-    const current = (await finance.bet(bet.id)).bet;
+    await events.complete(tenantContext, search.id, [found]);
+    const current = (await finance.bet(tenantContext, bet.id)).bet;
     await run({
       type: 'bet.update',
       id: bet.id,

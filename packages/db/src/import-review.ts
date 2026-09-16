@@ -10,6 +10,7 @@ import type { Database } from './index.js';
 import { createInboxStore } from './inbox.js';
 import { createAttachmentStore, type ObjectStorage } from './attachments.js';
 import { FinanceError } from './finance-core.js';
+import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
 export async function findDuplicates(
   client: Pick<PoolClient, 'query'>,
@@ -28,11 +29,11 @@ export async function findDuplicates(
       similar: boolean;
     }>(
       `select b.id as bet_id,b.reference,b.bookmaker_id,b.stake,b.placed_at,
-    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 where other.sha256=current.sha256 and other.imported_bet_id=b.id) as image,
+    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 and current.organization_id=other.organization_id where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id) as image,
     ($3::text<>'' and b.bookmaker_id=$2 and lower(trim(b.reference))=lower(trim($3))) as ref,
     (b.bookmaker_id=$2 and b.stake=$4::numeric and b.odds=$5::numeric and (b.placed_at at time zone 'America/Sao_Paulo')::date=($6::timestamptz at time zone 'America/Sao_Paulo')::date) as similar
-    from finance.bet b where
-    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 where other.sha256=current.sha256 and other.imported_bet_id=b.id)
+    from finance.bet b where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and
+    exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 and current.organization_id=other.organization_id where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id)
     or ($3::text<>'' and b.bookmaker_id=$2 and lower(trim(b.reference))=lower(trim($3)))
     or (b.bookmaker_id=$2 and b.stake=$4::numeric and b.odds=$5::numeric and (b.placed_at at time zone 'America/Sao_Paulo')::date=($6::timestamptz at time zone 'America/Sao_Paulo')::date)
     order by b.created_at desc limit 101`,
@@ -99,10 +100,21 @@ function normalized(value: string) {
     .replace(/\s+/g, ' ');
 }
 export function createImportService(database: Database, storage?: ObjectStorage) {
+  const tenant = createTenantContext(database);
   const inbox = createInboxStore(database, undefined, storage);
   const attachments = createAttachmentStore(database, storage);
+  const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
+    tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
   return {
-    async upload(actor: string, key: string, input: { image: string; caption: string }) {
+    /** Returns the authenticated user's organization context (provisioning on first use). */
+    ensureContext(userId: string) {
+      return tenant.ensureOrganizationMembership(userId);
+    },
+    async upload(
+      context: OrganizationContext,
+      key: string,
+      input: { image: string; caption: string },
+    ) {
       const bytes = Buffer.from(input.image, 'base64');
       if (bytes.toString('base64') !== input.image) throw new Error('INVALID_INBOX_IMAGE');
       const requestHash = createHash('sha256')
@@ -111,8 +123,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         .update(input.caption)
         .digest('hex');
       const id = await inbox.accept(
+        context,
         {
-          sourceKey: `web:${actor}:${key}`,
+          sourceKey: `web:${context.userId}:${key}`,
           caption: input.caption,
           requestHash,
           metadata: { source: 'web' },
@@ -121,43 +134,46 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       );
       return { id };
     },
-    async list(query: {
-      page: number;
-      pageSize: number;
-      state?: string | undefined;
-      betId?: string | undefined;
-    }) {
-      const rows = await database.pool.query<InboxRow & { total: string }>(
-        `select ${columns},count(*) over() as total from integration.inbox i join integration.attachment a on a.id=i.attachment_id where ($1::text is null or i.state=$1) and ($4::uuid is null or i.imported_bet_id=$4) order by i.created_at desc,i.id desc limit $2 offset $3`,
-        [
-          query.state ?? null,
-          query.pageSize,
-          (query.page - 1) * query.pageSize,
-          query.betId ?? null,
-        ],
-      );
-      const total =
-        rows.rows[0]?.total ??
-        (
-          await database.pool.query<{ total: string }>(
-            'select count(*) as total from integration.inbox where ($1::text is null or state=$1) and ($2::uuid is null or imported_bet_id=$2)',
-            [query.state ?? null, query.betId ?? null],
-          )
-        ).rows[0]!.total;
-      return {
-        items: rows.rows.map(item),
-        total: Number(total),
-        page: query.page,
-        pageSize: query.pageSize,
-      };
+    async list(
+      context: OrganizationContext,
+      query: {
+        page: number;
+        pageSize: number;
+        state?: string | undefined;
+        betId?: string | undefined;
+      },
+    ) {
+      return read(context, async (client) => {
+        const rows = await client.query<InboxRow & { total: string }>(
+          `select ${columns},count(*) over() as total from integration.inbox i join integration.attachment a on a.id=i.attachment_id and a.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and ($1::text is null or i.state=$1) and ($4::uuid is null or i.imported_bet_id=$4) order by i.created_at desc,i.id desc limit $2 offset $3`,
+          [
+            query.state ?? null,
+            query.pageSize,
+            (query.page - 1) * query.pageSize,
+            query.betId ?? null,
+          ],
+        );
+        const total =
+          rows.rows[0]?.total ??
+          (
+            await client.query<{ total: string }>(
+              'select count(*) as total from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and ($1::text is null or state=$1) and ($2::uuid is null or imported_bet_id=$2)',
+              [query.state ?? null, query.betId ?? null],
+            )
+          ).rows[0]!.total;
+        return {
+          items: rows.rows.map(item),
+          total: Number(total),
+          page: query.page,
+          pageSize: query.pageSize,
+        };
+      });
     },
-    async detail(id: string) {
-      const client = await database.pool.connect();
-      try {
-        await client.query('begin isolation level repeatable read read only');
+    async detail(context: OrganizationContext, id: string) {
+      return read(context, async (client) => {
         const row = (
           await client.query<InboxRow>(
-            `select ${columns} from integration.inbox i join integration.attachment a on a.id=i.attachment_id where i.id=$1`,
+            `select ${columns} from integration.inbox i join integration.attachment a on a.id=i.attachment_id and a.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1`,
             [id],
           )
         ).rows[0];
@@ -176,7 +192,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         );
         const aliases = (
           await client.query<{ catalog_id: string; kind: string; label: string }>(
-            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id where c.active',
+            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
           )
         ).rows;
         const match = (kind: string, label: string | null) =>
@@ -194,7 +210,6 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           odds: '1',
           placedAt: new Date(0).toISOString(),
         });
-        await client.query('commit');
         return {
           item: item(row),
           extraction,
@@ -217,22 +232,19 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             ? decision.data.reason
             : ('LAYOUT_NOT_VALIDATED' as const),
         };
-      } catch (error) {
-        await client.query('rollback');
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
     },
-    async image(id: string) {
-      const row = (
-        await database.pool.query<{ attachment_id: string }>(
-          'select attachment_id from integration.inbox where id=$1',
-          [id],
-        )
-      ).rows[0];
-      if (!row) throw new FinanceError('NOT_FOUND');
-      return attachments.read(row.attachment_id);
+    async image(context: OrganizationContext, id: string) {
+      return read(context, async (client) => {
+        const row = (
+          await client.query<{ attachment_id: string }>(
+            'select attachment_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return attachments.read(client, row.attachment_id);
+      });
     },
   };
 }

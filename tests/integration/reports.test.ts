@@ -8,6 +8,7 @@ import {
   type Database,
   type FinanceService,
   type ReportService,
+  type OrganizationContext,
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
@@ -22,6 +23,7 @@ const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
 const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 let database: Database;
 let finance: FinanceService;
+let tenantContext: OrganizationContext;
 let reports: ReportService;
 let name: string;
 let bookmakerId: string;
@@ -31,9 +33,9 @@ type Input = FinanceCommand extends infer C
     : never
   : never;
 const run = async (input: Input) =>
-  finance.command('fixture-owner', randomUUID(), {
+  finance.command(tenantContext, randomUUID(), {
     ...input,
-    expectedVersion: (await finance.workspace()).version,
+    expectedVersion: (await finance.workspace(tenantContext)).version,
   } as FinanceCommand);
 const query = reportQuerySchema.parse({ from: '2026-09-01', to: '2026-09-30' });
 const selection = {
@@ -77,7 +79,7 @@ async function settle(
   });
 }
 async function exported(kind: 'csv' | 'json') {
-  const stream = await reports.export(kind, kind === 'csv' ? query : undefined);
+  const stream = await reports.export(kind, tenantContext, kind === 'csv' ? query : undefined);
   let text = '';
   for await (const chunk of stream) text += String(chunk);
   return text;
@@ -91,8 +93,14 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   finance = createFinanceService(database);
+  await database.pool.query(
+    "insert into auth.\"user\"(id,name,email) values('fixture-owner','Fixture Owner','fixture-owner@stk.test') on conflict (id) do nothing",
+  );
+  tenantContext = await finance.ensureContext('fixture-owner');
   reports = createReportService(database);
-  bookmakerId = (await finance.workspace()).catalog.find((row) => row.name === 'Bet365')!.id;
+  bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+    (row) => row.name === 'Bet365',
+  )!.id;
   await run({
     type: 'bankroll.initialize',
     reserve: '5000.00',
@@ -109,7 +117,11 @@ afterAll(async () => admin.close());
 
 describe('performance cohorts and portability', () => {
   it('bounds the final supported calendar year without looping past four-digit dates', async () => {
-    const report = await reports.report({ ...query, from: '9999-12-31', to: '9999-12-31' });
+    const report = await reports.report(tenantContext, {
+      ...query,
+      from: '9999-12-31',
+      to: '9999-12-31',
+    });
     expect(report.timeline.map((row) => row.date)).toEqual(['9999-12-31']);
     expect(report.metrics.bets).toBe(0);
   });
@@ -119,7 +131,7 @@ describe('performance cohorts and portability', () => {
     });
     await settle(first.id);
     await bet({ stake: '50.00', selections: [{ ...selection, sport: 'TÊNIS' }] });
-    const report = await reports.report(query);
+    const report = await reports.report(tenantContext, query);
     expect(report.metrics).toMatchObject({
       bets: 2,
       settledBets: 1,
@@ -134,7 +146,7 @@ describe('performance cohorts and portability', () => {
     expect(report.timeline.find((row) => row.date === '2026-09-06')?.metrics.profit).toBe('100.00');
     expect(report.byBookmaker[0]?.metrics).toEqual(report.metrics);
     expect(report.bySport.map((row) => row.key).sort()).toEqual(['sport:futebol', 'sport:tenis']);
-    expect((await reports.bets({ ...query, page: 1, pageSize: 25 })).total).toBe(2);
+    expect((await reports.bets(tenantContext, { ...query, page: 1, pageSize: 25 })).total).toBe(2);
     expect((await exported('csv')).split('\r\n')).toHaveLength(4);
   });
   it('excludes unknown and estimated dates explicitly, including partially dated multiples', async () => {
@@ -143,11 +155,13 @@ describe('performance cohorts and portability', () => {
     });
     await bet({ selections: [{ ...selection, dateStatus: 'estimated' }] });
     await bet({ selections: [{ ...selection, eventDate: '2026-08-31' }] });
-    const result = await reports.report(query);
+    const result = await reports.report(tenantContext, query);
     expect(result.metrics.bets).toBe(0);
     expect(result.exclusions).toEqual({ unknownDateBets: 1, estimatedDateBets: 1 });
     expect(result.previous.metrics.bets).toBe(1);
-    expect((await reports.report({ ...query, includeEstimated: 'true' })).metrics.bets).toBe(1);
+    expect(
+      (await reports.report(tenantContext, { ...query, includeEstimated: 'true' })).metrics.bets,
+    ).toBe(1);
   });
   it('separates promotions, excludes reversed settlements and cashout from hit rate', async () => {
     const real = await bet();
@@ -166,7 +180,7 @@ describe('performance cohorts and portability', () => {
     });
     const promo = await bet({ freebetId: award.id });
     await settle(promo.id, 'win', '100.00');
-    const result = await reports.report(query);
+    const result = await reports.report(tenantContext, query);
     expect(result.metrics).toMatchObject({
       realProfit: '-130.00',
       freebetProfit: '100.00',
@@ -177,14 +191,14 @@ describe('performance cohorts and portability', () => {
       hitEligibleReal: 1,
       exposure: '60.00',
     });
-    const detail = await finance.bet(real.id);
+    const detail = await finance.bet(tenantContext, real.id);
     await run({
       type: 'settlement.reverse',
       id: detail.settlements[0]!.id,
       reason: 'Correção de teste',
       effectiveAt: new Date().toISOString(),
     });
-    expect((await reports.report(query)).metrics).toMatchObject({
+    expect((await reports.report(tenantContext, query)).metrics).toMatchObject({
       realProfit: '-30.00',
       hitRateReal: null,
       hitEligibleReal: 0,
@@ -194,7 +208,7 @@ describe('performance cohorts and portability', () => {
   it('keeps missing units explicit until the owner attaches the frozen historical unit', async () => {
     const historic = await bet({ placedAt: '2025-01-03T12:00:00Z', allowMissingUnit: true });
     await settle(historic.id);
-    expect((await reports.report(query)).metrics).toMatchObject({
+    expect((await reports.report(tenantContext, query)).metrics).toMatchObject({
       profitUnits: null,
       knownProfitUnits: '0.000000',
       missingUnitBets: 1,
@@ -205,13 +219,13 @@ describe('performance cohorts and portability', () => {
       amount: '20.00',
       reason: 'Unidade histórica comprovada',
     });
-    expect((await reports.report(query)).metrics.profitUnits).toBeNull();
+    expect((await reports.report(tenantContext, query)).metrics.profitUnits).toBeNull();
     await run({
       type: 'bet.unit.resolve',
       id: historic.id,
       reason: 'Associar unidade histórica conferida',
     });
-    expect((await reports.report(query)).metrics).toMatchObject({
+    expect((await reports.report(tenantContext, query)).metrics).toMatchObject({
       profitUnits: '5.000000',
       missingUnitBets: 0,
     });
@@ -235,8 +249,10 @@ describe('performance cohorts and portability', () => {
     expect(JSON.stringify(json)).not.toMatch(
       /object_key|creation_transaction|access_token|refresh_token/,
     );
-    const held = await reports.export('json');
-    await expect(reports.export('json')).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+    const held = await reports.export('json', tenantContext);
+    await expect(reports.export('json', tenantContext)).rejects.toMatchObject({
+      code: 'STATE_CONFLICT',
+    });
     await new Promise<void>((resolve) => {
       held.once('close', resolve);
       held.destroy();
@@ -276,8 +292,8 @@ describe('performance cohorts and portability', () => {
   });
   it('keeps JSON at one version while financial commands commit concurrently', async () => {
     const first = await bet();
-    const version = (await finance.workspace()).version;
-    const stream = await reports.export('json');
+    const version = (await finance.workspace(tenantContext)).version;
+    const stream = await reports.export('json', tenantContext);
     const iterator = stream[Symbol.asyncIterator]();
     const chunk = await iterator.next();
     await bet({ reference: 'Criada depois do início da exportação' });
@@ -290,7 +306,7 @@ describe('performance cohorts and portability', () => {
     const json = JSON.parse(output);
     expect(json.financialVersion).toBe(version);
     expect(json['finance.bet'].map((row: { id: string }) => row.id)).toEqual([first.id]);
-    expect((await reports.report(query)).metrics.bets).toBe(2);
+    expect((await reports.report(tenantContext, query)).metrics.bets).toBe(2);
   });
   it('does not assign partial sport labels or multiply mixed sport tickets, and excludes cancelled records', async () => {
     await bet({ selections: [selection, { ...selection, sport: null }] });
@@ -302,28 +318,39 @@ describe('performance cohorts and portability', () => {
       effectiveAt: new Date().toISOString(),
       reason: 'Registro cancelado de teste',
     });
-    const all = await reports.report(query);
+    const all = await reports.report(tenantContext, query);
     expect(all.metrics).toMatchObject({ bets: 2, realStake: '200.00', exposure: '200.00' });
     expect(all.bySport.map((row) => row.key).sort()).toEqual(['mixed', 'unknown']);
-    expect((await reports.report({ ...query, sport: 'sport:futebol' })).metrics.bets).toBe(0);
-    expect((await reports.report({ ...query, sport: 'mixed' })).metrics.bets).toBe(1);
-    expect((await reports.report({ ...query, tipsterId: 'none' })).metrics.bets).toBe(2);
+    expect(
+      (await reports.report(tenantContext, { ...query, sport: 'sport:futebol' })).metrics.bets,
+    ).toBe(0);
+    expect((await reports.report(tenantContext, { ...query, sport: 'mixed' })).metrics.bets).toBe(
+      1,
+    );
+    expect(
+      (await reports.report(tenantContext, { ...query, tipsterId: 'none' })).metrics.bets,
+    ).toBe(2);
     await run({
       type: 'money.move',
       kind: 'deposit',
       targetAccountId: null,
-      accountId: (await finance.workspace()).accounts.find((row) => row.kind === 'reserve')!.id,
+      accountId: (await finance.workspace(tenantContext)).accounts.find(
+        (row) => row.kind === 'reserve',
+      )!.id,
       amount: '500.00',
       effectiveAt: new Date().toISOString(),
       reason: 'Aporte sem desempenho',
     });
-    expect((await reports.report(query)).metrics.profit).toBe('0.00');
+    expect((await reports.report(tenantContext, query)).metrics.profit).toBe('0.00');
   });
   it('exports beyond a batch boundary with complete bet, posting and composite alias keys', async () => {
     const template = await bet();
     const client = await database.pool.connect();
     try {
       await client.query('begin');
+      await client.query("select set_config('app.organization_id', $1, true)", [
+        tenantContext.organizationId,
+      ]);
       await client.query(
         `with journals as (
         insert into finance.journal(kind,effective_at,actor,reason)
@@ -352,7 +379,7 @@ describe('performance cohorts and portability', () => {
     } finally {
       client.release();
     }
-    expect((await reports.report(query)).metrics).toMatchObject({
+    expect((await reports.report(tenantContext, query)).metrics).toMatchObject({
       bets: 511,
       realStake: '51100.00',
       exposure: '51100.00',

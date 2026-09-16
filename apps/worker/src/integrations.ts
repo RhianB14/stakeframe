@@ -4,18 +4,32 @@ import {
   createInboxStore,
   createR2Storage,
   createAutomaticImportService,
+  createTenantContext,
   assertRecoveryReviewed,
+  systemOrganizationContext,
   type Database,
   type PoolClient,
   type ObjectStorage,
 } from '@stakeframe/db';
-import { probeSchema } from '@stakeframe/shared';
 import { readAiConfig, extractTicket } from './openrouter.js';
 import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
 import { IntegrationError } from './http.js';
 import { readAutomaticLayouts } from './automatic-config.js';
 
 export const EXTRACTION_QUEUE = 'ticket-extraction';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function readExtractionJob(data: unknown): { inboxId: string; organizationId: string } {
+  const payload = data as { nonce?: unknown; organizationId?: unknown } | null | undefined;
+  if (
+    typeof payload?.nonce !== 'string' ||
+    !UUID_PATTERN.test(payload.nonce) ||
+    typeof payload.organizationId !== 'string' ||
+    !UUID_PATTERN.test(payload.organizationId)
+  )
+    throw new IntegrationError('INVALID_EXTRACTION_JOB');
+  return { inboxId: payload.nonce, organizationId: payload.organizationId };
+}
 
 export async function prepareExtractionQueue(boss: PgBoss) {
   // A failed or uncertain paid call is never retried by the queue.
@@ -29,10 +43,10 @@ export async function prepareExtractionQueue(boss: PgBoss) {
 export function integrationStore(database: Database, boss: PgBoss, storage?: ObjectStorage) {
   return createInboxStore(
     database,
-    async (client, id) => {
+    async (client, id, organizationId) => {
       const queued = await boss.send(
         EXTRACTION_QUEUE,
-        { nonce: id },
+        { nonce: id, organizationId },
         { id, db: { executeSql: (text, values) => client.query(text, values) } },
       );
       if (!queued) throw new IntegrationError('EXTRACTION_ENQUEUE_FAILED');
@@ -41,34 +55,36 @@ export function integrationStore(database: Database, boss: PgBoss, storage?: Obj
   );
 }
 
+/**
+ * Dispatches one pending extraction request to the queue, iterating organizations (the request
+ * belongs to one tenant; without context it is invisible). Atomic: the queue insertion and the
+ * request deletion commit with the same organization transaction.
+ */
 export async function drainExtractionRequest(database: Database, boss: PgBoss) {
-  const client = await database.pool.connect();
-  try {
-    await client.query('begin');
-    const row = (
-      await client.query<{ id: string; inbox_id: string }>(
-        'select id,inbox_id from integration.extraction_request order by created_at limit 1 for update skip locked',
-      )
-    ).rows[0];
-    if (!row) {
-      await client.query('commit');
-      return false;
-    }
-    const queued = await boss.send(
-      EXTRACTION_QUEUE,
-      { nonce: row.inbox_id },
-      { id: row.id, db: { executeSql: (text, values) => client.query(text, values) } },
-    );
-    if (!queued) throw new IntegrationError('EXTRACTION_ENQUEUE_FAILED');
-    await client.query('delete from integration.extraction_request where id=$1', [row.id]);
-    await client.query('commit');
-    return true;
-  } catch (error) {
-    await client.query('rollback');
-    throw error;
-  } finally {
-    client.release();
+  const tenant = createTenantContext(database);
+  for (const context of await tenant.listOrganizations()) {
+    const progressed = await tenant.withOrganizationTransaction(context, async (client) => {
+      const row = (
+        await client.query<{ id: string; inbox_id: string }>(
+          'select id,inbox_id from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid order by created_at limit 1 for update skip locked',
+        )
+      ).rows[0];
+      if (!row) return false;
+      const queued = await boss.send(
+        EXTRACTION_QUEUE,
+        { nonce: row.inbox_id, organizationId: context.organizationId },
+        { id: row.id, db: { executeSql: (text, values) => client.query(text, values) } },
+      );
+      if (!queued) throw new IntegrationError('EXTRACTION_ENQUEUE_FAILED');
+      await client.query(
+        'delete from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [row.id],
+      );
+      return true;
+    });
+    if (progressed) return true;
   }
+  return false;
 }
 
 export async function startIntegrations(
@@ -84,6 +100,10 @@ export async function startIntegrations(
   const telegram = readTelegramConfig(env);
   if (!ai && !telegram) return { stop: async () => {}, check: () => {} };
   await assertRecoveryReviewed(database);
+  // The Telegram consumer predates per-organization bindings: it serves the founding organization.
+  const tenant = createTenantContext(database);
+  const founder = telegram ? await tenant.founderOrganizationId() : null;
+  if (telegram && !founder) throw new IntegrationError('TELEGRAM_FOUNDING_ORGANIZATION_MISSING');
   await prepareExtractionQueue(boss);
   const store = integrationStore(database, boss, createR2Storage(env));
   const controller = new AbortController();
@@ -103,12 +123,12 @@ export async function startIntegrations(
           }
         })(),
       );
-      await store.recoverInterrupted();
+      for (const context of await tenant.listOrganizations())
+        await store.recoverInterrupted(context);
       await boss.work(EXTRACTION_QUEUE, { pollingIntervalSeconds: 1 }, async (jobs) => {
-        const parsed = probeSchema.safeParse(jobs[0]?.data);
-        if (!parsed.success) throw new IntegrationError('INVALID_EXTRACTION_JOB');
-        const id = parsed.data.nonce;
-        const claim = await store.claim(id);
+        const { inboxId, organizationId } = readExtractionJob(jobs[0]?.data);
+        const context = systemOrganizationContext(organizationId);
+        const claim = await store.claim(context, inboxId);
         if (!claim) return { state: 'unchanged' };
         try {
           if (requireBudget) await requireBudget();
@@ -119,10 +139,10 @@ export async function startIntegrations(
             signal: controller.signal,
             layouts,
           });
-          return await automatic.complete(id, claim.attempt, result);
+          return await automatic.complete(context, inboxId, claim.attempt, result);
         } catch (error) {
           const code = error instanceof IntegrationError ? error.code : 'AI_OUTCOME_UNCERTAIN';
-          await store.fail(id, claim.attempt, code);
+          await store.fail(context, inboxId, claim.attempt, code);
           return { state: 'failed', code };
         }
       });
@@ -135,11 +155,13 @@ export async function startIntegrations(
       if (!lock.rows[0]?.locked) throw new IntegrationError('TELEGRAM_CONSUMER_ALREADY_RUNNING');
       // Losing this session invalidates leadership immediately, including an in-flight poll.
       leader.on('error', () => controller.abort());
+      const telegramContext = systemOrganizationContext(founder!);
       const inbox = {
         offset: store.offset,
         advance: store.advance,
         async accept(image: TelegramImage, download: () => Promise<Buffer>) {
           await store.accept(
+            telegramContext,
             {
               sourceKey: `telegram:${telegram.userId}:${image.messageId}`,
               caption: image.caption,
@@ -175,7 +197,12 @@ export async function startIntegrations(
         while (!controller.signal.aborted) {
           await delay(60_000, undefined, { signal: controller.signal }).catch(() => undefined);
           if (controller.signal.aborted) break;
-          await store.recoverInterrupted().catch(() => console.warn('INTEGRATION_RECOVERY_FAILED'));
+          try {
+            for (const context of await tenant.listOrganizations())
+              await store.recoverInterrupted(context);
+          } catch {
+            console.warn('INTEGRATION_RECOVERY_FAILED');
+          }
         }
       })(),
     );

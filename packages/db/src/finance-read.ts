@@ -11,8 +11,11 @@ import type { PoolClient } from 'pg';
 import { FinanceError, type BetRow, type SettingsRow } from './finance-core.js';
 
 export async function readWorkspace(client: PoolClient) {
-  const settings = (await client.query<SettingsRow>('select * from finance.settings where id=1'))
-    .rows[0]!;
+  const settings = (
+    await client.query<SettingsRow>(
+      'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+    )
+  ).rows[0]!;
   const accounts = (
     await client.query<{
       id: string;
@@ -21,7 +24,7 @@ export async function readWorkspace(client: PoolClient) {
       bookmaker_id: string | null;
       balance: string;
     }>(
-      'select a.*,coalesce(sum(p.amount),0)::numeric(16,2)::text as balance from finance.account a left join finance.posting p on p.account_id=a.id group by a.id order by a.kind,a.name',
+      'select a.*,coalesce(sum(p.amount),0)::numeric(16,2)::text as balance from finance.account a left join finance.posting p on p.account_id=a.id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid group by a.id order by a.kind,a.name',
     )
   ).rows;
   const catalog = (
@@ -32,12 +35,12 @@ export async function readWorkspace(client: PoolClient) {
       active: boolean;
       aliases: string[];
     }>(
-      'select c.*,coalesce(array_agg(a.label order by a.label) filter(where a.alias is not null),array[]::text[]) as aliases from finance.catalog c left join finance.catalog_alias a on a.catalog_id=c.id group by c.id order by c.kind,c.name',
+      'select c.*,coalesce(array_agg(a.label order by a.label) filter(where a.alias is not null),array[]::text[]) as aliases from finance.catalog c left join finance.catalog_alias a on a.catalog_id=c.id where c.organization_id=current_setting($$app.organization_id$$, true)::uuid group by c.id order by c.kind,c.name',
     )
   ).rows;
   const units = (
     await client.query(
-      'select month,amount,base,percent,source from finance.monthly_unit order by month desc limit 120',
+      'select month,amount,base,percent,source from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid order by month desc limit 120',
     )
   ).rows;
   const freebets = (
@@ -50,7 +53,7 @@ export async function readWorkspace(client: PoolClient) {
       used_by: string | null;
       note: string;
     }>(
-      'select *, expires_on::text as expires_on from finance.freebet order by created_at desc limit 1000',
+      'select *, expires_on::text as expires_on from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid order by created_at desc limit 1000',
     )
   ).rows;
   const cash = accounts.filter(
@@ -115,13 +118,13 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       event_at: Date | null;
       date_status: string;
     }>(
-      'select *, event_date::text as event_date from finance.selection where bet_id=any($1::uuid[]) order by bet_id,position',
+      'select *, event_date::text as event_date from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=any($1::uuid[]) order by bet_id,position',
       [ids],
     )
   ).rows;
   const totals = (
     await client.query<{ bet_id: string; returns: string; profit: string }>(
-      'select s.bet_id,coalesce(sum(s.return_amount),0)::numeric(16,2)::text as returns,coalesce(sum(s.return_amount-s.real_principal_closed),0)::numeric(16,2)::text as profit from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.bet_id=any($1::uuid[]) and r.settlement_id is null group by s.bet_id',
+      'select s.bet_id,coalesce(sum(s.return_amount),0)::numeric(16,2)::text as returns,coalesce(sum(s.return_amount-s.real_principal_closed),0)::numeric(16,2)::text as profit from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=any($1::uuid[]) and r.settlement_id is null group by s.bet_id',
       [ids],
     )
   ).rows;
@@ -164,7 +167,10 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
 
 export async function readBets(client: PoolClient, query: BetQuery) {
   const values: unknown[] = [];
-  const clauses: string[] = [];
+  // The organization predicate is always the first clause: reads can never widen it.
+  const clauses: string[] = [
+    'organization_id=current_setting($$app.organization_id$$, true)::uuid',
+  ];
   const where = (expression: string, value: unknown) => {
     values.push(value);
     clauses.push(expression.replace('?', `$${values.length}`));
@@ -193,7 +199,12 @@ export async function readBets(client: PoolClient, query: BetQuery) {
   };
 }
 export async function readBetDetail(client: PoolClient, id: string) {
-  const rows = (await client.query<BetRow>('select * from finance.bet where id=$1', [id])).rows;
+  const rows = (
+    await client.query<BetRow>(
+      'select * from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [id],
+    )
+  ).rows;
   if (!rows.length) throw new FinanceError('NOT_FOUND');
   const bet = (await betDtos(client, rows))[0]!;
   const settlements = (
@@ -207,7 +218,7 @@ export async function readBetDetail(client: PoolClient, id: string) {
       reversed: boolean;
       reason: string;
     }>(
-      'select s.*,r.settlement_id is not null as reversed from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.bet_id=$1 order by s.settled_at,s.created_at',
+      'select s.*,r.settlement_id is not null as reversed from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=$1 order by s.settled_at,s.created_at',
       [id],
     )
   ).rows;
@@ -226,8 +237,11 @@ export async function readBetDetail(client: PoolClient, id: string) {
   };
 }
 export async function readJournal(client: PoolClient, query: { page: number; pageSize: number }) {
-  const count = (await client.query<{ count: string }>('select count(*) from finance.journal'))
-    .rows[0]!;
+  const count = (
+    await client.query<{ count: string }>(
+      'select count(*) from finance.journal where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+    )
+  ).rows[0]!;
   const rows = (
     await client.query<{
       id: string;
@@ -238,13 +252,13 @@ export async function readJournal(client: PoolClient, query: { page: number; pag
       reversal_of: string | null;
       reversed: boolean;
     }>(
-      'select j.*,exists(select 1 from finance.journal r where r.reversal_of=j.id) as reversed from finance.journal j order by j.effective_at desc,j.created_at desc,j.id desc limit $1 offset $2',
+      'select j.*,exists(select 1 from finance.journal r where r.reversal_of=j.id) as reversed from finance.journal j where j.organization_id=current_setting($$app.organization_id$$, true)::uuid order by j.effective_at desc,j.created_at desc,j.id desc limit $1 offset $2',
       [query.pageSize, (query.page - 1) * query.pageSize],
     )
   ).rows;
   const postings = (
     await client.query<{ journal_id: string; account_id: string; name: string; amount: string }>(
-      'select p.*,a.name from finance.posting p join finance.account a on a.id=p.account_id where p.journal_id=any($1::uuid[]) order by a.kind,a.name',
+      'select p.*,a.name from finance.posting p join finance.account a on a.id=p.account_id where p.organization_id=current_setting($$app.organization_id$$, true)::uuid and p.journal_id=any($1::uuid[]) order by a.kind,a.name',
       [rows.map((row) => row.id)],
     )
   ).rows;

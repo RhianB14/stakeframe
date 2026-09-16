@@ -164,6 +164,7 @@ export async function roles(client) {
 export async function attachmentMetadata(client) {
   const columns = [
     'id',
+    'organization_id',
     'sha256',
     'mime',
     'size',

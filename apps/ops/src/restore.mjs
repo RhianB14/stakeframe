@@ -191,19 +191,27 @@ export async function restore(config, requestedSnapshot, parentSignal) {
     await client.query(
       'update auth.account set access_token=null,refresh_token=null,id_token=null,access_token_expires_at=null,refresh_token_expires_at=null',
     );
-    await client.query(
-      "insert into finance.audit(type,actor,entity_id,after) values('recovery.restored','system',$1,$2)",
-      [
-        manifest.cycle,
-        JSON.stringify({
-          snapshot: selected.id,
-          cutoff: manifest.cutoff,
-          restoredImages,
-          expiredImages: metadata.length - restoredImages,
-          importsPaused: true,
-        }),
-      ],
-    );
+    // STK-F1-13: the restored audit trail is per organization — one row for each organization
+    // that exists in the restored database.
+    const organizations = (
+      await client.query('select id from core.organization order by created_at, id')
+    ).rows;
+    for (const organization of organizations) {
+      await client.query(
+        "insert into finance.audit(organization_id,type,actor,entity_id,after) values($3,'recovery.restored','system',$1,$2)",
+        [
+          manifest.cycle,
+          JSON.stringify({
+            snapshot: selected.id,
+            cutoff: manifest.cutoff,
+            restoredImages,
+            expiredImages: metadata.length - restoredImages,
+            importsPaused: true,
+          }),
+          organization.id,
+        ],
+      );
+    }
     await client.query('commit');
     return {
       version: 1,

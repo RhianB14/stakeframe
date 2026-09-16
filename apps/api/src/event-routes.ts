@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { FinanceError, type EventService } from '@stakeframe/db';
+import type { OrganizationContext } from '@stakeframe/db';
 import {
   apiErrorSchema,
   calendarQuerySchema,
@@ -21,7 +22,7 @@ export function registerEventRoutes(
   auth: OwnerAuth | undefined,
   service: EventService | undefined,
 ) {
-  const identities = new WeakMap<FastifyRequest, string>();
+  const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const errors = {
     400: apiErrorSchema,
     401: apiErrorSchema,
@@ -45,7 +46,8 @@ export function registerEventRoutes(
     if (owner.status === 'consent_required')
       return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
-    identities.set(request, owner.user.id);
+    // The organization always comes from the authenticated user — never from the client.
+    contexts.set(request, await service.ensureContext(owner.user.id));
   };
   const execute = async (
     request: FastifyRequest,
@@ -88,7 +90,9 @@ export function registerEventRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.calendar(calendarQuerySchema.parse(request.query))),
+      execute(request, reply, () =>
+        service!.calendar(contexts.get(request)!, calendarQuerySchema.parse(request.query)),
+      ),
   );
   app.get(
     '/api/v1/events/:id',
@@ -103,7 +107,9 @@ export function registerEventRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.selection(params.parse(request.params).id)),
+      execute(request, reply, () =>
+        service!.selection(contexts.get(request)!, params.parse(request.params).id),
+      ),
   );
   app.get(
     '/api/v1/event-search/status',
@@ -116,7 +122,7 @@ export function registerEventRoutes(
         response: { 200: eventSearchStatusSchema, ...errors },
       },
     },
-    (request, reply) => execute(request, reply, () => service!.status()),
+    (request, reply) => execute(request, reply, () => service!.status(contexts.get(request)!)),
   );
   app.get(
     '/api/v1/event-search',
@@ -132,7 +138,10 @@ export function registerEventRoutes(
     },
     (request, reply) =>
       execute(request, reply, () =>
-        service!.searches(z.object({ selectionId: z.uuid() }).parse(request.query).selectionId),
+        service!.searches(
+          contexts.get(request)!,
+          z.object({ selectionId: z.uuid() }).parse(request.query).selectionId,
+        ),
       ),
   );
   app.get(
@@ -148,7 +157,9 @@ export function registerEventRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.search(params.parse(request.params).id)),
+      execute(request, reply, () =>
+        service!.search(contexts.get(request)!, params.parse(request.params).id),
+      ),
   );
   app.post(
     '/api/v1/event-search',
@@ -166,7 +177,7 @@ export function registerEventRoutes(
     (request, reply) =>
       execute(request, reply, () =>
         service!.request(
-          identities.get(request)!,
+          contexts.get(request)!,
           commandHeadersSchema.parse(request.headers)['idempotency-key'],
           eventSearchInputSchema.parse(request.body),
         ),

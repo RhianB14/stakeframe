@@ -178,13 +178,14 @@ type CommandInput = FinanceCommand extends infer C
     : never
   : never;
 async function command(actor: string, input: CommandInput) {
-  return service.command(actor, randomUUID(), {
+  const context = await service.ensureContext(actor);
+  return service.command(context, randomUUID(), {
     ...input,
-    expectedVersion: (await service.workspace()).version,
+    expectedVersion: (await service.workspace(context)).version,
   } as FinanceCommand);
 }
 async function initializeBankroll(actor: string) {
-  const workspace = await service.workspace();
+  const workspace = await service.workspace(await service.ensureContext(actor));
   const bookmaker = workspace.catalog.find((item) => item.name === 'Bet365')!;
   await command(actor, {
     type: 'bankroll.initialize',

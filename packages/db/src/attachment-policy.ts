@@ -1,36 +1,50 @@
 // Shared by live retention and recovery. Unknown/open references always keep the image.
+// The correlation is always through the attachment's own organization (`a.organization_id`):
+// results are identical inside a tenant transaction and in the global backup/restore scans,
+// and no subquery can ever match a row from another organization.
 import type { PoolClient } from 'pg';
+import { createTenantContext, type OrganizationContext } from './tenant-context.js';
+import type { Database } from './index.js';
 
 export const attachmentExpiredSql = `
-  exists(select 1 from integration.inbox i where i.attachment_id=a.id)
+  exists(select 1 from integration.inbox i where i.organization_id=a.organization_id and i.attachment_id=a.id)
   and not exists(
-    select 1 from integration.inbox i left join finance.bet b on b.id=i.imported_bet_id
-    where i.attachment_id=a.id and (
+    select 1 from integration.inbox i
+    left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
+    where i.organization_id=a.organization_id and i.attachment_id=a.id and (
       i.state not in ('discarded','imported') or i.updated_at>now()-interval '30 days'
       or (i.state='imported' and (b.id is null or b.state='open'
-        or exists(select 1 from finance.settlement s where s.bet_id=b.id and greatest(s.created_at,s.settled_at)>now()-interval '30 days')
-        or exists(select 1 from finance.audit audit where audit.entity_id=b.id::text and audit.created_at>now()-interval '30 days')
+        or exists(select 1 from finance.settlement s where s.organization_id=i.organization_id and s.bet_id=b.id and greatest(s.created_at,s.settled_at)>now()-interval '30 days')
+        or exists(select 1 from finance.audit audit where audit.organization_id=i.organization_id and audit.entity_id=b.id::text and audit.created_at>now()-interval '30 days')
       ))
     )
   )`;
 
-// Caller owns the attachment session lock (782341095). Mark before exporting
-// recovery metadata so a new reference cannot revive an object whose old copies
-// are about to be purged. The worker completes the remote deletion normally.
-export async function claimExpiredAttachmentsForBackup(client: PoolClient) {
-  try {
-    await client.query('begin');
-    await client.query('select id from finance.settings where id=1 for update');
-    await client.query('select pg_advisory_xact_lock(782341092)');
-    await client.query(`with expired as (
-      update integration.attachment a set state='deleting',updated_at=now()
-      where a.state in ('local','remote') and (${attachmentExpiredSql}) returning a.id
-    ) insert into finance.audit(type,actor,entity_id,after)
-      select 'attachment.expiry_claimed','system',id::text,
-        '{"policy":"30_days_after_all_references_closed","source":"recovery_copy_retention"}'::jsonb from expired`);
-    await client.query('commit');
-  } catch (error) {
-    await client.query('rollback');
-    throw error;
-  }
+// Caller owns the attachment session lock (782341095) and the organization context. Mark before
+// exporting recovery metadata so a new reference cannot revive an object whose old copies are
+// about to be purged. The worker completes the remote deletion normally.
+export async function claimExpiredAttachmentsForBackup(
+  database: Database,
+  context: OrganizationContext,
+  client?: PoolClient,
+) {
+  const tenant = createTenantContext(database);
+  await tenant.withOrganizationTransaction(
+    context,
+    async (connection) => {
+      await connection.query(
+        'select id from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+      );
+      await connection.query('select pg_advisory_xact_lock(782341092)');
+      await connection.query(`with expired as (
+        update integration.attachment a set state='deleting',updated_at=now()
+        where a.state in ('local','remote')
+          and a.organization_id=current_setting($$app.organization_id$$, true)::uuid
+          and (${attachmentExpiredSql}) returning a.id
+      ) insert into finance.audit(type,actor,entity_id,after)
+        select 'attachment.expiry_claimed','system',id::text,
+          '{"policy":"30_days_after_all_references_closed","source":"recovery_copy_retention"}'::jsonb from expired`);
+    },
+    client ? { client } : {},
+  );
 }
