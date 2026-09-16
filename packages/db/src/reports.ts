@@ -11,6 +11,7 @@ import {
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
+import { createTenantContext, ORGANIZATION_CONTEXT_SETTING, type OrganizationContext } from './tenant-context.js';
 import {
   reportRange,
   reportPopulation,
@@ -31,20 +32,13 @@ export function csvCell(value: unknown, numeric = false) {
 
 export function createReportService(database: Database) {
   let activeExports = 0;
-  async function read<T>(action: (client: PoolClient) => Promise<T>) {
-    const client = await database.pool.connect();
-    try {
-      await client.query('begin isolation level repeatable read read only');
-      const result = await action(client);
-      await client.query('commit');
-      return result;
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
+  const tenant = createTenantContext(database);
+  /**
+   * Repeatable read (with the organization context) — deliberately NOT read only: a read-only
+   * transaction rejects `set_config`, and every statement here must see the RLS context.
+   */
+  const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
+    tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
   async function metrics(client: PoolClient, query: ReportQuery) {
     return reportMetricsSchema.parse(
       (
@@ -56,12 +50,19 @@ export function createReportService(database: Database) {
     );
   }
   return {
-    async report(input: ReportQuery) {
+    /** Returns the authenticated user's organization context (provisioning on first use). */
+    ensureContext(userId: string) {
+      return tenant.ensureOrganizationMembership(userId);
+    },
+    async report(context: OrganizationContext, input: ReportQuery) {
       const query = reportQuerySchema.parse(input);
       const range = reportRange(query);
-      return read(async (client) => {
-        const version = (await client.query('select version from finance.settings where id=1'))
-          .rows[0].version;
+      return read(context, async (client) => {
+        const version = (
+          await client.query(
+            "select version from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid",
+          )
+        ).rows[0].version;
         const current = await metrics(client, query);
         const previous = await metrics(client, {
           ...query,
@@ -135,10 +136,10 @@ export function createReportService(database: Database) {
         });
       });
     },
-    async bets(input: ReportDetailQuery) {
+    async bets(context: OrganizationContext, input: ReportDetailQuery) {
       const query = reportDetailQuerySchema.parse(input);
       reportRange(query);
-      return read(async (client) => {
+      return read(context, async (client) => {
         const values = reportValues(query);
         const total = (
           await client.query(`${reportPopulation} select count(*)::int total from eligible`, values)
@@ -158,8 +159,8 @@ export function createReportService(database: Database) {
         });
       });
     },
-    async options() {
-      return read(async (client) =>
+    async options(context: OrganizationContext) {
+      return read(context, async (client) =>
         reportOptionsSchema.parse({
           sports: (
             await client.query(
@@ -170,7 +171,7 @@ export function createReportService(database: Database) {
         }),
       );
     },
-    async export(kind: 'csv' | 'json', input?: ReportQuery) {
+    async export(kind: 'csv' | 'json', context: OrganizationContext, input?: ReportQuery) {
       const query = input ? reportQuerySchema.parse(input) : undefined;
       if (kind === 'csv' && !query) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
       if (query) reportRange(query);
@@ -185,7 +186,11 @@ export function createReportService(database: Database) {
         throw error;
       }
       try {
-        await client.query('begin isolation level repeatable read read only');
+        await client.query('begin isolation level repeatable read');
+        await client.query('SELECT set_config($1, $2, true)', [
+          ORGANIZATION_CONTEXT_SETTING,
+          context.organizationId,
+        ]);
       } catch (error) {
         activeExports--;
         client.release(true);
@@ -206,8 +211,11 @@ export function createReportService(database: Database) {
       async function* content() {
         try {
           if (kind === 'json') {
-            const version = (await client.query('select version from finance.settings where id=1'))
-              .rows[0].version;
+            const version = (
+              await client.query(
+                "select version from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid",
+              )
+            ).rows[0].version;
             yield JSON.stringify({
               schemaVersion: 1,
               generatedAt: new Date().toISOString(),

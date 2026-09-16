@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { FinanceError, type ImportService } from '@stakeframe/db';
+import type { OrganizationContext } from '@stakeframe/db';
 import {
   apiErrorSchema,
   importPageSchema,
@@ -19,7 +20,7 @@ export function registerImportRoutes(
   auth: OwnerAuth | undefined,
   service: ImportService | undefined,
 ) {
-  const identities = new WeakMap<FastifyRequest, string>();
+  const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const errors = {
     400: apiErrorSchema,
     401: apiErrorSchema,
@@ -43,7 +44,8 @@ export function registerImportRoutes(
     if (owner.status === 'consent_required')
       return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
-    identities.set(request, owner.user.id);
+    // The organization always comes from the authenticated user — never from the client.
+    contexts.set(request, await service.ensureContext(owner.user.id));
   };
   const execute = async (
     request: FastifyRequest,
@@ -84,7 +86,9 @@ export function registerImportRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.list(importQuerySchema.parse(request.query))),
+      execute(request, reply, () =>
+        service!.list(contexts.get(request)!, importQuerySchema.parse(request.query)),
+      ),
   );
   app.post(
     '/api/v1/imports',
@@ -103,7 +107,7 @@ export function registerImportRoutes(
     (request, reply) =>
       execute(request, reply, () =>
         service!.upload(
-          identities.get(request)!,
+          contexts.get(request)!,
           commandHeadersSchema.parse(request.headers)['idempotency-key'],
           uploadSchema.parse(request.body),
         ),
@@ -122,7 +126,9 @@ export function registerImportRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.detail(params.parse(request.params).id)),
+      execute(request, reply, () =>
+        service!.detail(contexts.get(request)!, params.parse(request.params).id),
+      ),
   );
   app.get(
     '/api/v1/imports/:id/image',
@@ -138,7 +144,7 @@ export function registerImportRoutes(
     },
     (request, reply) =>
       execute(request, reply, async () => {
-        const result = await service!.image(params.parse(request.params).id);
+        const result = await service!.image(contexts.get(request)!, params.parse(request.params).id);
         reply
           .type(result.mime)
           .header('content-disposition', 'inline')

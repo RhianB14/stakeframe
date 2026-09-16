@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
-import { readSecret, type Database } from '@stakeframe/db';
+import { createTenantContext, readSecret, type Database } from '@stakeframe/db';
 import {
   apiErrorSchema,
   operationStateSchema,
@@ -78,30 +78,47 @@ export function createOperationsService(
         };
         const probes = Promise.allSettled([
           (async () => {
-            const row = (
-              await database.pool.query<{
-                imports_late: boolean;
-                attachments_late: boolean;
-                events_late: boolean;
-                quarantine: boolean;
-                daily: string;
-                monthly: string;
-              }>(`select
-            exists(select 1 from integration.inbox where (state='pending' and updated_at<now()-interval '5 minutes') or (state='processing' and updated_at<now()-interval '3 minutes')) as imports_late,
-            exists(select 1 from integration.attachment where state in ('local','deleting') and updated_at<now()-interval '15 minutes') as attachments_late,
-            exists(select 1 from integration.event_search where state in ('pending','processing') and created_at<now()-interval '5 minutes') as events_late,
+            // Infrastructure probes: global tables directly, tenant tables by iterating
+            // organizations (RLS returns nothing without a context).
+            type GlobalRow = { quarantine: boolean; daily: string; monthly: string };
+            const global = (
+              await database.pool.query<GlobalRow>(`select
             exists(select 1 from integration.cursor where name='recovery-quarantine' and next_offset<>0) as quarantine,
             coalesce(sum(requests) filter(where day=to_char(now() at time zone 'UTC','YYYY-MM-DD')),0)::text as daily,
             coalesce(sum(requests),0)::text as monthly
             from integration.ai_usage_day where day>=to_char(now() at time zone 'UTC','YYYY-MM')||'-01'
               and day<to_char(now() at time zone 'UTC','YYYY-MM')||'-32'`)
             ).rows[0]!;
+            const tenantContext = createTenantContext(database);
+            let importsLate = false;
+            let attachmentsLate = false;
+            let eventsLate = false;
+            for (const context of await tenantContext.listOrganizations()) {
+              const row = await tenantContext.withOrganizationTransaction(
+                context,
+                async (client) => {
+                  return (
+                    await client.query<{
+                      imports_late: boolean;
+                      attachments_late: boolean;
+                      events_late: boolean;
+                    }>(`select
+            exists(select 1 from integration.inbox where (state='pending' and updated_at<now()-interval '5 minutes') or (state='processing' and updated_at<now()-interval '3 minutes')) as imports_late,
+            exists(select 1 from integration.attachment where state in ('local','deleting') and updated_at<now()-interval '15 minutes') as attachments_late,
+            exists(select 1 from integration.event_search where state in ('pending','processing') and created_at<now()-interval '5 minutes') as events_late`)
+                  ).rows[0]!;
+                },
+              );
+              importsLate = importsLate || row.imports_late;
+              attachmentsLate = attachmentsLate || row.attachments_late;
+              eventsLate = eventsLate || row.events_late;
+            }
             checks.database = 'ready';
-            checks.importQueue = row.imports_late ? 'failed' : 'ready';
-            checks.attachments = row.attachments_late ? 'failed' : 'ready';
-            checks.eventQueue = row.events_late ? 'failed' : 'ready';
-            checks.recovery = row.quarantine ? 'failed' : 'ready';
-            const ratio = Math.max(Number(row.daily) / 60, Number(row.monthly) / 1500);
+            checks.importQueue = importsLate ? 'failed' : 'ready';
+            checks.attachments = attachmentsLate ? 'failed' : 'ready';
+            checks.eventQueue = eventsLate ? 'failed' : 'ready';
+            checks.recovery = global.quarantine ? 'failed' : 'ready';
+            const ratio = Math.max(Number(global.daily) / 60, Number(global.monthly) / 1500);
             checks.aiQuota = ratio >= 1 ? 'failed' : ratio >= 0.8 ? 'warning' : 'ready';
           })(),
           (async () => {

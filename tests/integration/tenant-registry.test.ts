@@ -242,10 +242,10 @@ describe('core tenant registry backfill with more than one pre-existing user', (
     expect(
       await count("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'core'"),
     ).toBe(0);
-    // reopenCoreMigration removed the markers of 0005 and every later core migration
-    // (0006, 0007, 0008, 0009); the failed 0005 replay must not add any marker back.
+    // reopenCoreMigration removed the markers of 0005 and every later…
+    // (0006, 0007, 0008, 0009, 0010); the failed 0005 replay must not add a…
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(
-      recordedBefore - 5,
+      recordedBefore - 6,
     );
     expect(await count('SELECT count(*) FROM auth."user"')).toBe(2);
   });

@@ -1,14 +1,20 @@
-import { createFinanceService, type Database } from '@stakeframe/db';
+import { createFinanceService, createTenantContext, type Database } from '@stakeframe/db';
 
 export async function startMonthlyUnits(database: Database) {
   const finance = createFinanceService(database);
-  await finance.ensureCurrentUnit();
+  const tenant = createTenantContext(database);
+  const runAll = async () => {
+    // Infrastructure iterates organizations: the monthly unit is per tenant.
+    for (const context of await tenant.listOrganizations()) {
+      await finance.ensureCurrentUnit(context);
+    }
+  };
+  await runAll();
   let running: Promise<void> | null = null;
   let healthy = true;
   const timer = setInterval(() => {
     if (running) return;
-    running = finance
-      .ensureCurrentUnit()
+    running = runAll()
       .then(() => {
         healthy = true;
       })

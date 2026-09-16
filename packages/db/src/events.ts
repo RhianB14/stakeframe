@@ -15,6 +15,7 @@ import {
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { FinanceError, validateEventDate } from './finance-core.js';
+import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
 export const EVENT_LIMITS = {
   thesportsdb: { daily: 60, monthly: 1500, minute: 10 },
@@ -103,6 +104,11 @@ function calendarDto(row: SelectionRow) {
     scheduleStatus: row.schedule_status,
   };
 }
+/**
+ * Provider usage is counted per organization: the provider quota is shared infrastructure, but
+ * with the financial core now multi-tenant each organization's searches are isolated; the limit
+ * multiplication across tenants is a declared limitation of the single-worker setup (beta).
+ */
 async function usage(client: Pick<PoolClient, 'query'>, provider: EventProvider) {
   return (
     await client.query<{ daily: number; monthly: number; minute: number }>(
@@ -119,28 +125,23 @@ export function createEventService(
   database: Database,
   config: EventSearchConfig = { thesportsdb: false, tavily: false },
 ) {
-  async function transaction<T>(action: (client: PoolClient) => Promise<T>, readonly = false) {
-    const client = await database.pool.connect();
-    try {
-      await client.query(readonly ? 'begin isolation level repeatable read read only' : 'begin');
-      const value = await action(client);
-      await client.query('commit');
-      return value;
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
+  const tenant = createTenantContext(database);
+  const transaction = <T>(
+    context: OrganizationContext,
+    action: (client: PoolClient) => Promise<T>,
+  ) => tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
   return {
-    calendar(query: CalendarQuery) {
+    /** Returns the authenticated user's organization context (provisioning on first use). */
+    ensureContext(userId: string) {
+      return tenant.ensureOrganizationMembership(userId);
+    },
+    calendar(context: OrganizationContext, query: CalendarQuery) {
       if (
         query.from > query.to ||
         (Date.parse(query.to) - Date.parse(query.from)) / 86_400_000 > 366
       )
         throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-      return transaction(async (client) => {
+      return transaction(context, async (client) => {
         const args = [query.from, query.to, query.view, query.betState ?? null];
         const filter = `where ($4::text is null or b.state=$4) and
           (case when $3='pending' then s.event_date is null or s.schedule_status='postponed'
@@ -178,22 +179,24 @@ export function createEventService(
           page: query.page,
           pageSize: query.pageSize,
         });
-      }, true);
+      });
     },
-    async selection(id: string) {
-      const row = (
-        await database.pool.query<SelectionRow>(
-          `select s.*,s.event_date::text as event_date,
+    async selection(context: OrganizationContext, id: string) {
+      return transaction(context, async (client) => {
+        const row = (
+          await client.query<SelectionRow>(
+            `select s.*,s.event_date::text as event_date,
         b.reference,b.state as bet_state,c.name as bookmaker from finance.selection s
         join finance.bet b on b.id=s.bet_id join finance.catalog c on c.id=b.bookmaker_id where s.id=$1`,
-          [id],
-        )
-      ).rows[0];
-      if (!row) throw new FinanceError('NOT_FOUND');
-      return calendarDto(row);
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return calendarDto(row);
+      });
     },
-    async status() {
-      return transaction(async (client) => {
+    async status(context: OrganizationContext) {
+      return transaction(context, async (client) => {
         const providers = [];
         for (const provider of ['thesportsdb', 'tavily'] as const) {
           const used = await usage(client, provider);
@@ -207,36 +210,40 @@ export function createEventService(
           });
         }
         return eventSearchStatusSchema.parse({ providers });
-      }, true);
+      });
     },
-    async search(id: string) {
-      const row = (
-        await database.pool.query<SearchRow>('select * from integration.event_search where id=$1', [
-          id,
-        ])
-      ).rows[0];
-      if (!row) throw new FinanceError('NOT_FOUND');
-      return searchDto(row);
+    async search(context: OrganizationContext, id: string) {
+      return transaction(context, async (client) => {
+        const row = (
+          await client.query<SearchRow>('select * from integration.event_search where id=$1', [
+            id,
+          ])
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return searchDto(row);
+      });
     },
-    async searches(selectionId: string) {
-      const rows = (
-        await database.pool.query<SearchRow>(
-          'select * from integration.event_search where selection_id=$1 order by created_at desc,id desc limit 20',
-          [selectionId],
-        )
-      ).rows;
-      return rows.map(searchDto);
+    async searches(context: OrganizationContext, selectionId: string) {
+      return transaction(context, async (client) => {
+        const rows = (
+          await client.query<SearchRow>(
+            'select * from integration.event_search where selection_id=$1 order by created_at desc,id desc limit 20',
+            [selectionId],
+          )
+        ).rows;
+        return rows.map(searchDto);
+      });
     },
-    request(actor: string, key: string, input: EventSearchInput) {
+    request(context: OrganizationContext, key: string, input: EventSearchInput) {
       const command = eventSearchInputSchema.parse(input);
       const hash = createHash('sha256').update(JSON.stringify(command)).digest('hex');
-      return transaction(async (client) => {
+      return transaction(context, async (client) => {
         await client.query('select pg_advisory_xact_lock(783420096)');
         const previous = (
           await client.query<SearchRow>('select * from integration.event_search where id=$1', [key])
         ).rows[0];
         if (previous) {
-          if (previous.actor !== actor || previous.hash !== hash)
+          if (previous.actor !== context.userId || previous.hash !== hash)
             throw new FinanceError('IDEMPOTENCY_CONFLICT');
           return searchDto(previous);
         }
@@ -276,7 +283,7 @@ export function createEventService(
           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,case when $11::uuid is null then null else now() end) returning *`,
             [
               key,
-              actor,
+              context.userId,
               hash,
               command.selectionId,
               command.provider,
@@ -292,8 +299,9 @@ export function createEventService(
         return searchDto(row);
       });
     },
-    claim() {
-      return transaction(async (client) => {
+    /** Workers iterate organizations and pass the matching context (never a client value). */
+    claim(context: OrganizationContext) {
+      return transaction(context, async (client) => {
         await client.query('select pg_advisory_xact_lock(783420096)');
         // An interrupted external call is never retried automatically or charged again.
         await client.query(
@@ -329,25 +337,29 @@ export function createEventService(
         return null;
       });
     },
-    async complete(id: string, candidates: EventCandidate[]) {
+    async complete(context: OrganizationContext, id: string, candidates: EventCandidate[]) {
       if (candidates.length > 5) throw new Error('INVALID_EVENT_CANDIDATES');
       const parsed = candidates.map((item) => eventCandidateSchema.parse(item));
-      await database.pool.query(
-        "update integration.event_search set state='complete',candidates=$2,completed_at=now() where id=$1 and state='processing'",
-        [id, JSON.stringify(parsed)],
-      );
+      await tenant.withOrganizationTransaction(context, async (client) => {
+        await client.query(
+          "update integration.event_search set state='complete',candidates=$2,completed_at=now() where id=$1 and state='processing'",
+          [id, JSON.stringify(parsed)],
+        );
+      });
     },
-    async fail(id: string, code: string) {
+    async fail(context: OrganizationContext, id: string, code: string) {
       const allowed = [
         'EVENT_RATE_LIMITED',
         'EVENT_CONNECTION_FAILED',
         'EVENT_INVALID_RESPONSE',
         'EVENT_PROVIDER_UNAVAILABLE',
       ];
-      await database.pool.query(
-        "update integration.event_search set state='failed',error_code=$2,completed_at=now() where id=$1 and state='processing'",
-        [id, allowed.includes(code) ? code : 'EVENT_CONNECTION_FAILED'],
-      );
+      await tenant.withOrganizationTransaction(context, async (client) => {
+        await client.query(
+          "update integration.event_search set state='failed',error_code=$2,completed_at=now() where id=$1 and state='processing'",
+          [id, allowed.includes(code) ? code : 'EVENT_CONNECTION_FAILED'],
+        );
+      });
     },
   };
 }

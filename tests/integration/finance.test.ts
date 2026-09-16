@@ -6,6 +6,7 @@ import {
   requireDatabaseUrl,
   type Database,
   type FinanceService,
+  type OrganizationContext,
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
@@ -20,6 +21,7 @@ const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
 const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 let database: Database;
 let service: FinanceService;
+let tenantContext: OrganizationContext;
 let name: string;
 let created = false;
 const now = () => new Date().toISOString();
@@ -39,13 +41,13 @@ type CommandInput = FinanceCommand extends infer C
     : never
   : never;
 async function command(input: CommandInput) {
-  return service.command('fixture-owner', randomUUID(), {
+  return service.command(tenantContext, randomUUID(), {
     ...input,
-    expectedVersion: (await service.workspace()).version,
+    expectedVersion: (await service.workspace(tenantContext)).version,
   } as FinanceCommand);
 }
 async function initialized() {
-  const workspace = await service.workspace();
+  const workspace = await service.workspace(tenantContext);
   const bookmaker = workspace.catalog.find((item) => item.name === 'Bet365')!;
   await command({
     type: 'bankroll.initialize',
@@ -53,7 +55,7 @@ async function initialized() {
     balances: [{ bookmakerId: bookmaker.id, amount: '500.00' }],
     unitPercent: '1.00',
   });
-  const updated = await service.workspace();
+  const updated = await service.workspace(tenantContext);
   return {
     bookmakerId: bookmaker.id,
     house: updated.accounts.find((account) => account.bookmakerId === bookmaker.id)!.id,
@@ -88,6 +90,7 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   service = createFinanceService(database);
+  tenantContext = await service.ensureContext('fixture-owner');
 });
 afterEach(async () => {
   await database?.close();
@@ -161,8 +164,8 @@ describe('financial core with PostgreSQL', () => {
     } finally {
       client.release();
     }
-    await Promise.all([service.ensureCurrentUnit(), service.ensureCurrentUnit()]);
-    const workspace = await service.workspace();
+    await Promise.all([service.ensureCurrentUnit(tenantContext), service.ensureCurrentUnit(tenantContext)]);
+    const workspace = await service.workspace(tenantContext);
     expect(workspace.units).toEqual([
       { month, amount: '20.00', base: '1000.00', percent: '2.00', source: 'automatic' },
     ]);
@@ -176,12 +179,12 @@ describe('financial core with PostgreSQL', () => {
       ).rows[0]?.count,
     ).toBe(1);
     await database.pool.query("update finance.settings set unit_percent='3.00'");
-    await service.ensureCurrentUnit();
-    expect((await service.workspace()).units[0]?.amount).toBe('20.00');
+    await service.ensureCurrentUnit(tenantContext);
+    expect((await service.workspace(tenantContext)).units[0]?.amount).toBe('20.00');
   });
   it('conserves the bankroll through transfers and separates cashflows from winnings', async () => {
     const { house, reserve } = await initialized();
-    expect((await service.workspace()).bankroll).toBe('1000.00');
+    expect((await service.workspace(tenantContext)).bankroll).toBe('1000.00');
     await command({
       type: 'money.move',
       kind: 'transfer',
@@ -191,7 +194,7 @@ describe('financial core with PostgreSQL', () => {
       effectiveAt: now(),
       reason: 'Transferência de teste',
     });
-    expect((await service.workspace()).bankroll).toBe('1000.00');
+    expect((await service.workspace(tenantContext)).bankroll).toBe('1000.00');
     await command({
       type: 'money.move',
       kind: 'deposit',
@@ -210,8 +213,8 @@ describe('financial core with PostgreSQL', () => {
       effectiveAt: now(),
       reason: 'Retirada de teste',
     });
-    expect((await service.workspace()).bankroll).toBe('1050.00');
-    const journals = await service.journal({ page: 1, pageSize: 20 });
+    expect((await service.workspace(tenantContext)).bankroll).toBe('1050.00');
+    const journals = await service.journal(tenantContext, { page: 1, pageSize: 20 });
     expect(journals.items.map((item) => item.kind)).toContain('deposit');
     expect(
       (
@@ -223,7 +226,7 @@ describe('financial core with PostgreSQL', () => {
   });
   it('makes repeated and concurrent mutations idempotent and rejects stale versions', async () => {
     const { reserve } = await initialized();
-    const workspace = await service.workspace();
+    const workspace = await service.workspace(tenantContext);
     const key = randomUUID();
     const input: FinanceCommand = {
       type: 'money.move',
@@ -236,22 +239,22 @@ describe('financial core with PostgreSQL', () => {
       expectedVersion: workspace.version,
     };
     const [a, b] = await Promise.all([
-      service.command('fixture-owner', key, input),
-      service.command('fixture-owner', key, input),
+      service.command(tenantContext, key, input),
+      service.command(tenantContext, key, input),
     ]);
     expect(a).toEqual(b);
-    expect((await service.workspace()).bankroll).toBe('1025.00');
+    expect((await service.workspace(tenantContext)).bankroll).toBe('1025.00');
     await expect(
-      service.command('fixture-owner', key, { ...input, amount: '26.00' }),
+      service.command(tenantContext, key, { ...input, amount: '26.00' }),
     ).rejects.toThrow('IDEMPOTENCY_CONFLICT');
-    await expect(service.command('fixture-owner', randomUUID(), input)).rejects.toThrow(
+    await expect(service.command(tenantContext, randomUUID(), input)).rejects.toThrow(
       'VERSION_CONFLICT',
     );
   });
   it('moves real stake into exposure and closes it only once', async () => {
     const { bookmakerId } = await initialized();
     const bet = await createBet(bookmakerId);
-    expect(await service.workspace()).toMatchObject({
+    expect(await service.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',
       available: '900.00',
       exposure: '100.00',
@@ -265,8 +268,8 @@ describe('financial core with PostgreSQL', () => {
       settledAt: now(),
       reason: 'Resultado conferido',
     });
-    expect(await service.workspace()).toMatchObject({ bankroll: '1085.00', exposure: '0.00' });
-    expect((await service.bet(bet.id)).bet).toMatchObject({
+    expect(await service.workspace(tenantContext)).toMatchObject({ bankroll: '1085.00', exposure: '0.00' });
+    expect((await service.bet(tenantContext, bet.id)).bet).toMatchObject({
       profit: '85.00',
       returnAmount: '185.00',
       state: 'settled',
@@ -296,7 +299,7 @@ describe('financial core with PostgreSQL', () => {
       settledAt: now(),
       reason: 'Cashout parcial conferido',
     });
-    expect(await service.workspace()).toMatchObject({ bankroll: '985.00', exposure: '60.00' });
+    expect(await service.workspace(tenantContext)).toMatchObject({ bankroll: '985.00', exposure: '60.00' });
     await command({
       type: 'bet.settle',
       id: bet.id,
@@ -306,18 +309,18 @@ describe('financial core with PostgreSQL', () => {
       settledAt: now(),
       reason: 'Cashout final conferido',
     });
-    expect((await service.bet(bet.id)).bet.profit).toBe('5.00');
+    expect((await service.bet(tenantContext, bet.id)).bet.profit).toBe('5.00');
     await command({
       type: 'settlement.reverse',
       id: partial.id,
       effectiveAt: now(),
       reason: 'Correção do primeiro cashout',
     });
-    const detail = await service.bet(bet.id);
+    const detail = await service.bet(tenantContext, bet.id);
     expect(detail.bet).toMatchObject({ state: 'open', remaining: '40.00', profit: '20.00' });
     expect(detail.settlements).toHaveLength(2);
     expect(detail.settlements.find((row) => row.id === partial.id)?.reversed).toBe(true);
-    expect(await service.workspace()).toMatchObject({ bankroll: '1020.00', exposure: '40.00' });
+    expect(await service.workspace(tenantContext)).toMatchObject({ bankroll: '1020.00', exposure: '40.00' });
   });
   it('keeps freebet principal out of the bank and credits only real payout', async () => {
     const { bookmakerId } = await initialized();
@@ -334,7 +337,7 @@ describe('financial core with PostgreSQL', () => {
       odds: '3.00',
       freebetId: credit.id,
     });
-    expect(await service.workspace()).toMatchObject({
+    expect(await service.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',
       exposure: '0.00',
       available: '1000.00',
@@ -348,9 +351,9 @@ describe('financial core with PostgreSQL', () => {
       settledAt: now(),
       reason: 'Freebet ganha conferida',
     });
-    expect((await service.workspace()).bankroll).toBe('1040.00');
-    expect((await service.bet(bet.id)).bet.profit).toBe('40.00');
-    expect((await service.bet(bet.id)).bet.freebetStakeReturned).toBe(false);
+    expect((await service.workspace(tenantContext)).bankroll).toBe('1040.00');
+    expect((await service.bet(tenantContext, bet.id)).bet.profit).toBe('40.00');
+    expect((await service.bet(tenantContext, bet.id)).bet.freebetStakeReturned).toBe(false);
     await expect(createBet(bookmakerId, { stake: '20.00', freebetId: credit.id })).rejects.toThrow(
       'INVALID_FINANCIAL_OPERATION',
     );
@@ -399,14 +402,14 @@ describe('financial core with PostgreSQL', () => {
   it('flags insufficient cash without inventing a deposit', async () => {
     const { bookmakerId } = await initialized();
     await createBet(bookmakerId, { stake: '700.00' });
-    expect(await service.workspace()).toMatchObject({
+    expect(await service.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',
       available: '300.00',
       exposure: '700.00',
       warnings: ['NEGATIVE_BALANCE'],
     });
     expect(
-      (await service.journal({ page: 1, pageSize: 20 })).items.map((row) => row.kind),
+      (await service.journal(tenantContext, { page: 1, pageSize: 20 })).items.map((row) => row.kind),
     ).not.toContain('deposit');
   });
   it('freezes the current unit and requires review for absent historical units', async () => {
@@ -422,7 +425,7 @@ describe('financial core with PostgreSQL', () => {
       reason: 'Aporte no meio do mês',
     });
     await command({ type: 'settings.update', unitPercent: '2.00' });
-    expect((await service.workspace()).units.find((unit) => unit.month === month)?.amount).toBe(
+    expect((await service.workspace(tenantContext)).units.find((unit) => unit.month === month)?.amount).toBe(
       '10.00',
     );
     await expect(createBet(bookmakerId, { placedAt: '2020-01-15T12:00:00-03:00' })).rejects.toThrow(
@@ -432,7 +435,7 @@ describe('financial core with PostgreSQL', () => {
       placedAt: '2020-01-15T12:00:00-03:00',
       allowMissingUnit: true,
     });
-    expect((await service.bet(pending.id)).bet.unitAmount).toBeNull();
+    expect((await service.bet(tenantContext, pending.id)).bet.unitAmount).toBeNull();
     await command({
       type: 'unit.set',
       month: '2020-01',
@@ -440,8 +443,8 @@ describe('financial core with PostgreSQL', () => {
       reason: 'Unidade histórica conferida',
     });
     const historic = await createBet(bookmakerId, { placedAt: '2020-01-16T12:00:00-03:00' });
-    expect((await service.bet(historic.id)).bet.unitAmount).toBe('5.00');
-    expect((await service.bet(pending.id)).bet.unitAmount).toBeNull();
+    expect((await service.bet(tenantContext, historic.id)).bet.unitAmount).toBe('5.00');
+    expect((await service.bet(tenantContext, pending.id)).bet.unitAmount).toBeNull();
   });
   it('rolls back invalid event dates and preserves partial dates without invented times', async () => {
     const { bookmakerId } = await initialized();
@@ -457,18 +460,18 @@ describe('financial core with PostgreSQL', () => {
         ],
       }),
     ).rejects.toThrow('INVALID_FINANCIAL_OPERATION');
-    expect((await service.workspace()).exposure).toBe('0.00');
+    expect((await service.workspace(tenantContext)).exposure).toBe('0.00');
     const bet = await createBet(bookmakerId, {
       selections: [{ ...selection, eventDate: '2026-09-01', dateStatus: 'confirmed' }],
     });
-    expect((await service.bet(bet.id)).bet.selections[0]).toMatchObject({
+    expect((await service.bet(tenantContext, bet.id)).bet.selections[0]).toMatchObject({
       eventDate: '2026-09-01',
       eventAt: null,
     });
   });
   it('enforces immutable balanced journals at the database boundary', async () => {
     const { reserve } = await initialized();
-    const journal = (await service.journal({ page: 1, pageSize: 10 })).items[0]!;
+    const journal = (await service.journal(tenantContext, { page: 1, pageSize: 10 })).items[0]!;
     await expect(
       database.pool.query('update finance.journal set reason=$2 where id=$1', [
         journal.id,
@@ -533,7 +536,7 @@ describe('financial core with PostgreSQL', () => {
         },
       });
       expect(response.statusCode).toBe(200);
-      expect((await service.workspace()).catalog.some((item) => item.name === 'Teste')).toBe(true);
+      expect((await service.workspace(tenantContext)).catalog.some((item) => item.name === 'Teste')).toBe(true);
     } finally {
       await app.close();
     }

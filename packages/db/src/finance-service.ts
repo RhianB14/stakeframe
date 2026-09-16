@@ -10,30 +10,27 @@ import type { Database } from './index.js';
 import { FinanceError, insertUnit, type SettingsRow } from './finance-core.js';
 import { executeFinancialCommand } from './finance-transaction.js';
 import { readWorkspace, readBets, readBetDetail, readJournal } from './finance-read.js';
+import {
+  createTenantContext,
+  type OrganizationContext,
+  type WithOrganizationTransactionOptions,
+} from './tenant-context.js';
 export { FinanceError } from './finance-core.js';
 
+/** The organization-scoped settings lock: PK lookup, resolved from the authenticated context. */
+const LOCK_SETTINGS_SQL = `select * from finance.settings
+  where organization_id=current_setting('app.organization_id', true)::uuid for update`;
+
 export function createFinanceService(database: Database) {
-  async function read<T>(action: (client: PoolClient) => Promise<T>) {
-    const client = await database.pool.connect();
-    try {
-      await client.query('begin isolation level repeatable read read only');
-      const value = await action(client);
-      await client.query('commit');
-      return value;
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-  async function ensureCurrentUnit() {
-    const client = await database.pool.connect();
-    try {
-      await client.query('begin');
-      const settings = (
-        await client.query<SettingsRow>('select * from finance.settings where id=1 for update')
-      ).rows[0]!;
+  const tenant = createTenantContext(database);
+  const read = <T>(
+    context: OrganizationContext,
+    action: (client: PoolClient) => Promise<T>,
+    options: WithOrganizationTransactionOptions = { isolation: 'repeatable read' },
+  ) => tenant.withOrganizationTransaction(context, action, options);
+  async function ensureCurrentUnit(context: OrganizationContext) {
+    return tenant.withOrganizationTransaction(context, async (client) => {
+      const settings = (await client.query<SettingsRow>(LOCK_SETTINGS_SQL)).rows[0]!;
       if (settings.initialized) {
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
         const month = saoPauloDate(now).slice(0, 7);
@@ -50,69 +47,63 @@ export function createFinanceService(database: Database) {
             )
           ).rows[0]!.amount;
           await insertUnit(client, month, cents(base), settings.unit_percent, 'automatic');
-          await client.query('update finance.settings set version=version+1 where id=1');
+          await client.query(
+            "update finance.settings set version=version+1 where organization_id=current_setting('app.organization_id', true)::uuid",
+          );
           await client.query(
             "insert into finance.audit(type,actor,entity_id,after) values('unit.automatic','system',$1,$2)",
             [month, JSON.stringify({ base, percent: settings.unit_percent })],
           );
         }
       }
-      await client.query('commit');
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
   return {
+    /** Returns the authenticated user's organization context (provisioning on first use). */
+    ensureContext(userId: string) {
+      return tenant.ensureOrganizationMembership(userId);
+    },
     ensureCurrentUnit,
-    async workspace() {
-      await ensureCurrentUnit();
-      return read(readWorkspace);
+    async workspace(context: OrganizationContext) {
+      await ensureCurrentUnit(context);
+      return read(context, readWorkspace);
     },
-    bets(query: BetQuery) {
-      return read((client) => readBets(client, query));
+    bets(context: OrganizationContext, query: BetQuery) {
+      return read(context, (client) => readBets(client, query));
     },
-    bet(id: string) {
-      return read((client) => readBetDetail(client, id));
+    bet(context: OrganizationContext, id: string) {
+      return read(context, (client) => readBetDetail(client, id));
     },
-    journal(query: { page: number; pageSize: number }) {
-      return read((client) => readJournal(client, query));
+    journal(context: OrganizationContext, query: { page: number; pageSize: number }) {
+      return read(context, (client) => readJournal(client, query));
     },
-    async command(actor: string, key: string, input: FinanceCommand) {
+    async command(context: OrganizationContext, key: string, input: FinanceCommand) {
       const command = financeCommandSchema.parse(input);
-      await ensureCurrentUnit();
+      const actor = context.userId;
+      await ensureCurrentUnit(context);
       if (!actor || actor.length > 200 || !/^[a-f0-9-]{36}$/i.test(key))
         throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-      const client = await database.pool.connect();
-      try {
-        await client.query('begin');
-        const settings = (
-          await client.query<SettingsRow>('select * from finance.settings where id=1 for update')
-        ).rows[0]!;
-        const result = await executeFinancialCommand(client, actor, key, command, settings);
-        await client.query('commit');
-        return result;
-      } catch (error) {
-        await client.query('rollback');
-        if (error instanceof FinanceError) throw error;
-        if (
-          error instanceof Error &&
-          ['INVALID_MONEY', 'MONEY_OUT_OF_RANGE', 'INVALID_ODDS'].includes(error.message)
-        )
-          throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-        if (
-          error &&
-          typeof error === 'object' &&
-          'code' in error &&
-          ['23505', '23514', '23503'].includes(String(error.code))
-        )
-          throw new FinanceError('STATE_CONFLICT');
-        throw error;
-      } finally {
-        client.release();
-      }
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        try {
+          const settings = (await client.query<SettingsRow>(LOCK_SETTINGS_SQL)).rows[0]!;
+          return await executeFinancialCommand(client, actor, key, command, settings);
+        } catch (error) {
+          if (error instanceof FinanceError) throw error;
+          if (
+            error instanceof Error &&
+            ['INVALID_MONEY', 'MONEY_OUT_OF_RANGE', 'INVALID_ODDS'].includes(error.message)
+          )
+            throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            ['23505', '23514', '23503'].includes(String(error.code))
+          )
+            throw new FinanceError('STATE_CONFLICT');
+          throw error;
+        }
+      });
     },
   };
 }

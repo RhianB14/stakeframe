@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { FinanceError, type FinanceService } from '@stakeframe/db';
+import type { OrganizationContext } from '@stakeframe/db';
 import {
   apiErrorSchema,
   workspaceSchema,
@@ -23,7 +24,7 @@ export function registerFinanceRoutes(
   ownerAuth: OwnerAuth | undefined,
   service: FinanceService | undefined,
 ) {
-  const identities = new WeakMap<FastifyRequest, string>();
+  const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const errors = {
     400: apiErrorSchema,
     401: apiErrorSchema,
@@ -48,7 +49,9 @@ export function registerFinanceRoutes(
     if (owner.status === 'consent_required')
       return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
-    identities.set(request, owner.user.id);
+    // The organization always comes from the authenticated user — never from the client.
+    const context = await service.ensureContext(owner.user.id);
+    contexts.set(request, context);
   };
   const execute = async <T>(
     request: FastifyRequest,
@@ -84,7 +87,8 @@ export function registerFinanceRoutes(
         response: { 200: workspaceSchema, ...errors },
       },
     },
-    (request, reply) => execute(request, reply, () => service!.workspace()),
+    (request, reply) =>
+      execute(request, reply, () => service!.workspace(contexts.get(request)!)),
   );
   app.post(
     '/api/v1/commands',
@@ -102,13 +106,14 @@ export function registerFinanceRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () =>
-        service!.command(
-          identities.get(request)!,
+      execute(request, reply, () => {
+        const context = contexts.get(request)!;
+        return service!.command(
+          context,
           commandHeadersSchema.parse(request.headers)['idempotency-key'],
           financeCommandSchema.parse(request.body),
-        ),
-      ),
+        );
+      }),
   );
   app.get(
     '/api/v1/bets',
@@ -124,7 +129,9 @@ export function registerFinanceRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.bets(betQuerySchema.parse(request.query))),
+      execute(request, reply, () =>
+        service!.bets(contexts.get(request)!, betQuerySchema.parse(request.query)),
+      ),
   );
   app.get(
     '/api/v1/bets/:id',
@@ -141,7 +148,7 @@ export function registerFinanceRoutes(
     },
     (request, reply) =>
       execute(request, reply, () =>
-        service!.bet(z.object({ id: z.uuid() }).parse(request.params).id),
+        service!.bet(contexts.get(request)!, z.object({ id: z.uuid() }).parse(request.params).id),
       ),
   );
   app.get(
@@ -158,6 +165,8 @@ export function registerFinanceRoutes(
       },
     },
     (request, reply) =>
-      execute(request, reply, () => service!.journal(pageQuerySchema.parse(request.query))),
+      execute(request, reply, () =>
+        service!.journal(contexts.get(request)!, pageQuerySchema.parse(request.query)),
+      ),
   );
 }

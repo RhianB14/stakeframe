@@ -11,7 +11,7 @@ import type { PoolClient } from 'pg';
 import { FinanceError, type BetRow, type SettingsRow } from './finance-core.js';
 
 export async function readWorkspace(client: PoolClient) {
-  const settings = (await client.query<SettingsRow>('select * from finance.settings where id=1'))
+  const settings = (await client.query<SettingsRow>('select * from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid'))
     .rows[0]!;
   const accounts = (
     await client.query<{
@@ -115,7 +115,7 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       event_at: Date | null;
       date_status: string;
     }>(
-      'select *, event_date::text as event_date from finance.selection where bet_id=any($1::uuid[]) order by bet_id,position',
+      'select *, event_date::text as event_date from finance.selection where organization_id=current_setting('app.organization_id', true)::uuid and bet_id=any($1::uuid[]) order by bet_id,position',
       [ids],
     )
   ).rows;
@@ -193,7 +193,7 @@ export async function readBets(client: PoolClient, query: BetQuery) {
   };
 }
 export async function readBetDetail(client: PoolClient, id: string) {
-  const rows = (await client.query<BetRow>('select * from finance.bet where id=$1', [id])).rows;
+  const rows = (await client.query<BetRow>('select * from finance.bet where organization_id=current_setting('app.organization_id', true)::uuid and id=$1', [id])).rows;
   if (!rows.length) throw new FinanceError('NOT_FOUND');
   const bet = (await betDtos(client, rows))[0]!;
   const settlements = (

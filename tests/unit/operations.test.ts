@@ -78,19 +78,21 @@ describe('operational monitoring', () => {
     expect(disabledFetch).not.toHaveBeenCalled();
   });
   it('authenticates before reading signals and returns only the fixed operational schema', async () => {
-    const database = createDatabase('postgresql://fixture:fixture@127.0.0.1/fixture');
+    const database = createDatabase('postgresql://fixture:***@127.0.0.1/fixture');
     databases.push(database);
-    const query = vi.spyOn(database.pool, 'query').mockResolvedValue({
-      rows: [
-        {
-          imports_late: false,
-          attachments_late: true,
-          events_late: false,
-          quarantine: false,
-          daily: '48',
-          monthly: '48',
-        },
-      ],
+    const query = vi
+      .spyOn(database.pool, 'query')
+      .mockImplementation(async (text: unknown) => {
+        if (String(text).includes('core.organization'))
+          return { rows: [{ id: '00000000-0000-0000-0000-000000000001' }] } as never;
+        return { rows: [{ quarantine: false, daily: '48', monthly: '48' }] } as never;
+      });
+    // Tenant checks run inside the organization context (SET LOCAL + RLS): mock the client.
+    vi.spyOn(database.pool, 'connect').mockResolvedValue({
+      query: async () => ({
+        rows: [{ imports_late: false, attachments_late: true, events_late: false }],
+      }),
+      release: () => {},
     } as never);
     const fetchImpl = vi.fn<typeof fetch>(async (url) =>
       Response.json(
@@ -135,7 +137,7 @@ describe('operational monitoring', () => {
       url: '/api/v1/operations/health',
       headers: { authorization: `Bearer ${service.token}` },
     });
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     const financial = await app.inject({
       url: '/api/v1/finance/workspace',
@@ -146,18 +148,10 @@ describe('operational monitoring', () => {
   it('answers within the probe deadline when an internal probe hangs', async () => {
     const database = createDatabase('postgresql://fixture:***@127.0.0.1/fixture');
     databases.push(database);
-    vi.spyOn(database.pool, 'query').mockResolvedValue({
-      rows: [
-        {
-          imports_late: false,
-          attachments_late: false,
-          events_late: false,
-          quarantine: false,
-          daily: '0',
-          monthly: '0',
-        },
-      ],
-    } as never);
+    vi.spyOn(database.pool, 'query').mockImplementation(async (text: unknown) => {
+      if (String(text).includes('core.organization')) return { rows: [] } as never;
+      return { rows: [{ quarantine: false, daily: '0', monthly: '0' }] } as never;
+    });
     const fetchImpl = vi.fn<typeof fetch>(async (url) => {
       const target = String(url);
       if (target === 'http://worker:9091/') return new Promise<Response>(() => {});

@@ -21,6 +21,7 @@ import { FinanceError, type SettingsRow } from './finance-core.js';
 import { createFinanceService } from './finance-service.js';
 import { executeFinancialCommand } from './finance-transaction.js';
 import { layoutDigest } from './automatic-policy.js';
+import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
 type Evidence = {
   extraction?: unknown;
@@ -146,15 +147,21 @@ export function createAutomaticImportService(
 ) {
   const layouts = validatedLayoutsSchema.parse(configuredLayouts);
   const finance = createFinanceService(database);
+  const tenant = createTenantContext(database);
   return {
-    async complete(id: string, attempt: number, result: Evidence & object) {
-      if (layouts.length) await finance.ensureCurrentUnit();
-      const client = await database.pool.connect();
-      try {
-        await client.query('begin');
+    async complete(
+      context: OrganizationContext,
+      id: string,
+      attempt: number,
+      result: Evidence & object,
+    ) {
+      if (layouts.length) await finance.ensureCurrentUnit(context);
+      return tenant.withOrganizationTransaction(context, async (client) => {
         // All financial writers acquire locks in this order: settings, inbox, attachment.
         const settings = (
-          await client.query<SettingsRow>('select * from finance.settings where id=1 for update')
+          await client.query<SettingsRow>(
+            "select * from finance.settings where organization_id=current_setting('app.organization_id', true)::uuid for update",
+          )
         ).rows[0]!;
         const row = (
           await client.query<{ caption: string; version: number }>(
@@ -162,10 +169,7 @@ export function createAutomaticImportService(
             [id, JSON.stringify(result), attempt],
           )
         ).rows[0];
-        if (!row) {
-          await client.query('commit');
-          return { state: 'unchanged' as const };
-        }
+        if (!row) return { state: 'unchanged' as const };
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
         const layout = layouts.find(
           (value) =>
@@ -236,14 +240,8 @@ export function createAutomaticImportService(
           "insert into finance.audit(type,actor,entity_id,after) values('import.automatic','system:automatic-import',$1,$2)",
           [id, JSON.stringify({ attempt, ...automatic, betId })],
         );
-        await client.query('commit');
         return { state: betId ? ('imported' as const) : ('review' as const), reason };
-      } catch (error) {
-        await client.query('rollback');
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
     },
   };
 }

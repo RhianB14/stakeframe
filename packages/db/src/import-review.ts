@@ -10,6 +10,7 @@ import type { Database } from './index.js';
 import { createInboxStore } from './inbox.js';
 import { createAttachmentStore, type ObjectStorage } from './attachments.js';
 import { FinanceError } from './finance-core.js';
+import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
 export async function findDuplicates(
   client: Pick<PoolClient, 'query'>,
@@ -99,10 +100,17 @@ function normalized(value: string) {
     .replace(/\s+/g, ' ');
 }
 export function createImportService(database: Database, storage?: ObjectStorage) {
+  const tenant = createTenantContext(database);
   const inbox = createInboxStore(database, undefined, storage);
   const attachments = createAttachmentStore(database, storage);
+  const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
+    tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
   return {
-    async upload(actor: string, key: string, input: { image: string; caption: string }) {
+    /** Returns the authenticated user's organization context (provisioning on first use). */
+    ensureContext(userId: string) {
+      return tenant.ensureOrganizationMembership(userId);
+    },
+    async upload(context: OrganizationContext, key: string, input: { image: string; caption: string }) {
       const bytes = Buffer.from(input.image, 'base64');
       if (bytes.toString('base64') !== input.image) throw new Error('INVALID_INBOX_IMAGE');
       const requestHash = createHash('sha256')
@@ -111,8 +119,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         .update(input.caption)
         .digest('hex');
       const id = await inbox.accept(
+        context,
         {
-          sourceKey: `web:${actor}:${key}`,
+          sourceKey: `web:${context.userId}:${key}`,
           caption: input.caption,
           requestHash,
           metadata: { source: 'web' },
@@ -121,40 +130,43 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       );
       return { id };
     },
-    async list(query: {
-      page: number;
-      pageSize: number;
-      state?: string | undefined;
-      betId?: string | undefined;
-    }) {
-      const rows = await database.pool.query<InboxRow & { total: string }>(
-        `select ${columns},count(*) over() as total from integration.inbox i join integration.attachment a on a.id=i.attachment_id where ($1::text is null or i.state=$1) and ($4::uuid is null or i.imported_bet_id=$4) order by i.created_at desc,i.id desc limit $2 offset $3`,
-        [
-          query.state ?? null,
-          query.pageSize,
-          (query.page - 1) * query.pageSize,
-          query.betId ?? null,
-        ],
-      );
-      const total =
-        rows.rows[0]?.total ??
-        (
-          await database.pool.query<{ total: string }>(
-            'select count(*) as total from integration.inbox where ($1::text is null or state=$1) and ($2::uuid is null or imported_bet_id=$2)',
-            [query.state ?? null, query.betId ?? null],
-          )
-        ).rows[0]!.total;
-      return {
-        items: rows.rows.map(item),
-        total: Number(total),
-        page: query.page,
-        pageSize: query.pageSize,
-      };
+    async list(
+      context: OrganizationContext,
+      query: {
+        page: number;
+        pageSize: number;
+        state?: string | undefined;
+        betId?: string | undefined;
+      },
+    ) {
+      return read(context, async (client) => {
+        const rows = await client.query<InboxRow & { total: string }>(
+          `select ${columns},count(*) over() as total from integration.inbox i join integration.attachment a on a.id=i.attachment_id where ($1::text is null or i.state=$1) and ($4::uuid is null or i.imported_bet_id=$4) order by i.created_at desc,i.id desc limit $2 offset $3`,
+          [
+            query.state ?? null,
+            query.pageSize,
+            (query.page - 1) * query.pageSize,
+            query.betId ?? null,
+          ],
+        );
+        const total =
+          rows.rows[0]?.total ??
+          (
+            await client.query<{ total: string }>(
+              'select count(*) as total from integration.inbox where ($1::text is null or state=$1) and ($2::uuid is null or imported_bet_id=$2)',
+              [query.state ?? null, query.betId ?? null],
+            )
+          ).rows[0]!.total;
+        return {
+          items: rows.rows.map(item),
+          total: Number(total),
+          page: query.page,
+          pageSize: query.pageSize,
+        };
+      });
     },
-    async detail(id: string) {
-      const client = await database.pool.connect();
-      try {
-        await client.query('begin isolation level repeatable read read only');
+    async detail(context: OrganizationContext, id: string) {
+      return read(context, async (client) => {
         const row = (
           await client.query<InboxRow>(
             `select ${columns} from integration.inbox i join integration.attachment a on a.id=i.attachment_id where i.id=$1`,
@@ -194,7 +206,6 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           odds: '1',
           placedAt: new Date(0).toISOString(),
         });
-        await client.query('commit');
         return {
           item: item(row),
           extraction,
@@ -217,22 +228,19 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             ? decision.data.reason
             : ('LAYOUT_NOT_VALIDATED' as const),
         };
-      } catch (error) {
-        await client.query('rollback');
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
     },
-    async image(id: string) {
-      const row = (
-        await database.pool.query<{ attachment_id: string }>(
-          'select attachment_id from integration.inbox where id=$1',
-          [id],
-        )
-      ).rows[0];
-      if (!row) throw new FinanceError('NOT_FOUND');
-      return attachments.read(row.attachment_id);
+    async image(context: OrganizationContext, id: string) {
+      return read(context, async (client) => {
+        const row = (
+          await client.query<{ attachment_id: string }>(
+            'select attachment_id from integration.inbox where id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return attachments.read(client, row.attachment_id);
+      });
     },
   };
 }

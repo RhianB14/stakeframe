@@ -3,8 +3,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
   createEventService,
+  createTenantContext,
   readEventSearchConfig,
   readSecret,
+  systemOrganizationContext,
   type Database,
 } from '@stakeframe/db';
 import { eventCandidateSchema, type EventCandidate, type EventSearch } from '@stakeframe/shared';
@@ -146,29 +148,42 @@ export function startEventSearch(database: Database, env: NodeJS.ProcessEnv) {
   if (config.tavily && (!tavilyKey || !/^[A-Za-z0-9_-]{20,200}$/.test(tavilyKey)))
     throw new Error('INVALID_EVENT_SEARCH_CONFIGURATION');
   const service = createEventService(database, config);
+  const tenant = createTenantContext(database);
   const controller = new AbortController();
   const task = (async () => {
     while (!controller.signal.aborted) {
-      let id: string | undefined;
-      try {
-        const search = await service.claim();
-        if (search) {
-          id = search.id;
-          const candidates = await lookupEvent({
-            search,
-            ...(tavilyKey ? { tavilyKey } : {}),
-            signal: controller.signal,
-          });
-          await service.complete(id, candidates);
-          continue;
+      let progressed = false;
+      // Infrastructure iterates organizations: each search belongs to one tenant.
+      for (const organization of await tenant.listOrganizations()) {
+        if (controller.signal.aborted) break;
+        const context = systemOrganizationContext(organization.organizationId);
+        let id: string | undefined;
+        try {
+          const search = await service.claim(context);
+          if (search) {
+            id = search.id;
+            const candidates = await lookupEvent({
+              search,
+              ...(tavilyKey ? { tavilyKey } : {}),
+              signal: controller.signal,
+            });
+            await service.complete(context, id, candidates);
+            progressed = true;
+            break;
+          }
+        } catch (error) {
+          if (id)
+            await service
+              .fail(
+                context,
+                id,
+                error instanceof IntegrationError ? error.code : 'EVENT_CONNECTION_FAILED',
+              )
+              .catch(() => undefined);
+          console.warn('EVENT_SEARCH_FAILED');
         }
-      } catch (error) {
-        if (id)
-          await service
-            .fail(id, error instanceof IntegrationError ? error.code : 'EVENT_CONNECTION_FAILED')
-            .catch(() => undefined);
-        console.warn('EVENT_SEARCH_FAILED');
       }
+      if (progressed) continue;
       await delay(5000, undefined, { signal: controller.signal }).catch(() => undefined);
     }
   })();

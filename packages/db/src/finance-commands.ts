@@ -179,7 +179,7 @@ export async function applyFinanceCommand(
       postings,
     });
     await client.query(
-      'update finance.settings set initialized=true,unit_percent=$1,opened_at=$2 where id=1',
+      "update finance.settings set initialized=true,unit_percent=$1,opened_at=$2 where organization_id=current_setting('app.organization_id', true)::uuid",
       [money(cents(command.unitPercent)), now],
     );
     await insertUnit(client, saoPauloDate(now).slice(0, 7), total, command.unitPercent, 'initial');
@@ -188,9 +188,10 @@ export async function applyFinanceCommand(
   if (!settings.initialized) throw new FinanceError('NOT_INITIALIZED');
   if (type === 'settings.update') {
     if (cents(command.unitPercent) > 10_000n) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-    await client.query('update finance.settings set unit_percent=$1 where id=1', [
-      money(cents(command.unitPercent)),
-    ]);
+    await client.query(
+      "update finance.settings set unit_percent=$1 where organization_id=current_setting('app.organization_id', true)::uuid",
+      [money(cents(command.unitPercent))],
+    );
     return { id: 'settings', before: settings };
   }
   if (type === 'unit.set') {

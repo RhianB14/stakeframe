@@ -11,6 +11,7 @@ import {
   type FinanceService,
   type ImportService,
   type ObjectStorage,
+  type OrganizationContext,
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
@@ -32,6 +33,7 @@ const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 const image = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 let database: Database;
 let finance: FinanceService;
+let tenantContext: OrganizationContext;
 let imports: ImportService;
 let name: string;
 type CommandInput = FinanceCommand extends infer C
@@ -40,14 +42,14 @@ type CommandInput = FinanceCommand extends infer C
     : never
   : never;
 const run = async (input: CommandInput) =>
-  finance.command('fixture-owner', randomUUID(), {
+  finance.command(tenantContext, randomUUID(), {
     ...input,
-    expectedVersion: (await finance.workspace()).version,
+    expectedVersion: (await finance.workspace(tenantContext)).version,
   } as FinanceCommand);
 const upload = async (key = randomUUID(), caption = 'Tipster\nBet365') =>
-  imports.upload('fixture-owner', key, { image: image.toString('base64'), caption });
+  imports.upload(tenantContext, key, { image: image.toString('base64'), caption });
 async function betInput(): Promise<BetInput> {
-  const bookmakerId = (await finance.workspace()).catalog.find((c) => c.name === 'Bet365')!.id;
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find((c) => c.name === 'Bet365')!.id;
   return {
     bookmakerId,
     tipsterId: null,
@@ -95,6 +97,7 @@ beforeEach(async (context) => {
       );
   } else await migrateLocalDatabase(database);
   finance = createFinanceService(database);
+  tenantContext = await finance.ensureContext('fixture-owner');
   imports = createImportService(database);
 });
 afterEach(async () => {
@@ -129,8 +132,8 @@ describe('private import review', () => {
     } finally {
       client.release();
     }
-    expect((await imports.image(first)).image).toEqual(image);
-    expect((await imports.image(second)).image).toEqual(image);
+    expect((await imports.image(tenantContext, first)).image).toEqual(image);
+    expect((await imports.image(tenantContext, second)).image).toEqual(image);
     expect(
       (await database.pool.query('select count(*)::int as n from integration.attachment')).rows[0]
         .n,
@@ -142,7 +145,7 @@ describe('private import review', () => {
         )
       ).rows[0].n,
     ).toBe(0);
-    expect((await imports.list({ page: 1, pageSize: 25 })).total).toBe(2);
+    expect((await imports.list(tenantContext, { page: 1, pageSize: 25 })).total).toBe(2);
   });
   it('preserves bytes and remote cleanup intent after an uncertain upload', async () => {
     const objects = new Map<string, Buffer>();
@@ -158,8 +161,8 @@ describe('private import review', () => {
     };
     const files = createAttachmentStore(database, storage);
     const { id } = await upload();
-    await expect(files.uploadOne()).rejects.toThrow('PUT outcome uncertain');
-    expect((await imports.image(id)).image).toEqual(image);
+    await expect(files.uploadOne(tenantContext)).rejects.toThrow('PUT outcome uncertain');
+    expect((await imports.image(tenantContext, id)).image).toEqual(image);
     await run({
       type: 'import.discard',
       importId: id,
@@ -167,12 +170,12 @@ describe('private import review', () => {
       reason: 'Descartar comprovante',
     });
     await database.pool.query("update integration.inbox set updated_at=now()-interval '31 days'");
-    expect(await createAttachmentStore(database).retainOne()).toBe(false);
-    expect(await files.retainOne()).toBe(false);
+    expect(await createAttachmentStore(database).retainOne(tenantContext)).toBe(false);
+    expect(await files.retainOne(tenantContext)).toBe(false);
     await database.pool.query(
       "update integration.attachment set updated_at=now()-interval '3 minutes'",
     );
-    expect(await files.retainOne()).toBe(true);
+    expect(await files.retainOne(tenantContext)).toBe(true);
     expect(objects.size).toBe(0);
   });
   it('coordinates financial reopening with deletion and preserves history after expiry', async () => {
@@ -210,9 +213,9 @@ describe('private import review', () => {
       effectiveAt: new Date().toISOString(),
       reason: 'Correção do resultado',
     });
-    expect((await finance.bet(created.id)).bet.state).toBe('open');
-    expect((await imports.detail(id)).item.imageAvailable).toBe(false);
-    expect((await imports.list({ page: 1, pageSize: 25, betId: created.id })).items).toHaveLength(
+    expect((await finance.bet(tenantContext, created.id)).bet.state).toBe('open');
+    expect((await imports.detail(tenantContext, id)).item.imageAvailable).toBe(false);
+    expect((await imports.list(tenantContext, { page: 1, pageSize: 25, betId: created.id })).items).toHaveLength(
       1,
     );
   });
@@ -221,10 +224,10 @@ describe('private import review', () => {
     const [a, b] = await Promise.all([upload(key), upload(key)]);
     expect(a).toEqual(b);
     await expect(
-      imports.upload('fixture-owner', key, { image: image.toString('base64'), caption: 'changed' }),
+      imports.upload(tenantContext, key, { image: image.toString('base64'), caption: 'changed' }),
     ).rejects.toThrow('IDEMPOTENCY_CONFLICT');
     await expect(
-      imports.upload('fixture-owner', randomUUID(), {
+      imports.upload(tenantContext, randomUUID(), {
         image: image.subarray(0, 64).toString('base64'),
         caption: '',
       }),
@@ -239,7 +242,7 @@ describe('private import review', () => {
       (await database.pool.query('select count(*)::int as n from integration.extraction_request'))
         .rows[0].n,
     ).toBe(2);
-    expect((await imports.image(a.id)).image).toEqual(image);
+    expect((await imports.image(tenantContext, a.id)).image).toEqual(image);
   });
   it('commits confirmation and ledger exactly once and rolls back invalid financial input', async () => {
     const bet = await initialize();
@@ -249,11 +252,11 @@ describe('private import review', () => {
       type: 'import.confirm',
       importId: id,
       expectedInboxVersion: 1,
-      expectedVersion: (await finance.workspace()).version,
+      expectedVersion: (await finance.workspace(tenantContext)).version,
       decision: { kind: 'create', bet, duplicateReason: '' },
     };
     await expect(
-      finance.command('fixture-owner', randomUUID(), {
+      finance.command(tenantContext, randomUUID(), {
         ...command,
         decision: {
           kind: 'create',
@@ -262,14 +265,14 @@ describe('private import review', () => {
         },
       }),
     ).rejects.toThrow('INVALID_FINANCIAL_OPERATION');
-    expect((await imports.detail(id)).item.state).toBe('pending');
+    expect((await imports.detail(tenantContext, id)).item.state).toBe('pending');
     const [a, b] = await Promise.all([
-      finance.command('fixture-owner', key, command),
-      finance.command('fixture-owner', key, command),
+      finance.command(tenantContext, key, command),
+      finance.command(tenantContext, key, command),
     ]);
     expect(a).toEqual(b);
-    expect((await imports.detail(id)).item.betId).toBe(a.id);
-    expect((await finance.workspace()).exposure).toBe('100.00');
+    expect((await imports.detail(tenantContext, id)).item.betId).toBe(a.id);
+    expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
     await expect(run({ ...command, expectedInboxVersion: 2 })).rejects.toThrow('STATE_CONFLICT');
     expect(
       (await database.pool.query('select count(*)::int as n from finance.bet')).rows[0].n,
@@ -285,7 +288,7 @@ describe('private import review', () => {
       decision: { kind: 'create', bet, duplicateReason: '' },
     });
     const second = await upload();
-    const detail = importDetailSchema.parse(await imports.detail(second.id));
+    const detail = importDetailSchema.parse(await imports.detail(tenantContext, second.id));
     expect(detail.duplicates[0]?.betId).toBe(created.id);
     expect(detail.duplicates[0]?.reasons).toContain('image');
     await expect(
@@ -302,7 +305,7 @@ describe('private import review', () => {
       expectedInboxVersion: 1,
       decision: { kind: 'link', betId: created.id, reason: 'Mesmo bilhete reenviado' },
     });
-    expect((await finance.workspace()).exposure).toBe('100.00');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
     const third = await upload();
     await run({
       type: 'import.confirm',
@@ -310,12 +313,12 @@ describe('private import review', () => {
       expectedInboxVersion: 1,
       decision: { kind: 'create', bet, duplicateReason: 'São dois bilhetes distintos conferidos' },
     });
-    expect((await finance.workspace()).exposure).toBe('200.00');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('200.00');
   });
   it('resolves caption aliases and exposes conflicting extraction without guessing dates', async () => {
     const { id } = await upload(randomUUID(), 'Analista\nBet 365');
     await run({ type: 'catalog.create', kind: 'tipster', name: 'Analista', aliases: ['A'] });
-    const workspace = await finance.workspace();
+    const workspace = await finance.workspace(tenantContext);
     const house = workspace.catalog.find((c) => c.name === 'Bet365')!;
     await run({
       type: 'catalog.update',
@@ -349,7 +352,7 @@ describe('private import review', () => {
       "update integration.inbox set state='review',extraction=$2 where id=$1",
       [id, JSON.stringify({ extraction: candidate, requiresReview: true })],
     );
-    const result = importDetailSchema.parse(await imports.detail(id));
+    const result = importDetailSchema.parse(await imports.detail(tenantContext, id));
     expect(result.extraction).toEqual(candidate);
     expect(result.matches.conflict).toBe(true);
     expect(result.matches.captionBookmakerId).toBe(house.id);
@@ -363,7 +366,7 @@ describe('private import review', () => {
       [id, JSON.stringify({ old: 'evidence' })],
     );
     await run({ type: 'import.retry', importId: id, expectedInboxVersion: 1 });
-    expect((await imports.detail(id)).item.state).toBe('pending');
+    expect((await imports.detail(tenantContext, id)).item.state).toBe('pending');
     await expect(
       run({ type: 'import.retry', importId: id, expectedInboxVersion: 2 }),
     ).rejects.toThrow('STATE_CONFLICT');
@@ -402,8 +405,8 @@ describe('private import review', () => {
     const files = createAttachmentStore(database, storage);
     const first = await upload();
     const second = await upload();
-    expect(await files.uploadOne()).toBe(true);
-    expect((await createImportService(database, storage).image(first.id)).image).toEqual(image);
+    expect(await files.uploadOne(tenantContext)).toBe(true);
+    expect((await createImportService(database, storage).image(tenantContext, first.id)).image).toEqual(image);
     expect(
       (await database.pool.query('select image,state from integration.attachment')).rows[0],
     ).toEqual({ image: null, state: 'remote' });
@@ -420,26 +423,26 @@ describe('private import review', () => {
       "update integration.inbox set updated_at=now()-interval '31 days' where id=$1",
       [first.id],
     );
-    expect(await files.retainOne()).toBe(false);
+    expect(await files.retainOne(tenantContext)).toBe(false);
     await run({
       type: 'import.discard',
       importId: second.id,
       expectedInboxVersion: 1,
       reason: 'Descartar teste',
     });
-    expect(await files.retainOne()).toBe(false);
+    expect(await files.retainOne(tenantContext)).toBe(false);
     await database.pool.query("update integration.inbox set updated_at=now()-interval '31 days'");
     vi.mocked(storage.delete).mockRejectedValueOnce(new Error('uncertain'));
-    await expect(files.retainOne()).rejects.toThrow('uncertain');
-    expect(await createAttachmentStore(database).retainOne()).toBe(false);
-    expect(await files.retainOne()).toBe(false);
+    await expect(files.retainOne(tenantContext)).rejects.toThrow('uncertain');
+    expect(await createAttachmentStore(database).retainOne(tenantContext)).toBe(false);
+    expect(await files.retainOne(tenantContext)).toBe(false);
     await database.pool.query(
       "update integration.attachment set updated_at=now()-interval '3 minutes'",
     );
-    expect(await files.retainOne()).toBe(true);
+    expect(await files.retainOne(tenantContext)).toBe(true);
     expect(stored.size).toBe(0);
-    expect((await imports.detail(first.id)).item.imageAvailable).toBe(false);
-    expect((await imports.list({ page: 1, pageSize: 25 })).total).toBe(2);
+    expect((await imports.detail(tenantContext, first.id)).item.imageAvailable).toBe(false);
+    expect((await imports.list(tenantContext, { page: 1, pageSize: 25 })).total).toBe(2);
   });
   it('protects active bets and late settlements from retention', async () => {
     const bet = await initialize();
@@ -452,7 +455,7 @@ describe('private import review', () => {
     });
     const files = createAttachmentStore(database);
     await database.pool.query("update integration.inbox set updated_at=now()-interval '31 days'");
-    expect(await files.retainOne()).toBe(false);
+    expect(await files.retainOne(tenantContext)).toBe(false);
     await run({
       type: 'bet.settle',
       id: created.id,
@@ -462,7 +465,7 @@ describe('private import review', () => {
       settledAt: new Date().toISOString(),
       reason: 'Liquidação de teste',
     });
-    expect(await files.retainOne()).toBe(false);
+    expect(await files.retainOne(tenantContext)).toBe(false);
   });
   it('authenticates upload before parsing and serves private image bytes without a public URL', async () => {
     const getOwner = vi.fn().mockResolvedValue(null);

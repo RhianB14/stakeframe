@@ -13,6 +13,7 @@ import {
   requireDatabaseUrl,
   type Database,
   type FinanceService,
+  type OrganizationContext,
 } from '../../packages/db/src/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
@@ -29,6 +30,7 @@ const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 const image = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 let database: Database;
 let finance: FinanceService;
+let tenantContext: OrganizationContext;
 let name: string;
 let layout: ValidatedLayout;
 type CommandInput = FinanceCommand extends infer C
@@ -37,9 +39,9 @@ type CommandInput = FinanceCommand extends infer C
     : never
   : never;
 const run = async (input: CommandInput) =>
-  finance.command('fixture-owner', randomUUID(), {
+  finance.command(tenantContext, randomUUID(), {
     ...input,
-    expectedVersion: (await finance.workspace()).version,
+    expectedVersion: (await finance.workspace(tenantContext)).version,
   } as FinanceCommand);
 beforeEach(async () => {
   name = `stk_auto_test_${randomUUID().replaceAll('-', '')}`;
@@ -50,7 +52,8 @@ beforeEach(async () => {
   database = createDatabase(url.toString());
   await migrateLocalDatabase(database);
   finance = createFinanceService(database);
-  const bookmakerId = (await finance.workspace()).catalog.find((row) => row.name === 'Bet365')!.id;
+  tenantContext = await finance.ensureContext('fixture-owner');
+  const bookmakerId = (await finance.workspace(tenantContext)).catalog.find((row) => row.name === 'Bet365')!.id;
   await run({
     type: 'bankroll.initialize',
     reserve: '500.00',
@@ -97,11 +100,11 @@ afterEach(async () => {
 afterAll(async () => admin.close());
 async function input(changes: Partial<TicketExtraction> = {}, caption = 'Fixture\nBet365') {
   const imports = createImportService(database);
-  const { id } = await imports.upload('fixture-owner', randomUUID(), {
+  const { id } = await imports.upload(tenantContext, randomUUID(), {
     image: image.toString('base64'),
     caption,
   });
-  const claim = await createInboxStore(database).claim(id);
+  const claim = await createInboxStore(database).claim(tenantContext, id);
   expect(claim).not.toBeNull();
   const extraction: TicketExtraction = {
     bookmaker: 'Bet365',
@@ -138,6 +141,7 @@ async function input(changes: Partial<TicketExtraction> = {}, caption = 'Fixture
 }
 async function complete(value: Awaited<ReturnType<typeof input>>, layouts = [layout]) {
   return createAutomaticImportService(database, layouts).complete(
+    tenantContext,
     value.id,
     value.attempt,
     value.result,
@@ -154,7 +158,7 @@ describe('automatic import financial boundary', () => {
     let integrations: Awaited<ReturnType<typeof startIntegrations>> | undefined;
     try {
       const imports = createImportService(database);
-      const { id } = await imports.upload('fixture-owner', randomUUID(), {
+      const { id } = await imports.upload(tenantContext, randomUUID(), {
         image: image.toString('base64'),
         caption: 'Fixture\nBet365',
       });
@@ -207,11 +211,11 @@ describe('automatic import financial boundary', () => {
         fetchImpl,
       );
       await expect
-        .poll(async () => (await imports.detail(id)).item.state, { timeout: 10000 })
+        .poll(async () => (await imports.detail(tenantContext, id)).item.state, { timeout: 10000 })
         .toBe('imported');
-      expect((await imports.detail(id)).automatic).toBe(true);
+      expect((await imports.detail(tenantContext, id)).automatic).toBe(true);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect((await finance.workspace()).exposure).toBe('100.00');
+      expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
     } finally {
       await integrations?.stop();
       await boss?.stop({ graceful: true, timeout: 5000 });
@@ -233,27 +237,27 @@ describe('automatic import financial boundary', () => {
         reason: 'LAYOUT_NOT_VALIDATED',
       });
     }
-    expect((await finance.workspace()).exposure).toBe('0.00');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
   });
   it('commits evidence, bet, unit, ledger and audit once across repeated completions', async () => {
     const value = await input();
     const outcomes = await Promise.all([complete(value), complete(value)]);
     expect(outcomes.map((outcome) => outcome.state).sort()).toEqual(['imported', 'unchanged']);
     expect(await complete(value)).toEqual({ state: 'unchanged' });
-    const detail = await createImportService(database).detail(value.id);
+    const detail = await createImportService(database).detail(tenantContext, value.id);
     expect(detail).toMatchObject({
       automatic: true,
       automaticReason: 'IMPORTED',
       item: { state: 'imported' },
     });
-    const { bet } = await finance.bet(detail.item.betId!);
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet).toMatchObject({ stake: '100.00', unitAmount: '10.00', state: 'open' });
     expect(bet.selections[0]).toMatchObject({
       eventDate: '2026-09-07',
       eventAt: null,
       dateStatus: 'estimated',
     });
-    expect(await finance.workspace()).toMatchObject({
+    expect(await finance.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',
       available: '900.00',
       exposure: '100.00',
@@ -281,7 +285,7 @@ describe('automatic import financial boundary', () => {
     expect(outcomes.find((outcome) => outcome.state === 'review')).toMatchObject({
       reason: 'DUPLICATE_REVIEW_REQUIRED',
     });
-    expect((await finance.workspace()).exposure).toBe('100.00');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
   });
   it.each([
     [{ warnings: ['Unreadable'] }, 'EXTRACTION_UNCERTAIN'],
@@ -298,10 +302,10 @@ describe('automatic import financial boundary', () => {
   ] as const)('retains evidence with reason %s / %s', async (changes, reason) => {
     const value = await input(changes as Partial<TicketExtraction>);
     expect(await complete(value)).toMatchObject({ state: 'review', reason });
-    expect((await createImportService(database).detail(value.id)).extraction).toEqual(
+    expect((await createImportService(database).detail(tenantContext, value.id)).extraction).toEqual(
       value.result.extraction,
     );
-    expect((await finance.workspace()).exposure).toBe('0.00');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
     );
@@ -322,8 +326,8 @@ describe('automatic import financial boundary', () => {
       ],
     });
     expect(await complete(valid)).toMatchObject({ state: 'imported' });
-    const detail = await createImportService(database).detail(valid.id);
-    expect((await finance.bet(detail.item.betId!)).bet.selections[0]).toMatchObject({
+    const detail = await createImportService(database).detail(tenantContext, valid.id);
+    expect((await finance.bet(tenantContext, detail.item.betId!)).bet.selections[0]).toMatchObject({
       eventDate: null,
       eventAt: null,
       dateStatus: 'pending',
@@ -340,13 +344,13 @@ describe('automatic import financial boundary', () => {
     });
     const value = await input({ freebet: true, potentialReturn: '100.00' });
     expect(await complete(value)).toMatchObject({ state: 'imported' });
-    expect(await finance.workspace()).toMatchObject({
+    expect(await finance.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',
       exposure: '0.00',
       available: '1000.00',
     });
-    const detail = await createImportService(database).detail(value.id);
-    expect((await finance.workspace()).freebets[0]?.usedBy).toBe(detail.item.betId);
+    const detail = await createImportService(database).detail(tenantContext, value.id);
+    expect((await finance.workspace(tenantContext)).freebets[0]?.usedBy).toBe(detail.item.betId);
   });
   it('rejects ambiguity between two eligible promotional credits', async () => {
     for (let i = 0; i < 2; i++)
@@ -368,8 +372,8 @@ describe('automatic import financial boundary', () => {
       .query(`create function finance.fail_automatic_audit() returns trigger language plpgsql as $$ begin if NEW.type='import.automatic' then raise exception 'SYNTHETIC_FAILURE'; end if; return NEW; end $$;
       create trigger fail_automatic_audit before insert on finance.audit for each row execute function finance.fail_automatic_audit()`);
     await expect(complete(value)).rejects.toThrow('SYNTHETIC_FAILURE');
-    expect((await finance.workspace()).exposure).toBe('0.00');
-    expect((await createImportService(database).detail(value.id)).item.state).toBe('processing');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
+    expect((await createImportService(database).detail(tenantContext, value.id)).item.state).toBe('processing');
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
     );
@@ -382,6 +386,6 @@ describe('automatic import financial boundary', () => {
       value.id,
     ]);
     expect(await complete(value)).toEqual({ state: 'unchanged' });
-    expect((await createImportService(database).detail(value.id)).item.state).toBe('processing');
+    expect((await createImportService(database).detail(tenantContext, value.id)).item.state).toBe('processing');
   });
 });

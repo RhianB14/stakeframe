@@ -2,8 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { validateImage, createAttachmentStore, type ObjectStorage } from './attachments.js';
+import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
-export type EnqueueExtraction = (client: PoolClient, id: string) => Promise<void>;
+export type EnqueueExtraction = (
+  client: PoolClient,
+  id: string,
+  organizationId?: string,
+) => Promise<void>;
 export type InboxInput = {
   sourceKey: string;
   caption: string;
@@ -23,8 +28,12 @@ export function createInboxStore(
   enqueue: EnqueueExtraction = enqueueExtraction,
   storage?: ObjectStorage,
 ) {
+  const tenant = createTenantContext(database);
   const attachments = createAttachmentStore(database, storage);
+  const withOrg = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
+    tenant.withOrganizationTransaction(context, action);
   return {
+    /** Telegram cursor: infrastructure shared by every organization. */
     async offset() {
       const result = await database.pool.query<{ next_offset: string }>(
         "select next_offset from integration.cursor where name = 'telegram'",
@@ -38,24 +47,30 @@ export function createInboxStore(
         [next],
       );
     },
-    async accept(input: InboxInput, download: () => Promise<Buffer>) {
+    async accept(
+      context: OrganizationContext,
+      input: InboxInput,
+      download: () => Promise<Buffer>,
+    ) {
       if (!input.sourceKey || input.sourceKey.length > 200 || input.caption.length > 1024)
         throw new Error('INVALID_INBOX_INPUT');
-      const existing = await database.pool.query<{ id: string; request_hash: string | null }>(
-        'select id,request_hash from integration.inbox where source_key=$1',
-        [input.sourceKey],
-      );
-      if (existing.rows[0]) {
-        if (input.requestHash && existing.rows[0].request_hash !== input.requestHash)
+      const existing = await withOrg(context, async (client) => {
+        return (
+          await client.query<{ id: string; request_hash: string | null }>(
+            'select id,request_hash from integration.inbox where source_key=$1',
+            [input.sourceKey],
+          )
+        ).rows[0];
+      });
+      if (existing) {
+        if (input.requestHash && existing.request_hash !== input.requestHash)
           throw new Error('IDEMPOTENCY_CONFLICT');
-        return existing.rows[0].id;
+        return existing.id;
       }
       const bytes = await download();
       if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw new Error('INVALID_INBOX_IMAGE');
       const info = await validateImage(bytes);
-      const client = await database.pool.connect();
-      try {
-        await client.query('begin');
+      return withOrg(context, async (client) => {
         // Admission control is shared by all producers; the network call happened before BEGIN.
         await client.query('select pg_advisory_xact_lock(782341092)');
         const raced = (
@@ -67,7 +82,6 @@ export function createInboxStore(
         if (raced) {
           if (input.requestHash && raced.request_hash !== input.requestHash)
             throw new Error('IDEMPOTENCY_CONFLICT');
-          await client.query('commit');
           return raced.id;
         }
         const capacity = await client.query<{ count: string; bytes: string }>(
@@ -112,51 +126,47 @@ export function createInboxStore(
             input.requestHash ?? null,
           ],
         );
-        if (inserted.rowCount) await enqueue(client, id);
+        if (inserted.rowCount) await enqueue(client, id, context.organizationId);
         const result = await client.query<{ id: string }>(
           'select id from integration.inbox where source_key=$1',
           [input.sourceKey],
         );
-        await client.query('commit');
         return result.rows[0]!.id;
-      } catch (error) {
-        await client.query('rollback');
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
     },
-    async claim(id: string) {
-      const pending = (
-        await database.pool.query<{ attachment_id: string }>(
-          "select attachment_id from integration.inbox where id=$1 and state='pending'",
-          [id],
-        )
-      ).rows[0];
+    /** Claims one pending inbox row inside the organization it belongs to. */
+    async claim(context: OrganizationContext, id: string) {
+      const pending = await withOrg(context, async (client) => {
+        return (
+          await client.query<{ attachment_id: string }>(
+            "select attachment_id from integration.inbox where id=$1 and state='pending'",
+            [id],
+          )
+        ).rows[0];
+      });
       if (!pending) return null;
-      // Private object I/O happens before the transaction and before reserving a paid attempt.
+      // Private object I/O happens in its own short transaction, before reserving a paid attempt.
       let image: Buffer;
       try {
-        image = (await attachments.read(pending.attachment_id)).image;
+        image = await withOrg(context, async (client) => {
+          return (await attachments.read(client, pending.attachment_id)).image;
+        });
       } catch {
-        await database.pool.query(
-          "update integration.inbox set state='failed',error_code='ATTACHMENT_UNAVAILABLE',version=version+1,updated_at=now() where id=$1 and state='pending'",
-          [id],
-        );
+        await withOrg(context, async (client) => {
+          await client.query(
+            "update integration.inbox set state='failed',error_code='ATTACHMENT_UNAVAILABLE',version=version+1,updated_at=now() where id=$1 and state='pending'",
+            [id],
+          );
+        });
         return null;
       }
-      const client = await database.pool.connect();
-      try {
-        await client.query('begin');
+      return withOrg(context, async (client) => {
         await client.query('select pg_advisory_xact_lock(782341093)');
         const item = await client.query(
           "select id from integration.inbox where id=$1 and state='pending' for update",
           [id],
         );
-        if (!item.rows[0]) {
-          await client.query('commit');
-          return null;
-        }
+        if (!item.rows[0]) return null;
         // Counts include uncertain/failed calls. Retrying requires a new explicit request.
         const period = await client.query<{ day: string; month: string }>(
           "select to_char(now() at time zone 'UTC','YYYY-MM-DD') as day, to_char(now() at time zone 'UTC','YYYY-MM') as month",
@@ -171,7 +181,6 @@ export function createInboxStore(
             "update integration.inbox set state='failed',error_code='AI_LOCAL_QUOTA_REACHED',version=version+1,updated_at=now() where id=$1",
             [id],
           );
-          await client.query('commit');
           return null;
         }
         await client.query(
@@ -182,32 +191,33 @@ export function createInboxStore(
           "update integration.inbox set state='processing',attempts=attempts+1,version=version+1,updated_at=now() where id=$1 returning attempts",
           [id],
         );
-        await client.query('commit');
         return { image, attempt: claimed.rows[0]!.attempts };
-      } catch (error) {
-        await client.query('rollback');
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
     },
-    async complete(id: string, attempt: number, result: object) {
-      await database.pool.query(
-        "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3",
-        [id, JSON.stringify(result), attempt],
-      );
+    async complete(context: OrganizationContext, id: string, attempt: number, result: object) {
+      await withOrg(context, async (client) => {
+        await client.query(
+          "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3",
+          [id, JSON.stringify(result), attempt],
+        );
+      });
     },
-    async fail(id: string, attempt: number, code: string) {
+    async fail(context: OrganizationContext, id: string, attempt: number, code: string) {
       if (!/^[A-Z_]{3,80}$/.test(code)) throw new Error('INVALID_ERROR_CODE');
-      await database.pool.query(
-        "update integration.inbox set state='failed',error_code=$2,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3",
-        [id, code, attempt],
-      );
+      await withOrg(context, async (client) => {
+        await client.query(
+          "update integration.inbox set state='failed',error_code=$2,version=version+1,updated_at=now() where id=$1 and state='processing' and attempts=$3",
+          [id, code, attempt],
+        );
+      });
     },
-    async recoverInterrupted() {
-      await database.pool.query(
-        "update integration.inbox set state='failed',error_code='AI_OUTCOME_UNCERTAIN',version=version+1,updated_at=now() where state='processing' and updated_at < now()-interval '3 minutes'",
-      );
+    /** Callers iterate organizations; each organization recovers its own interrupted claims. */
+    async recoverInterrupted(context: OrganizationContext) {
+      await withOrg(context, async (client) => {
+        await client.query(
+          "update integration.inbox set state='failed',error_code='AI_OUTCOME_UNCERTAIN',version=version+1,updated_at=now() where state='processing' and updated_at < now()-interval '3 minutes'",
+        );
+      });
     },
   };
 }

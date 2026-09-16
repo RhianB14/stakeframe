@@ -20,7 +20,10 @@ export async function executeFinancialCommand(
       actor: string;
       hash: string;
       result: { id: string; version: number };
-    }>('select actor,hash,result from finance.command_receipt where key=$1', [key])
+    }>(
+      "select actor,hash,result from finance.command_receipt where organization_id=current_setting('app.organization_id', true)::uuid and key=$1",
+      [key],
+    )
   ).rows[0];
   if (receipt) {
     if (receipt.actor !== actor || receipt.hash !== hash)
@@ -49,7 +52,10 @@ export async function executeFinancialCommand(
   if (cents(open) !== cents(balances.find((value) => value.kind === 'exposure')?.amount ?? '0'))
     throw new FinanceError('INVALID_FINANCIAL_OPERATION');
   const result = { id: applied.id, version: settings.version + 1 };
-  await client.query('update finance.settings set version=$1 where id=1', [result.version]);
+  await client.query(
+    "update finance.settings set version=$1 where organization_id=current_setting('app.organization_id', true)::uuid",
+    [result.version],
+  );
   await client.query(
     'insert into finance.audit(type,actor,entity_id,before,after) values($1,$2,$3,$4,$5)',
     [
