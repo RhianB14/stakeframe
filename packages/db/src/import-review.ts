@@ -238,7 +238,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       return read(context, async (client) => {
         const row = (
           await client.query<{ attachment_id: string }>(
-            'select attachment_id from integration.inbox where id=$1',
+            'select attachment_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
             [id],
           )
         ).rows[0];

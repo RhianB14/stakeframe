@@ -2,7 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  claimExpiredAttachmentsForBackup,
   createDatabase,
+  createEventService,
   createFinanceService,
   createImportService,
   createInboxStore,
@@ -305,6 +307,12 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
       "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relrowsecurity",
     );
     expect(enabled.rows[0].count).toBe('18');
+    // The isolation proven in this suite runs as the database owner, which the enabled policies
+    // do not reach (no FORCE anywhere): the explicit predicates are the effective guard.
+    const forced = await database.pool.query(
+      "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relrowsecurity and relforcerowsecurity",
+    );
+    expect(forced.rows[0].count).toBe('0');
   });
 
   it('runs onboarding per organization without the founding anchor', async () => {
@@ -482,5 +490,116 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
       [sourceKey],
     );
     expect(inboxes.rows).toHaveLength(2);
+  });
+
+  it('scopes calendar totals, rows and pagination to the current organization', async () => {
+    const { contextA, contextB } = await setup();
+    const bookmakerA = await initialize(contextA);
+    const betA = await registerBet(contextA, bookmakerA.id);
+    const bookmakerB = await initialize(contextB);
+    const betB = await registerBet(contextB, bookmakerB.id);
+    const events = createEventService(database);
+    const query = {
+      from: '2026-09-01',
+      to: '2026-09-30',
+      view: 'scheduled',
+      page: 1,
+      pageSize: 50,
+    } as const;
+    const calendarA = await events.calendar(contextA, query);
+    const calendarB = await events.calendar(contextB, query);
+    // Each organization sees exactly its own selection — never both.
+    expect(calendarA.total).toBe(1);
+    expect(calendarA.distinctBets).toBe(1);
+    expect(calendarA.items.map((item) => item.betId)).toEqual([betA.betId]);
+    expect(calendarB.total).toBe(1);
+    expect(calendarB.distinctBets).toBe(1);
+    expect(calendarB.items.map((item) => item.betId)).toEqual([betB.betId]);
+  });
+
+  it('never serves another organization import image, even with a valid UUID', async () => {
+    const { contextA, contextB } = await setup();
+    const store = createInboxStore(database);
+    const inboxA = await store.accept(
+      contextA,
+      { sourceKey: `img:${randomUUID()}`, caption: 'A', metadata: { source: 'test' } },
+      async () => image,
+    );
+    const imports = createImportService(database);
+    const found = await imports.image(contextA, inboxA);
+    expect(Buffer.compare(found.image!, image)).toBe(0);
+    // B knows the inbox UUID but can never read A's bytes.
+    await expect(imports.image(contextB, inboxA)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('claims expired attachments only for the organization that runs retention', async () => {
+    const { contextA, contextB } = await setup();
+    const store = createInboxStore(database);
+    const inboxA = await store.accept(
+      contextA,
+      { sourceKey: `ret:${randomUUID()}`, caption: 'A', metadata: { source: 'test' } },
+      async () => image,
+    );
+    const inboxB = await store.accept(
+      contextB,
+      { sourceKey: `ret:${randomUUID()}`, caption: 'B', metadata: { source: 'test' } },
+      async () => image,
+    );
+    // Both references are terminal and older than the 30-day window.
+    await database.pool.query(
+      "update integration.inbox set state='discarded', updated_at=now()-interval '31 days' where id = any($1::uuid[])",
+      [[inboxA, inboxB]],
+    );
+    const attachmentOf = async (inboxId: string) =>
+      (
+        await database.pool.query<{ attachment_id: string }>(
+          'select attachment_id from integration.inbox where id=$1',
+          [inboxId],
+        )
+      ).rows[0]!.attachment_id;
+    const stateOf = async (id: string) =>
+      (
+        await database.pool.query<{ state: string }>(
+          'select state from integration.attachment where id=$1',
+          [id],
+        )
+      ).rows[0]!.state;
+    const attachmentA = await attachmentOf(inboxA);
+    const attachmentB = await attachmentOf(inboxB);
+    await claimExpiredAttachmentsForBackup(database, contextA);
+    expect(await stateOf(attachmentA)).toBe('deleting');
+    expect(await stateOf(attachmentB)).toBe('local');
+    await claimExpiredAttachmentsForBackup(database, contextB);
+    expect(await stateOf(attachmentB)).toBe('deleting');
+  });
+
+  it('never reuses another organization completed event search as cache', async () => {
+    const { contextA, contextB } = await setup();
+    const bookmakerA = await initialize(contextA);
+    const betA = await registerBet(contextA, bookmakerA.id);
+    const bookmakerB = await initialize(contextB);
+    const betB = await registerBet(contextB, bookmakerB.id);
+    const selectionOf = async (context: OrganizationContext, betId: string) =>
+      (
+        await database.pool.query<{ id: string }>(
+          'select id from finance.selection where organization_id=$1 and bet_id=$2 order by position limit 1',
+          [context.organizationId, betId],
+        )
+      ).rows[0]!.id;
+    const selectionA = await selectionOf(contextA, betA.betId);
+    const selectionB = await selectionOf(contextB, betB.betId);
+    const events = createEventService(database, { thesportsdb: false, tavily: true });
+    const input = (selectionId: string) =>
+      ({ selectionId, provider: 'tavily', dateHint: '2026-09-10' }) as const;
+    const firstKey = randomUUID();
+    await events.request(contextA, firstKey, input(selectionA));
+    expect((await events.claim(contextA))?.id).toBe(firstKey);
+    await events.complete(contextA, firstKey, []);
+    // A second search in A reuses its own completed cache.
+    const cachedA = await events.request(contextA, randomUUID(), input(selectionA));
+    expect(cachedA.state).toBe('complete');
+    // B has the same fingerprint but must stay fresh: A's cache is never reused across tenants.
+    const freshB = await events.request(contextB, randomUUID(), input(selectionB));
+    expect(freshB.state).toBe('pending');
   });
 });

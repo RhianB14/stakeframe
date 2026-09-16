@@ -83,11 +83,34 @@ decisão explícita (`registered` verificado contra `finance.bet` da organizaç�
   isolado, leitura cruzada (404 `NOT_FOUND`), liquidação/cancelamento/reversão cruzados,
   catálogos/aliases/freebets, recibos idempotentes por organização, constraints compostas
   (23503), fail-closed sem contexto, onboarding por organização sem âncora, relatórios e
-  importações isolados, precisão decimal.
-- `tests/integration/tenant-registry.test.ts` — migração fresh, replay e abort fail-closed.
+  importações isolados, precisão decimal, exportação CSV/JSON cross-org (sem `cursor` e
+  `ai_usage_day`), dispatch de `extraction_request` por tenant, dedupe de `sourceKey`/hash por
+  organização, calendário e paginação cross-org, imagem de importação cross-org (UUID válido),
+  retenção de anexos por organização, cache de busca de eventos por organização (fingerprint
+  idêntico) e o registro de que nenhuma tabela usa `FORCE RLS` (o isolamento não depende dele).
+- `tests/integration/tenant-registry.test.ts` — migração fresh, replay e abort fail-closed;
+  verifica `finance.settings.organization_id` `NOT NULL` (coluna e dados) após o replay.
 - `tests/integration/import-review.test.ts` — o caso de upgrade legado (0002 → atual) prova o
   backfill: as linhas legadas ganham a organização fundadora sem perder bytes.
 - Suítes unit, integração e e2e do repositório permanecem verdes.
+
+## Auditoria SQL (revisão R2)
+
+Varredura mecânica de toda referência a `finance.*`/`integration.*` em `packages/db/src`,
+`apps/api/src`, `apps/worker/src` e `apps/ops/src` (201 referências). Classificação:
+
+- **Predicado explícito de organização** (`organization_id=current_setting('app.organization_id', true)::uuid`
+  ou correlacionada via `a.organization_id`): toda leitura/escrita privada de runtime — inclusive
+  joins, CTEs e subconsultas de calendário, relatórios, retenção, eventos, importação e exportação.
+- **INSERTs que usam o `DEFAULT` org-scoped da coluna** (falha fechado sem contexto, pois a coluna é
+  `NOT NULL`): journal, posting, monthly_unit, account, bet, freebet, settlement, command_receipt,
+  event_search, extraction_request. Todos os call sites rodam dentro de uma transação de organização.
+- **Fluxos operacionais globais explícitos** (preservados por contrato): `integration.cursor` e
+  `integration.ai_usage_day` (infraestrutura sem dono), e as rotinas de backup/bundle/restore de
+  `apps/ops` — que varrem todas as organizações de propósito e usam a expressão de retenção
+  correlacionada pelo dono (`a.organization_id`), sem depender do contexto de sessão.
+
+Nenhuma consulta privada ficou sem predicado ou justificativa após a varredura.
 
 ## Limitações conhecidas
 
@@ -97,4 +120,6 @@ decisão explícita (`registered` verificado contra `finance.bet` da organizaç�
 - O consumidor Telegram opera em nome da organização fundadora (o binding por organização do
   Telegram é unidade futura); os workers de retenção e de busca de eventos iteram todas as
   organizações, cada uma dentro do próprio contexto.
-- As cotas de provedores externos de busca de eventos continuam globais por provedor.
+- As cotas de provedores externos de busca de eventos são contadas por organização (cada tenant
+  tem a própria cota; a multiplicação de chamadas entre organizações é limitação do beta com um
+  único worker).

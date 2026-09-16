@@ -120,7 +120,8 @@ async function usage(client: Pick<PoolClient, 'query'>, provider: EventProvider)
     select count(*) filter(where started_at >= date_trunc('day',now() at time zone 'UTC') at time zone 'UTC')::int as daily,
       count(*)::int as monthly,
       count(*) filter(where started_at > now()-interval '1 minute')::int as minute
-    from integration.event_search where provider=$1 and started_at >= date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`,
+    from integration.event_search where organization_id=current_setting($$app.organization_id$$, true)::uuid
+      and provider=$1 and started_at >= date_trunc('month',now() at time zone 'UTC') at time zone 'UTC'`,
       [provider],
     )
   ).rows[0]!;
@@ -152,21 +153,22 @@ export function createEventService(
         throw new FinanceError('INVALID_FINANCIAL_OPERATION');
       return read(context, async (client) => {
         const args = [query.from, query.to, query.view, query.betState ?? null];
-        const filter = `where ($4::text is null or b.state=$4) and
+        const filter = `where s.organization_id=current_setting($$app.organization_id$$, true)::uuid
+          and ($4::text is null or b.state=$4) and
           (case when $3='pending' then s.event_date is null or s.schedule_status='postponed'
             else s.event_date between $1::date and $2::date and s.schedule_status<>'postponed' end)`;
         const totals = (
           await client.query<{ total: number; bets: number }>(
             `
           select count(*)::int as total,count(distinct b.id)::int as bets
-          from finance.selection s join finance.bet b on b.id=s.bet_id ${filter}`,
+          from finance.selection s join finance.bet b on b.id=s.bet_id and b.organization_id=s.organization_id ${filter}`,
             args,
           )
         ).rows[0]!;
         const pending = (
           await client.query<{ count: number }>(
             `select count(*)::int as count
-          from finance.selection s join finance.bet b on b.id=s.bet_id
+          from finance.selection s join finance.bet b on b.id=s.bet_id and b.organization_id=s.organization_id
           where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and (s.event_date is null or s.schedule_status='postponed') and ($1::text is null or b.state=$1)`,
             [query.betState ?? null],
           )
@@ -175,7 +177,8 @@ export function createEventService(
           await client.query<SelectionRow>(
             `
           select s.*,s.event_date::text as event_date,b.reference,b.state as bet_state,c.name as bookmaker
-          from finance.selection s join finance.bet b on b.id=s.bet_id join finance.catalog c on c.id=b.bookmaker_id
+          from finance.selection s join finance.bet b on b.id=s.bet_id and b.organization_id=s.organization_id
+          join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id
           ${filter} order by s.event_date nulls last,s.event_at nulls last,s.event,b.id,s.position,s.id limit $5 offset $6`,
             [...args, query.pageSize, (query.page - 1) * query.pageSize],
           )
@@ -273,8 +276,11 @@ export function createEventService(
           ? undefined
           : (
               await client.query<SearchRow>(
+                // The cache is organization-scoped: a completed search of another tenant can
+                // never be reused, so `cached_from` always points inside the same organization.
                 `select * from integration.event_search
-          where provider=$1 and event_fingerprint=$2 and date_hint is not distinct from $3::text
+          where organization_id=current_setting($$app.organization_id$$, true)::uuid
+          and provider=$1 and event_fingerprint=$2 and date_hint is not distinct from $3::text
           and state='complete' and cached_from is null and completed_at > now()-interval '24 hours'
           order by completed_at desc limit 1`,
                 [command.provider, fingerprint, command.dateHint],
