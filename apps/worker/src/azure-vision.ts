@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { imageMime } from './openrouter.js';
 import { IntegrationError, readJson } from './http.js';
 import type { OcrItem, OcrPoint, OcrResult } from './ocr.js';
@@ -31,7 +32,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_KEY_BYTES = 512;
 const MAX_OCR_TEXT = 64 * 1024;
 const MAX_OCR_ITEMS = 2_000;
-const MAX_POLL_ATTEMPTS = 24;
 const POLL_INTERVAL_MS = 750;
 const ENDPOINT_PATTERN =
   /^https:\/\/[a-z0-9][a-z0-9-]{1,62}\.(?:cognitiveservices|api\.cognitive)\.(?:azure|microsoft)\.com$/;
@@ -174,10 +174,6 @@ function statusError(status: number): string {
   return 'AZURE_VISION_PROVIDER_UNAVAILABLE';
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function extractAzureVisionOcr(options: {
   config: AzureVisionConfig;
   image: Buffer;
@@ -209,8 +205,12 @@ export async function extractAzureVisionOcr(options: {
     if (!location || !location.startsWith(`${options.config.endpoint}/`))
       throw new IntegrationError('AZURE_VISION_RESPONSE_INVALID');
     await submit.body?.cancel();
-    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
-      if (attempt > 0) await wait(POLL_INTERVAL_MS);
+    // Polling advances only while the configured timeout allows: the loop is
+    // bounded by the same deadline as the transport signal, so a 60 s timeout
+    // keeps polling for up to 60 s instead of a fixed attempt count.
+    const deadline = Date.now() + options.config.timeoutMs;
+    for (;;) {
+      if (Date.now() >= deadline) throw new IntegrationError('AZURE_VISION_INTERRUPTED');
       const poll = await fetchImpl(location, {
         method: 'GET',
         redirect: 'error',
@@ -227,8 +227,13 @@ export async function extractAzureVisionOcr(options: {
       const status = (body as { status?: unknown }).status;
       if (status === 'succeeded') return parseAnalyzeResult(body);
       if (status === 'failed') throw new IntegrationError('AZURE_VISION_PROVIDER_UNAVAILABLE');
+      // The analysis is asynchronous by design: wait only for the next status
+      // check, bounded by the remaining deadline and cancellable by the
+      // transport signal (external interruption or the timeout itself).
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new IntegrationError('AZURE_VISION_INTERRUPTED');
+      await delay(Math.min(POLL_INTERVAL_MS, remaining), undefined, { signal });
     }
-    throw new IntegrationError('AZURE_VISION_INTERRUPTED');
   } catch (error) {
     if (error instanceof IntegrationError) throw error;
     throw new IntegrationError(
