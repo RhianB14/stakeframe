@@ -7,6 +7,7 @@ import {
   createDatabase,
   createFinanceService,
   createReportService,
+  createTenantContext,
 } from '../../packages/db/dist/index.js';
 import { migrateLocalDatabase } from '../../packages/db/dist/migrate.js';
 import { reportQuerySchema, cents } from '../../packages/shared/dist/index.js';
@@ -55,12 +56,22 @@ try {
   await admin.pool.query(`CREATE DATABASE "${name}"`);
   created = true;
   source.pathname = `/${name}`;
-  database = createDatabase(source.toString());
+  database = createDatabase(source.toString(), {
+    // The synthetic fixture loads six figures of rows in one shot; the runtime-oriented default
+    // query timeout would cut it off now that organization columns/indexes/FKs add per-row work.
+    // Budgets below still measure the expensive queries themselves.
+    statementTimeoutMs: 30_000,
+  });
   await migrateLocalDatabase(database);
   const finance = createFinanceService(database);
-  const workspace = await finance.workspace();
+  const tenant = createTenantContext(database);
+  await database.pool.query(
+    `insert into auth."user"(id,name,email) values('synthetic-performance','Synthetic Performance','synthetic@stk.test') on conflict (id) do nothing`,
+  );
+  const context = await tenant.ensureOrganizationMembership('synthetic-performance');
+  const workspace = await finance.workspace(context);
   const bookmakerId = workspace.catalog.find((row) => row.name === 'Bet365').id;
-  await finance.command('synthetic-performance', randomUUID(), {
+  await finance.command(context, randomUUID(), {
     type: 'bankroll.initialize',
     expectedVersion: workspace.version,
     reserve: '100000.00',
@@ -71,6 +82,9 @@ try {
   try {
     await seed.connect();
     await seed.query('begin');
+    await seed.query("select set_config('app.organization_id', $1, true)", [
+      context.organizationId,
+    ]);
     await seed.query(await readFile(new URL('./seed-performance.sql', import.meta.url), 'utf8'));
     await seed.query('commit');
     await seed.query('analyze');
@@ -79,7 +93,7 @@ try {
   }
   const reports = createReportService(database);
   const query = reportQuerySchema.parse({ from: '2026-09-01', to: '2026-09-30' });
-  const result = await reports.report(query);
+  const result = await reports.report(context, query);
   assert.equal(result.metrics.bets, 9000);
   assert.equal(result.metrics.profit, '22500.00');
   assert.equal(result.metrics.exposure, '45000.00');
@@ -94,7 +108,7 @@ try {
       2250000n,
     );
   }
-  const balance = await finance.workspace();
+  const balance = await finance.workspace(context);
   assert.equal(balance.bankroll, '225000.00');
   assert.equal(balance.exposure, '50000.00');
   assert.equal(balance.available, '175000.00');
@@ -107,7 +121,7 @@ try {
     0,
   );
   async function exported(kind) {
-    const stream = await reports.export(kind, kind === 'csv' ? query : undefined);
+    const stream = await reports.export(kind, context, kind === 'csv' ? query : undefined);
     let text = '';
     for await (const chunk of stream) text += String(chunk);
     if (kind === 'csv') assert.equal(text.split('\r\n').length, 9002);
@@ -120,13 +134,13 @@ try {
       assert.equal(json['finance.posting'].length, 35003);
     }
   }
-  await measure('workspace', 10, 500, () => finance.workspace());
-  await measure('report', 10, 2000, () => reports.report(query));
+  await measure('workspace', 10, 500, () => finance.workspace(context));
+  await measure('report', 10, 2000, () => reports.report(context, query));
   await measure('detail-first-page', 10, 500, () =>
-    reports.bets({ ...query, page: 1, pageSize: 50 }),
+    reports.bets(context, { ...query, page: 1, pageSize: 50 }),
   );
   await measure('detail-last-page', 10, 500, () =>
-    reports.bets({ ...query, page: 180, pageSize: 50 }),
+    reports.bets(context, { ...query, page: 180, pageSize: 50 }),
   );
   await measure('csv-9000', 3, 10000, () => exported('csv'));
   await measure('json-10000', 3, 10000, () => exported('json'));

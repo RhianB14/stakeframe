@@ -153,7 +153,9 @@ export const posting = finance.table(
     amount: money('amount').notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.organizationId, t.journalId, t.accountId] }),
+    // Business columns first: the deferred balanced/same-transaction triggers scan by
+    // journal_id on every posting, and the organization is also carried explicitly.
+    primaryKey({ columns: [t.journalId, t.accountId, t.organizationId] }),
     index('posting_account_idx').on(t.accountId),
     check('posting_nonzero', sql`${t.amount}<>0`),
     foreignKey({
