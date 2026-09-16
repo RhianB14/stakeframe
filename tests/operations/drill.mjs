@@ -157,7 +157,7 @@ try {
     },
   };
   const attachments = createAttachmentStore(database, storage);
-  await attachments.uploadOne();
+  await attachments.uploadOne(context);
   assert.equal(remote.size, 1);
   await execute({
     type: 'import.discard',
