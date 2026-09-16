@@ -5,6 +5,7 @@ import {
   createR2Storage,
   createEventService,
   createReportService,
+  createOnboardingService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -48,6 +49,7 @@ async function main() {
     runtime: config.runtime,
     release: config.release,
     finance: createFinanceService(database),
+    onboarding: createOnboardingService(database),
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
     reports: createReportService(database),

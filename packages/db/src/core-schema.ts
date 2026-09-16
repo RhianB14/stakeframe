@@ -152,10 +152,41 @@ export const consentRecord = core.table(
   ],
 );
 
+/**
+ * Per-user onboarding progress (STK-F1-09). One row per user; `organization_id` keeps every
+ * read and write scoped to the tenant that owns the row, and the remaining steps are NOT
+ * duplicated here — the bankroll step comes from the financial core (`finance.settings`) and
+ * the first-bet step from the registered bets, so there is a single source of truth for each.
+ */
+export const onboardingState = core.table(
+  'onboarding_state',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    timezone: text('timezone'),
+    profileCompletedAt: timestamp('profile_completed_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index('onboarding_state_organization_idx').on(table.organizationId),
+    check(
+      'onboarding_state_timezone_not_empty',
+      sql`${table.timezone} is null or btrim(${table.timezone}) <> ''`,
+    ),
+  ],
+);
+
 export const coreSchema = {
   organization,
   membership,
   betaInvitation,
   legalDocument,
   consentRecord,
+  onboardingState,
 };

@@ -57,6 +57,13 @@
       "when": 1789377594460,
       "tag": "0007_consents",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789558461892,
+      "tag": "0008_onboarding_state",
+      "breakpoints": true
     }
   ]
 }

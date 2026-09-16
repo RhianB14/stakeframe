@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   workspaceSchema,
+  onboardingStatusSchema,
   formatBRL,
   saoPauloDate,
   type Workspace,
@@ -30,6 +31,7 @@ import { ImportsPage, ImportReview, UploadForm } from './imports.js';
 import { savePendingUpload } from './upload-storage.js';
 import { CalendarPage, EventReview } from './events.js';
 import { OverviewReport } from './overview-report.js';
+import { OnboardingPage } from './onboarding.js';
 import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
 
@@ -116,6 +118,14 @@ function ProductShell({
   const [modal, setModal] = useState<Modal | null>(null);
   const actions = useFinanceActions();
   const client = useQueryClient();
+  const onboarding = useQuery({
+    queryKey: ['product', 'onboarding'],
+    queryFn: () => request('/api/v1/onboarding', onboardingStatusSchema),
+    refetchInterval: 30_000,
+  });
+  // First login lands on the first-steps flow; the server state decides, and finishing it
+  // (or having it already finished) restores the regular overview.
+  const onboardingActive = page === 'overview' && !onboarding.data?.completedAt;
   const logout = useMutation({
     mutationFn: () => authAction('sign-out'),
     onSuccess: async () => {
@@ -193,7 +203,11 @@ function ProductShell({
                   year: 'numeric',
                 }).format(new Date())}
               </p>
-              <h1>{navigation.find((item) => item.id === page)!.title}</h1>
+              <h1>
+                {onboardingActive
+                  ? 'Primeiros passos'
+                  : navigation.find((item) => item.id === page)!.title}
+              </h1>
             </div>
             <span className="live-label">
               <span className="private-dot" /> Registros pessoais
@@ -212,7 +226,7 @@ function ProductShell({
                 : 'Não há unidade positiva para este mês. Confira o histórico em Configurações; apostas podem ser registradas com a pendência identificada.'}
             </div>
           ))}
-          {!workspace.initialized ? (
+          {!workspace.initialized && !onboardingActive ? (
             <div className="initial-card">
               <div>
                 <span className="product-eyebrow">PRIMEIRO PASSO</span>
@@ -224,7 +238,9 @@ function ProductShell({
               <Button onClick={() => open({ kind: 'initialize' })}>Conferir saldos iniciais</Button>
             </div>
           ) : null}
-          {page === 'overview' ? (
+          {onboardingActive ? (
+            <OnboardingPage workspace={workspace} open={open} />
+          ) : page === 'overview' ? (
             <Overview workspace={workspace} open={open} />
           ) : page === 'bets' ? (
             <BetsPage workspace={workspace} open={open} />
