@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { writeFile, rename } from 'node:fs/promises';
-import { createDatabase, createR2Storage, claimExpiredAttachmentsForBackup } from '@stakeframe/db';
+import {
+  createDatabase,
+  createR2Storage,
+  claimExpiredAttachmentsForBackup,
+  createTenantContext,
+} from '@stakeframe/db';
 import { run } from './process.mjs';
 import { permissions } from './permissions.mjs';
 import {
@@ -158,7 +163,11 @@ export async function backup(config, env, parentSignal, dependencies = {}) {
     // Share the worker's upload/deletion exclusion and claim expiry atomically
     // before snapshotting, preventing reuse of an ID whose recovery copies expire.
     await client.query('select pg_advisory_lock(782341095)');
-    await claimExpiredAttachmentsForBackup(client);
+    // STK-F1-13: retention claims span every organization; iterate them explicitly.
+    const tenant = createTenantContext(database);
+    for (const context of await tenant.listOrganizations()) {
+      await claimExpiredAttachmentsForBackup(database, context, client);
+    }
     await client.query('begin isolation level repeatable read read only');
     const snapshot = (
       await client.query(

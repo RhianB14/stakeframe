@@ -234,10 +234,15 @@ try {
     const restoredStore = createAttachmentStore(target);
     for (let index = 0; index < 2; index++)
       assert.deepEqual(
-        (await restoredStore.read(rows.find((row) => row.id === inbox[index]).attachment_id)).image,
+        (
+          await restoredStore.read(
+            target.pool,
+            rows.find((row) => row.id === inbox[index]).attachment_id,
+          )
+        ).image,
         images[index],
       );
-    await assert.rejects(restoredStore.read(expiredId));
+    await assert.rejects(restoredStore.read(target.pool, expiredId));
     assert.equal(
       (
         await target.pool.query(
