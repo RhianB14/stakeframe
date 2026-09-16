@@ -32,23 +32,24 @@ O modelo é fixado em `google/gemini-3.8-flash`, com schema estrito, 2.048 token
 raciocínio `low`, prazo de 60 segundos e fallback desativado. A saída é validada
 novamente pelo Zod. Valores monetários permanecem strings; datas visíveis são
 preservadas como texto, sem inferir ano/fuso. Toda extração vai para revisão;
-O contrato interno de OCR é provider-neutral. O adaptador **Azure Vision**
-está implementado (`apps/worker/src/azure-vision.ts`) e permanece **desativado
-por padrão**: a leitura de configuração só ocorre com `AZURE_VISION_ENABLED=true`
-e exige `AZURE_VISION_ENDPOINT` (HTTPS absoluto do recurso) e
-`AZURE_VISION_API_KEY_FILE` (arquivo privado com a chave; nunca em variável,
-log ou repositório); `AZURE_VISION_TIMEOUT_MS` limita a espera. Configuração
-incompleta, relativa ou inválida falha sanitizada antes de qualquer rede.
-Quando ativado, o adaptador normaliza texto, páginas, linhas, coordenadas e
-confiança para o contrato antes da chamada multimodal e **falha fechado**: uma
-falha do OCR interrompe o item ANTES da chamada paga — sem fallback silencioso
-para uma extração sem OCR. A qualidade permanece nula quando o provedor não a
-fornece. A imagem
-original continuará sendo a fonte de verdade; OCR será apenas contexto
-auxiliar. Credenciais, texto OCR e resultados não entram em logs, Git, PR ou
-Kanban. Sem um provedor OCR configurado, a extração usa somente a visão do
-modelo já existente; não há credencial Google nem fallback silencioso para um
-OCR não validado.
+O contrato interno de OCR é provider-neutral. Os adaptadores **Azure Vision**
+(`apps/worker/src/azure-vision.ts`) e **Google Cloud Vision**
+(`apps/worker/src/google-vision.ts`) permanecem **desativados por padrão**.
+O Azure é o primário e o Google é o fallback para falhas recuperáveis; o modo
+explícito `OCR_MODE=consensus` chama os dois e recusa divergência. Não existe
+fallback silencioso para uma extração sem OCR.
+
+O Azure exige `AZURE_VISION_ENDPOINT` (HTTPS absoluto do recurso) e
+`AZURE_VISION_API_KEY_FILE`; o Google exige `GOOGLE_VISION_API_KEY_FILE` e usa
+`https://vision.googleapis.com`. Ambos leem chaves somente de arquivos
+absolutos, rejeitam configuração incompleta antes da rede e limitam a espera
+por `*_TIMEOUT_MS`. Os adaptadores normalizam texto, páginas, linhas,
+coordenadas e confiança para `apps/worker/src/ocr.ts`. A imagem original
+continua sendo a fonte de verdade; OCR é contexto auxiliar. Credenciais, texto
+OCR e resultados não entram em logs, Git, PR ou Kanban.
+
+O overlay opcional `compose.ocr.yml` habilita os dois provedores com Azure
+primário e Google fallback. Sem overlay, nenhuma chamada OCR é feita.
 
 O modelo multimodal recebe a imagem original preparada para visão e o OCR como
 contexto auxiliar. A imagem continua sendo a fonte de verdade: OCR não pode
