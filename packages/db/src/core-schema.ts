@@ -169,6 +169,8 @@ export const onboardingState = core.table(
       .references(() => organization.id, { onDelete: 'cascade' }),
     timezone: text('timezone'),
     profileCompletedAt: timestamp('profile_completed_at', { withTimezone: true }),
+    /** The user's explicit choice to conclude without a bet ("connect Telegram later"). */
+    firstBetDeferredAt: timestamp('first_bet_deferred_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

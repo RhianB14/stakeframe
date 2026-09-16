@@ -2658,8 +2658,15 @@
               },
               "firstBet": {
                 "type": "object",
-                "properties": { "completed": { "type": "boolean" } },
-                "required": ["completed"]
+                "properties": {
+                  "completed": { "type": "boolean" },
+                  "resolution": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": ["registered", "deferred"]
+                  }
+                },
+                "required": ["completed", "resolution"]
               }
             },
             "required": ["profile", "bankroll", "firstBet"]
@@ -2685,8 +2692,11 @@
       },
       "OnboardingFinishInput": {
         "type": "object",
-        "properties": { "step": { "type": "string", "enum": ["finish"] } },
-        "required": ["step"],
+        "properties": {
+          "step": { "type": "string", "enum": ["finish"] },
+          "firstBet": { "type": "string", "enum": ["registered", "deferred"] }
+        },
+        "required": ["step", "firstBet"],
         "additionalProperties": false
       },
       "OnboardingUpdateInput": {
@@ -2730,6 +2740,7 @@
                   "EMAIL_NOT_VERIFIED",
                   "CONSENT_REQUIRED",
                   "CONSENT_INVALID",
+                  "ONBOARDING_PREREQUISITE",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -5705,8 +5716,15 @@
               },
               "firstBet": {
                 "type": "object",
-                "properties": { "completed": { "type": "boolean" } },
-                "required": ["completed"],
+                "properties": {
+                  "completed": { "type": "boolean" },
+                  "resolution": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": ["registered", "deferred"]
+                  }
+                },
+                "required": ["completed", "resolution"],
                 "additionalProperties": false
               }
             },
@@ -5735,8 +5753,11 @@
       },
       "OnboardingFinish": {
         "type": "object",
-        "properties": { "step": { "type": "string", "enum": ["finish"] } },
-        "required": ["step"],
+        "properties": {
+          "step": { "type": "string", "enum": ["finish"] },
+          "firstBet": { "type": "string", "enum": ["registered", "deferred"] }
+        },
+        "required": ["step", "firstBet"],
         "additionalProperties": false
       },
       "OnboardingUpdate": {
@@ -5781,6 +5802,7 @@
                   "EMAIL_NOT_VERIFIED",
                   "CONSENT_REQUIRED",
                   "CONSENT_INVALID",
+                  "ONBOARDING_PREREQUISITE",
                   "STATE_CONFLICT",
                   "VERSION_CONFLICT",
                   "IDEMPOTENCY_CONFLICT",
@@ -7651,6 +7673,12 @@
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
             }
           },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
           "500": {
             "description": "Default Response",
             "content": {
@@ -7675,7 +7703,7 @@
         "operationId": "updateOnboarding",
         "summary": "Atualizar o progresso dos primeiros passos",
         "tags": ["Onboarding"],
-        "description": "Atualizações idempotentes do próprio usuário: `profile` grava o nome exibido e um fuso horário IANA válido; `finish` conclui explicitamente os primeiros passos. O fuso é validado no servidor, o nome exibido atualiza a identidade do usuário e repetir a operação não duplica estado. Exige Origin da aplicação, sessão válida e consentimento vigente.",
+        "description": "Atualizações idempotentes do próprio usuário: `profile` grava o nome exibido e um fuso horário IANA válido; `finish` conclui explicitamente os primeiros passos e exige, no servidor, perfil concluído, banca inicial configurada para a organização e a decisão explícita da primeira aposta (`registered`, verificado contra apostas registradas, ou `deferred`, a escolha de continuar sem aposta). O fuso é validado no servidor, o nome exibido atualiza a identidade do usuário e repetir a operação não duplica estado. Exige Origin da aplicação, sessão válida e consentimento vigente; pré-requisitos não satisfeitos respondem `409 ONBOARDING_PREREQUISITE`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -7705,6 +7733,12 @@
             }
           },
           "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

@@ -64,7 +64,7 @@ type OnboardingState = {
   steps: {
     profile: { completed: boolean; completedAt: string | null };
     bankroll: { completed: boolean };
-    firstBet: { completed: boolean };
+    firstBet: { completed: boolean; resolution: 'registered' | 'deferred' | null };
   };
   completedAt: string | null;
 };
@@ -75,7 +75,7 @@ function pendingOnboarding(): OnboardingState {
     steps: {
       profile: { completed: false, completedAt: null },
       bankroll: { completed: false },
-      firstBet: { completed: false },
+      firstBet: { completed: false, resolution: null },
     },
     completedAt: null,
   };
@@ -85,7 +85,7 @@ function finishedOnboarding(): OnboardingState {
   state.timezone = 'America/Sao_Paulo';
   state.steps.profile = { completed: true, completedAt: '2026-09-16T12:00:00.000Z' };
   state.steps.bankroll = { completed: true };
-  state.steps.firstBet = { completed: true };
+  state.steps.firstBet = { completed: true, resolution: 'registered' };
   state.completedAt = '2026-09-16T12:30:00.000Z';
   return state;
 }
@@ -112,6 +112,7 @@ type Harness = {
   commands: unknown[];
   profilePosts: number[];
   finishPosts: number[];
+  finishChoices: ('registered' | 'deferred' | null)[];
 };
 async function enableOnboarding(
   page: Page,
@@ -130,6 +131,7 @@ async function enableOnboarding(
     commands: [],
     profilePosts: [],
     finishPosts: [],
+    finishChoices: [],
   };
   await page.route('**/api/v1/system/status', (route) => route.fulfill({ json: statusBody }));
   await page.route('**/api/v1/me', (route) => {
@@ -169,6 +171,7 @@ async function enableOnboarding(
         step?: string;
         displayName?: string;
         timezone?: string;
+        firstBet?: 'registered' | 'deferred';
       };
       if (body.step === 'profile') {
         harness.profilePosts.push(1);
@@ -178,6 +181,9 @@ async function enableOnboarding(
       }
       if (body.step === 'finish') {
         harness.finishPosts.push(1);
+        harness.finishChoices.push(body.firstBet ?? null);
+        if (!onboarding.steps.firstBet.completed && body.firstBet)
+          onboarding.steps.firstBet = { completed: true, resolution: body.firstBet };
         onboarding.completedAt = new Date().toISOString();
       }
     }
@@ -201,7 +207,8 @@ async function enableOnboarding(
       onboarding.steps.bankroll.completed = true;
       workspace.version++;
     }
-    if (body.type === 'bet.create') onboarding.steps.firstBet.completed = true;
+    if (body.type === 'bet.create')
+      onboarding.steps.firstBet = { completed: true, resolution: 'registered' };
     workspace.version++;
     return route.fulfill({ json: { id: crypto.randomUUID(), version: workspace.version } });
   });
@@ -286,6 +293,54 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
   await page.getByRole('button', { name: 'Concluir primeiros passos' }).click();
   await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
   await noHorizontalOverflow(page);
+  expect(harness.finishChoices).toEqual(['registered']);
+});
+
+test('concluding without a bet requires the explicit deferral choice', async ({ page }) => {
+  const onboarding = pendingOnboarding();
+  onboarding.timezone = 'America/Sao_Paulo';
+  onboarding.steps.profile = { completed: true, completedAt: '2026-09-16T12:00:00.000Z' };
+  onboarding.steps.bankroll = { completed: true };
+  const workspace = emptyWorkspace();
+  workspace.initialized = true;
+  const harness = await enableOnboarding(page, { onboarding, workspace });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  expect(harness.finishChoices).toEqual(['deferred']);
+  expect(harness.onboarding.steps.firstBet).toEqual({
+    completed: true,
+    resolution: 'deferred',
+  });
+});
+
+test('an onboarding lookup failure surfaces an error state with retry, never the overview', async ({
+  page,
+}) => {
+  let failing = true;
+  const harness = await enableOnboarding(page);
+  // Last match wins: while `failing`, every lookup answers a sanitized server error.
+  await page.route('**/api/v1/onboarding', (route) =>
+    failing
+      ? route.fulfill({
+          status: 500,
+          json: {
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: 'Não foi possível concluir a solicitação.',
+              requestId: '00000000-0000-4000-8000-000000000000',
+            },
+          },
+        })
+      : route.fulfill({ json: harness.onboarding }),
+  );
+  await page.goto('/');
+  await expect(page.getByRole('alert')).toContainText('Não foi possível carregar seu progresso');
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toHaveCount(0);
+  failing = false;
+  await page.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(page.getByRole('heading', { name: 'Primeiros passos', level: 2 })).toBeVisible();
 });
 
 test('an invalid time zone keeps the user on the profile step with a clear error', async ({
@@ -362,5 +417,6 @@ test('the Telegram route only explains the upcoming connector and writes nothing
   await page.getByRole('button', { name: 'Conectar Telegram' }).click();
   await expect(page.getByText(/STK-F2-04/)).toBeVisible();
   expect(harness.finishPosts).toHaveLength(0);
+  expect(harness.finishChoices).toHaveLength(0);
   expect(harness.commands).toHaveLength(0);
 });

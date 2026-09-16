@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
-import type { OnboardingService, OnboardingStatus } from '@stakeframe/db';
+import { OnboardingError, type OnboardingService, type OnboardingStatus } from '@stakeframe/db';
 import { apiErrorSchema, onboardingStatusSchema, onboardingUpdateSchema } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { ownerSessionSecurity } from './openapi.js';
@@ -40,6 +40,7 @@ export function registerOnboardingRoutes(
     400: apiErrorSchema,
     401: apiErrorSchema,
     403: apiErrorSchema,
+    409: apiErrorSchema,
     500: apiErrorSchema,
     503: apiErrorSchema,
     default: apiErrorSchema,
@@ -90,7 +91,7 @@ export function registerOnboardingRoutes(
         summary: 'Atualizar o progresso dos primeiros passos',
         security: ownerSessionSecurity,
         description:
-          'Atualizações idempotentes do próprio usuário: `profile` grava o nome exibido e um fuso horário IANA válido; `finish` conclui explicitamente os primeiros passos. O fuso é validado no servidor, o nome exibido atualiza a identidade do usuário e repetir a operação não duplica estado. Exige Origin da aplicação, sessão válida e consentimento vigente.',
+          'Atualizações idempotentes do próprio usuário: `profile` grava o nome exibido e um fuso horário IANA válido; `finish` conclui explicitamente os primeiros passos e exige, no servidor, perfil concluído, banca inicial configurada para a organização e a decisão explícita da primeira aposta (`registered`, verificado contra apostas registradas, ou `deferred`, a escolha de continuar sem aposta). O fuso é validado no servidor, o nome exibido atualiza a identidade do usuário e repetir a operação não duplica estado. Exige Origin da aplicação, sessão válida e consentimento vigente; pré-requisitos não satisfeitos respondem `409 ONBOARDING_PREREQUISITE`.',
         body: onboardingUpdateSchema,
         response: { 200: onboardingStatusSchema, ...errors },
       },
@@ -99,14 +100,19 @@ export function registerOnboardingRoutes(
       if (service === undefined) return;
       const update = onboardingUpdateSchema.parse(request.body);
       const userId = identities.get(request)!;
-      const status =
-        update.step === 'profile'
-          ? await service.updateProfile(userId, {
-              displayName: update.displayName,
-              timezone: update.timezone,
-            })
-          : await service.finish(userId);
-      return reply.send(onboardingStatusSchema.parse(serialize(status)));
+      try {
+        const status =
+          update.step === 'profile'
+            ? await service.updateProfile(userId, {
+                displayName: update.displayName,
+                timezone: update.timezone,
+              })
+            : await service.finish(userId, update.firstBet);
+        return reply.send(onboardingStatusSchema.parse(serialize(status)));
+      } catch (error) {
+        if (error instanceof OnboardingError) return sendApiError(request, reply, 409, error.code);
+        throw error;
+      }
     },
   );
 }

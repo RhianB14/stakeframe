@@ -4,11 +4,13 @@ import {
   createBetaInvitation,
   createDatabase,
   createFinanceService,
-  createOnboardingService,
   requireDatabaseUrl,
   type Database,
   type FinanceService,
 } from '../../packages/db/src/index.js';
+// A rota resolve `@stakeframe/db` para o dist do pacote: o serviço do teste precisa vir do
+// MESMO arquivo, senão o `instanceof OnboardingError` falha entre cópias (src × dist).
+import { createOnboardingService } from '../../packages/db/dist/index.js';
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import { BETA_INVITE_COOKIE, createOwnerAuth } from '../../apps/api/src/auth.js';
 import { createEmailService } from '../../apps/api/src/email-service.js';
@@ -151,13 +153,13 @@ async function updateProfile(cookie: string, payload: { displayName: string; tim
     payload: { step: 'profile', ...payload },
   });
 }
-async function finishOnboarding(cookie: string) {
+async function finishOnboarding(cookie: string, firstBet: 'registered' | 'deferred' = 'deferred') {
   return app.inject({
     method: 'POST',
     url: '/api/v1/onboarding',
     remoteAddress: nextIp(),
     headers: { cookie, origin: config.origin },
-    payload: { step: 'finish' },
+    payload: { step: 'finish', firstBet },
   });
 }
 const selection: SelectionInput = {
@@ -299,7 +301,7 @@ describe('onboarding with PostgreSQL', () => {
   });
 
   it('keeps profile and completion idempotent under repetition and concurrency', async () => {
-    const { cookie } = await onboardingSession('repeat@example.test');
+    const { cookie, userId } = await onboardingSession('repeat@example.test');
     const [first, second] = await Promise.all([
       updateProfile(cookie, { displayName: 'Repetida', timezone: 'America/Sao_Paulo' }),
       updateProfile(cookie, { displayName: 'Repetida', timezone: 'America/Sao_Paulo' }),
@@ -322,12 +324,17 @@ describe('onboarding with PostgreSQL', () => {
     const stable = await readStatus(cookie);
     expect(stable.steps.profile.completedAt).toBe(firstCompletedAt);
 
-    const [doneA, doneB] = await Promise.all([finishOnboarding(cookie), finishOnboarding(cookie)]);
+    // The explicit conclusion requires the configured bankroll and the first-bet decision.
+    await initializeBankroll(userId);
+    const [doneA, doneB] = await Promise.all([
+      finishOnboarding(cookie, 'deferred'),
+      finishOnboarding(cookie, 'deferred'),
+    ]);
     expect(doneA.statusCode).toBe(200);
     expect(doneB.statusCode).toBe(200);
     const finished = await readStatus(cookie);
     expect(finished.completedAt).not.toBeNull();
-    const repeated = await finishOnboarding(cookie);
+    const repeated = await finishOnboarding(cookie, 'deferred');
     expect(onboardingStatusSchema.parse(repeated.json()).completedAt).toBe(finished.completedAt);
   });
 
@@ -422,6 +429,7 @@ describe('onboarding with PostgreSQL', () => {
 
   it('marks the first-bet step from registered bets and finishes explicitly', async () => {
     const { cookie, userId } = await onboardingSession('first-bet@example.test');
+    await updateProfile(cookie, { displayName: 'Primeira aposta', timezone: 'America/Sao_Paulo' });
     const bookmakerId = await initializeBankroll(userId);
     expect((await readStatus(cookie)).steps.firstBet.completed).toBe(false);
 
@@ -438,13 +446,122 @@ describe('onboarding with PostgreSQL', () => {
       allowMissingUnit: false,
     });
     const withBet = await readStatus(cookie);
-    expect(withBet.steps.firstBet.completed).toBe(true);
+    expect(withBet.steps.firstBet).toEqual({ completed: true, resolution: 'registered' });
 
-    const finished = await finishOnboarding(cookie);
+    const finished = await finishOnboarding(cookie, 'registered');
     expect(finished.statusCode).toBe(200);
     const status = onboardingStatusSchema.parse(finished.json());
     expect(status.completedAt).not.toBeNull();
     expect((await readStatus(cookie)).completedAt).toBe(status.completedAt);
+  });
+
+  it('gates the explicit conclusion on the server: profile, bankroll and the first-bet decision', async () => {
+    const { cookie, userId } = await onboardingSession('prerequisite@example.test');
+
+    // Before the profile: refused and nothing recorded.
+    const beforeProfile = await finishOnboarding(cookie, 'deferred');
+    expect(beforeProfile.statusCode).toBe(409);
+    expect(apiCode(beforeProfile)).toBe('ONBOARDING_PREREQUISITE');
+    const rows = await database.pool.query<{ count: string }>(
+      'SELECT count(*) FROM core.onboarding_state',
+    );
+    expect(Number(rows.rows[0]?.count)).toBe(0);
+
+    // Profile complete but no bankroll for the anchored organization: still refused.
+    await updateProfile(cookie, { displayName: 'Prerequisito', timezone: 'America/Sao_Paulo' });
+    const beforeBankroll = await finishOnboarding(cookie, 'deferred');
+    expect(beforeBankroll.statusCode).toBe(409);
+    expect(apiCode(beforeBankroll)).toBe('ONBOARDING_PREREQUISITE');
+
+    // Bankroll configured: the payload field is required, and "registered" without a bet is refused.
+    await initializeBankroll(userId);
+    const withoutChoice = await app.inject({
+      method: 'POST',
+      url: '/api/v1/onboarding',
+      remoteAddress: nextIp(),
+      headers: { cookie, origin: config.origin },
+      payload: { step: 'finish' },
+    });
+    expect(withoutChoice.statusCode).toBe(400);
+    expect(apiCode(withoutChoice)).toBe('INVALID_REQUEST');
+    const claimedWithoutBet = await finishOnboarding(cookie, 'registered');
+    expect(claimedWithoutBet.statusCode).toBe(409);
+    expect(apiCode(claimedWithoutBet)).toBe('ONBOARDING_PREREQUISITE');
+
+    // The explicit deferral is the valid path and is recorded as the step's resolution.
+    const finished = await finishOnboarding(cookie, 'deferred');
+    expect(finished.statusCode).toBe(200);
+    const status = onboardingStatusSchema.parse(finished.json());
+    expect(status.completedAt).not.toBeNull();
+    expect(status.steps.firstBet).toEqual({ completed: true, resolution: 'deferred' });
+    expect((await readStatus(cookie)).steps.firstBet.resolution).toBe('deferred');
+  });
+
+  it('never exposes the anchored financial state to another organization', async () => {
+    // The anchored organization configures the single-tenant financial core…
+    const anchored = await onboardingSession('anchor@example.test');
+    await updateProfile(anchored.cookie, {
+      displayName: 'Âncora',
+      timezone: 'America/Sao_Paulo',
+    });
+    const bookmakerId = await initializeBankroll(anchored.userId);
+    await command(anchored.userId, {
+      type: 'bet.create',
+      bookmakerId,
+      tipsterId: null,
+      stake: '100.00',
+      odds: '1.85',
+      placedAt: new Date().toISOString(),
+      freebetId: null,
+      reference: '',
+      selections: [selection],
+      allowMissingUnit: false,
+    });
+    const anchoredStatus = await readStatus(anchored.cookie);
+    expect(anchoredStatus.steps.bankroll.completed).toBe(true);
+    expect(anchoredStatus.steps.firstBet.resolution).toBe('registered');
+    const anchoredFinished = await finishOnboarding(anchored.cookie, 'registered');
+    expect(anchoredFinished.statusCode).toBe(200);
+
+    // …and a different organization never sees those flags: its own bankroll does not exist
+    // yet (the multi-tenant financial core is STK-F1-13) and its conclusion is refused.
+    const other = await onboardingSession('other@example.test');
+    await updateProfile(other.cookie, { displayName: 'Outra', timezone: 'America/Sao_Paulo' });
+    const otherStatus = await readStatus(other.cookie);
+    expect(otherStatus.steps.profile.completed).toBe(true);
+    expect(otherStatus.steps.bankroll.completed).toBe(false);
+    expect(otherStatus.steps.firstBet).toEqual({ completed: false, resolution: null });
+
+    // The refused attempt writes nothing financial: journals (the bankroll opening + the
+    // anchored first bet) and bets are unchanged by the 409.
+    const journeyCount = async () =>
+      Number(
+        (await database.pool.query<{ count: string }>('SELECT count(*) FROM finance.journal'))
+          .rows[0]?.count,
+      );
+    const betCount = async () =>
+      Number(
+        (await database.pool.query<{ count: string }>('SELECT count(*) FROM finance.bet')).rows[0]
+          ?.count,
+      );
+    const journalsBefore = await journeyCount();
+    const betsBefore = await betCount();
+    const refused = await finishOnboarding(other.cookie, 'deferred');
+    expect(refused.statusCode).toBe(409);
+    expect(apiCode(refused)).toBe('ONBOARDING_PREREQUISITE');
+    expect(await journeyCount()).toBe(journalsBefore);
+    expect(await betCount()).toBe(betsBefore);
+    expect(journalsBefore).toBe(2);
+    expect(betsBefore).toBe(1);
+    const anchoredAfter = await readStatus(anchored.cookie);
+    expect(anchoredAfter.completedAt).toBe(
+      onboardingStatusSchema.parse(anchoredFinished.json()).completedAt,
+    );
+    const otherRows = await database.pool.query<{ count: string }>(
+      'SELECT count(*) FROM core.onboarding_state WHERE user_id = $1',
+      [other.userId],
+    );
+    expect(Number(otherRows.rows[0]?.count)).toBe(1);
   });
 
   it('refuses unauthenticated reads and cross-origin writes', async () => {
@@ -461,7 +578,7 @@ describe('onboarding with PostgreSQL', () => {
       url: '/api/v1/onboarding',
       remoteAddress: nextIp(),
       headers: { cookie, origin: 'https://outra-origem.example' },
-      payload: { step: 'finish' },
+      payload: { step: 'finish', firstBet: 'deferred' },
     });
     expect(crossOrigin.statusCode).toBe(403);
     expect(apiCode(crossOrigin)).toBe('ORIGIN_NOT_ALLOWED');

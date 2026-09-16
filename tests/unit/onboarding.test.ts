@@ -51,14 +51,21 @@ describe('onboarding contract', () => {
       { step: 'profile', displayName: 'Ana', timezone: 'nope/nope' },
       { step: 'profile', displayName: '', timezone: 'UTC' },
       { step: 'profile', displayName: 'Ana', timezone: 'UTC', admin: true },
-      { step: 'finish', extra: 1 },
+      { step: 'finish' },
+      { step: 'finish', firstBet: 'skip' },
+      { step: 'finish', firstBet: 'registered', extra: 1 },
       { step: 'bankroll' },
       {},
     ])
       expect(onboardingUpdateSchema.safeParse(invalid).success, JSON.stringify(invalid)).toBe(
         false,
       );
-    expect(onboardingUpdateSchema.safeParse({ step: 'finish' }).success).toBe(true);
+    expect(onboardingUpdateSchema.safeParse({ step: 'finish', firstBet: 'deferred' }).success).toBe(
+      true,
+    );
+    expect(
+      onboardingUpdateSchema.safeParse({ step: 'finish', firstBet: 'registered' }).success,
+    ).toBe(true);
   });
 
   it('validates the status read model and serializes it without private extras', () => {
@@ -68,7 +75,7 @@ describe('onboarding contract', () => {
       steps: {
         profile: { completed: false, completedAt: null },
         bankroll: { completed: false },
-        firstBet: { completed: false },
+        firstBet: { completed: false, resolution: null },
       },
       completedAt: null,
     };
@@ -79,11 +86,23 @@ describe('onboarding contract', () => {
       steps: {
         profile: { completed: true, completedAt: '2026-09-16T12:00:00.000Z' },
         bankroll: { completed: true },
-        firstBet: { completed: true },
+        firstBet: { completed: true, resolution: 'registered' },
       },
       completedAt: '2026-09-16T12:30:00.000Z',
     };
     expect(onboardingStatusSchema.safeParse(done).success).toBe(true);
+    expect(
+      onboardingStatusSchema.safeParse({
+        ...done,
+        steps: { ...done.steps, firstBet: { completed: true, resolution: 'deferred' } },
+      }).success,
+    ).toBe(true);
+    expect(
+      onboardingStatusSchema.safeParse({
+        ...done,
+        steps: { ...done.steps, firstBet: { completed: true } },
+      }).success,
+    ).toBe(false);
     expect(onboardingStatusSchema.safeParse({ ...pending, displayName: 1 }).success).toBe(false);
     expect(onboardingStatusSchema.safeParse({ ...pending, steps: {} }).success).toBe(false);
   });

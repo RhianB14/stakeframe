@@ -285,14 +285,15 @@ function FirstBetStep({ status, open }: { status: OnboardingStatus; open: OpenMo
   const [showTelegram, setShowTelegram] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function finish() {
+  const resolution = status.steps.firstBet.resolution;
+  async function finish(firstBet: 'registered' | 'deferred') {
     setSaving(true);
     setError(null);
     try {
       await request('/api/v1/onboarding', onboardingStatusSchema, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ step: 'finish' }),
+        body: JSON.stringify({ step: 'finish', firstBet }),
       });
       await client.invalidateQueries({ queryKey: ['product'] });
     } catch (reason) {
@@ -304,14 +305,19 @@ function FirstBetStep({ status, open }: { status: OnboardingStatus; open: OpenMo
   return (
     <section aria-labelledby="onboarding-first-bet-title" className="onboarding-section">
       <h3 id="onboarding-first-bet-title">Sua primeira aposta</h3>
-      {status.steps.firstBet.completed ? (
+      {resolution === 'registered' ? (
         <p className="notice" role="status">
           Primeira aposta registrada — você já pode acompanhá-la em Apostas.
         </p>
+      ) : resolution === 'deferred' ? (
+        <p className="notice" role="status">
+          Você escolheu continuar sem registrar agora. Conecte o Telegram quando quiser — nada se
+          perde.
+        </p>
       ) : (
         <p className="form-intro">
-          Registre uma aposta manualmente agora ou prepare a conexão com o Telegram. Os dois
-          caminhos levam ao mesmo acompanhamento, sem prender você a nenhum deles.
+          Registre uma aposta manualmente agora ou prepare a conexão com o Telegram. Se preferir,
+          você pode seguir sem registrar uma aposta agora — a escolha fica registrada.
         </p>
       )}
       <div className="onboarding-actions">
@@ -333,8 +339,16 @@ function FirstBetStep({ status, open }: { status: OnboardingStatus; open: OpenMo
         </p>
       ) : null}
       <div className="form-actions">
-        <Button variant="ghost" onClick={() => void finish()} disabled={saving}>
-          {saving ? 'Concluindo…' : 'Concluir primeiros passos'}
+        <Button
+          variant="ghost"
+          onClick={() => void finish(resolution ?? 'deferred')}
+          disabled={saving}
+        >
+          {saving
+            ? 'Concluindo…'
+            : resolution
+              ? 'Concluir primeiros passos'
+              : 'Continuar sem registrar aposta'}
         </Button>
       </div>
     </section>

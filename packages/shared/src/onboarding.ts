@@ -39,8 +39,9 @@ export type OnboardingStepId = z.infer<typeof onboardingStepIdSchema>;
 
 /**
  * Progress read model. `profile` and the overall completion are the persisted state; `bankroll`
- * and `firstBet` are derived from the financial core (single source of truth) — this contract
- * never duplicates balances, bets or anything private beyond the user's own display name.
+ * and `firstBet` come from the financial core (single source of truth). `firstBet.resolution`
+ * records which explicit path resolved the step — a registered bet or the user's explicit
+ * choice to continue without one — and is null while the step is pending.
  */
 export const onboardingStatusSchema = z
   .object({
@@ -52,7 +53,10 @@ export const onboardingStatusSchema = z
         completedAt: z.iso.datetime().nullable(),
       }),
       bankroll: z.object({ completed: z.boolean() }),
-      firstBet: z.object({ completed: z.boolean() }),
+      firstBet: z.object({
+        completed: z.boolean(),
+        resolution: z.enum(['registered', 'deferred']).nullable(),
+      }),
     }),
     completedAt: z.iso.datetime().nullable(),
   })
@@ -67,9 +71,17 @@ export const onboardingProfileUpdateSchema = z
   })
   .meta({ id: 'OnboardingProfileUpdate' });
 
-/** Explicit conclusion of the first-bet step ("register now" or "route to Telegram later"). */
+/**
+ * Explicit conclusion of the first-bet step. The payload must declare the path: `registered`
+ * requires a registered bet (checked on the server) and `deferred` records the user's explicit
+ * choice to continue without one ("connect Telegram later"). The server also requires the
+ * profile and the bankroll step before accepting either path.
+ */
 export const onboardingFinishSchema = z
-  .strictObject({ step: z.literal('finish') })
+  .strictObject({
+    step: z.literal('finish'),
+    firstBet: z.enum(['registered', 'deferred']),
+  })
   .meta({ id: 'OnboardingFinish' });
 
 export const onboardingUpdateSchema = z

@@ -143,7 +143,7 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
         steps: {
           profile: { completed: true, completedAt: '2026-09-14T12:00:00.000Z' },
           bankroll: { completed: true },
-          firstBet: { completed: true },
+          firstBet: { completed: true, resolution: 'registered' },
         },
         completedAt: '2026-09-14T12:30:00.000Z',
       },
