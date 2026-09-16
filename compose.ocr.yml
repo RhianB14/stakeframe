@@ -1,0 +1,25 @@
+# Overlay privado dos dois OCRs. Não incluir no compose padrão nem em produção
+# antes de provisionar as credenciais e autorizar a ativação separadamente.
+services:
+  worker:
+    environment:
+      AZURE_VISION_ENABLED: 'true'
+      AZURE_VISION_ENDPOINT: ${AZURE_VISION_ENDPOINT:?Azure Vision endpoint required}
+      AZURE_VISION_API_KEY_FILE: /run/secrets/azure_vision_api_key
+      AZURE_VISION_TIMEOUT_MS: '30000'
+      GOOGLE_VISION_ENABLED: 'true'
+      GOOGLE_VISION_ENDPOINT: https://vision.googleapis.com
+      GOOGLE_VISION_API_KEY_FILE: /run/secrets/google_vision_api_key
+      GOOGLE_VISION_TIMEOUT_MS: '30000'
+      OCR_PRIMARY_PROVIDER: azure
+      OCR_FALLBACK_PROVIDER: google
+      OCR_MODE: failover
+    secrets:
+      - azure_vision_api_key
+      - google_vision_api_key
+
+secrets:
+  azure_vision_api_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/azure_vision_api_key
+  google_vision_api_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/google_vision_api_key

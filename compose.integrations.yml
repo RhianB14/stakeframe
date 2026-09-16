@@ -20,6 +20,7 @@ services:
       OPENROUTER_REASONING_EFFORT: low
       OPENROUTER_TIMEOUT_MS: '60000'
       OPENROUTER_API_KEY_FILE: /run/secrets/openrouter_api_key
+      AZURE_VISION_ENABLED: 'false'
       TELEGRAM_ENABLED: 'true'
       TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
       TELEGRAM_OWNER_USER_ID_FILE: /run/secrets/telegram_owner_user_id

@@ -15,6 +15,7 @@ import { readAiConfig, extractTicket } from './openrouter.js';
 import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
 import { IntegrationError } from './http.js';
 import { readAutomaticLayouts } from './automatic-config.js';
+import { extractConfiguredOcr, readOcrProvidersConfig } from './ocr-providers.js';
 
 export const EXTRACTION_QUEUE = 'ticket-extraction';
 
@@ -95,6 +96,8 @@ export async function startIntegrations(
   requireBudget?: () => Promise<void>,
 ) {
   const ai = readAiConfig(env);
+  const ocrProviders = readOcrProvidersConfig(env);
+  if (ocrProviders && !ai) throw new IntegrationError('OCR_REQUIRES_AI');
   const layouts = readAutomaticLayouts(env);
   const automatic = createAutomaticImportService(database, layouts);
   const telegram = readTelegramConfig(env);
@@ -132,12 +135,24 @@ export async function startIntegrations(
         if (!claim) return { state: 'unchanged' };
         try {
           if (requireBudget) await requireBudget();
+          // Fail-closed: when OCR is enabled, its failure aborts the job before
+          // the multimodal request. Only the explicitly configured provider
+          // failover is allowed; there is no silent OCR-less paid call.
+          const ocr = ocrProviders
+            ? await extractConfiguredOcr({
+                config: ocrProviders,
+                image: claim.image,
+                fetchImpl,
+                signal: controller.signal,
+              })
+            : undefined;
           const result = await extractTicket({
             apiKey: ai.apiKey,
             image: claim.image,
             fetchImpl,
             signal: controller.signal,
             layouts,
+            ...(ocr ? { ocr: ocr.result } : {}),
           });
           return await automatic.complete(context, inboxId, claim.attempt, result);
         } catch (error) {
