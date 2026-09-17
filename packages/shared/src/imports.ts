@@ -72,7 +72,15 @@ export const ticketExtractionSchema = z.strictObject({
         market: text.nullable(),
         selection: text.nullable(),
         odds: decimal.nullable(),
-        eventDateText: text.nullable(),
+        // Reservado e depreciado (R3): a importação automática sempre envia
+        // null e ignora o valor. Datas/horários de evento (inclusive período
+        // ao vivo) pertencem ao enriquecimento posterior de eventos e nunca
+        // decidem importação.
+        eventDateText: text
+          .nullable()
+          .describe(
+            'Reservado e depreciado: a importação automática sempre envia null e ignora o valor; datas de evento pertencem ao enriquecimento posterior.',
+          ),
       }),
     )
     .min(1)
@@ -116,10 +124,10 @@ export const validatedLayoutSchema = z.strictObject({
   description: z.string().trim().min(20).max(1000),
   placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo', 'br-textual-sao-paulo']),
   allowFreebet: z.boolean(),
-  // Rótulos autorizados para potentialReturn — parte do digest da política por
-  // casa (ex.: Bet365: ["Retorno Total"]; Superbet: ["Prêmio", "Ganho
-  // Potencial"]). Opcional para políticas antigas; políticas novas declaram.
-  potentialReturnLabels: z.array(z.string().trim().min(1).max(60)).min(1).max(10).optional(),
+  // Rótulos autorizados para potentialReturn — parte do digest da política
+  // por casa (Bet365: ["Retorno Total"]; Superbet: ["Prêmio", "Ganho
+  // Potencial"]). Obrigatório: toda política nova/aprovada declara os rótulos.
+  potentialReturnLabels: z.array(z.string().trim().min(1).max(60)).min(1).max(10),
   layoutSha256: z.string().regex(/^[a-f0-9]{64}$/),
   coverage: z.strictObject({
     positive: z.number().int().min(20).max(10000),

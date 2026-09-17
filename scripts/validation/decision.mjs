@@ -5,12 +5,17 @@ import { isAbsolute, relative, resolve, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluateDecision } from './decision-core.mjs';
 
-// Avaliação offline ORIENTADA À DECISÃO: só lê evidência salva (corpus.json e,
-// quando existir, evaluation.json para o bloco de qualidade). Nenhuma chamada
-// de rede, nenhuma escrita financeira, nenhuma ativação de política.
-const [directoryArg, ...extra] = process.argv.slice(2);
+// Avaliação offline ORIENTADA À DECISÃO (STK-G0-19-R3): só lê evidência salva
+// (corpus.json, evaluation.json para o bloco de qualidade e, opcionalmente, o
+// contexto privado com --context). Nenhuma chamada de rede, nenhuma escrita
+// financeira, nenhuma ativação de política.
+const args = process.argv.slice(2);
+const directoryArg = args[0];
+let contextArg = null;
+if (args.length === 3 && args[1] === '--context') contextArg = args[2];
+else if (args.length !== 1) contextArg = undefined;
 try {
-  if (!isAbsolute(directoryArg ?? '') || extra.length) throw new Error();
+  if (!directoryArg || !isAbsolute(directoryArg) || contextArg === undefined) throw new Error();
   const directory = await realpath(directoryArg);
   const workspace = await realpath(fileURLToPath(new URL('../../', import.meta.url)));
   const canonical = (value) => (process.platform === 'win32' ? value.toLowerCase() : value);
@@ -49,7 +54,25 @@ try {
       eligibleForOwnerReview: evaluation.eligibleForOwnerReview,
     };
   }
-  const report = evaluateDecision(JSON.parse(bytes.toString('utf8')), { quality });
+  let context = null;
+  let contextSha256 = null;
+  if (contextArg) {
+    if (!isAbsolute(contextArg)) throw new Error();
+    const contextInfo = await lstat(contextArg);
+    const contextReal = await realpath(contextArg);
+    const contextRel = relative(workspace, contextReal);
+    if (
+      !contextInfo.isFile() ||
+      contextInfo.isSymbolicLink() ||
+      contextInfo.size > 20 * 1024 * 1024 ||
+      (!contextRel.startsWith(`..${sep}`) && !isAbsolute(contextRel))
+    )
+      throw new Error();
+    const contextBytes = await readFile(contextReal);
+    contextSha256 = createHash('sha256').update(contextBytes).digest('hex');
+    context = JSON.parse(contextBytes.toString('utf8'));
+  }
+  const report = evaluateDecision(JSON.parse(bytes.toString('utf8')), { quality, context });
   const output =
     JSON.stringify({ generatedAt: new Date().toISOString(), ...report }, null, 2) + '\n';
   await writeFile(join(directory, 'decision.json'), output, { flag: 'wx', mode: 0o600 });
@@ -58,24 +81,30 @@ try {
       layoutId: report.layoutId,
       bookmaker: report.bookmaker,
       totalCases: report.totalCases,
-      autoImportableReal: report.autoImportableReal,
-      autoImportableWithCredit: report.autoImportableWithCredit,
+      positives: report.positives,
+      negatives: report.negatives,
+      contextProvided: report.context.provided,
       wouldImport: report.actual.wouldImport,
       review: report.actual.review,
+      conservativeReview: report.conservativeReview,
+      eventEnrichmentPending: report.eventEnrichmentPending,
+      reasonCounts: report.reasonCounts,
       gates: report.gates,
       corpusSha256: createHash('sha256').update(bytes).digest('hex'),
+      contextSha256,
       decisionSha256: createHash('sha256').update(output).digest('hex'),
     }),
   );
   if (
     report.gates.unsafeAutoImport > 0 ||
-    report.gates.wrongFinancialValue > 0 ||
-    report.gates.conflictAccepted > 0
+    report.gates.wrongPersistedData > 0 ||
+    report.gates.conflictAccepted > 0 ||
+    report.gates.layoutOrPolicyBypass > 0
   )
     process.exitCode = 1;
 } catch {
   console.error(
-    'DECISION_EVALUATION_FAILED: use a private directory outside the repository with a valid corpus.json and no existing decision.json',
+    'DECISION_EVALUATION_FAILED: use a private directory outside the repository with a valid corpus.json and no existing decision.json (--context <arquivo privado> opcional)',
   );
   process.exitCode = 1;
 }

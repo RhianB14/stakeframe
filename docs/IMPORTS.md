@@ -44,6 +44,15 @@ quando contradiz esse contexto (`FREEBET_CONFLICT`) e `null` da IA não
 contradiz contexto explícito. Sem tipo na legenda, a escolha manual de origem
 real/freebet permanece. Ausência de evento/data não inventa fatos.
 
+A data/hora do evento não pertence à extração automática desta fase:
+`eventDateText` é reservado e depreciado (a importação sempre envia `null` e
+ignora o valor), nunca autoriza nem bloqueia a importação e nunca é
+convertido em data. Toda seleção criada automaticamente nasce pendente de
+enriquecimento — `eventDate` e `eventAt` nulos e `dateStatus` `pending` — e o
+enriquecimento de eventos acontece por processo posterior (docs/EVENTS.md).
+Período ao vivo, minuto da partida e placar jamais são tratados como
+data/hora do evento.
+
 Nenhuma casa vem aprovada por padrão: ainda não existe amostra privada
 representativa aprovada das três casas. Nessas condições, `automatic=false`
 e `LAYOUT_NOT_VALIDATED` mantêm a restrição verificável. Uma única amostra de

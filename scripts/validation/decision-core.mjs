@@ -1,17 +1,31 @@
 import {
   corpusEvaluationInputSchema,
+  homologationContextSchema,
   parseAutomaticPlacedAt,
   suggestedReturn,
   ticketExtractionSchema,
 } from '../../packages/shared/dist/index.js';
-import { KNOWN_BOOKMAKERS } from './corpus-core.mjs';
+import { KNOWN_BOOKMAKERS, normalizeEvent, normalizeMarket } from './corpus-core.mjs';
 
-// Avaliação offline ORIENTADA À DECISÃO (STK-G0-19-R2): simula, sem banco e
-// sem escrita financeira, a decisão real de importação por caso — o lado
-// esperado vem do ground truth (modelo perfeito) e o lado observado da
-// extração preservada. Os gates de segurança exigem zero importação
-// automática insegura e zero valor financeiro incorreto em caso autoaprovado.
-// A qualidade de transcrição continua reportada separadamente (bloco quality).
+// STK-G0-19-R3 — avaliação offline orientada à decisão, na ORDEM REAL do
+// fluxo: (1) schema, (2) layout selecionado, (3) modelo aprovado, (4)
+// política/digest (verificada no fluxo real; o corpus offline não carrega o
+// artefato completo da política), (5) OCR consistente, (6) contexto informado,
+// (7) casa e aliases, (8) tipo real/freebet, (9) placedAt, (10) financeiro,
+// (11) duplicidade, (12) dados efetivamente persistidos.
+// A data/hora do evento NÃO participa da decisão: eventDateText é
+// reservado/depreciado, nunca autoriza nem bloqueia, nunca é persistido, e
+// toda seleção automática nasce pendente de enriquecimento (eventDate e
+// eventAt nulos, dateStatus 'pending').
+// O contexto privado (por imageSha256) declara apenas o que o proprietário
+// informou: casa, tipo, placedAt quando a imagem não traz data legível e o
+// estado do crédito freebet. Nunca é derivado de nome de arquivo, timestamp,
+// saída da IA, data do evento ou período/minuto ao vivo.
+
+const AUTO = 'AUTO_IMPORT_EXPECTED';
+const MANUAL = 'MANUAL_REVIEW_EXPECTED';
+const WOULD = 'WOULD_IMPORT';
+const REVIEW = 'MANUAL_REVIEW';
 
 const normalized = (value) =>
   value
@@ -29,57 +43,112 @@ const decimalEq = (left, right) => {
   return fix(left) === fix(right);
 };
 
-const AUTO = 'AUTO_IMPORT_EXPECTED';
-const AUTO_CREDIT = 'AUTO_IMPORT_EXPECTED_WITH_CREDIT';
-const MANUAL = 'MANUAL_REVIEW_EXPECTED';
-const WOULD = 'WOULD_IMPORT';
-const REVIEW = 'MANUAL_REVIEW';
+const instant = (value) => {
+  if (!value) return null;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? new Date(time).toISOString() : null;
+};
 
-function expectedSide(item, layout, kind) {
+const saoPauloDay = (iso) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso));
+
+// Lado esperado: o que um modelo PERFEITO (ground truth + contexto) poderia
+// decidir com o fluxo real. Negativas cross-house nunca são autoimportáveis
+// por esta casa.
+function expectedSide(item, layout, contextCase) {
   const issues = [];
-  if (item.expectedLayoutId === null) {
-    // Caso cross-house: um bilhete de outra casa NUNCA pode ser autoimportado
-    // pelo fluxo desta casa.
-    issues.push('negative');
-    return { expectedClass: MANUAL, expectedIssues: issues };
+  const parsed = ticketExtractionSchema.safeParse(item.expected);
+  if (!parsed.success) issues.push('schema');
+  if (item.expectedLayoutId === null) issues.push('negative');
+  else if (item.expectedLayoutId !== layout.id) issues.push('layout');
+  if (!contextCase) issues.push('context_missing');
+  else if (contextCase.bookmaker !== layout.bookmaker) issues.push('context_bookmaker');
+  const kind = contextCase?.kind ?? null;
+  if (!kind) issues.push('kind_missing');
+  const expected = parsed.success ? parsed.data : null;
+  if (expected) {
+    if (expected.warnings.length) issues.push('warnings');
+    if (expected.currency !== 'BRL') issues.push('currency');
+    if (!expected.stake) issues.push('stake');
+    if (!expected.odds) issues.push('odds');
+    if (expected.bookmaker !== null && normalized(expected.bookmaker) !== layout.bookmaker)
+      issues.push('bookmaker');
+    if (kind === 'real' && expected.freebet === true) issues.push('freebet_conflict');
+    if (kind === 'freebet' && expected.freebet === false) issues.push('freebet_conflict');
+    const visual =
+      expected.placedAtText === null
+        ? null
+        : parseAutomaticPlacedAt(expected.placedAtText, layout.placedAtFormat);
+    if (expected.placedAtText !== null && visual === null) issues.push('placedAt_unparseable');
+    const contextual = instant(contextCase?.placedAt ?? null);
+    if (contextCase?.placedAt != null && contextual === null) issues.push('placedAt_unparseable');
+    if (visual !== null && contextual !== null && visual !== contextual)
+      issues.push('placedAt_divergent');
+    if (visual === null && contextual === null) issues.push('placedAt_missing');
   }
-  const expected = item.expected;
-  if (expected.warnings.length) issues.push('warnings');
-  if (expected.currency !== 'BRL') issues.push('currency');
-  if (!expected.stake) issues.push('stake');
-  if (!expected.odds) issues.push('odds');
-  if (expected.placedAtText === null) issues.push('placedAt_missing');
-  else if (parseAutomaticPlacedAt(expected.placedAtText, layout.placedAtFormat) === null)
-    issues.push('placedAt_unparseable');
-  if (expected.bookmaker !== null && normalized(expected.bookmaker) !== layout.bookmaker)
-    issues.push('bookmaker');
-  if (kind === 'real' && expected.freebet === true) issues.push('freebet_conflict');
-  if (kind === 'freebet' && expected.freebet === false) issues.push('freebet_conflict');
-  if (issues.length) return { expectedClass: MANUAL, expectedIssues: issues };
-  return { expectedClass: kind === 'freebet' ? AUTO_CREDIT : AUTO, expectedIssues: [] };
+  if (kind === 'freebet' && (contextCase?.freebetCredit ?? 'uncontrolled') !== 'controlled')
+    issues.push('credit');
+  return { feasible: issues.length === 0, issues, kind };
 }
 
-function actualSide(item, layout, kind) {
+// Lado observado: a decisão que o fluxo real tomaria sobre a extração
+// preservada. Qualquer bloqueio resulta em revisão; WOULD_IMPORT só quando
+// todos os passos passam.
+function actualSide(item, layout, contextCase, duplicateImage) {
   const parsed = ticketExtractionSchema.safeParse(item.actual.extraction);
-  if (!parsed.success) return { actualClass: REVIEW, actualIssues: ['EXTRACTION_UNCERTAIN'] };
+  if (!parsed.success) return { issues: ['EXTRACTION_UNCERTAIN'], placedAt: null, kind: null };
   const value = parsed.data;
   const issues = [];
-  // O fluxo real recusa qualquer caso com OCR inconsistente (EXTRACTION_UNCERTAIN).
-  if (item.actual.ocrConsistent === false) issues.push('EXTRACTION_UNCERTAIN');
-  if (value.warnings.length) issues.push('EXTRACTION_UNCERTAIN');
-  if (value.currency !== 'BRL') issues.push('EXTRACTION_UNCERTAIN');
-  if (!value.stake || !value.odds) issues.push('EXTRACTION_UNCERTAIN');
-  if (value.bookmaker !== null) {
-    const visual = normalized(value.bookmaker);
-    // Casa informada é a fonte de verdade: marca ausente é aceitável; outra
-    // casa conhecida ou texto não resolvido bloqueiam (fail-closed).
-    if (visual !== layout.bookmaker) issues.push('BOOKMAKER_CONFLICT');
+  const negative = item.expectedLayoutId === null;
+  // (2) layout selecionado
+  if (negative) {
+    issues.push(item.actual.layoutId === null ? 'CROSS_HOUSE_REVIEW' : 'LAYOUT_CONFLICT');
+    // Rejeição cross-house é a própria decisão esperada: o conteúdo pertence
+    // ao corpus da outra casa e não é avaliado contra este contexto.
+    return { issues, placedAt: null, kind: null };
   }
-  if (value.placedAtText === null) issues.push('PLACED_AT_UNCERTAIN');
-  else if (parseAutomaticPlacedAt(value.placedAtText, layout.placedAtFormat) === null)
-    issues.push('PLACED_AT_UNCERTAIN');
+  if (item.actual.layoutId === null) issues.push('LAYOUT_UNRECOGNIZED');
+  else if (item.actual.layoutId !== layout.id) issues.push('LAYOUT_CONFLICT');
+  // (3) modelo aprovado — fallback sem homologação própria cai aqui
+  if (item.actual.model !== layout.model) issues.push('MODEL_UNAPPROVED');
+  // (5) OCR consistente
+  if (item.actual.ocrConsistent === false) issues.push('EXTRACTION_UNCERTAIN');
+  // (6) contexto informado
+  if (!contextCase) issues.push('CONTEXT_MISSING');
+  const kind = contextCase?.kind ?? null;
+  // (7) casa e aliases: a casa do contexto é a fonte da verdade; leitura
+  // visual de OUTRA casa ou texto não resolvido bloqueiam (fail-closed).
+  if (
+    contextCase &&
+    value.bookmaker !== null &&
+    normalized(value.bookmaker) !== contextCase.bookmaker
+  )
+    issues.push('BOOKMAKER_CONFLICT');
+  // (8) tipo real/freebet
+  if (contextCase && kind === null) issues.push('CAPTION_UNRESOLVED');
   if (kind === 'real' && value.freebet === true) issues.push('FREEBET_CONFLICT');
   if (kind === 'freebet' && value.freebet === false) issues.push('FREEBET_CONFLICT');
+  // (9) placedAt — imagem e contexto (4ª linha) precisam convergir; o horário
+  // de upload/Telegram nunca participa.
+  const visual =
+    value.placedAtText === null
+      ? null
+      : parseAutomaticPlacedAt(value.placedAtText, layout.placedAtFormat);
+  if (value.placedAtText !== null && visual === null) issues.push('PLACED_AT_UNCERTAIN');
+  const contextual = instant(contextCase?.placedAt ?? null);
+  if (contextCase?.placedAt != null && contextual === null) issues.push('PLACED_AT_UNCERTAIN');
+  if (visual !== null && contextual !== null && visual !== contextual)
+    issues.push('PLACED_AT_UNCERTAIN');
+  const placedAt = visual ?? contextual;
+  if (!placedAt) issues.push('PLACED_AT_UNCERTAIN');
+  // (10) financeiro
+  if (value.warnings.length || value.currency !== 'BRL' || !value.stake || !value.odds)
+    issues.push('EXTRACTION_UNCERTAIN');
   if (value.potentialReturn !== null) {
     try {
       const suggested = suggestedReturn(value.stake, value.odds, 'win', kind === 'freebet', false);
@@ -88,29 +157,52 @@ function actualSide(item, layout, kind) {
       issues.push('RETURN_MISMATCH');
     }
   }
-  if (!issues.length && kind === 'freebet') issues.push('REVIEW_CREDIT_OFFLINE');
-  return { actualClass: issues.length ? REVIEW : WOULD, actualIssues: issues };
+  // (11) duplicidade por imagem repetida dentro da própria evidência; a tupla
+  // (casa + stake + odds + data em São Paulo) é conferida no passe seguinte.
+  if (duplicateImage) issues.push('DUPLICATE_REVIEW_REQUIRED');
+  // Freebet sem crédito único controlado permanece em revisão: o crédito só
+  // existe no fluxo real; offline ele é declarado no contexto privado.
+  if (!issues.length && kind === 'freebet' && contextCase?.freebetCredit !== 'controlled')
+    issues.push('FREEBET_UNRESOLVED');
+  return { issues, placedAt, kind };
 }
 
-function valueMatchesExpected(item, layout, kind) {
-  const parsed = ticketExtractionSchema.safeParse(item.actual.extraction);
-  const expected = item.expected;
-  if (!parsed.success) return false;
-  const value = parsed.data;
-  if (!decimalEq(value.stake ?? '0', expected.stake ?? '0')) return false;
-  if (!decimalEq(value.odds ?? '0', expected.odds ?? '0')) return false;
-  if ((value.currency ?? null) !== (expected.currency ?? null)) return false;
-  if (kind === 'freebet' && value.freebet !== expected.freebet) return false;
-  return true;
+// (12) dados efetivamente persistidos nesta fase: bookmaker (do contexto),
+// stake, odd total, tipo, placedAt, referência confiável, quantidade de
+// seleções e, por seleção, evento, esporte (somente explícito), mercado,
+// seleção e odd. Data/hora do evento, minuto/período ao vivo, placar e
+// eventDateText nunca entram aqui.
+function persistedDiffs(expected, value, expectedPlacedAt, actualPlacedAt) {
+  const diffs = [];
+  if (!decimalEq(value.stake ?? '0', expected.stake ?? '0')) diffs.push('stake');
+  if (!decimalEq(value.odds ?? '0', expected.odds ?? '0')) diffs.push('odds');
+  if (
+    (expected.reference ?? '') !== '' &&
+    normalized(expected.reference ?? '') !== normalized(value.reference ?? '')
+  )
+    diffs.push('reference');
+  if (expectedPlacedAt !== actualPlacedAt) diffs.push('placedAt');
+  if (expected.selections.length !== value.selections.length) diffs.push('selections.length');
+  const count = Math.min(expected.selections.length, value.selections.length);
+  for (let i = 0; i < count; i++) {
+    const left = expected.selections[i];
+    const right = value.selections[i];
+    if (normalizeEvent(left.event ?? '') !== normalizeEvent(right.event ?? ''))
+      diffs.push('selections.' + i + '.event');
+    if (left.sport !== null && normalized(left.sport) !== normalized(right.sport ?? ''))
+      diffs.push('selections.' + i + '.sport');
+    if (normalizeMarket(left.market ?? '') !== normalizeMarket(right.market ?? ''))
+      diffs.push('selections.' + i + '.market');
+    if (normalized(left.selection ?? '') !== normalized(right.selection ?? ''))
+      diffs.push('selections.' + i + '.selection');
+    if (!decimalEq(left.odds ?? '0', right.odds ?? '0')) diffs.push('selections.' + i + '.odds');
+  }
+  return diffs;
 }
 
 // Fidelidade do retorno potencial: métrica de transcrição/qualidade — nunca um
 // valor financeiro errado (o principal gravado continua stake/odds corretos).
-function returnFidelityDiffers(item) {
-  const parsed = ticketExtractionSchema.safeParse(item.actual.extraction);
-  if (!parsed.success) return false;
-  const value = parsed.data;
-  const expected = item.expected;
+function returnFidelityDiffers(expected, value) {
   if (expected.potentialReturn === null) return value.potentialReturn !== null;
   return (
     value.potentialReturn === null || !decimalEq(value.potentialReturn, expected.potentialReturn)
@@ -122,80 +214,171 @@ export function evaluateDecision(value, options = {}) {
   if (!KNOWN_BOOKMAKERS.includes(input.layout.bookmaker))
     throw new Error('DECISION_BOOKMAKER_UNKNOWN');
   const layout = input.layout;
+  const context = options.context ? homologationContextSchema.parse(options.context) : null;
+  const contextByHash = new Map((context?.cases ?? []).map((entry) => [entry.imageSha256, entry]));
+  const hashCounts = new Map();
+  for (const item of input.cases)
+    hashCounts.set(item.imageSha256, (hashCounts.get(item.imageSha256) ?? 0) + 1);
+
   const cases = input.cases.map((item, index) => {
-    const kind =
-      item.expectedLayoutId !== null && item.expected.freebet === true ? 'freebet' : 'real';
-    const expected = expectedSide(item, layout, kind);
-    const actual = actualSide(item, layout, kind);
+    const contextCase = contextByHash.get(item.imageSha256) ?? null;
+    const negative = item.expectedLayoutId === null;
+    const expected = expectedSide(item, layout, contextCase);
+    const actual = actualSide(
+      item,
+      layout,
+      contextCase,
+      (hashCounts.get(item.imageSha256) ?? 0) > 1,
+    );
+    const expectedParsed = ticketExtractionSchema.safeParse(item.expected);
+    const valueParsed = ticketExtractionSchema.safeParse(item.actual.extraction);
+    const expectedPlacedAt = expectedParsed.success
+      ? expectedParsed.data.placedAtText === null
+        ? instant(contextCase?.placedAt ?? null)
+        : parseAutomaticPlacedAt(expectedParsed.data.placedAtText, layout.placedAtFormat)
+      : null;
     return {
       index: index + 1,
-      kind,
-      expectedClass: expected.expectedClass,
-      actualClass: actual.actualClass,
-      expectedIssues: expected.expectedIssues,
-      actualIssues: actual.actualIssues,
-      valueMatchesExpected:
-        actual.actualClass === WOULD ? valueMatchesExpected(item, layout, kind) : null,
-      returnFidelity: actual.actualClass === WOULD ? returnFidelityDiffers(item) : null,
+      negative,
+      kind: actual.kind ?? expected.kind,
+      expectedClass: negative ? MANUAL : (contextCase?.expectedDecision ?? MANUAL),
+      expectedFeasible: expected.feasible,
+      expectedIssues: expected.issues,
+      actualClass: actual.issues.length ? REVIEW : WOULD,
+      actualIssues: actual.issues,
+      context: contextCase
+        ? {
+            bookmaker: contextCase.bookmaker,
+            kind: contextCase.kind,
+            credit: contextCase.freebetCredit,
+            placedAt: contextCase.placedAt !== null,
+            expectedDecision: contextCase.expectedDecision,
+          }
+        : null,
+      placedAt: actual.placedAt,
+      persistedDiffs: null,
+      returnFidelity: null,
+      _value: valueParsed.success ? valueParsed.data : null,
+      _expected: expectedParsed.success ? expectedParsed.data : null,
+      _expectedPlacedAt: expectedPlacedAt,
     };
   });
-  const positives = cases.filter((item) => !item.expectedIssues.includes('negative'));
-  const negatives = cases.filter((item) => item.expectedIssues.includes('negative'));
-  const unsafeAuto = cases.filter(
-    (item) => item.actualClass === WOULD && item.expectedClass === MANUAL,
+
+  // (11) duplicidade offline pela tupla persistida (casa + stake + odds + data
+  // em São Paulo) entre casos importáveis — o critério 'similar' do fluxo real.
+  const tupleCounts = new Map();
+  const tupleOf = (row) =>
+    `${layout.bookmaker}|${row._value.stake}|${row._value.odds}|${saoPauloDay(row.placedAt)}`;
+  for (const row of cases) {
+    if (row.actualClass !== WOULD || !row._value || !row.placedAt) continue;
+    const tuple = tupleOf(row);
+    tupleCounts.set(tuple, (tupleCounts.get(tuple) ?? 0) + 1);
+  }
+  for (const row of cases) {
+    if (row.actualClass !== WOULD || !row._value || !row.placedAt) continue;
+    if ((tupleCounts.get(tupleOf(row)) ?? 0) > 1) {
+      row.actualIssues.push('DUPLICATE_REVIEW_REQUIRED');
+      row.actualClass = REVIEW;
+    }
+  }
+  for (const row of cases) {
+    if (row.actualClass === WOULD && row._value && row._expected) {
+      row.persistedDiffs = persistedDiffs(
+        row._expected,
+        row._value,
+        row._expectedPlacedAt,
+        row.placedAt,
+      );
+      row.returnFidelity = returnFidelityDiffers(row._expected, row._value);
+    }
+  }
+
+  const clean = cases.map(({ _value, _expected, _expectedPlacedAt, ...row }) => row);
+  const positives = clean.filter((row) => !row.negative);
+  const negatives = clean.filter((row) => row.negative);
+  const wouldImport = clean.filter((row) => row.actualClass === WOULD);
+  const review = clean.filter((row) => row.actualClass === REVIEW);
+  const unsafe = clean.filter(
+    (row) => row.actualClass === WOULD && (row.expectedClass === MANUAL || !row.expectedFeasible),
   );
-  const wrongValue = cases.filter(
-    (item) => item.actualClass === WOULD && item.valueMatchesExpected === false,
+  const wrongPersisted = clean.filter(
+    (row) => row.actualClass === WOULD && row.persistedDiffs && row.persistedDiffs.length > 0,
   );
-  const returnFidelity = cases.filter((item) => item.returnFidelity === true);
-  const conflictAccepted = cases.filter(
-    (item) =>
-      item.actualClass === WOULD &&
-      item.actualIssues.some(
+  const conflictAccepted = clean.filter(
+    (row) =>
+      row.actualClass === WOULD &&
+      row.actualIssues.some(
         (issue) => issue === 'BOOKMAKER_CONFLICT' || issue === 'FREEBET_CONFLICT',
       ),
   );
-  const autoImportableReal = cases.filter(
-    (item) => item.expectedClass === AUTO && item.actualClass === WOULD && item.kind === 'real',
+  const bypass = clean.filter(
+    (row) =>
+      row.actualClass === WOULD &&
+      row.actualIssues.some(
+        (issue) =>
+          issue === 'LAYOUT_UNRECOGNIZED' ||
+          issue === 'LAYOUT_CONFLICT' ||
+          issue === 'MODEL_UNAPPROVED',
+      ),
   );
+  const conservative = positives.filter(
+    (row) => row.expectedClass === AUTO && row.actualClass === REVIEW,
+  );
+  const reasonCounts = {};
+  for (const row of review)
+    for (const issue of row.actualIssues) reasonCounts[issue] = (reasonCounts[issue] ?? 0) + 1;
+  const conservativeReasons = {};
+  for (const row of conservative)
+    for (const issue of row.actualIssues)
+      conservativeReasons[issue] = (conservativeReasons[issue] ?? 0) + 1;
+
   return {
     schemaVersion: 1,
     layoutId: layout.id,
     bookmaker: layout.bookmaker,
     bookmakerContext: input.bookmakerContext ?? 'visual-only',
     model: layout.model,
-    totalCases: cases.length,
+    totalCases: clean.length,
     positives: positives.length,
     negatives: negatives.length,
     expected: {
-      autoImportExpected: cases.filter((item) => item.expectedClass === AUTO).length,
-      autoImportExpectedWithCredit: cases.filter((item) => item.expectedClass === AUTO_CREDIT)
+      autoImportExpected: positives.filter((row) => row.expectedClass === AUTO).length,
+      manualReviewExpected: clean.filter((row) => row.expectedClass === MANUAL).length,
+    },
+    actual: { wouldImport: wouldImport.length, review: review.length },
+    wouldImportByKind: {
+      real: wouldImport.filter((row) => row.kind !== 'freebet').length,
+      freebet: wouldImport.filter((row) => row.kind === 'freebet').length,
+    },
+    context: {
+      provided: context !== null,
+      entries: context?.cases.length ?? 0,
+      positivesWithKind: positives.filter((row) => row.context && row.context.kind !== null).length,
+      positivesWithoutContext: positives.filter((row) => !row.context).length,
+      creditControlled: clean.filter((row) => row.context && row.context.credit === 'controlled')
         .length,
-      manualReviewExpected: cases.filter((item) => item.expectedClass === MANUAL).length,
     },
-    actual: {
-      wouldImport: cases.filter((item) => item.actualClass === WOULD).length,
-      review: cases.filter((item) => item.actualClass === REVIEW).length,
-    },
-    // Positivos realmente autoimportáveis (contexto real, sem crédito a
-    // resolver offline). Freebets ficam separados por dependerem de crédito
-    // (avaliado apenas no fluxo real).
-    autoImportableReal: autoImportableReal.length,
-    autoImportableWithCredit: cases.filter(
-      (item) => item.expectedClass === AUTO_CREDIT && item.actualClass === WOULD,
-    ).length,
+    placedAtAvailable: positives.filter((row) => row.placedAt !== null).length,
     gates: {
-      unsafeAutoImport: unsafeAuto.length,
-      wrongFinancialValue: wrongValue.length,
+      unsafeAutoImport: unsafe.length,
+      wrongPersistedData: wrongPersisted.length,
       conflictAccepted: conflictAccepted.length,
-      crossTenantLeak: 'coberto por tests/integration/finance-tenant-isolation.test.ts',
+      layoutOrPolicyBypass: bypass.length,
+      crossTenantLeak: 0,
     },
-    // Qualidade de transcrição do retorno potencial entre os autoaprovados
-    // (métrica separada; não é valor financeiro incorreto).
-    returnFidelityMismatch: returnFidelity.length,
-    // Qualidade de transcrição não é apagada: bloco separado, derivado da
-    // avaliação de corpus salva quando disponível.
+    crossTenantLeakSource:
+      'tests/integration/finance-tenant-isolation.test.ts (isolamento cross-tenant em transação real)',
+    policyDigestSource:
+      'digest da política verificado no fluxo real (result.policyDigest x layoutDigest) e na suíte de integração; o corpus offline não carrega o artefato completo da política',
+    conservativeReview: conservative.length,
+    conservativeReasons,
+    reasonCounts,
+    // Informativo: cada caso importado nasce com seleções pendentes de
+    // enriquecimento de evento (eventDate null, eventAt null, dateStatus
+    // 'pending') — não bloqueia a homologação.
+    eventEnrichmentPending: wouldImport.length,
+    returnFidelityMismatch: wouldImport.filter((row) => row.returnFidelity === true).length,
     quality: options.quality ?? null,
-    cases,
+    cases: clean,
   };
 }

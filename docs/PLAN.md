@@ -237,7 +237,10 @@ A terceira linha é obrigatória para qualquer registro automático; a quarta é
 obrigatória para a automação quando a imagem não traz data legível: envios de
 duas linhas e valores ausentes, desconhecidos ou ambíguos permanecem em revisão
 manual. O tipo informado é a fonte de verdade financeira; a IA apenas sinaliza
-conflito visual.
+conflito visual. A data/hora do evento não entra na extração automática desta
+fase: as seleções nascem pendentes de enriquecimento posterior e a data do
+evento nunca autoriza, bloqueia ou é persistida pela importação (`eventDateText`
+reservado/depreciado).
 
 A legenda é interpretada por regras determinísticas. A IA extrai os dados do
 bilhete, preservando o conteúdo original para conferência.

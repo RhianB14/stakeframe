@@ -9,12 +9,12 @@ import {
 export const KNOWN_BOOKMAKERS = ['bet365', 'superbet', 'novibet'];
 
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const normalizeName = (value) => value.normalize('NFC').trim().replace(/\s+/g, ' ');
+export const normalizeName = (value) => value.normalize('NFC').trim().replace(/\s+/g, ' ');
 // Separadores isolados de confronto (x, v, vs, -, –, —) são equivalentes. O
 // hífen legítimo dentro de nomes permanece significativo porque a troca exige
 // espaço dos dois lados; nada mais do texto é tocado.
 const EVENT_SEPARATOR = /\s+(?:vs|x|v|-|–|—)\s+/gi;
-const normalizeEvent = (value) => {
+export const normalizeEvent = (value) => {
   const text = value.normalize('NFC').trim();
   // Empilhamento estrito: exatamente dois lados não vazios separados por quebra
   // de linha são o separador de confronto implícito dos layouts atuais. A
@@ -30,7 +30,7 @@ const normalizeEvent = (value) => {
 };
 // Glifos ordinais º/° são equivalentes somente em mercados; o restante do
 // texto (nomes, valores, datas, acentos) continua exato.
-const normalizeMarket = (value) => normalizeName(value).replace(/[\u00b0\u00ba]/g, '\u00ba');
+export const normalizeMarket = (value) => normalizeName(value).replace(/[\u00b0\u00ba]/g, '\u00ba');
 const normalizeBookmaker = (value) => normalizeName(value).toLocaleLowerCase('pt-BR');
 const normalize = (value, field) => {
   if (typeof value !== 'string') return value;
@@ -131,7 +131,7 @@ export function evaluateCorpus(value) {
         const expected = item.expected.selections[i];
         const observed = actual.data.selections[i];
         if (!observed) continue;
-        for (const field of ['event', 'sport', 'market', 'selection', 'odds', 'eventDateText'])
+        for (const field of ['event', 'sport', 'market', 'selection', 'odds'])
           compare(`selections.${field}`, expected[field], observed[field], field);
       }
       compare(
@@ -151,12 +151,13 @@ export function evaluateCorpus(value) {
     uniqueImages,
     multiples: positive.filter((item) => item.expected.selections.length > 1).length,
     promotional: positive.filter((item) => item.expected.freebet === true).length,
+    // eventDateText saiu dos campos essenciais (R3): a ausência de dados é
+    // contada por placedAtText, potentialReturn e reference — nunca pela data
+    // do evento, que pertence ao enriquecimento posterior.
     missingFields: positive.filter((item) =>
-      [
-        item.expected.placedAtText,
-        item.expected.potentialReturn,
-        ...item.expected.selections.map((selection) => selection.eventDateText),
-      ].some((field) => field === null),
+      [item.expected.placedAtText, item.expected.potentialReturn, item.expected.reference].some(
+        (field) => field === null,
+      ),
     ).length,
   };
   const errors = cases.reduce((total, item) => total + item.issues.length, 0);

@@ -10,7 +10,6 @@ import {
   suggestedReturn,
   saoPauloDate,
   parseAutomaticPlacedAt,
-  automaticEventDate,
   type ValidatedLayout,
   type AutomaticReason,
   type BetInput,
@@ -139,19 +138,20 @@ async function candidate(
     // referencia sintetica.
     reference: extraction.reference ?? '',
     allowMissingUnit: false,
-    selections: extraction.selections.map((selection) => {
-      const eventDate = automaticEventDate(selection.eventDateText);
-      return {
-        event: selection.event,
-        sport: selection.sport,
-        market: selection.market,
-        selection: selection.selection,
-        odds: selection.odds,
-        eventDate,
-        eventAt: null,
-        dateStatus: eventDate ? 'estimated' : 'pending',
-      };
-    }),
+    // Data/hora do evento NÃO pertence à importação automática desta fase:
+    // toda seleção nasce pendente de enriquecimento (eventDate e eventAt
+    // nulos, dateStatus 'pending'). eventDateText é reservado e depreciado —
+    // nunca é convertido em data, nunca autoriza nem bloqueia a importação.
+    selections: extraction.selections.map((selection) => ({
+      event: selection.event,
+      sport: selection.sport,
+      market: selection.market,
+      selection: selection.selection,
+      odds: selection.odds,
+      eventDate: null,
+      eventAt: null,
+      dateStatus: 'pending' as const,
+    })),
   });
   if (!parsed.success) return { reason: 'EXTRACTION_UNCERTAIN' };
   if (extraction.potentialReturn !== null) {

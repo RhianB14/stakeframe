@@ -7,17 +7,25 @@ export const corpusEvaluationInputSchema = z.strictObject({
   // fonte de verdade para o bookmaker; 'visual-only' = modo legado, em que a
   // classificação visual de layout e o texto do modelo decidiam.
   bookmakerContext: z.enum(['user-informed', 'visual-only']).optional(),
-  layout: validatedLayoutSchema.omit({
-    layoutSha256: true,
-    coverage: true,
-    corpusSha256: true,
-    evaluationSha256: true,
-    sampleCount: true,
-    essentialFieldErrors: true,
-    approvedBy: true,
-    approvedAt: true,
-    expiresAt: true,
-  }),
+  layout: validatedLayoutSchema
+    .omit({
+      layoutSha256: true,
+      coverage: true,
+      corpusSha256: true,
+      evaluationSha256: true,
+      sampleCount: true,
+      essentialFieldErrors: true,
+      approvedBy: true,
+      approvedAt: true,
+      expiresAt: true,
+      // Corpora preservados podem anteceder a obrigatoriedade dos rótulos
+      // na política; a evidência continua válida e os rótulos declarados no
+      // layout são conferidos quando presentes.
+      potentialReturnLabels: true,
+    })
+    .extend({
+      potentialReturnLabels: z.array(z.string().trim().min(1).max(60)).min(1).max(10).optional(),
+    }),
   cases: z
     .array(
       z.strictObject({
@@ -44,6 +52,12 @@ export const corpusEvaluationInputSchema = z.strictObject({
             })
             .optional(),
           ocrConsistent: z.boolean().nullable().optional(),
+          // Digest da política que orientou o artefato, quando a evidência o
+          // carrega; ausente em corpora anteriores a este contrato.
+          policyDigest: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
         }),
       }),
     )
@@ -126,9 +140,25 @@ function saoPauloInstant(date: string, hour: string, minute: string, second: str
     });
   return matches.length === 1 ? matches[0]!.toISOString() : null;
 }
-export function automaticEventDate(text: string | null) {
-  if (!text) return null;
-  const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
-  const value = br ? `${br[3]}-${br[2]}-${br[1]}` : text;
-  return z.iso.date().safeParse(value).success ? value : null;
-}
+// Contexto privado explícito da homologação (STK-G0-19-R3): ligado por
+// imageSha256, declara somente o que o proprietário informou — casa, tipo
+// real/freebet, placedAt quando a imagem não traz data legível e o estado do
+// crédito freebet — e a decisão esperada. NUNCA derivado de nome de arquivo,
+// timestamp, saída da IA, data do evento ou período/minuto ao vivo.
+export const homologationContextSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  cases: z
+    .array(
+      z.strictObject({
+        imageSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        bookmaker: z.enum(['bet365', 'superbet', 'novibet']),
+        kind: z.enum(['real', 'freebet']).nullable(),
+        placedAt: z.iso.datetime({ offset: true }).nullable(),
+        freebetCredit: z.enum(['none', 'controlled', 'uncontrolled']),
+        expectedDecision: z.enum(['AUTO_IMPORT_EXPECTED', 'MANUAL_REVIEW_EXPECTED']),
+      }),
+    )
+    .min(1)
+    .max(10000),
+});
+export type HomologationContext = z.infer<typeof homologationContextSchema>;

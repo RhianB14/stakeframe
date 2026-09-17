@@ -79,6 +79,7 @@ beforeEach(async () => {
     description: 'Fictional layout used exclusively for deterministic integration tests.',
     placedAtFormat: 'iso-offset',
     allowFreebet: true,
+    potentialReturnLabels: ['Retorno Total'],
     layoutSha256: '2'.repeat(64),
     coverage: {
       positive: 20,
@@ -257,10 +258,12 @@ describe('automatic import financial boundary', () => {
     });
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet).toMatchObject({ stake: '100.00', unitAmount: '10.00', state: 'open' });
+    // Data/hora do evento saiu da importação automática (R3): a seleção nasce
+    // pendente de enriquecimento, mesmo com eventDateText presente na extração.
     expect(bet.selections[0]).toMatchObject({
-      eventDate: '2026-09-07',
+      eventDate: null,
       eventAt: null,
-      dateStatus: 'estimated',
+      dateStatus: 'pending',
     });
     expect(await finance.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',

@@ -55,6 +55,7 @@ const LAYOUT_PROFILES = {
       'Recorte de tela de bilhete/cupom da Bet365 (interface pt-BR, moeda BRL): bilhetes liquidados, recortes parciais sem prêmio visível e cupons de pré-aposta não confirmados. Corresponder somente quando o recorte exibir marcadores visuais da Bet365 (marca ou identidade da casa, tipografia e controles característicos da interface). Não corresponde a capturas de outra casa nem quando a casa não puder ser determinada visualmente; nesse caso não atribua este layout. Campos ausentes ou ilegíveis permanecem null; nenhuma data é inferida.',
     placedAtFormat: 'br-sao-paulo',
     allowFreebet: true,
+    potentialReturnLabels: ['Retorno Total'],
   },
   superbet: {
     id: 'superbet-v1',
@@ -62,6 +63,7 @@ const LAYOUT_PROFILES = {
       'Recorte de tela de bilhete/cupom da Superbet (interface pt-BR, moeda BRL): bilhetes liquidados, recortes parciais sem prêmio visível, múltiplas com aposta grátis e cupons de pré-aposta não confirmados. Corresponder somente quando o recorte exibir marcadores visuais da Superbet (marca ou identidade da casa, tipografia e controles característicos da interface). Não corresponde a capturas de outra casa nem quando a casa não puder ser determinada visualmente; nesse caso não atribua este layout. Campos ausentes ou ilegíveis permanecem null; nenhuma data é inferida.',
     placedAtFormat: 'br-sao-paulo',
     allowFreebet: true,
+    potentialReturnLabels: ['Prêmio', 'Ganho Potencial'],
   },
 };
 
@@ -249,6 +251,7 @@ export async function runReplay(options) {
     description: profile.description,
     placedAtFormat: profile.placedAtFormat,
     allowFreebet: profile.allowFreebet,
+    potentialReturnLabels: profile.potentialReturnLabels,
   };
   const summary = {
     bookmaker,

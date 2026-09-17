@@ -83,6 +83,12 @@ test('compares decimal spelling exactly by value while preserving text and event
   assert.equal(evaluateCorpus(value).essentialFieldErrors, 2);
 });
 
+test('keeps the event date out of the essential comparison (R3)', () => {
+  const value = fixture();
+  value.cases[0].actual.extraction.selections[0].eventDateText = '31/12/2030';
+  value.cases[0].expected.selections[0].eventDateText = '07/09/2026';
+  assert.equal(evaluateCorpus(value).essentialFieldErrors, 0);
+});
 test('does not use missing fields from negative images to qualify the approved layout', () => {
   const value = fixture();
   for (const item of value.cases.filter((item) => item.expectedLayoutId !== null)) {

@@ -5,13 +5,15 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import {
   parseAutomaticPlacedAt,
-  automaticEventDate,
   validatedLayoutsSchema,
   OPENROUTER_MODEL,
   type ValidatedLayout,
 } from '../../packages/shared/src/index.js';
 import { readAutomaticLayouts } from '../../apps/worker/src/automatic-config.js';
-import { extractTicket } from '../../apps/worker/src/openrouter.js';
+import {
+  extractTicket,
+  TICKET_EXTRACTION_SYSTEM_PROMPT,
+} from '../../apps/worker/src/openrouter.js';
 import { layoutDigest } from '../../packages/db/src/automatic-policy.js';
 const layout: ValidatedLayout = {
   id: 'synthetic-layout',
@@ -21,6 +23,7 @@ const layout: ValidatedLayout = {
   description: 'Fictional deterministic layout, never a production approval.',
   placedAtFormat: 'iso-offset',
   allowFreebet: false,
+  potentialReturnLabels: ['Retorno Total'],
   layoutSha256: '2'.repeat(64),
   coverage: {
     positive: 20,
@@ -62,10 +65,6 @@ describe('automatic import policy boundaries', () => {
     // São Paulo skipped midnight at the DST start and repeated 23:00 at the end.
     expect(parseAutomaticPlacedAt('04/11/2018 00:30', 'br-sao-paulo')).toBeNull();
     expect(parseAutomaticPlacedAt('16/02/2019 23:30', 'br-sao-paulo')).toBeNull();
-    expect(automaticEventDate('07/09/2026')).toBe('2026-09-07');
-    expect(automaticEventDate('2026-09-07')).toBe('2026-09-07');
-    for (const value of ['07/09', 'amanhã', '2026-02-30', '07/09/2026 18:00'])
-      expect(automaticEventDate(value)).toBeNull();
   });
   it('parses the strict Superbet textual date and normalizes only the separator', () => {
     expect(parseAutomaticPlacedAt('7 DE SET. DE 2026 \u2014 14:51', 'br-textual-sao-paulo')).toBe(
@@ -280,5 +279,10 @@ describe('automatic import policy boundaries', () => {
     const { fetchImpl } = await run('20.00', 'Retorno Total 20,00');
     const sent = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
     expect(sent.messages[0].content).toContain('"potentialReturnLabels":["Retorno Total"]');
+  });
+  it('keeps the event date out of the extraction order', () => {
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('[Data do evento]');
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('envie sempre null');
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('"eventDateText":null');
   });
 });

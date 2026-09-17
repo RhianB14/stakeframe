@@ -67,10 +67,10 @@ O contrato executável é `corpusEvaluationInputSchema` em
   `superbet` e `novibet` são aceitos), `bookmakerId` do cadastro de destino,
   `model`, descrição visual exata, `placedAtFormat` (`iso-offset`,
   `br-sao-paulo` ou `br-textual-sao-paulo` — formato textual por extenso dos
-  meses, ex.: `7 DE SET. DE 2026 — 14:51`), `allowFreebet` e, opcionalmente,
-  `potentialReturnLabels` (rótulos autorizados de retorno por casa, ex.:
-  Bet365 `["Retorno Total"]`; Superbet `["Prêmio", "Ganho Potencial"]`;
-  parte do digest da política).
+  meses, ex.: `7 DE SET. DE 2026 — 14:51`), `allowFreebet` e
+  `potentialReturnLabels` (rótulos autorizados de retorno por casa —
+  **obrigatório** na política aprovada; ex.: Bet365 `["Retorno Total"]`;
+  Superbet `["Prêmio", "Ganho Potencial"]`; parte do digest da política).
 - `cases`: SHA-256 da imagem em `imageSha256`, `expectedLayoutId` (ID ou `null`
   para imagens que não devem ser reconhecidas), `expected` com todos os campos
   de `ticketExtractionSchema` conferidos pelo proprietário e `actual`.
@@ -81,7 +81,9 @@ O contrato executável é `corpusEvaluationInputSchema` em
 
 A avaliação verifica vínculo imagem/modelo/layout, validade do JSON, campos
 essenciais, quantidade/ordem das seleções, presença de dúvidas, omissões e
-valores inventados. Negativos corretamente rejeitados (`expectedLayoutId=null`
+valores inventados. A data do evento (`eventDateText`) saiu dos campos
+essenciais (R3): a ausência nunca conta contra a amostra — a contagem usa
+`placedAtText`, `potentialReturn` e `reference`. Negativos corretamente rejeitados (`expectedLayoutId=null`
 com `layoutId=null`) validam schema, vínculo e a própria rejeição, mas não têm
 conteúdo comparado — o campo pertence ao corpus da outra casa; falsos positivos
 de layout continuam bloqueando a aprovação. Dinheiro/odds com representações como `10` e `10.00` são
@@ -90,17 +92,26 @@ nomes, inferir datas ou corrigir valores. O relatório privado identifica
 índice do caso e campo com erro, sem copiar os valores; a saída de console
 mostra somente totais e hashes.
 
-`pnpm validation:decision <diretório-absoluto-privado>` lê o `corpus.json` (e o
-`evaluation.json`, quando existir, para o bloco de qualidade) e grava
-`decision.json` no mesmo diretório, sem banco e sem escrita financeira. Cada
-caso é classificado nos dois lados — ground truth (modelo perfeito) e extração
-preservada — com os mesmos gates do fluxo real: schema, OCR consistente,
-dúvidas, moeda, casa informada, data parseável pelo formato do layout, conflito
-de freebet e retorno. Os gates exigem zero importação automática insegura, zero
-valor financeiro incorreto em caso autoaprovado e zero conflito aceito;
-freebets com crédito não resolvido ficam em revisão offline e a fidelidade do
-retorno potencial entre autoaprovados é reportada como métrica de transcrição
-separada (nunca apagada). Não ativa política nem escreve nada financeiro.
+`pnpm validation:decision <diretório-absoluto-privado> [--context <arquivo>]`
+lê o `corpus.json` (e o `evaluation.json`, quando existir, para o bloco de
+qualidade) e, opcionalmente, o contexto privado ligado por `imageSha256` (casa
+informada, tipo real/freebet, `placedAt` quando a imagem não traz data legível,
+estado do crédito freebet e decisão esperada), gravando `decision.json` no
+mesmo diretório, sem banco e sem escrita financeira. A decisão reproduz a
+ordem real do fluxo: schema, layout selecionado, modelo aprovado,
+política/digest, OCR consistente, contexto informado, casa e aliases, tipo
+real/freebet, `placedAt`, financeiro, duplicidade e dados efetivamente
+persistidos. Positivo sem layout reconhecido, layout ou modelo divergentes,
+OCR inconsistente, contexto ausente, conflito de casa/tipo, data divergente e
+duplicidade permanecem em revisão; negativa cross-house rejeitada é revisão
+esperada e nunca importação insegura. A data/hora do evento nunca participa
+da decisão — `eventDateText` não autoriza, não bloqueia e não é persistido;
+toda seleção automática nasce com `eventDate` e `eventAt` nulos e `dateStatus`
+`pending` (`eventEnrichmentPending`, informativo). Os gates de segurança
+(`unsafeAutoImport`, `wrongPersistedData`, `conflictAccepted`,
+`layoutOrPolicyBypass`, `crossTenantLeak`) exigem zero; `conservativeReview`,
+motivos agregados, fidelidade do retorno potencial e qualidade de transcrição
+ficam reportados à parte. Não ativa política nem escreve nada financeiro.
 
 `pnpm validation:policy <arquivo-de-políticas-absoluto> <diretório-corpus>...`
 verifica uma política proposta contra as evidências salvas: recalcula a
