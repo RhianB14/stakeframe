@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { importDetailSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
-import { request, patchImportDraft } from './api.js';
+import { request, patchImportDraft, setImportStatus } from './api.js';
 import { DraftControls } from './drafts.js';
+import { BookmakerSection, StatusSection } from './MiniAppSections.js';
 
 // STK-G0-19-R5 — Mini App do Telegram: a mesma fonte canônica, autenticada pelo
 // initData validado no servidor (x-telegram-init-data). Nenhum identificador
@@ -14,17 +15,23 @@ declare global {
   }
 }
 
-// O identificador chega pelo link do botão da mensagem (`#miniapp?import=<uuid>`),
-// dentro do fragmento da rota — nunca em window.location.search.
-function importId(): string | null {
+// O identificador e a seção chegam pelo link do botão da mensagem
+// (`#miniapp?import=<uuid>&section=status|bookmaker`), dentro do fragmento da
+// rota — nunca em window.location.search.
+function hashParam(name: string): string | null {
   try {
     const hash = window.location.hash;
     const index = hash.indexOf('?');
-    return new URLSearchParams(index >= 0 ? hash.slice(index) : '').get('import');
+    return new URLSearchParams(index >= 0 ? hash.slice(index) : '').get(name);
   } catch {
     return null;
   }
 }
+const importId = () => hashParam('import');
+const sectionParam = (): 'status' | 'bookmaker' | null => {
+  const value = hashParam('section');
+  return value === 'status' || value === 'bookmaker' ? value : null;
+};
 
 export function MiniAppPage() {
   const initData = window.Telegram?.WebApp?.initData ?? '';
@@ -70,15 +77,36 @@ export function MiniAppPage() {
         <p role="status">Carregando a importação…</p>
       </div>
     );
+  const section = sectionParam();
   return (
     <div className="miniapp-page">
-      <h1>Conferir importação</h1>
+      <h1>
+        {section === 'status'
+          ? 'Alterar status'
+          : section === 'bookmaker'
+            ? 'Alterar casa'
+            : 'Conferir importação'}
+      </h1>
       <p className="caption-evidence">{detail.data.item.caption || 'Sem legenda'}</p>
-      <DraftControls
-        detail={detail.data}
-        sender={(body) => patchImportDraft(id, body, initData)}
-        onSaved={() => void detail.refetch()}
-      />
+      {section === 'status' ? (
+        <StatusSection
+          detail={detail.data}
+          sender={(body) => setImportStatus(id, body, initData)}
+          onSaved={() => void detail.refetch()}
+        />
+      ) : section === 'bookmaker' ? (
+        <BookmakerSection
+          detail={detail.data}
+          sender={(body) => patchImportDraft(id, body, initData)}
+          onSaved={() => void detail.refetch()}
+        />
+      ) : (
+        <DraftControls
+          detail={detail.data}
+          sender={(body) => patchImportDraft(id, body, initData)}
+          onSaved={() => void detail.refetch()}
+        />
+      )}
     </div>
   );
 }

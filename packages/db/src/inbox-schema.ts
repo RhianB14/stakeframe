@@ -15,7 +15,7 @@ import {
   boolean,
   unique,
 } from 'drizzle-orm/pg-core';
-import { bet, freebet } from './finance-schema.js';
+import { bet, catalog, freebet } from './finance-schema.js';
 
 export const integrationNamespace = pgSchema('integration');
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
@@ -92,6 +92,10 @@ export const inbox = integrationNamespace.table(
     telegramSyncedVersion: integer('telegram_synced_version'),
     telegramEditedAt: timestamp('telegram_edited_at', { withTimezone: true }),
     telegramDeletedAt: timestamp('telegram_deleted_at', { withTimezone: true }),
+    // STK-G0-19-R7: casa declarada pelo usuário no rascunho (seção "Alterar
+    // Casa" do Mini App); validada sob lock contra o catálogo ativo da
+    // organização e sempre revalidada junto do crédito freebet associado.
+    bookmakerOverrideId: uuid('bookmaker_override_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -141,6 +145,11 @@ export const inbox = integrationNamespace.table(
       name: 'inbox_freebet_fk',
       columns: [table.organizationId, table.freebetId],
       foreignColumns: [freebet.organizationId, freebet.id],
+    }),
+    foreignKey({
+      name: 'inbox_bookmaker_override_fk',
+      columns: [table.organizationId, table.bookmakerOverrideId],
+      foreignColumns: [catalog.organizationId, catalog.id],
     }),
   ],
 );

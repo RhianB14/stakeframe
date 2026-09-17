@@ -283,3 +283,33 @@ Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
   repete a validação completa sob lock; o consumo mantém a validação
   transacional (um crédito → uma importação; concorrência serializada no
   financeiro).
+
+## Ações reais no Telegram e declaração × política (STK-G0-19-R7)
+
+- **Botões da resposta final** — "Editar", "Alterar Status" e "Alterar Casa" são
+  botões `web_app` que abrem o Mini App autenticado POR IMPORTAÇÃO na seção
+  correspondente (`#miniapp?import=<uuid>[&section=status|bookmaker]`); a URL
+  base vem de `TELEGRAM_MINIAPP_URL` (HTTPS validada). Nenhum botão responde
+  apenas texto: o único `callback_query` sobrevivente é a exclusão em dois
+  toques.
+- **Seção Alterar Status** — exibe o estado canônico da aposta e lista apenas as
+  transições permitidas (ganhou/perdeu para aposta pendente), exige confirmação
+  e grava pelo comando financeiro canônico (`bet.settle`) com versão otimista,
+  idempotência determinística e autorização da organização; o retorno é
+  calculado no servidor (`remaining × odds` no ganho, zero na perda). Ao sair de
+  pendente, a limpeza do chat (foto, temporária, resultado) é enfileirada pela
+  regra existente; repetir o pedido não duplica efeitos.
+- **Seção Alterar Casa** — lista apenas casas ativas da organização, mostra a
+  casa canônica atual e salva pelo serviço canônico do rascunho
+  (`bookmaker_override_id`, migração 0012). Trocar a casa REVALIDA o crédito
+  freebet associado: crédito de casa diferente, consumido ou expirado é
+  removido com aviso sanitizado e a origem volta a "não informada" (nova escolha
+  explícita) — nunca preservado em silêncio.
+- **Declaração × política automática** — a declaração real/freebet do usuário é
+  validada SOMENTE contra o crédito da própria organização (casa efetiva, valor
+  exato da stake, validade, disponibilidade) e é salva mesmo sem arquivo de
+  política; o Mini App informa o estado da política automática
+  (`disabled|absent|invalid|approved`). A importação AUTOMÁTICA é estritamente
+  fail-closed: política ausente/inválida/expirada ⇒ nenhum layout ⇒ revisão
+  (`LAYOUT_NOT_VALIDATED`); layout sem `allowFreebet` ou crédito inválido ⇒
+  revisão (`FREEBET_UNRESOLVED`); `null` nunca significa autorização.

@@ -625,3 +625,5 @@ recebem status `Superseded` e apontam a substituta.
   anterior até nova autorização do Codex.
 - **Segurança:** nenhum identificador Telegram em payload de callback, logs ou
   respostas; a importação é sempre resolvida pelo vínculo canônico no servidor.
+
+- **D035 — Ações reais no Telegram e separação declaração × política (STK-G0-19-R7)**: Status e casa deixam de ser callbacks de texto e viram `web_app` com seções dedicadas do Mini App (gravação canônica com initData validado, versão otimista e idempotência); a troca de casa limpa crédito incompatível com aviso sanitizado; a declaração real/freebet nunca é bloqueada pela política automática (que permanece fail-closed para a automação e cujo estado é exposto como aviso). A semântica ambígua `freebetAllowedByPolicy(...) !== false` foi eliminada.

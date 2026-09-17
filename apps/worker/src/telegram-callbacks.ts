@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import {
   createFinanceService,
   createTenantContext,
-  enqueueOutbox,
   systemOrganizationContext,
   type Database,
 } from '@stakeframe/db';
@@ -14,21 +13,14 @@ import {
   type TelegramConfig,
 } from './telegram.js';
 
-// STK-G0-19-R6 — tratamento de callback_query dos botões da resposta final.
+// STK-G0-19-R6/R7 — tratamento de callback_query dos botões da resposta final.
+// Status e casa NÃO passam mais por aqui (botões web_app com seções reais do
+// Mini App); só a EXCLUSÃO em dois toques permanece como callback.
 // A importação NUNCA é identificada por payload: resolve-se pelo vínculo
 // canônico (chat + id da mensagem de resultado), com isolamento por organização
 // (contexto de sistema da organização fundadora, única consumidora do bot no
 // beta). A exclusão exige confirmação explícita e é idempotente via chave fixa
 // do comando; nada aqui fala com o Telegram real fora dos testes.
-
-const STATE_LABELS: Record<string, string> = {
-  pending: 'recebida',
-  processing: 'em processamento',
-  review: 'aguardando confirmação',
-  imported: 'registrada',
-  discarded: 'descartada',
-  failed: 'com falha no processamento',
-};
 
 type Client = ReturnType<typeof createTelegramClient>;
 
@@ -65,20 +57,9 @@ export function createTelegramCallbackHandler(
       });
       return;
     }
-    if (query.action === 'status' || query.action === 'bookmaker') {
-      const label = STATE_LABELS[row.state] ?? 'registrada';
-      await client.answerCallbackQuery(query.callbackId, {
-        text:
-          query.action === 'status'
-            ? `Estado atual: ${label}. A mensagem foi atualizada.`
-            : 'A casa e o crédito são ajustados no Mini App (Editar). A mensagem foi atualizada.',
-      });
-      // Re-sincroniza a mensagem com o estado canônico (idempotente).
-      await tenant.withOrganizationTransaction(context, (db) =>
-        enqueueOutbox(db, row.id, 'edit_result_message', row.version),
-      );
-      return;
-    }
+    // STK-G0-19-R7: status e casa são ações REAIS no Mini App (botões web_app
+    // com seções dedicadas) — não existem mais callbacks que apenas respondem
+    // texto. O único callback sobrevivente é a exclusão em dois toques.
     if (query.action === 'delete') {
       await client.answerCallbackQuery(query.callbackId, {
         text: 'Confirme a exclusão desta importação.',

@@ -354,6 +354,10 @@ function importFixture(): ImportDetail {
     eventAt: null,
     eventDateStatus: 'pending',
     telegramReceivedAt: '2026-09-01T18:00:02Z',
+    bookmakerOverrideId: null,
+    bookmakers: [],
+    bet: null,
+    automaticPolicy: 'disabled',
     credits: [],
     matches: {
       tipsterId: null,
@@ -1014,6 +1018,84 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real' });
   // O Mini App autentica pelo initData validado no servidor; nada de IDs no payload.
   expect(patchHeaders['x-telegram-init-data']).toBe('stub-initdata');
+});
+
+test('opens the status section from the Telegram button and liquidates for real (R7)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.item.state = 'imported';
+  detail.item.betId = betId;
+  detail.bet = { id: betId, state: 'open', stake: '25.50', odds: '2.1000', remaining: '25.50' };
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  const posts: { body: unknown; headers: Record<string, string> }[] = [];
+  await page.route(`**/api/v1/imports/${importId}/status`, (route) => {
+    posts.push({ body: route.request().postDataJSON(), headers: route.request().headers() });
+    return route.fulfill({ json: { version: 2, betState: 'settled' } });
+  });
+  await page.goto(`/#miniapp?import=${importId}&section=status`);
+  await expect(page.getByRole('heading', { name: 'Alterar status' })).toBeVisible();
+  await expect(page.getByText('Estado atual:', { exact: false })).toBeVisible();
+  await page.getByLabel(/Ganhou/).check();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  // Confirmação explícita antes da gravação (dois passos).
+  await page.getByRole('button', { name: 'Confirmar liquidação' }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]!.body).toMatchObject({ version: 2, action: 'win' });
+  expect(posts[0]!.headers['x-telegram-init-data']).toBe('stub-initdata');
+  await expect(page.getByText('Liquidação registrada', { exact: false })).toBeVisible();
+});
+
+test('opens the bookmaker section and never keeps an incompatible credit silently (R7)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const superbet = '10000000-0000-4000-8000-000000000002';
+  const detail = importFixture();
+  detail.bookmakers = [
+    { id: house, name: 'Bet365' },
+    { id: superbet, name: 'Superbet' },
+  ];
+  detail.betOrigin = 'freebet';
+  detail.freebetId = '10000000-0000-4000-8000-000000000009';
+  detail.credits = [
+    {
+      id: '10000000-0000-4000-8000-000000000009',
+      bookmakerId: house,
+      amount: '25.50',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+    },
+  ];
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  const patches: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({
+        json: { version: 2, freebetCleared: true, automaticPolicy: 'disabled' },
+      });
+    }
+    return route.fulfill({ json: detail });
+  });
+  await page.goto(`/#miniapp?import=${importId}&section=bookmaker`);
+  await expect(page.getByRole('heading', { name: 'Alterar casa' })).toBeVisible();
+  await page.getByLabel('Nova casa').selectOption(superbet);
+  await page.getByRole('button', { name: 'Salvar casa' }).click();
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0]).toMatchObject({ version: 2, bookmakerId: superbet });
+  await expect(page.getByText('não é compatível', { exact: false })).toBeVisible();
 });
 
 test('the Mini App explains how to open it when Telegram is unavailable (R5)', async ({ page }) => {

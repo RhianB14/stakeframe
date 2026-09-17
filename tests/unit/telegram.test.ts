@@ -234,8 +234,8 @@ describe('import message rendering (R5)', () => {
   });
 });
 
-describe('telegram buttons and callbacks (R6)', () => {
-  it('builds per-record Mini App URLs for the edit button without duplicating links', () => {
+describe('telegram buttons and callbacks (R6/R7)', () => {
+  it('builds real per-record Mini App URLs for every action without duplicating links', () => {
     const first = telegramResultButtons(
       'https://app.stakeframe.test',
       '10000000-0000-4000-8000-000000000001',
@@ -244,22 +244,33 @@ describe('telegram buttons and callbacks (R6)', () => {
       'https://app.stakeframe.test',
       '10000000-0000-4000-8000-000000000002',
     );
-    const urlOf = (buttons: ReturnType<typeof telegramResultButtons>) =>
-      (buttons[0]![0] as { web_app?: { url?: string } }).web_app?.url;
-    expect(urlOf(first)).toBe(
-      'https://app.stakeframe.test#miniapp?import=10000000-0000-4000-8000-000000000001',
+    const urlOf = (button: unknown) => (button as { web_app?: { url?: string } }).web_app?.url;
+    const id = '10000000-0000-4000-8000-000000000001';
+    // R7: Editar, Alterar Status e Alterar Casa abrem o Mini App na seção certa.
+    expect(urlOf(first[0]![0])).toBe(`https://app.stakeframe.test#miniapp?import=${id}`);
+    expect(urlOf(first[1]![0])).toBe(
+      `https://app.stakeframe.test#miniapp?import=${id}&section=status`,
     );
-    expect(urlOf(second)).not.toBe(urlOf(first));
-    // Nenhum identificador em callback_data; os demais botões só carregam a ação.
-    expect(first[0]![0]).not.toHaveProperty('callback_data');
-    expect(first[1]![0]).toMatchObject({ callback_data: 'sf:v1:status' });
+    expect(urlOf(first[1]![1])).toBe(
+      `https://app.stakeframe.test#miniapp?import=${id}&section=bookmaker`,
+    );
+    expect(urlOf(second[0]![0])).not.toBe(urlOf(first[0]![0]));
+    // R7: NÃO existe mais callback de status/casa que apenas mostre toast —
+    // as duas primeiras linhas são web_app (as seções reais do Mini App).
+    for (const row of [first[0]!, first[1]!]) {
+      for (const button of row) expect(button).not.toHaveProperty('callback_data');
+    }
+    // Excluir continua callback com confirmação em dois toques.
     expect(first[2]![0]).toMatchObject({ callback_data: 'sf:v1:delete' });
     const confirm = telegramDeleteConfirmButtons();
     expect(confirm[0]![0]).toMatchObject({ callback_data: 'sf:v1:delete:confirm' });
     expect(confirm[1]![0]).toMatchObject({ callback_data: 'sf:v1:delete:cancel' });
   });
   it('parses callback data strictly and refuses unknown or foreign callbacks', () => {
-    expect(parseTelegramCallbackData('sf:v1:status')).toBe('status');
+    // R7: status/casa deixaram de existir como callbacks (viraram web_app com
+    // seção real); somente a exclusão permanece como callback.
+    expect(parseTelegramCallbackData('sf:v1:status')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:bookmaker')).toBeNull();
     expect(parseTelegramCallbackData('sf:v1:delete:confirm')).toBe('delete_confirm');
     expect(parseTelegramCallbackData('sf:v1:delete:cancel')).toBe('delete_cancel');
     expect(parseTelegramCallbackData('sf:v1:edit')).toBeNull();

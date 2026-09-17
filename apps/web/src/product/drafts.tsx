@@ -27,7 +27,11 @@ export function DraftControls({
   onSaved,
 }: {
   detail: ImportDetail;
-  sender: (body: DraftBody) => Promise<unknown>;
+  sender: (body: DraftBody) => Promise<{
+    version: number;
+    freebetCleared: boolean;
+    automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
+  }>;
   onSaved: () => void;
 }) {
   const [origin, setOrigin] = useState<'real' | 'freebet' | null>(detail.betOrigin);
@@ -37,18 +41,23 @@ export function DraftControls({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const provisional = detail.eventDateStatus === 'pending';
+  const [automaticHold, setAutomaticHold] = useState(false);
+  const [cleared, setCleared] = useState(false);
   const save = async () => {
     setBusy(true);
     setError(null);
     setSaved(false);
+    setCleared(false);
     try {
-      await sender({
+      const result = await sender({
         version: detail.item.version,
         betOrigin: origin,
         freebetId: origin === 'freebet' ? credit || null : null,
         ...(eventDate ? { eventAt: localInstant(eventDate) } : {}),
       });
       setSaved(true);
+      setCleared(result.freebetCleared);
+      setAutomaticHold(result.automaticPolicy !== 'approved');
       onSaved();
     } catch (failure) {
       setError(
@@ -124,6 +133,12 @@ export function DraftControls({
       {saved ? (
         <p className="notice" role="status">
           Rascunho atualizado. A mensagem do Telegram será sincronizada.
+          {automaticHold
+            ? ' Sem política automática ativa, a importação automática permanece desligada e este bilhete seguirá em revisão.'
+            : ''}
+          {cleared
+            ? ' O crédito anterior não era compatível com a casa atual e foi removido — escolha outro crédito.'
+            : ''}
         </p>
       ) : null}
       <Button onClick={() => void save()} disabled={busy}>

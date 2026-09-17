@@ -180,3 +180,5 @@ bloqueiam a importação automática nem mudam a classe de decisão. A base
 financeira é sempre o cálculo server-side `stake × totalOdds`; stake ou odd
 realmente incertas permanecem em revisão pelos seus próprios códigos
 (`EXTRACTION_UNCERTAIN` etc.).
+
+- **R7 — política automática fail-closed para revisão**: `readAutomaticLayouts` nunca derruba o worker nem habilita a automação — política ausente/ilegível/inválida/expirada devolve `[]` e o candidato encaminha TODA importação para revisão com motivo sanitizado (`LAYOUT_NOT_VALIDATED`); `allowFreebet` ausente ou crédito inválido ⇒ `FREEBET_UNRESOLVED`. A declaração do usuário é independente desse eixo.

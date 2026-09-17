@@ -1579,6 +1579,47 @@
             },
             "required": ["tipsterId", "captionBookmakerId", "extractedBookmakerId", "conflict"]
           },
+          "bookmakerOverrideId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "bookmakers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": { "type": "string" }
+              },
+              "required": ["id", "name"]
+            }
+          },
+          "bet": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "state": { "type": "string", "enum": ["open", "settled", "cancelled"] },
+              "stake": { "type": "string" },
+              "odds": { "type": "string" },
+              "remaining": { "type": "string" }
+            },
+            "required": ["id", "state", "stake", "odds", "remaining"]
+          },
+          "automaticPolicy": {
+            "type": "string",
+            "enum": ["disabled", "absent", "invalid", "approved"]
+          },
           "duplicates": {
             "type": "array",
             "items": {
@@ -1641,11 +1682,59 @@
           "telegramReceivedAt",
           "credits",
           "matches",
+          "bookmakerOverrideId",
+          "bookmakers",
+          "bet",
+          "automaticPolicy",
           "duplicates",
           "duplicateCount",
           "automatic",
           "automaticReason"
         ]
+      },
+      "DraftUpdateResultInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "freebetCleared": { "type": "boolean" },
+          "automaticPolicy": {
+            "type": "string",
+            "enum": ["disabled", "absent", "invalid", "approved"]
+          }
+        },
+        "required": ["version", "freebetCleared", "automaticPolicy"]
+      },
+      "ImportStatusUpdateInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "action": { "type": "string", "enum": ["win", "loss"] }
+        },
+        "required": ["version", "action"],
+        "additionalProperties": false
+      },
+      "ImportStatusResultInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "betState": { "type": "string" }
+        },
+        "required": ["version", "betState"]
       },
       "CalendarPageInput": {
         "type": "object",
@@ -4663,6 +4752,49 @@
             "required": ["tipsterId", "captionBookmakerId", "extractedBookmakerId", "conflict"],
             "additionalProperties": false
           },
+          "bookmakerOverrideId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "bookmakers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": { "type": "string" }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          },
+          "bet": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "state": { "type": "string", "enum": ["open", "settled", "cancelled"] },
+              "stake": { "type": "string" },
+              "odds": { "type": "string" },
+              "remaining": { "type": "string" }
+            },
+            "required": ["id", "state", "stake", "odds", "remaining"],
+            "additionalProperties": false
+          },
+          "automaticPolicy": {
+            "type": "string",
+            "enum": ["disabled", "absent", "invalid", "approved"]
+          },
           "duplicates": {
             "type": "array",
             "items": {
@@ -4726,11 +4858,61 @@
           "telegramReceivedAt",
           "credits",
           "matches",
+          "bookmakerOverrideId",
+          "bookmakers",
+          "bet",
+          "automaticPolicy",
           "duplicates",
           "duplicateCount",
           "automatic",
           "automaticReason"
         ],
+        "additionalProperties": false
+      },
+      "DraftUpdateResult": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "freebetCleared": { "type": "boolean" },
+          "automaticPolicy": {
+            "type": "string",
+            "enum": ["disabled", "absent", "invalid", "approved"]
+          }
+        },
+        "required": ["version", "freebetCleared", "automaticPolicy"],
+        "additionalProperties": false
+      },
+      "ImportStatusUpdate": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "action": { "type": "string", "enum": ["win", "loss"] }
+        },
+        "required": ["version", "action"],
+        "additionalProperties": false
+      },
+      "ImportStatusResult": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "betState": { "type": "string" }
+        },
+        "required": ["version", "betState"],
         "additionalProperties": false
       },
       "CalendarPage": {
@@ -8121,6 +8303,12 @@
                     "type": "string",
                     "format": "date-time",
                     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "bookmakerId": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   }
                 },
                 "required": ["version"],
@@ -8146,21 +8334,7 @@
           "200": {
             "description": "Default Response",
             "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "version": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "exclusiveMinimum": true,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": ["version"],
-                  "additionalProperties": false
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/DraftUpdateResult" } }
             }
           },
           "400": {
@@ -8241,6 +8415,98 @@
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ImportDetail" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/status": {
+      "post": {
+        "operationId": "updateImportStatus",
+        "summary": "Liquidar a aposta da importação (vitória/derrota)",
+        "tags": ["Importações"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImportStatusUpdateInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImportStatusResult" }
+              }
             }
           },
           "400": {

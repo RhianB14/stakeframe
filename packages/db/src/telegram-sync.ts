@@ -6,7 +6,7 @@ import {
   ticketExtractionSchema,
   type TelegramOperation,
 } from '@stakeframe/shared';
-import { freebetAllowedByPolicy } from './layout-policy.js';
+import { automaticPolicyNotice } from './layout-policy.js';
 import type { Database } from './index.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 import { FinanceError } from './finance-core.js';
@@ -115,6 +115,7 @@ export function createImportDraftService(database: Database) {
         betOrigin?: 'real' | 'freebet' | null | undefined;
         freebetId?: string | null | undefined;
         eventAt?: string | null | undefined;
+        bookmakerId?: string | null | undefined;
       },
       actor: string,
     ) {
@@ -131,8 +132,9 @@ export function createImportDraftService(database: Database) {
             telegram_deleted_at: string | null;
             caption: string;
             extraction: unknown;
+            bookmaker_override_id: string | null;
           }>(
-            'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction,bookmaker_override_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
             [id],
           )
         ).rows[0];
@@ -145,51 +147,98 @@ export function createImportDraftService(database: Database) {
         let nextFreebet: string | null = row.freebet_id;
         if (patch.freebetId !== undefined) nextFreebet = patch.freebetId;
         if (nextOrigin === 'real' || nextOrigin === null) nextFreebet = null;
+        // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa"):
+        // validada sob lock contra o catálogo ATIVO da organização; a casa
+        // nunca vem do cliente sem revalidação.
+        let nextBookmakerOverride = row.bookmaker_override_id;
+        if (patch.bookmakerId !== undefined) {
+          if (patch.bookmakerId === null) nextBookmakerOverride = null;
+          else {
+            const house = (
+              await client.query<{ id: string }>(
+                'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and active',
+                [patch.bookmakerId],
+              )
+            ).rows[0];
+            if (!house) throw new FinanceError('NOT_FOUND');
+            nextBookmakerOverride = house.id;
+          }
+        }
+        // Resolução efetiva do rascunho: escolha declarada > legenda > leitura visual.
+        const labels = parseCaption(row.caption);
+        const evidence =
+          row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+            ? (row.extraction as { extraction: unknown }).extraction
+            : row.extraction;
+        const parsedExtraction = ticketExtractionSchema.safeParse(evidence);
+        const extraction = parsedExtraction.success ? parsedExtraction.data : null;
+        const aliases = (
+          await client.query<{ catalog_id: string; kind: string; label: string }>(
+            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+          )
+        ).rows;
+        const matchBookmaker = (label: string | null) =>
+          label
+            ? (aliases.find(
+                (alias) =>
+                  alias.kind === 'bookmaker' &&
+                  normalizeAlias(alias.label) === normalizeAlias(label),
+              )?.catalog_id ?? null)
+            : null;
+        const effectiveBookmakerId =
+          nextBookmakerOverride ??
+          matchBookmaker(labels.bookmaker) ??
+          matchBookmaker(extraction?.bookmaker ?? null);
+        const stake = extraction?.stake ?? null;
+        // R7: troca de casa NUNCA preserva crédito incompatível em silêncio —
+        // casa divergente, consumido ou expirado ⇒ crédito removido e a
+        // origem volta a "não informada" (nova escolha explícita obrigatória).
+        let freebetCleared = false;
+        if (row.freebet_id && patch.freebetId === undefined) {
+          const existing = (
+            await client.query<{ bookmaker_id: string; used_by: string | null; valid: boolean }>(
+              "select bookmaker_id,used_by,(expires_on >= (now() at time zone 'America/Sao_Paulo')::date) as valid from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+              [row.freebet_id],
+            )
+          ).rows[0];
+          if (
+            !existing ||
+            existing.used_by !== null ||
+            !existing.valid ||
+            existing.bookmaker_id !== effectiveBookmakerId
+          ) {
+            freebetCleared = true;
+            nextFreebet = null;
+            nextOrigin = null;
+          }
+        }
         if (nextOrigin === 'freebet') {
           if (!nextFreebet) throw new FinanceError('FREEBET_UNRESOLVED');
-          // STK-G0-19-R6: validação COMPLETA sob lock — organização (RLS),
-          // casa resolvida do rascunho, valor exatamente igual à stake,
-          // validade, disponibilidade e política aprovada permitindo freebet.
-          // Sem contexto confiável de casa/stake, fail-closed (sem escolha
-          // implícita); a interface nunca é a única barreira.
-          const labels = parseCaption(row.caption);
-          const evidence =
-            row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
-              ? (row.extraction as { extraction: unknown }).extraction
-              : row.extraction;
-          const parsedExtraction = ticketExtractionSchema.safeParse(evidence);
-          const extraction = parsedExtraction.success ? parsedExtraction.data : null;
-          const aliases = (
-            await client.query<{ catalog_id: string; kind: string; label: string }>(
-              'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
-            )
-          ).rows;
-          const matchBookmaker = (label: string | null) =>
-            label
-              ? (aliases.find(
-                  (alias) =>
-                    alias.kind === 'bookmaker' &&
-                    normalizeAlias(alias.label) === normalizeAlias(label),
-                )?.catalog_id ?? null)
-              : null;
-          const bookmakerId =
-            matchBookmaker(labels.bookmaker) ?? matchBookmaker(extraction?.bookmaker ?? null);
-          const stake = extraction?.stake ?? null;
-          if (!bookmakerId || !stake) throw new FinanceError('FREEBET_UNRESOLVED');
-          if (freebetAllowedByPolicy(bookmakerId) === false)
-            throw new FinanceError('FREEBET_UNRESOLVED');
+          // STK-G0-19-R7: a DECLARAÇÃO valida apenas o crédito da própria
+          // organização (casa efetiva, valor exato da stake, validade,
+          // disponibilidade). A política automática não participa desta
+          // validação — a declaração nunca é bloqueada por ausência de
+          // política; a automação é que permanece fail-closed.
+          if (!effectiveBookmakerId || !stake) throw new FinanceError('FREEBET_UNRESOLVED');
           const credit = (
             await client.query<{ id: string }>(
               "select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update",
-              [nextFreebet, bookmakerId, stake],
+              [nextFreebet, effectiveBookmakerId, stake],
             )
           ).rows[0];
           if (!credit) throw new FinanceError('FREEBET_UNRESOLVED');
         }
         const nextEventAt = patch.eventAt === undefined ? row.event_at : patch.eventAt;
         const updated = await client.query<{ version: number }>(
-          "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
-          [id, nextOrigin, nextFreebet, nextEventAt, nextEventAt ? 'confirmed' : 'pending'],
+          "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
+          [
+            id,
+            nextOrigin,
+            nextFreebet,
+            nextEventAt,
+            nextEventAt ? 'confirmed' : 'pending',
+            nextBookmakerOverride,
+          ],
         );
         const version = updated.rows[0]!.version;
         await client.query(
@@ -201,12 +250,14 @@ export function createImportDraftService(database: Database) {
               betOrigin: nextOrigin,
               freebetSelected: !!nextFreebet,
               eventDateStatus: nextEventAt ? 'confirmed' : 'pending',
+              bookmakerDeclared: !!nextBookmakerOverride,
+              freebetCleared,
             }),
           ],
         );
         if (row.telegram_chat_id && row.telegram_result_message_id && !row.telegram_deleted_at)
           await enqueueOutbox(client, id, 'edit_result_message', version);
-        return { version };
+        return { version, freebetCleared, automaticPolicy: automaticPolicyNotice() };
       });
     },
     /**

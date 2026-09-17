@@ -11,13 +11,19 @@ import { IntegrationError, readBounded, readJson } from './http.js';
 // com a URL HTTPS configurada e o UUID opaco do registro canônico; os demais
 // usam callback_data sem NENHUM identificador — a importação é resolvida no
 // servidor por chat + id da mensagem de resultado.
+// STK-G0-19-R7 — todos os botões executam AÇÕES REAIS: Editar, Alterar Status e
+// Alterar Casa abrem o Mini App autenticado por importação, cada um na sua
+// seção (`section=status|bookmaker`); Excluir é o único callback (confirmação
+// em dois toques). Nenhum botão responde apenas texto sem oferecer a ação.
 export function telegramResultButtons(miniAppUrl: string, importId: string) {
   const base = miniAppUrl.replace(/#.*$/, '').replace(/\/+$/, '');
+  const miniApp = (section?: 'status' | 'bookmaker') =>
+    `${base}#miniapp?import=${importId}${section ? `&section=${section}` : ''}`;
   return [
-    [{ text: 'Editar', web_app: { url: `${base}#miniapp?import=${importId}` } }],
+    [{ text: 'Editar', web_app: { url: miniApp() } }],
     [
-      { text: 'Alterar Status', callback_data: 'sf:v1:status' },
-      { text: 'Alterar Casa', callback_data: 'sf:v1:bookmaker' },
+      { text: 'Alterar Status', web_app: { url: miniApp('status') } },
+      { text: 'Alterar Casa', web_app: { url: miniApp('bookmaker') } },
     ],
     [{ text: 'Excluir', callback_data: 'sf:v1:delete' }],
   ];

@@ -2,6 +2,7 @@ import {
   apiErrorSchema,
   financeCommandSchema,
   commandResultSchema,
+  importStatusResultSchema,
   cents,
   money,
   saoPauloDate,
@@ -59,12 +60,30 @@ export async function request<T>(
   }
   return schema.parse(await response.json());
 }
+type DraftResult = {
+  version: number;
+  freebetCleared: boolean;
+  automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
+};
 const draftResultSchema = {
-  parse: (value: unknown) => {
-    const version = (value as { version?: unknown } | null)?.version;
+  parse: (value: unknown): DraftResult => {
+    const result = value as {
+      version?: unknown;
+      freebetCleared?: unknown;
+      automaticPolicy?: unknown;
+    } | null;
+    const version = result?.version;
     if (typeof version !== 'number' || !Number.isInteger(version) || version < 1)
       throw new Error('Resposta inválida do servidor.');
-    return { version };
+    const policy = result?.automaticPolicy;
+    return {
+      version,
+      freebetCleared: result?.freebetCleared === true,
+      automaticPolicy:
+        policy === 'approved' || policy === 'absent' || policy === 'invalid'
+          ? policy
+          : ('disabled' as const),
+    };
   },
 };
 // STK-G0-19-R5 — edição canônica do rascunho (web com sessão; Mini App com o
@@ -76,11 +95,28 @@ export function patchImportDraft(
     betOrigin?: 'real' | 'freebet' | null;
     freebetId?: string | null;
     eventAt?: string | null;
+    bookmakerId?: string | null;
   },
   initData?: string,
 ) {
   return request(`/api/v1/imports/${id}`, draftResultSchema, {
     method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+// STK-G0-19-R7 — liquidação real pelo Mini App (seção "Alterar Status"):
+// vitória/derrota de aposta pendente pelo comando canônico no servidor.
+export function setImportStatus(
+  id: string,
+  body: { version: number; action: 'win' | 'loss' },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}/status`, importStatusResultSchema, {
+    method: 'POST',
     headers: {
       'content-type': 'application/json',
       ...(initData ? { 'x-telegram-init-data': initData } : {}),

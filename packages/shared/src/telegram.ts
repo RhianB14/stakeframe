@@ -17,20 +17,16 @@ export type TelegramOperation = z.infer<typeof telegramOperationSchema>;
 
 export const telegramSyncStateSchema = z.enum(['none', 'pending', 'synced', 'failed', 'deleted']);
 
-// STK-G0-19-R6 — dados de callback dos botões da resposta final. O payload
-// NUNCA carrega identificadores: a importação é resolvida no servidor por
-// chat + id da mensagem de resultado.
-export const TELEGRAM_CALLBACK_ACTIONS = [
-  'status',
-  'bookmaker',
-  'delete',
-  'delete_confirm',
-  'delete_cancel',
-] as const;
+// STK-G0-19-R7 — callbacks da resposta final restritos a AÇÕES REAIS. Status e
+// casa abrem o Mini App por botões web_app (seções dedicadas); o único callback
+// sobrevivente é a exclusão em dois toques. Nenhum botão responde apenas texto
+// sem oferecer a ação prometida. O payload NUNCA carrega identificadores: a
+// importação é resolvida no servidor por chat + id da mensagem de resultado.
+export const TELEGRAM_CALLBACK_ACTIONS = ['delete', 'delete_confirm', 'delete_cancel'] as const;
 export type TelegramCallbackAction = (typeof TELEGRAM_CALLBACK_ACTIONS)[number];
 
 export function parseTelegramCallbackData(value: string): TelegramCallbackAction | null {
-  const match = /^sf:v1:(status|bookmaker|delete|delete:confirm|delete:cancel)$/.exec(value);
+  const match = /^sf:v1:(delete|delete:confirm|delete:cancel)$/.exec(value);
   if (!match || match[1] === undefined) return null;
   return match[1].replace('delete:', 'delete_') as TelegramCallbackAction;
 }

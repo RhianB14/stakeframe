@@ -3,16 +3,42 @@ import {
   parseCaption,
   ticketExtractionSchema,
   automaticDecisionSchema,
+  financeCommandSchema,
   type BetInput,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { createInboxStore } from './inbox.js';
 import { createAttachmentStore, type ObjectStorage } from './attachments.js';
-import { FinanceError } from './finance-core.js';
+import { FinanceError, type SettingsRow } from './finance-core.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 import { createImportDraftService } from './telegram-sync.js';
-import { freebetAllowedByPolicy } from './layout-policy.js';
+import { executeFinancialCommand } from './finance-transaction.js';
+import { automaticPolicyNotice } from './layout-policy.js';
+
+// stake (até 2 casas) × odds (até 4 casas), arredondamento half-up em centavos.
+// Espelha o mesmo cálculo exibido na mensagem do Telegram (fonte única da
+// semântica `potentialReturn = stake × odd`).
+function grossReturn(stake: string, odds: string): string | null {
+  if (!/^\d{1,12}(\.\d{1,2})?$/.test(stake) || !/^\d{1,12}(\.\d{1,4})?$/.test(odds)) return null;
+  const scale = (value: string, decimals: number) => {
+    const [whole = '0', fraction = ''] = value.split('.');
+    return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(`${fraction}0000`.slice(0, decimals));
+  };
+  const centsValue = scale(stake, 2);
+  const scaledOdds = scale(odds, 4);
+  const total = (centsValue * scaledOdds + 5000n) / 10000n;
+  const whole = total / 100n;
+  const fraction = (total % 100n).toString().padStart(2, '0');
+  return `${whole}.${fraction}`;
+}
+
+// Chave de idempotência determinística (formato uuid) para repetições do mesmo
+// pedido — nunca duplica efeitos financeiros.
+function deterministicKey(seed: string): string {
+  const hash = createHash('sha256').update(seed).digest('hex');
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+}
 
 export async function findDuplicates(
   client: Pick<PoolClient, 'query'>,
@@ -246,21 +272,24 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             event_at: Date | null;
             event_date_status: string;
             telegram_received_at: Date | null;
+            bookmaker_override_id: string | null;
           }>(
-            'select bet_origin,freebet_id,event_at,event_date_status,telegram_received_at from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            'select bet_origin,freebet_id,event_at,event_date_status,telegram_received_at,bookmaker_override_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
             [id],
           )
         ).rows[0]!;
         const captionBookmakerId = match('bookmaker', labels.bookmaker);
         const extractedBookmakerId = match('bookmaker', extraction?.bookmaker ?? null);
-        const draftBookmakerId = captionBookmakerId ?? extractedBookmakerId;
+        // STK-G0-19-R7: a casa declarada pelo usuário tem precedência; a
+        // declaração nunca é filtrada pela política automática (que só governa
+        // a automação). Somente créditos compatíveis com o rascunho (casa,
+        // valor da stake, validade, disponibilidade) são listados — e o PATCH
+        // repete a validação completa sob lock antes de gravar.
+        const draftBookmakerId =
+          draftRow.bookmaker_override_id ?? captionBookmakerId ?? extractedBookmakerId;
         const draftStake = extraction?.stake ?? null;
-        // STK-G0-19-R6: somente créditos compatíveis com o rascunho (casa
-        // resolvida, valor da stake, validade, disponibilidade e política
-        // aprovada). A interface nunca é a única barreira — o PATCH repete a
-        // validação completa sob lock antes de gravar.
         const credits =
-          draftBookmakerId && draftStake && freebetAllowedByPolicy(draftBookmakerId) !== false
+          draftBookmakerId && draftStake
             ? (
                 await client.query<{
                   id: string;
@@ -274,9 +303,27 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 )
               ).rows
             : [];
+        const bookmakers = (
+          await client.query<{ id: string; name: string }>(
+            'select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active order by name asc,id asc limit 200',
+          )
+        ).rows;
+        const bet = row.imported_bet_id
+          ? ((
+              await client.query<{
+                id: string;
+                state: string;
+                stake: string;
+                odds: string;
+                remaining: string;
+              }>(
+                'select id,state,stake,odds,remaining from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+                [row.imported_bet_id],
+              )
+            ).rows[0] ?? null)
+          : null;
         const duplicates = await findDuplicates(client, id, {
-          bookmakerId:
-            captionBookmakerId ?? extractedBookmakerId ?? '00000000-0000-0000-0000-000000000000',
+          bookmakerId: draftBookmakerId ?? '00000000-0000-0000-0000-000000000000',
           reference: extraction?.reference ?? '',
           stake: '0',
           odds: '1',
@@ -303,6 +350,21 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             expiresOn: credit.expires_text,
             stakeReturned: credit.stake_returned,
           })),
+          bookmakerOverrideId: draftRow.bookmaker_override_id,
+          bookmakers,
+          bet: bet
+            ? {
+                id: bet.id,
+                state:
+                  bet.state === 'open' || bet.state === 'settled'
+                    ? bet.state
+                    : ('cancelled' as const),
+                stake: bet.stake,
+                odds: bet.odds,
+                remaining: bet.remaining,
+              }
+            : null,
+          automaticPolicy: automaticPolicyNotice(),
           matches: {
             tipsterId: match('tipster', labels.tipster),
             captionBookmakerId,
@@ -321,6 +383,87 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             ? decision.data.reason
             : ('LAYOUT_NOT_VALIDATED' as const),
         };
+      });
+    },
+    /**
+     * STK-G0-19-R7 — transição REAL de status pelo Mini App (seção "Alterar
+     * Status"): liquidação de aposta pendente (vitória/derrota) pelo comando
+     * financeiro canônico, com autorização da organização, versão otimista,
+     * idempotência determinística e a limpeza do Telegram enfileirada na
+     * mesma transação (regra de saída de pendente da mensagem).
+     */
+    async setStatus(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number; action: 'win' | 'loss' },
+      actor: string,
+    ) {
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        if (!settings.initialized) throw new FinanceError('NOT_INITIALIZED');
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        const bet = (
+          await client.query<{ id: string; state: string; remaining: string; odds: string }>(
+            'select id,state,remaining,odds from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [row.imported_bet_id],
+          )
+        ).rows[0];
+        if (!bet) throw new FinanceError('NOT_FOUND');
+        if (bet.state !== 'open') {
+          // Repetição idempotente: a MESMA liquidação já registrada é sucesso —
+          // nunca um segundo efeito financeiro.
+          const last = (
+            await client.query<{ outcome: string }>(
+              'select outcome from finance.settlement where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by settled_at desc, id desc limit 1',
+              [bet.id],
+            )
+          ).rows[0];
+          if (last?.outcome === input.action) return { version: row.version, betState: bet.state };
+          throw new FinanceError('STATE_CONFLICT');
+        }
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        // Valor derivado calculado no servidor (stake/odd canônicas): a vitória
+        // devolve o bruto `remaining × odds`; a derrota devolve zero.
+        const returnAmount =
+          input.action === 'win' ? (grossReturn(bet.remaining, bet.odds) ?? '0.00') : '0.00';
+        const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
+        const command = financeCommandSchema.parse({
+          type: 'bet.settle',
+          id: bet.id,
+          outcome: input.action,
+          closedPrincipal: bet.remaining,
+          returnAmount,
+          settledAt: now.toISOString(),
+          reason: 'Liquidação pelo Mini App',
+          expectedVersion: settings.version,
+        });
+        const key = deterministicKey(`import-status:${id}:${input.action}`);
+        await executeFinancialCommand(client, actor, key, command, settings);
+        const updated = (
+          await client.query<{ version: number }>(
+            'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        const settledBet = (
+          await client.query<{ state: string }>(
+            'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [bet.id],
+          )
+        ).rows[0]!;
+        return { version: updated.version, betState: settledBet.state };
       });
     },
     async image(context: OrganizationContext, id: string) {

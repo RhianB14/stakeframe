@@ -200,6 +200,24 @@ export const importDetailSchema = z
       extractedBookmakerId: z.uuid().nullable(),
       conflict: z.boolean(),
     }),
+    // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa") e o
+    // catálogo ativo da organização para a escolha explícita.
+    bookmakerOverrideId: z.uuid().nullable(),
+    bookmakers: z.array(z.object({ id: z.uuid(), name: z.string() })),
+    // Aposta vinculada (quando a importação já foi registrada): alimenta a
+    // seção "Alterar Status" com o estado canônico e os valores da liquidação.
+    bet: z
+      .object({
+        id: z.uuid(),
+        state: z.enum(['open', 'settled', 'cancelled']),
+        stake: z.string(),
+        odds: z.string(),
+        remaining: z.string(),
+      })
+      .nullable(),
+    // Estado da política automática (aviso sanitizado; nunca uma decisão do
+    // cliente). 'disabled' quando AUTOMATIC_IMPORT_ENABLED=false.
+    automaticPolicy: z.enum(['disabled', 'absent', 'invalid', 'approved']),
     duplicates: z.array(duplicateSchema),
     duplicateCount: z.number().int().nonnegative(),
     automatic: z.boolean(),
@@ -216,6 +234,9 @@ export const draftUpdateSchema = z
     betOrigin: z.enum(['real', 'freebet']).nullable().optional(),
     freebetId: z.uuid().nullable().optional(),
     eventAt: instant.nullable().optional(),
+    // STK-G0-19-R7: casa declarada pelo usuário (seção "Alterar Casa"); null
+    // limpa a escolha e volta à casa resolvida pela legenda/extração.
+    bookmakerId: z.uuid().nullable().optional(),
   })
   .refine(
     (value) => {
@@ -228,6 +249,35 @@ export const draftUpdateSchema = z
     { message: 'INVALID_FREEBET_SELECTION' },
   );
 export type DraftUpdate = z.infer<typeof draftUpdateSchema>;
+
+// STK-G0-19-R7 — resultado da edição do rascunho: versão + avisos sanitizados
+// (crédito removido por incompatibilidade de casa; estado da política
+// automática — nunca uma decisão, apenas o que informar ao usuário).
+export const draftUpdateResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    freebetCleared: z.boolean(),
+    automaticPolicy: z.enum(['disabled', 'absent', 'invalid', 'approved']),
+  })
+  .meta({ id: 'DraftUpdateResult' });
+export type DraftUpdateResult = z.infer<typeof draftUpdateResultSchema>;
+
+// STK-G0-19-R7 — transições REAIS de status disponíveis para a aposta de uma
+// importação pendente no Mini App (seção "Alterar Status").
+export const IMPORT_STATUS_ACTIONS = ['win', 'loss'] as const;
+export const importStatusSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    action: z.enum(IMPORT_STATUS_ACTIONS),
+  })
+  .meta({ id: 'ImportStatusUpdate' });
+export type ImportStatusUpdate = z.infer<typeof importStatusSchema>;
+export const importStatusResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string(),
+  })
+  .meta({ id: 'ImportStatusResult' });
 export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema);
 
 export const completionSchema = z.object({

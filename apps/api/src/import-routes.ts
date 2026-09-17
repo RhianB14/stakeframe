@@ -11,6 +11,9 @@ import {
   uploadSchema,
   commandHeadersSchema,
   draftUpdateSchema,
+  draftUpdateResultSchema,
+  importStatusSchema,
+  importStatusResultSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { validateTelegramInitData } from './telegram-init-data.js';
@@ -146,7 +149,7 @@ export function registerImportRoutes(
         params,
         body: draftUpdateSchema,
         response: {
-          200: z.object({ version: z.number().int().positive() }),
+          200: draftUpdateResultSchema,
           ...errors,
         },
       },
@@ -158,6 +161,35 @@ export function registerImportRoutes(
           contexts.get(request)!,
           params.parse(request.params).id,
           draftUpdateSchema.parse(request.body),
+          actor,
+        );
+      }),
+  );
+  app.post(
+    '/api/v1/imports/:id/status',
+    {
+      // STK-G0-19-R7 — transição REAL de status pelo Mini App ("Alterar
+      // Status"): liquidação da aposta pendente pelo comando financeiro
+      // canônico, com o MESMO autorizador do detalhe (sessão web ou initData
+      // validado no servidor). O cliente envia apenas a ação; estado,
+      // organização e valores vêm do registro canônico.
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'updateImportStatus',
+        summary: 'Liquidar a aposta da importação (vitória/derrota)',
+        params,
+        body: importStatusSchema,
+        response: { 200: importStatusResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, async () => {
+        const actor = request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web';
+        return service!.setStatus(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importStatusSchema.parse(request.body),
           actor,
         );
       }),

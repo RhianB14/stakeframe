@@ -580,7 +580,7 @@ describe('freebet compatibility on the canonical draft (R6)', () => {
     ).rejects.toThrow('FREEBET_UNRESOLVED');
   });
 
-  it('requires the approved policy to allow freebet for the resolved house', async () => {
+  it('declares freebet regardless of the automatic policy (R7) — saved and flagged, never blocked', async () => {
     const id = await upload();
     await seedExtraction(id);
     const credit = await run({
@@ -620,18 +620,11 @@ describe('freebet compatibility on the canonical draft (R6)', () => {
       approvedAt: '2020-01-01T00:00:00Z',
       expiresAt: '2999-01-01T00:00:00Z',
     });
+    // R7: a declaração do usuário nunca é bloqueada pela política automática —
+    // nem com layout allowFreebet=false. O que muda é só o aviso sanitizado.
     writeFileSync(file, JSON.stringify([layout(false)]));
     process.env.AUTOMATIC_IMPORT_POLICIES_FILE = file;
     try {
-      await expect(
-        imports.updateDraft(
-          tenantContext,
-          id,
-          { version: 1, betOrigin: 'freebet', freebetId: credit.id },
-          'web',
-        ),
-      ).rejects.toThrow('FREEBET_UNRESOLVED');
-      writeFileSync(file, JSON.stringify([layout(true)]));
       const saved = await imports.updateDraft(
         tenantContext,
         id,
@@ -639,10 +632,24 @@ describe('freebet compatibility on the canonical draft (R6)', () => {
         'web',
       );
       expect(saved.version).toBeGreaterThan(1);
+      // AUTOMATIC_IMPORT_ENABLED não está ligado no ambiente de teste: o
+      // aviso é 'disabled' (a automação não roda, o bilhete segue em revisão).
+      expect(saved.automaticPolicy).toBe('disabled');
+      expect(saved.freebetCleared).toBe(false);
     } finally {
       delete process.env.AUTOMATIC_IMPORT_POLICIES_FILE;
       rmSync(directory, { recursive: true, force: true });
     }
+    // Sem arquivo de política algum a declaração TAMBÉM é salva (novo rascunho).
+    const other = await upload();
+    await seedExtraction(other);
+    const second = await imports.updateDraft(
+      tenantContext,
+      other,
+      { version: 1, betOrigin: 'freebet', freebetId: credit.id },
+      'web',
+    );
+    expect(second.version).toBeGreaterThan(1);
   });
 
   it('keeps exactly one import when two drafts compete for the same credit', async () => {

@@ -140,17 +140,9 @@ afterEach(async () => {
 afterAll(async () => admin.close());
 
 describe('telegram result buttons callbacks', () => {
-  it('answers status and bookmaker questions with the canonical state and refreshes the message', async () => {
-    const id = await boundInbox();
-    await handler()(callback('status', 7777));
-    expect(calls[0]).toMatchObject({ method: 'answerCallbackQuery' });
-    expect(String(calls[0]!.body.text)).toContain('aguardando confirmação');
-    expect(Number(await editRows(id))).toBe(1);
-    await handler()(callback('bookmaker', 7777));
-    expect(String(calls[1]!.body.text)).toContain('Mini App');
-    // Re-sync idempotente: mesma versão ⇒ mesma chave da outbox (sem duplicar).
-    expect(Number(await editRows(id))).toBe(1);
-  });
+  // R7: os fluxos de status e casa NÃO são mais callbacks de texto — viraram
+  // botões web_app com seções reais do Mini App (o parser os recusa; os testes
+  // de rota com initData real cobrem a gravação efetiva).
 
   it('requires an explicit confirmation before discarding and allows cancelling', async () => {
     const id = await boundInbox();

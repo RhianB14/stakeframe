@@ -91,7 +91,7 @@ describe('automatic import policy boundaries', () => {
     ])
       expect(parseAutomaticPlacedAt(invalid, 'br-textual-sao-paulo')).toBeNull();
   });
-  it('defaults off and validates the private opt-in policy file without exposing paths or contents', () => {
+  it('defaults off and fail-closes to review on every invalid policy state (R7) — never a crash, never a path leak', () => {
     expect(readAutomaticLayouts({})).toEqual([]);
     expect(
       readAutomaticLayouts({
@@ -109,6 +109,8 @@ describe('automatic import policy boundaries', () => {
     try {
       writeFileSync(file, JSON.stringify([layout]));
       expect(readAutomaticLayouts(env)).toEqual([layout]);
+      // R7: política ausente/inválida/expirada NUNCA derruba o worker nem
+      // habilita a automação — devolve [] e o candidato encaminha à revisão.
       for (const value of [
         [],
         [{ ...layout, sampleCount: 1 }],
@@ -122,13 +124,15 @@ describe('automatic import policy boundaries', () => {
         [{ ...layout, model: 'unknown' }],
       ]) {
         writeFileSync(file, JSON.stringify(value));
-        expect(() => readAutomaticLayouts(env)).toThrow('AUTOMATIC_IMPORT_CONFIGURATION_INVALID');
+        expect(readAutomaticLayouts(env)).toEqual([]);
       }
       writeFileSync(file, 'private-invalid-content');
-      expect(() => readAutomaticLayouts(env)).toThrow('AUTOMATIC_IMPORT_CONFIGURATION_INVALID');
-      expect(() => readAutomaticLayouts({ ...env, AI_ENABLED: 'false' })).toThrow(
-        'AUTOMATIC_IMPORT_CONFIGURATION_INVALID',
-      );
+      expect(readAutomaticLayouts(env)).toEqual([]);
+      expect(readAutomaticLayouts({ ...env, AI_ENABLED: 'false' })).toEqual([]);
+      // Arquivo ausente com a automação ligada também é fail-closed para revisão.
+      expect(
+        readAutomaticLayouts({ ...env, AUTOMATIC_IMPORT_POLICIES_FILE: file + '.nope' }),
+      ).toEqual([]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

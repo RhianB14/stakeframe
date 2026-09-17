@@ -1,32 +1,36 @@
 import { readFileSync } from 'node:fs';
 import { validatedLayoutsSchema, type ValidatedLayout } from '@stakeframe/shared';
 
-// STK-G0-19-R6 — contexto de política de layouts aprovados (o MESMO arquivo
-// privado configurado para o worker). Usado para decidir se um freebet pode ser
-// escolhido num rascunho: sem arquivo configurado (dev/testes) não há contexto
-// (null); com arquivo presente a decisão é fail-closed — somente um layout
-// aprovado, vigente e com allowFreebet libera o crédito.
+// STK-G0-19-R7 — estado EXPLÍCITO da política de importação automática.
+//
+// A declaração do usuário (real/freebet) NUNCA depende deste módulo: aqui só
+// vive a elegibilidade da AUTOMAÇÃO. `null` nunca significa autorização; os
+// consumidores recebem um estado fechado e tratam qualquer coisa diferente de
+// 'approved' como bloqueio (fail-closed → revisão com motivo sanitizado).
+export type AutomaticPolicyState = 'absent' | 'invalid' | 'approved';
 
-export function freebetAllowedByPolicy(
-  bookmakerId: string,
-  now: Date = new Date(),
-): boolean | null {
+export function readAutomaticPolicy(): { state: AutomaticPolicyState; layouts: ValidatedLayout[] } {
   const path = process.env.AUTOMATIC_IMPORT_POLICIES_FILE;
-  if (!path) return null;
-  const read = (): ValidatedLayout[] | null => {
-    try {
-      const parsed = validatedLayoutsSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
-      return parsed.success ? parsed.data : null;
-    } catch {
-      return null;
-    }
-  };
-  const layouts = read();
-  if (!layouts) return false;
-  return layouts.some(
-    (layout) =>
-      layout.bookmakerId === bookmakerId &&
-      layout.allowFreebet &&
-      new Date(layout.expiresAt).getTime() > now.getTime(),
-  );
+  if (!path) return { state: 'absent', layouts: [] };
+  try {
+    const parsed = validatedLayoutsSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
+    if (!parsed.success || !parsed.data.length) return { state: 'invalid', layouts: [] };
+    const now = Date.now();
+    if (
+      parsed.data.some(
+        (layout) => Date.parse(layout.approvedAt) > now || Date.parse(layout.expiresAt) <= now,
+      )
+    )
+      return { state: 'invalid', layouts: [] };
+    return { state: 'approved', layouts: parsed.data };
+  } catch {
+    return { state: 'invalid', layouts: [] };
+  }
+}
+
+// Estado efetivo para avisos sanitizados no Mini App/web (disabled quando a
+// chave global está desligada — AUTOMATIC_IMPORT_ENABLED=false).
+export function automaticPolicyNotice(): 'disabled' | 'absent' | 'invalid' | 'approved' {
+  if (process.env.AUTOMATIC_IMPORT_ENABLED !== 'true') return 'disabled';
+  return readAutomaticPolicy().state;
 }

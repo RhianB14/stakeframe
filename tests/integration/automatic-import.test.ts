@@ -534,6 +534,84 @@ describe('automatic import financial boundary', () => {
     expect(await complete(freebetValue)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
     expect((await finance.workspace(tenantContext)).bankroll).toBe('1000.00');
   });
+  it('never autoimports without an approved policy and explains it with a sanitized reason (R7)', async () => {
+    const withoutPolicy = await input();
+    expect(await complete(withoutPolicy, [])).toMatchObject({ state: 'review' });
+    const fromStore = (
+      await database.pool.query<{ automatic_reason: string }>(
+        "select extraction->'automatic'->>'reason' as automatic_reason from integration.inbox where id=$1",
+        [withoutPolicy.id],
+      )
+    ).rows[0];
+    expect(fromStore?.automatic_reason).toBe('LAYOUT_NOT_VALIDATED');
+  });
+  it('blocks freebet on a layout without allowFreebet and proceeds with a valid credit when allowed (R7)', async () => {
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: layout.bookmakerId,
+      amount: '100.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Fictional credit',
+    });
+    const deniedLayout = { ...layout, allowFreebet: false };
+    const deniedInput = await input({ freebet: null }, 'Fixture\nBet365', {
+      kind: 'freebet',
+      freebetId: credit.id,
+    });
+    // O digest cobre o layout inteiro: o caminho realmente percorrido é o de
+    // um layout APROVADO que não permite freebet.
+    deniedInput.result.policyDigest = layoutDigest(deniedLayout);
+    const disallowed = await complete(deniedInput, [deniedLayout]);
+    expect(disallowed).toMatchObject({ state: 'review', reason: 'FREEBET_UNRESOLVED' });
+    // allowFreebet: true + crédito válido: prossegue, mas os DEMAIS gates
+    // continuam valendo (a stake veio válida; a odd também).
+    const allowed = await complete(
+      await input({ freebet: null }, 'Fixture\nBet365', { kind: 'freebet', freebetId: credit.id }),
+      [{ ...layout, allowFreebet: true }],
+    );
+    expect(allowed).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+  });
+  it('refuses a credit from another house or an expired credit even with an approved layout (R7)', async () => {
+    const superbet = (await finance.workspace(tenantContext)).catalog.find(
+      (item) => item.name === 'Superbet',
+    )!.id;
+    const foreignCredit = await run({
+      type: 'freebet.create',
+      bookmakerId: superbet,
+      amount: '100.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Fictional credit',
+    });
+    expect(
+      await complete(
+        await input({ freebet: null }, 'Fixture\nBet365', {
+          kind: 'freebet',
+          freebetId: foreignCredit.id,
+        }),
+      ),
+    ).toMatchObject({ state: 'review', reason: 'FREEBET_UNRESOLVED' });
+    const expired = await run({
+      type: 'freebet.create',
+      bookmakerId: layout.bookmakerId,
+      amount: '100.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Fictional credit',
+    });
+    await database.pool.query('update finance.freebet set expires_on=current_date-1 where id=$1', [
+      expired.id,
+    ]);
+    expect(
+      await complete(
+        await input({ freebet: null }, 'Fixture\nBet365', {
+          kind: 'freebet',
+          freebetId: expired.id,
+        }),
+      ),
+    ).toMatchObject({ state: 'review', reason: 'FREEBET_UNRESOLVED' });
+  });
   it('keeps a case without a readable placedAt in review and never invents an instant', async () => {
     // R5: a legenda não carrega mais data; placedAt vem apenas do texto visual.
     const noDate = await input({ placedAtText: null });
