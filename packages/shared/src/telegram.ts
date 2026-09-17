@@ -16,6 +16,24 @@ export const telegramOperationSchema = z.enum(TELEGRAM_OPERATIONS);
 export type TelegramOperation = z.infer<typeof telegramOperationSchema>;
 
 export const telegramSyncStateSchema = z.enum(['none', 'pending', 'synced', 'failed', 'deleted']);
+
+// STK-G0-19-R6 — dados de callback dos botões da resposta final. O payload
+// NUNCA carrega identificadores: a importação é resolvida no servidor por
+// chat + id da mensagem de resultado.
+export const TELEGRAM_CALLBACK_ACTIONS = [
+  'status',
+  'bookmaker',
+  'delete',
+  'delete_confirm',
+  'delete_cancel',
+] as const;
+export type TelegramCallbackAction = (typeof TELEGRAM_CALLBACK_ACTIONS)[number];
+
+export function parseTelegramCallbackData(value: string): TelegramCallbackAction | null {
+  const match = /^sf:v1:(status|bookmaker|delete|delete:confirm|delete:cancel)$/.exec(value);
+  if (!match || match[1] === undefined) return null;
+  return match[1].replace('delete:', 'delete_') as TelegramCallbackAction;
+}
 export type TelegramSyncState = z.infer<typeof telegramSyncStateSchema>;
 
 // Resultado final por caso (decisão única): would-import, review ou falha

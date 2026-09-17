@@ -7,7 +7,6 @@ import {
   financeCommandSchema,
   cents,
   money,
-  suggestedReturn,
   saoPauloDate,
   parseAutomaticPlacedAt,
   type ValidatedLayout,
@@ -109,7 +108,6 @@ async function candidate(
     return { reason: 'EXTRACTION_UNCERTAIN' };
   }
   let freebetId: string | null = null;
-  let stakeReturned = false;
   if (origin.kind === 'freebet') {
     if (!layout.allowFreebet) return { reason: 'FREEBET_UNRESOLVED' };
     // O crédito é o escolhido explicitamente pelo usuário; nunca ambíguo.
@@ -121,8 +119,9 @@ async function candidate(
       )
     ).rows;
     if (credits.length !== 1) return { reason: 'FREEBET_UNRESOLVED' };
+    // O stake_returned do crédito é aplicado na própria transação financeira
+    // (finance-commands lê o crédito sob lock); aqui basta o vínculo.
     freebetId = credits[0]!.id;
-    stakeReturned = credits[0]!.stake_returned;
   }
   const parsed = betInputSchema.safeParse({
     bookmakerId,
@@ -153,19 +152,10 @@ async function candidate(
     })),
   });
   if (!parsed.success) return { reason: 'EXTRACTION_UNCERTAIN' };
-  if (extraction.potentialReturn !== null) {
-    try {
-      if (
-        cents(extraction.potentialReturn) !==
-        cents(
-          suggestedReturn(stake, extraction.odds, 'win', origin.kind === 'freebet', stakeReturned),
-        )
-      )
-        return { reason: 'RETURN_MISMATCH' };
-    } catch {
-      return { reason: 'RETURN_MISMATCH' };
-    }
-  }
+  // STK-G0-19-R6: o retorno visual é somente diagnóstico de fidelidade —
+  // nunca bloqueia a importação. A base financeira é a stake validada, a odd
+  // total validada e o cálculo decimal server-side (stake × totalOdds); uma
+  // divergência visual não é prova de que stake/odd estejam erradas.
   return { reason: 'IMPORTED', bet: parsed.data };
 }
 

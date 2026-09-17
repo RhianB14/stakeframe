@@ -165,7 +165,9 @@ export function registerImportRoutes(
   app.get(
     '/api/v1/imports/:id',
     {
-      onRequest: authorize,
+      // STK-G0-19-R6: a leitura do detalhe aceita sessão web OU initData válido
+      // do Mini App (o PATCH já usava o mesmo autorizador; o GET ficou alinhado).
+      onRequest: authorizeDraft,
       schema: {
         ...common,
         operationId: 'getImport',

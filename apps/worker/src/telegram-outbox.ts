@@ -7,9 +7,9 @@ import {
   type OrganizationContext,
 } from '@stakeframe/db';
 import {
-  TELEGRAM_RESULT_BUTTONS,
   TelegramOperationError,
   createTelegramClient,
+  telegramResultButtons,
   type TelegramConfig,
 } from './telegram.js';
 import { buildImportMessage, type ImportMessageRow } from './telegram-message.js';
@@ -102,7 +102,7 @@ export function createTelegramOutboxService(
           ...(row.telegram_source_message_id !== null
             ? { replyToMessageId: Number(row.telegram_source_message_id) }
             : {}),
-          buttons: TELEGRAM_RESULT_BUTTONS,
+          buttons: telegramResultButtons(config.miniAppUrl, row.id),
         });
         await setSync(
           db,
@@ -126,7 +126,7 @@ export function createTelegramOutboxService(
           Number(row.telegram_result_message_id),
           buildImportMessage(row),
           {
-            buttons: TELEGRAM_RESULT_BUTTONS,
+            buttons: telegramResultButtons(config.miniAppUrl, row.id),
           },
         );
         await setSync(

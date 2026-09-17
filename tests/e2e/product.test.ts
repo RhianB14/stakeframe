@@ -400,12 +400,12 @@ test('an automatic import shows its origin and keeps financial creation controls
 test('a refused automatic import explains the review reason', async ({ page }) => {
   await enabledProduct(page);
   const detail = importFixture();
-  detail.automaticReason = 'RETURN_MISMATCH';
+  detail.automaticReason = 'EXTRACTION_UNCERTAIN';
   await importRoutes(page, detail);
   await page.goto('/#imports');
   await page.getByRole('button', { name: /Analista · Bet365/ }).click();
   await expect(page.getByRole('dialog')).toContainText(
-    'O retorno escrito diverge do cálculo pela stake e pela odd',
+    'Há campos essenciais ausentes ou dúvidas na leitura',
   );
   await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toBeVisible();
 });

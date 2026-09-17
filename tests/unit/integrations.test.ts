@@ -54,6 +54,7 @@ const config = {
   token: '123456:synthetic-token-not-a-real-credential',
   userId: '12345',
   chatId: '12345',
+  miniAppUrl: 'https://app.example.test',
 };
 const update = {
   update_id: 10,
@@ -397,5 +398,46 @@ describe('Telegram boundary', () => {
     expect(parseCaption('Tipster\n').bookmaker).toBeNull();
     expect(parseCaption('Tipster\n').requiresReview).toBe(true);
     expect(parseCaption('Tipster\n' + 'a'.repeat(101)).requiresReview).toBe(true);
+  });
+});
+
+describe('Telegram callback boundary (R6)', () => {
+  it('routes authorized callback_query updates to the inbox, advances the offset and drops foreign ones', async () => {
+    const updates = [
+      {
+        update_id: 60,
+        callback_query: {
+          id: 'cb-1',
+          from: { id: 12345 },
+          message: { message_id: 77, chat: { id: 12345 } },
+          data: 'sf:v1:delete',
+        },
+      },
+      {
+        update_id: 61,
+        callback_query: {
+          id: 'cb-2',
+          from: { id: 99999 },
+          message: { message_id: 78, chat: { id: 12345 } },
+          data: 'sf:v1:delete:confirm',
+        },
+      },
+    ];
+    const inbox = {
+      offset: vi.fn().mockResolvedValue(0),
+      accept: vi.fn(),
+      callback: vi.fn(),
+      advance: vi.fn(),
+    };
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ ok: true, result: updates }));
+    await pollTelegramOnce(config, inbox, new AbortController().signal, fetchImpl);
+    expect(inbox.accept).not.toHaveBeenCalled();
+    // Somente o callback do usuário configurado chega ao handler.
+    expect(inbox.callback).toHaveBeenCalledTimes(1);
+    expect(inbox.callback.mock.calls[0]![0]).toMatchObject({ action: 'delete', messageId: 77 });
+    expect(inbox.advance).toHaveBeenCalledWith(61);
+    expect(inbox.advance).toHaveBeenCalledWith(62);
   });
 });

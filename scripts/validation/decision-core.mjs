@@ -2,7 +2,6 @@ import {
   corpusEvaluationInputSchema,
   homologationContextSchema,
   parseAutomaticPlacedAt,
-  suggestedReturn,
   ticketExtractionSchema,
 } from '../../packages/shared/dist/index.js';
 import { KNOWN_BOOKMAKERS, normalizeEvent, normalizeMarket } from './corpus-core.mjs';
@@ -154,16 +153,11 @@ function actualSide(item, layout, contextCase, duplicateImage) {
   // (10) financeiro
   if (value.warnings.length || value.currency !== 'BRL' || !value.stake || !value.odds)
     issues.push('EXTRACTION_UNCERTAIN');
-  // R5: o valor visual é diagnóstico; o potencial persistido é sempre o
-  // CALCULADO (stake × odds). Divergência visual ⇒ stake/odd suspeitos ⇒ revisão.
-  if (value.potentialReturn !== null) {
-    try {
-      const suggested = suggestedReturn(value.stake, value.odds, 'win', kind === 'freebet', false);
-      if (!decimalEq(value.potentialReturn, suggested)) issues.push('RETURN_MISMATCH');
-    } catch {
-      issues.push('RETURN_MISMATCH');
-    }
-  }
+  // STK-G0-19-R6: o retorno visual NUNCA participa da decisão — divergência,
+  // ausência ou rótulo faltante são somente diagnóstico de fidelidade
+  // (returnFidelityMismatch no relatório). A base financeira é stake × odd
+  // calculados; stake/odd realmente incertas seguem em revisão pelos seus
+  // próprios códigos (EXTRACTION_UNCERTAIN etc.).
   // (11) duplicidade por imagem repetida dentro da própria evidência; a tupla
   // (casa + stake + odds + data em São Paulo) é conferida no passe seguinte.
   if (duplicateImage) issues.push('DUPLICATE_REVIEW_REQUIRED');

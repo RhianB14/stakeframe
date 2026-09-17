@@ -187,7 +187,7 @@ describe('automatic import policy boundaries', () => {
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     }
   });
-  it('binds potential return to the authorized labels and fails closed on OCR divergence', async () => {
+  it('keeps potential return out of the OCR agreement while the other fields stay essential', async () => {
     const completionFor = (potentialReturn: string | null) =>
       Response.json({
         id: 'fictional-completion',
@@ -268,13 +268,13 @@ describe('automatic import policy boundaries', () => {
       (await run('0.53', 'Ganho Potencial 0,53 R$', ['Prêmio', 'Ganho Potencial'])).result
         .ocrConsistent,
     ).toBe(true);
-    // Rotulo autorizado visivel + omissao do modelo.
-    expect((await run(null, 'Retorno Total 20,00')).result.ocrConsistent).toBe(false);
-    // Valor divergente do OCR.
-    expect((await run('21.00', 'Retorno Total 20,00')).result.ocrConsistent).toBe(false);
-    // Rotulo nao autorizado nunca preenche o campo.
-    expect((await run('20.00', 'Retorno Liquido 20,00')).result.ocrConsistent).toBe(false);
-    expect((await run('26.50', 'Retorno Obtido 26,50')).result.ocrConsistent).toBe(false);
+    // R6: o retorno é diagnóstico de fidelidade — rótulo visível com omissão do
+    // modelo, valor divergente do OCR ou rótulo não autorizado NÃO reprovam a
+    // concordância (stake, odds, referência e seleções seguem essenciais).
+    expect((await run(null, 'Retorno Total 20,00')).result.ocrConsistent).toBe(true);
+    expect((await run('21.00', 'Retorno Total 20,00')).result.ocrConsistent).toBe(true);
+    expect((await run('20.00', 'Retorno Liquido 20,00')).result.ocrConsistent).toBe(true);
+    expect((await run('26.50', 'Retorno Obtido 26,50')).result.ocrConsistent).toBe(true);
     // Os rotulos autorizados viajam no contexto dos layouts.
     const { fetchImpl } = await run('20.00', 'Retorno Total 20,00');
     const sent = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));

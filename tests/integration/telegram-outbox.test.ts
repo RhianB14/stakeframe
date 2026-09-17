@@ -23,7 +23,12 @@ import type { FinanceCommand } from '../../packages/shared/src/index.js';
 const source = requireDatabaseUrl(process.env.TEST_DATABASE_URL);
 const admin = createDatabase(source, { statementTimeoutMs: 30_000 });
 const image = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
-const config: TelegramConfig = { token: '123456:TEST-TOKEN', userId: '999', chatId: '42' };
+const config: TelegramConfig = {
+  token: '123456:TEST-TOKEN',
+  userId: '999',
+  chatId: '42',
+  miniAppUrl: 'https://app.stakeframe.test',
+};
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 let database: Database;
 let finance: FinanceService;

@@ -278,3 +278,22 @@ test('recusa casa fora do allowlist antes de avaliar', () => {
     /DECISION_BOOKMAKER_UNKNOWN/,
   );
 });
+
+test('retorno visual divergente é somente diagnóstico de fidelidade e nunca bloqueia (R6)', () => {
+  const value = base();
+  // Um positivo com retorno visual divergente do cálculo stake × odd.
+  // Um positivo qualquer recebe um retorno visual claramente divergente.
+  const targetIndex = 0;
+  const target = value.cases[targetIndex];
+  const original = target.actual.extraction.potentialReturn;
+  target.actual.extraction.potentialReturn = '999.99';
+  const report = evaluateDecision(value, { context: withContext(value) });
+  const evaluated = report.cases.find((item) => item.index === targetIndex + 1);
+  // Nenhum issue de retorno: o valor visual não participa da decisão…
+  assert.equal(evaluated.actualIssues.includes('RETURN_MISMATCH'), false);
+  // …o caso continua importável e a divergência fica no diagnóstico separado.
+  assert.equal(evaluated.actualClass, 'WOULD_IMPORT');
+  assert.equal(report.returnFidelityMismatch >= 1, true);
+  assert.equal(report.gates.unsafeAutoImport, 0);
+  target.actual.extraction.potentialReturn = original;
+});

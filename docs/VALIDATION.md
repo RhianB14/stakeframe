@@ -170,3 +170,13 @@ computador pessoal desligado. Validar upload, Telegram, revisão, calendário,
 relatórios e correções em desktop e celular. Critérios finais e autorização
 de release/deploy permanecem em [PLAN.md §5.5](PLAN.md#55-aceite-da-primeira-versão).
 O desempenho sintético e a CI não encerram esse aceite real.
+
+## Correção R6 — retorno visual fora da decisão
+
+A partir do R6 o valor visual de retorno potencial (`potentialReturn`) é
+considerado somente QUALIDADE DIAGNÓSTICA em `validation:decision`
+(`returnFidelityMismatch`): divergência, ausência ou rótulo faltante nunca
+bloqueiam a importação automática nem mudam a classe de decisão. A base
+financeira é sempre o cálculo server-side `stake × totalOdds`; stake ou odd
+realmente incertas permanecem em revisão pelos seus próprios códigos
+(`EXTRACTION_UNCERTAIN` etc.).

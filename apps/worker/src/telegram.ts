@@ -4,18 +4,31 @@ import {
   telegramMessageSchema,
   telegramUpdateIdSchema,
   parseCaption,
+  parseTelegramCallbackData,
 } from '@stakeframe/shared';
 import { IntegrationError, readBounded, readJson } from './http.js';
-// Botões da resposta final (callback tokens opacos; nenhum identificador
-// interno, segredo ou dado privado viaja no payload).
-export const TELEGRAM_RESULT_BUTTONS = [
-  [{ text: 'Editar', callback_data: 'sf:v1:edit' }],
-  [
-    { text: 'Alterar Status', callback_data: 'sf:v1:status' },
-    { text: 'Alterar Casa', callback_data: 'sf:v1:bookmaker' },
-  ],
-  [{ text: 'Excluir', callback_data: 'sf:v1:delete' }],
-] as const;
+// Botões da resposta final (R6): 'Editar' abre o Mini App pelo botão web_app
+// com a URL HTTPS configurada e o UUID opaco do registro canônico; os demais
+// usam callback_data sem NENHUM identificador — a importação é resolvida no
+// servidor por chat + id da mensagem de resultado.
+export function telegramResultButtons(miniAppUrl: string, importId: string) {
+  const base = miniAppUrl.replace(/#.*$/, '').replace(/\/+$/, '');
+  return [
+    [{ text: 'Editar', web_app: { url: `${base}#miniapp?import=${importId}` } }],
+    [
+      { text: 'Alterar Status', callback_data: 'sf:v1:status' },
+      { text: 'Alterar Casa', callback_data: 'sf:v1:bookmaker' },
+    ],
+    [{ text: 'Excluir', callback_data: 'sf:v1:delete' }],
+  ];
+}
+
+export function telegramDeleteConfirmButtons() {
+  return [
+    [{ text: 'Confirmar exclusão', callback_data: 'sf:v1:delete:confirm' }],
+    [{ text: 'Cancelar', callback_data: 'sf:v1:delete:cancel' }],
+  ];
+}
 
 // Falha de operação Telegram classificada: transitória (retry/backoff),
 // permanente (400/403 sem loop) ou idempotente (mensagem ausente/'não
@@ -60,23 +73,50 @@ function classifyFailure(payload: Record<string, unknown>): {
 }
 import { imageMime } from './openrouter.js';
 
-export type TelegramConfig = { token: string; userId: string; chatId: string };
+export type TelegramConfig = {
+  token: string;
+  userId: string;
+  chatId: string;
+  /** URL base HTTPS do Mini App (validada; nunca carrega token nem initData). */
+  miniAppUrl: string;
+};
+
+export function validMiniAppUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      url.search === '' &&
+      url.hash === ''
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function readTelegramConfig(env: NodeJS.ProcessEnv): TelegramConfig | null {
   if (env.TELEGRAM_ENABLED === undefined || env.TELEGRAM_ENABLED === 'false') return null;
   if (env.TELEGRAM_ENABLED !== 'true') throw new IntegrationError('TELEGRAM_CONFIGURATION_INVALID');
   const token = readSecret(env, 'TELEGRAM_BOT_TOKEN');
   const userId = readSecret(env, 'TELEGRAM_OWNER_USER_ID');
   const chatId = readSecret(env, 'TELEGRAM_OWNER_CHAT_ID');
+  // A URL do Mini App é informação pública (nunca um segredo): env simples.
+  const miniAppUrl =
+    typeof env.TELEGRAM_MINIAPP_URL === 'string' ? env.TELEGRAM_MINIAPP_URL.trim() : '';
   if (
     !token ||
     !/^\d{5,16}:[A-Za-z0-9_-]{30,80}$/.test(token) ||
     !userId ||
     !/^[1-9]\d{0,15}$/.test(userId) ||
     !Number.isSafeInteger(Number(userId)) ||
-    chatId !== userId
+    chatId !== userId ||
+    !miniAppUrl ||
+    !validMiniAppUrl(miniAppUrl)
   )
     throw new IntegrationError('TELEGRAM_CONFIGURATION_INVALID');
-  return { token, userId, chatId };
+  return { token, userId, chatId, miniAppUrl };
 }
 
 export function authorizedImage(update: unknown, config: TelegramConfig) {
@@ -102,6 +142,30 @@ export function authorizedImage(update: unknown, config: TelegramConfig) {
   };
 }
 export type TelegramImage = NonNullable<ReturnType<typeof authorizedImage>>;
+
+// STK-G0-19-R6 — callback_query autorizado: usuário e chat precisam ser os
+// configurados; o payload só carrega a AÇÃO (nunca UUID/identificador) e o
+// vínculo com a importação é resolvido no servidor por chat + message_id.
+export function authorizedCallback(update: unknown, config: TelegramConfig) {
+  const root = object(update);
+  if (!root || typeof root.update_id !== 'number' || !Number.isSafeInteger(root.update_id))
+    return null;
+  const query = object(root.callback_query);
+  if (!query) return null;
+  if (typeof query.id !== 'string' || query.id.length < 1 || query.id.length > 200) return null;
+  const from = object(query.from);
+  if (!from || String(from.id) !== config.userId) return null;
+  const message = object(query.message);
+  if (!message) return null;
+  const chat = object(message.chat);
+  if (!chat || String(chat.id) !== config.chatId) return null;
+  const messageId = message.message_id;
+  if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId)) return null;
+  const action = typeof query.data === 'string' ? parseTelegramCallbackData(query.data) : null;
+  if (!action) return null;
+  return { updateId: root.update_id, callbackId: query.id, action, messageId };
+}
+export type TelegramCallback = NonNullable<ReturnType<typeof authorizedCallback>>;
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -189,7 +253,7 @@ export function createTelegramClient(config: TelegramConfig, fetchImpl: typeof f
         throw new IntegrationError('TELEGRAM_OFFSET_INVALID');
       const result = await call(
         'getUpdates',
-        { offset, limit: 25, timeout: 25, allowed_updates: ['message'] },
+        { offset, limit: 25, timeout: 25, allowed_updates: ['message', 'callback_query'] },
         signal,
       );
       if (
@@ -239,6 +303,25 @@ export function createTelegramClient(config: TelegramConfig, fetchImpl: typeof f
         },
         options.stop,
       );
+    },
+    /** Responde um callback_query (toast/alert curto; nunca dados privados). */
+    async answerCallbackQuery(
+      callbackId: string,
+      options: { text?: string; showAlert?: boolean } = {},
+    ) {
+      await mutate('answerCallbackQuery', {
+        callback_query_id: callbackId,
+        ...(options.text ? { text: options.text } : {}),
+        ...(options.showAlert ? { show_alert: true } : {}),
+      });
+    },
+    /** Troca apenas o teclado inline (ex.: confirmação de exclusão). */
+    async editMessageReplyMarkup(chatId: number, messageId: number, buttons: unknown) {
+      await mutate('editMessageReplyMarkup', {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: { inline_keyboard: buttons },
+      });
     },
     async deleteMessage(chatId: number, messageId: number, stop?: AbortSignal) {
       const result = await mutate(
@@ -290,6 +373,8 @@ export interface TelegramInbox {
   offset(): Promise<number>;
   // Must commit idempotently before returning. Persist bytes and metadata together.
   accept(image: TelegramImage, download: () => Promise<Buffer>): Promise<void>;
+  /** Trata callback_query autorizado; ausente = callbacks são ignorados. */
+  callback?(query: TelegramCallback): Promise<void>;
   advance(nextOffset: number): Promise<void>;
 }
 
@@ -307,6 +392,10 @@ export async function pollTelegramOnce(
     if (id < offset) continue;
     const image = authorizedImage(update, config);
     if (image) await inbox.accept(image, () => client.download(image, signal));
+    else {
+      const callback = authorizedCallback(update, config);
+      if (callback && inbox.callback) await inbox.callback(callback);
+    }
     // No sender data or content from rejected messages is persisted.
     await inbox.advance(id + 1);
     offset = id + 1;

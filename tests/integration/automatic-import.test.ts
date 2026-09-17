@@ -310,7 +310,6 @@ describe('automatic import financial boundary', () => {
     [{ warnings: ['Unreadable'] }, 'EXTRACTION_UNCERTAIN'],
     [{ currency: null }, 'EXTRACTION_UNCERTAIN'],
     [{ stake: '10.123' }, 'EXTRACTION_UNCERTAIN'],
-    [{ potentialReturn: '199.99' }, 'RETURN_MISMATCH'],
     [{ odds: null }, 'EXTRACTION_UNCERTAIN'],
     [{ placedAtText: '07/09 10:30' }, 'PLACED_AT_UNCERTAIN'],
     [{ placedAtText: '9999-01-01T00:00:00Z' }, 'PLACED_AT_UNCERTAIN'],
@@ -502,6 +501,38 @@ describe('automatic import financial boundary', () => {
     const detail = await createImportService(database).detail(tenantContext, value.id);
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet.reference).toBe('');
+  });
+  it('never blocks on a divergent visual return and keeps the computed value as the source', async () => {
+    // R6: o valor visual é diagnóstico; a base financeira é stake × odd.
+    const divergent = await input({ potentialReturn: '199.99' });
+    expect(await complete(divergent)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, divergent.id);
+    // O valor visual permanece na evidência apenas como diagnóstico de fidelidade…
+    expect(detail.extraction?.potentialReturn).toBe('199.99');
+    // …e o registro financeiro usa somente stake e odd validados.
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
+    expect(bet.stake).toBe('100.00');
+    expect(bet.odds).toBe('2.0000');
+  });
+  it('imports with an absent visual return', async () => {
+    const missing = await input({ potentialReturn: null });
+    expect(await complete(missing)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+  });
+  it('keeps the freebet gross calculation without changing credit accounting', async () => {
+    const freebetCredit = await run({
+      type: 'freebet.create',
+      bookmakerId: layout.bookmakerId,
+      amount: '100.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Fictional credit',
+    });
+    const freebetValue = await input({ freebet: null, potentialReturn: null }, 'Fixture\nBet365', {
+      kind: 'freebet',
+      freebetId: freebetCredit.id,
+    });
+    expect(await complete(freebetValue)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    expect((await finance.workspace(tenantContext)).bankroll).toBe('1000.00');
   });
   it('keeps a case without a readable placedAt in review and never invents an instant', async () => {
     // R5: a legenda não carrega mais data; placedAt vem apenas do texto visual.

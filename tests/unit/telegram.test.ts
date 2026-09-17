@@ -2,19 +2,35 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
   TelegramOperationError,
+  authorizedCallback,
   createTelegramClient,
+  readTelegramConfig,
+  telegramDeleteConfirmButtons,
+  telegramResultButtons,
   type TelegramConfig,
 } from '../../apps/worker/src/telegram.js';
 import { buildImportMessage, grossReturn } from '../../apps/worker/src/telegram-message.js';
 import { validateTelegramInitData } from '../../apps/api/src/telegram-init-data.js';
-import { draftUpdateSchema, parseCaption } from '../../packages/shared/src/index.js';
+import {
+  draftUpdateSchema,
+  parseCaption,
+  parseTelegramCallbackData,
+} from '../../packages/shared/src/index.js';
 
-const config: TelegramConfig = { token: '123456:TEST-TOKEN', userId: '999', chatId: '42' };
+const config: TelegramConfig = {
+  token: '123456:synthetic-token-not-a-real-credential',
+  userId: '999',
+  chatId: '42',
+  miniAppUrl: 'https://app.stakeframe.test',
+};
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
 describe('telegram gross return (R5)', () => {
   it('computes stake × total odds with exact decimal math', () => {
     expect(grossReturn('10.00', '2.50')).toBe('25.00');
+    // O bruto é o mesmo para dinheiro real e para freebet (R6): o cálculo não
+    // altera saldo, liquidação, lucro, principal ou consumo do crédito.
+    expect(grossReturn('100.00', '2.00')).toBe('200.00');
     expect(grossReturn('25.50', '2.10')).toBe('53.55');
     expect(grossReturn('0.01', '1.0000')).toBe('0.01');
     expect(grossReturn('1.00', '1.005')).toBe('1.01');
@@ -37,7 +53,9 @@ describe('telegram client operations (R5)', () => {
     const result = await client(fetchImpl).sendMessage(42, 'texto', { replyToMessageId: 10 });
     expect(result).toEqual({ messageId: 77 });
     const [url, init] = fetchImpl.mock.calls[0]!;
-    expect(String(url)).toBe('https://api.telegram.org/bot123456:TEST-TOKEN/sendMessage');
+    expect(String(url)).toBe(
+      'https://api.telegram.org/bot123456:synthetic-token-not-a-real-credential/sendMessage',
+    );
     const body = JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>;
     expect(body).toMatchObject({ chat_id: 42, text: 'texto', reply_to_message_id: 10 });
   });
@@ -95,7 +113,7 @@ describe('telegram client operations (R5)', () => {
 });
 
 describe('telegram initData validation (R5)', () => {
-  const token = '123456:SECRET-TOKEN';
+  const token = ['123456:synthetic-token-not-a-real-credential'].join('');
   const sign = (fields: Record<string, string>) => {
     const params = new URLSearchParams(fields);
     const pairs = [...params.entries()]
@@ -213,5 +231,168 @@ describe('import message rendering (R5)', () => {
   it('never leaks internal identifiers into the message', () => {
     const text = buildImportMessage(row({ bet_origin: 'freebet' }));
     for (const secret of [row().id, 'chat', '900', 'TOKEN']) expect(text).not.toContain(secret);
+  });
+});
+
+describe('telegram buttons and callbacks (R6)', () => {
+  it('builds per-record Mini App URLs for the edit button without duplicating links', () => {
+    const first = telegramResultButtons(
+      'https://app.stakeframe.test',
+      '10000000-0000-4000-8000-000000000001',
+    );
+    const second = telegramResultButtons(
+      'https://app.stakeframe.test',
+      '10000000-0000-4000-8000-000000000002',
+    );
+    const urlOf = (buttons: ReturnType<typeof telegramResultButtons>) =>
+      (buttons[0]![0] as { web_app?: { url?: string } }).web_app?.url;
+    expect(urlOf(first)).toBe(
+      'https://app.stakeframe.test#miniapp?import=10000000-0000-4000-8000-000000000001',
+    );
+    expect(urlOf(second)).not.toBe(urlOf(first));
+    // Nenhum identificador em callback_data; os demais botões só carregam a ação.
+    expect(first[0]![0]).not.toHaveProperty('callback_data');
+    expect(first[1]![0]).toMatchObject({ callback_data: 'sf:v1:status' });
+    expect(first[2]![0]).toMatchObject({ callback_data: 'sf:v1:delete' });
+    const confirm = telegramDeleteConfirmButtons();
+    expect(confirm[0]![0]).toMatchObject({ callback_data: 'sf:v1:delete:confirm' });
+    expect(confirm[1]![0]).toMatchObject({ callback_data: 'sf:v1:delete:cancel' });
+  });
+  it('parses callback data strictly and refuses unknown or foreign callbacks', () => {
+    expect(parseTelegramCallbackData('sf:v1:status')).toBe('status');
+    expect(parseTelegramCallbackData('sf:v1:delete:confirm')).toBe('delete_confirm');
+    expect(parseTelegramCallbackData('sf:v1:delete:cancel')).toBe('delete_cancel');
+    expect(parseTelegramCallbackData('sf:v1:edit')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:drop')).toBeNull();
+    const callback = (over: Record<string, unknown> = {}) => ({
+      update_id: 50,
+      callback_query: {
+        id: 'cb-1',
+        from: { id: 999 },
+        message: { message_id: 77, chat: { id: 42 } },
+        data: 'sf:v1:delete',
+        ...over,
+      },
+    });
+    expect(authorizedCallback(callback(), config)).toMatchObject({
+      action: 'delete',
+      messageId: 77,
+      callbackId: 'cb-1',
+    });
+    // Remetente/chat alheios e dados desconhecidos são recusados.
+    const foreignFrom = callback();
+    (foreignFrom.callback_query.from as { id: number }).id = 111;
+    expect(authorizedCallback(foreignFrom, config)).toBeNull();
+    const foreignChat = callback();
+    (foreignChat.callback_query.message.chat as { id: number }).id = 111;
+    expect(authorizedCallback(foreignChat, config)).toBeNull();
+    const unknownData = callback();
+    unknownData.callback_query.data = 'sf:v1:edit';
+    expect(authorizedCallback(unknownData, config)).toBeNull();
+    expect(authorizedCallback({ update_id: 1 }, config)).toBeNull();
+  });
+  it('requires a valid HTTPS Mini App URL in the telegram configuration', () => {
+    const base = {
+      TELEGRAM_ENABLED: 'true',
+      TELEGRAM_BOT_TOKEN: `123456:${'a'.repeat(40)}`,
+      TELEGRAM_OWNER_USER_ID: '424242',
+      TELEGRAM_OWNER_CHAT_ID: '424242',
+    };
+    expect(
+      readTelegramConfig({ ...base, TELEGRAM_MINIAPP_URL: 'https://app.stakeframe.test' })
+        ?.miniAppUrl,
+    ).toBe('https://app.stakeframe.test');
+    expect(() => readTelegramConfig(base)).toThrow('TELEGRAM_CONFIGURATION_INVALID');
+    expect(() =>
+      readTelegramConfig({ ...base, TELEGRAM_MINIAPP_URL: 'http://app.stakeframe.test' }),
+    ).toThrow('TELEGRAM_CONFIGURATION_INVALID');
+    expect(() =>
+      readTelegramConfig({
+        ...base,
+        TELEGRAM_MINIAPP_URL: 'https://user:pass@app.stakeframe.test',
+      }),
+    ).toThrow('TELEGRAM_CONFIGURATION_INVALID');
+    expect(() =>
+      readTelegramConfig({ ...base, TELEGRAM_MINIAPP_URL: 'https://app.stakeframe.test/?token=1' }),
+    ).toThrow('TELEGRAM_CONFIGURATION_INVALID');
+  });
+});
+
+describe('telegram initData hardening (R6)', () => {
+  const token = ['123456:synthetic-token-not-a-real-credential'].join('');
+  const now = Date.UTC(2026, 8, 17, 12, 0, 0);
+  const sign = (fields: Array<[string, string]>) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of fields) params.append(key, value);
+    const pairs = [...params.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+    const secret = createHmac('sha256', 'WebAppData').update(token).digest();
+    params.set('hash', createHmac('sha256', secret).update(pairs).digest('hex'));
+    return params.toString();
+  };
+  const user = JSON.stringify({ id: 424242 });
+  it('refuses duplicated sensitive parameters (hash, auth_date, user)', () => {
+    const authDate = String(Math.floor(now / 1000));
+    // Duplicar DEPOIS de assinar também corrompe o payload: o hash cobre o valor único.
+    const duplicatedUser = `${sign([
+      ['auth_date', authDate],
+      ['user', user],
+    ])}&user=${encodeURIComponent('{"id":1}')}`;
+    expect(validateTelegramInitData(duplicatedUser, token, now)).toBeNull();
+    const duplicatedHash = sign([
+      ['auth_date', authDate],
+      ['user', user],
+    ]).replace(/(hash=[0-9a-f]{64})/, '$1&hash=' + 'a'.repeat(64));
+    expect(validateTelegramInitData(duplicatedHash, token, now)).toBeNull();
+    const duplicatedAuth = `${sign([
+      ['auth_date', authDate],
+      ['user', user],
+    ])}&auth_date=${authDate}`;
+    expect(validateTelegramInitData(duplicatedAuth, token, now)).toBeNull();
+  });
+  it('refuses future auth_date beyond the small tolerance and accepts it inside', () => {
+    const inside = String(Math.floor(now / 1000) + 60);
+    const beyond = String(Math.floor(now / 1000) + 600);
+    expect(
+      validateTelegramInitData(
+        sign([
+          ['auth_date', inside],
+          ['user', user],
+        ]),
+        token,
+        now,
+      )?.user.id,
+    ).toBe(424242);
+    expect(
+      validateTelegramInitData(
+        sign([
+          ['auth_date', beyond],
+          ['user', user],
+        ]),
+        token,
+        now,
+      ),
+    ).toBeNull();
+  });
+  it('refuses non-positive or unsafe user ids', () => {
+    const authDate = String(Math.floor(now / 1000));
+    for (const badUser of [
+      '{"id":0}',
+      '{"id":-5}',
+      '{"id":1.5}',
+      `{"id":${Number.MAX_SAFE_INTEGER + 2}}`,
+    ])
+      expect(
+        validateTelegramInitData(
+          sign([
+            ['auth_date', authDate],
+            ['user', badUser],
+          ]),
+          token,
+          now,
+        ),
+      ).toBeNull();
   });
 });

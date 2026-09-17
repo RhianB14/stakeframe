@@ -74,10 +74,13 @@ export async function applyFinanceCommand(
         'delete from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid and inbox_id=$1',
         [row.id],
       );
-      await client.query(
-        "update integration.inbox set state='discarded',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+      const discarded = await client.query<{ version: number }>(
+        "update integration.inbox set state='discarded',version=version+1,telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
         [row.id],
       );
+      // R6: a resposta final do Telegram reflete o descarte (mesma transação).
+      if (row.telegram_chat_id && row.telegram_result_message_id)
+        await enqueueOutbox(client, row.id, 'edit_result_message', discarded.rows[0]!.version);
       return { id: row.id, before: row };
     }
     const attachment = (

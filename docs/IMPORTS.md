@@ -260,3 +260,26 @@ mensagem final, contrato), integração (rascunho canônico, importação
 fail-closed, outbox com retry/429/permanente/versão antiga, limpeza,
 isolamento entre organizações) e E2E web/Mini App — zero operação real no
 Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
+
+## Correções pós-revisão (STK-G0-19-R6)
+
+- **Leitura do Mini App**: o GET do detalhe aceita sessão web OU
+  `Telegram.WebApp.initData` validado no servidor (mesmo autorizador do PATCH);
+  idade máxima de 24 h, tolerância de 2 min para relógio adiantado, recusa de
+  parâmetros sensíveis duplicados e vínculo ao Telegram ID do proprietário. O
+  `initData` nunca aparece em logs ou respostas.
+- **Botões funcionais**: 'Editar' abre o Mini App via botão `web_app` com URL
+  HTTPS validada (`TELEGRAM_MINIAPP_URL`, nunca com token/initData/segredo) e o
+  UUID opaco do registro; 'Alterar Status'/'Alterar Casa' respondem pelo vínculo
+  canônico (chat + id da mensagem) e re-sincronizam a mensagem; 'Excluir' exige
+  confirmação explícita em dois toques, é idempotente e recusa callbacks de
+  outra conversa/organização. Payloads de callback não carregam identificadores.
+- **Retorno visual apenas diagnóstico**: `potentialReturn` extraído nunca
+  autoriza, bloqueia ou altera importação e deixa de ser essencial na
+  concordância OCR↔modelo; a base é o cálculo `stake × totalOdds`. Divergências
+  aparecem em `returnFidelityMismatch` (qualidade), separadas da segurança.
+- **Freebet completa no rascunho**: créditos listados já filtrados por casa
+  resolvida, stake, validade, disponibilidade e política aprovada; o PATCH
+  repete a validação completa sob lock; o consumo mantém a validação
+  transacional (um crédito → uma importação; concorrência serializada no
+  financeiro).

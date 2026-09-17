@@ -603,3 +603,25 @@ recebem status `Superseded` e apontam a substituta.
 - **Segurança:** `initData` do Mini App validado no servidor (HMAC) e vinculado
   ao Telegram ID do proprietário; a web nunca chama o Telegram diretamente;
   auditoria sanitizada por edição.
+
+## D034 — Correções pós-revisão da PR #136 (2026-09-17)
+
+- **Contexto:** a revisão do Codex no head `17600ad` apontou quatro bloqueios:
+  leitura do Mini App sem autenticação por initData, botões do Telegram sem
+  comportamento real, retorno visual ainda atuando como gate e freebet do
+  rascunho sem validação de casa/valor/política/concorrência.
+- **Decisão:** (1) GET do detalhe passa a aceitar sessão web OU initData
+  validado no servidor, com hardening (duplicados, futuro além de 120 s, id
+  positivo); (2) botões passam a: 'Editar' via `web_app` com
+  `TELEGRAM_MINIAPP_URL` validada + UUID opaco, 'Status'/'Casa' via callback
+  resolvido por chat + id da mensagem com re-sync canônico, 'Excluir' com
+  confirmação explícita e descarte idempotente; (3) o retorno visual deixa de
+  ser gate em qualquer camada (candidato, OCR e decisão), permanecendo como
+  diagnóstico de fidelidade; (4) a escolha de freebet valida organização, casa,
+  valor, validade, disponibilidade e política sob lock, com a primeira escolha
+  explícita e o consumo serializado na transação financeira.
+- **Gates:** zero Telegram real (mocks), zero chamadas pagas, sem migração,
+  `AUTOMATIC_IMPORT_ENABLED=false`, sem merge; o novo commit invalida a revisão
+  anterior até nova autorização do Codex.
+- **Segurança:** nenhum identificador Telegram em payload de callback, logs ou
+  respostas; a importação é sempre resolvida pelo vínculo canônico no servidor.

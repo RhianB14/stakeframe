@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { telegramOperationSchema, type TelegramOperation } from '@stakeframe/shared';
+import {
+  parseCaption,
+  telegramOperationSchema,
+  ticketExtractionSchema,
+  type TelegramOperation,
+} from '@stakeframe/shared';
+import { freebetAllowedByPolicy } from './layout-policy.js';
 import type { Database } from './index.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 import { FinanceError } from './finance-core.js';
@@ -11,6 +17,14 @@ import { FinanceError } from './finance-core.js';
 // depois do commit. Chave idempotente por organização + importação + versão +
 // operação; a versão veta eventos antigos que tentariam sobrescrever conteúdo
 // mais novo. Nenhuma resposta bruta ou token entra no banco ou nos logs.
+
+const normalizeAlias = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .replace(/\s+/g, ' ');
 
 export async function enqueueOutbox(
   client: PoolClient,
@@ -115,8 +129,10 @@ export function createImportDraftService(database: Database) {
             telegram_chat_id: string | null;
             telegram_result_message_id: string | null;
             telegram_deleted_at: string | null;
+            caption: string;
+            extraction: unknown;
           }>(
-            'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
             [id],
           )
         ).rows[0];
@@ -131,10 +147,41 @@ export function createImportDraftService(database: Database) {
         if (nextOrigin === 'real' || nextOrigin === null) nextFreebet = null;
         if (nextOrigin === 'freebet') {
           if (!nextFreebet) throw new FinanceError('FREEBET_UNRESOLVED');
+          // STK-G0-19-R6: validação COMPLETA sob lock — organização (RLS),
+          // casa resolvida do rascunho, valor exatamente igual à stake,
+          // validade, disponibilidade e política aprovada permitindo freebet.
+          // Sem contexto confiável de casa/stake, fail-closed (sem escolha
+          // implícita); a interface nunca é a única barreira.
+          const labels = parseCaption(row.caption);
+          const evidence =
+            row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+              ? (row.extraction as { extraction: unknown }).extraction
+              : row.extraction;
+          const parsedExtraction = ticketExtractionSchema.safeParse(evidence);
+          const extraction = parsedExtraction.success ? parsedExtraction.data : null;
+          const aliases = (
+            await client.query<{ catalog_id: string; kind: string; label: string }>(
+              'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+            )
+          ).rows;
+          const matchBookmaker = (label: string | null) =>
+            label
+              ? (aliases.find(
+                  (alias) =>
+                    alias.kind === 'bookmaker' &&
+                    normalizeAlias(alias.label) === normalizeAlias(label),
+                )?.catalog_id ?? null)
+              : null;
+          const bookmakerId =
+            matchBookmaker(labels.bookmaker) ?? matchBookmaker(extraction?.bookmaker ?? null);
+          const stake = extraction?.stake ?? null;
+          if (!bookmakerId || !stake) throw new FinanceError('FREEBET_UNRESOLVED');
+          if (freebetAllowedByPolicy(bookmakerId) === false)
+            throw new FinanceError('FREEBET_UNRESOLVED');
           const credit = (
             await client.query<{ id: string }>(
-              "select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update",
-              [nextFreebet],
+              "select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update",
+              [nextFreebet, bookmakerId, stake],
             )
           ).rows[0];
           if (!credit) throw new FinanceError('FREEBET_UNRESOLVED');

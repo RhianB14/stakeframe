@@ -76,6 +76,7 @@ describe('production configuration boundaries', () => {
       TELEGRAM_BOT_TOKEN_FILE: join(directory, 'token'),
       TELEGRAM_OWNER_USER_ID_FILE: join(directory, 'owner'),
       TELEGRAM_OWNER_CHAT_ID_FILE: join(directory, 'owner'),
+      TELEGRAM_MINIAPP_URL: 'https://miniapp.example.test',
     };
     const storage = {
       ...environment,

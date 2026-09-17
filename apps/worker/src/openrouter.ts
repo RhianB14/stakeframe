@@ -30,7 +30,7 @@ export const TICKET_EXTRACTION_SYSTEM_PROMPT = [
   '[Procedimento obrigatório] Faça duas passagens: (1) localize todos os campos financeiros e cada linha de seleção; (2) compare a resposta com a imagem, principalmente o bloco financeiro final. Depois faça a auto-verificação antes de emitir o JSON.',
   '[Proibições] Não busque informações, não calcule valores ausentes e não invente datas, moeda, status, valores, bookmaker ou esporte. Não infira esporte por nomes de equipes ou participantes.',
   '[Bookmaker] O campo bookmaker é independente do contexto informado pelo usuário e da descrição do layout. Nunca copie o nome da casa desses contextos. Preencha bookmaker somente quando a marca estiver claramente visível na imagem; caso contrário use null.',
-  '[Retorno financeiro] Procure o rótulo financeiro visível e transcreva o valor exatamente como aparece, inclusive 0.00. Só mapeie para potentialReturn quando o rótulo constar entre os rótulos autorizados do layout (quando listados) e significar explicitamente retorno potencial ou total. Nunca use stake, odds, rótulo não autorizado, retorno líquido, retorno obtido, cashout, saldo ou status para preencher esse campo. Rótulo ausente, diferente, cortado ou ilegível significa null.',
+  '[Retorno financeiro] Procure o rótulo financeiro visível e transcreva o valor exatamente como aparece, inclusive 0.00. Só mapeie para potentialReturn quando o rótulo constar entre os rótulos autorizados do layout (quando listados) e significar explicitamente retorno potencial ou total. Nunca use stake, odds, rótulo não autorizado, retorno líquido, retorno obtido, cashout, saldo ou status para preencher esse campo. Rótulo ausente, diferente, cortado ou ilegível significa null. Este campo é apenas diagnóstico de fidelidade: nunca autoriza, bloqueia ou altera a importação, e o retorno financeiro do registro é sempre calculado no servidor (stake × odd total).',
   '[Retorno zero] Se houver retorno exibido como R$ 0,00, escreva 0.00; bilhete perdido não significa retorno ausente. Nunca derive potentialReturn de stake, odds, número de seleções ou resultado. Ausência não é zero.',
   '[Freebet] O campo freebet só recebe true com evidência explícita, na imagem, de aposta grátis/bônus; só recebe false com evidência visual explícita de aposta com saldo/dinheiro real debitado. Ausência de indicação não prova nem true nem false: use null. Nunca deduza o tipo apenas pela ausência de marca promocional.',
   '[Seleções] Leia cada seleção uma por uma, de cima para baixo. Copie o evento visível e a odd daquela seleção. Não deixe event ou odds em null quando o texto ou a odd estiverem legíveis e não substitua a odd da seleção pela odd total do cupom.',
@@ -40,7 +40,7 @@ export const TICKET_EXTRACTION_SYSTEM_PROMPT = [
   '[Warnings] Preencha warnings somente quando houver dúvida, conflito, corte ou ilegibilidade observável. Não crie alerta genérico para imagem clara.',
   '[Exemplos sintéticos] Os exemplos abaixo são fictícios e servem apenas para fixar o formato; nunca copie seus valores para outra imagem. Exemplo de bilhete perdido: {"bookmaker":"Bet365","reference":"ABC123","placedAtText":"15/09/2026 12:00","currency":"BRL","stake":"10.00","odds":"2.00","potentialReturn":"0.00","freebet":null,"selections":[{"event":"Time Alfa x Time Beta","sport":null,"market":"Match Winner","selection":"Time Alfa","odds":"2.00","eventDateText":null}],"warnings":[]}. Exemplo de campo ausente: se o rótulo de retorno potencial não aparecer, potentialReturn deve ser null, mesmo quando stake e odds estiverem presentes.',
   '[Formato] Decimais são strings com ponto, sem moeda. Não liquide apostas. Responda somente com o objeto JSON exigido pelo schema, sem markdown, comentários, explicações ou texto antes/depois do JSON.',
-  '[Auto-verificação] Antes do JSON, confira: (1) potentialReturn veio do rótulo correto ou ficou null; (2) nenhum valor foi calculado; (3) bookmaker veio da imagem, não do contexto; (4) todas as seleções visíveis têm event e odd conferidos; (5) warnings refletem somente evidência visual real; (6) freebet seguiu a regra de evidência (true/false somente com prova, senão null); (7) eventos empilhados usaram "participante 1 x participante 2" ou foram marcados em warnings.',
+  '[Auto-verificação] Antes do JSON, confira: (1) potentialReturn veio do rótulo correto ou ficou null (diagnóstico; nunca calculado e nunca usado como resultado); (2) nenhum valor foi calculado; (3) bookmaker veio da imagem, não do contexto; (4) todas as seleções visíveis têm event e odd conferidos; (5) warnings refletem somente evidência visual real; (6) freebet seguiu a regra de evidência (true/false somente com prova, senão null); (7) eventos empilhados usaram "participante 1 x participante 2" ou foram marcados em warnings.',
 ].join('\n\n');
 
 // Gemini can reject otherwise valid, constraint-heavy JSON schemas with HTTP 400.
@@ -141,11 +141,7 @@ function searchable(value: string): string {
     .replace(/[^a-z0-9]+/g, '');
 }
 
-function ocrSupportsExtraction(
-  extraction: unknown,
-  ocr: OcrResult,
-  potentialReturnLabels?: readonly string[],
-): boolean {
+function ocrSupportsExtraction(extraction: unknown, ocr: OcrResult): boolean {
   if (!extraction || typeof extraction !== 'object') return false;
   const value = extraction as {
     reference?: string | null;
@@ -160,16 +156,10 @@ function ocrSupportsExtraction(
     }>;
   };
   const searchableOcr = searchable(ocr.text);
-  if (potentialReturnLabels?.length) {
-    // Rotulo autorizado visivel sem valor extraido, ou valor extraido sem
-    // rotulo autorizado visivel, e divergencia OCR x modelo (fail-closed).
-    const hasAuthorizedLabel = potentialReturnLabels.some((label) =>
-      searchableOcr.includes(searchable(label)),
-    );
-    if (hasAuthorizedLabel && !value.potentialReturn) return false;
-    if (value.potentialReturn && !hasAuthorizedLabel) return false;
-  }
-  const fields = [value.reference, value.stake, value.odds, value.potentialReturn];
+  // STK-G0-19-R6: potentialReturn NAO participa da concordancia OCR x modelo —
+  // ele e apenas diagnostico de fidelidade (rotulo/valor divergentes, ausentes
+  // ou divergentes do calculo nunca reprovam a extracao).
+  const fields = [value.reference, value.stake, value.odds];
   for (const selection of value.selections ?? [])
     fields.push(selection.event, selection.market, selection.selection, selection.odds);
   return fields.every((field) => !field || searchableOcr.includes(searchable(field)));
@@ -335,9 +325,7 @@ async function runExtraction(
       model: completion.model,
       provider: completion.provider ?? null,
       layoutId: selected?.id ?? null,
-      ocrConsistent: options.ocr
-        ? ocrSupportsExtraction(extraction.data, options.ocr, selected?.potentialReturnLabels)
-        : null,
+      ocrConsistent: options.ocr ? ocrSupportsExtraction(extraction.data, options.ocr) : null,
       // A policy is model-specific. A fallback that has not passed its own
       // corpus can extract for review but can never inherit the primary
       // model's automatic-import approval.

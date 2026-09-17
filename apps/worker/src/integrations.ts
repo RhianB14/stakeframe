@@ -13,7 +13,13 @@ import {
   type ObjectStorage,
 } from '@stakeframe/db';
 import { readAiConfig, extractTicket } from './openrouter.js';
-import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
+import {
+  createTelegramClient,
+  pollTelegramOnce,
+  readTelegramConfig,
+  type TelegramImage,
+} from './telegram.js';
+import { createTelegramCallbackHandler } from './telegram-callbacks.js';
 import { IntegrationError } from './http.js';
 import { startTelegramOutbox } from './telegram-outbox.js';
 import { readAutomaticLayouts } from './automatic-config.js';
@@ -179,9 +185,14 @@ export async function startIntegrations(
       // Losing this session invalidates leadership immediately, including an in-flight poll.
       leader.on('error', () => controller.abort());
       const telegramContext = systemOrganizationContext(founder!);
+      // R6: callbacks dos botões são resolvidos pelo vínculo canônico
+      // (chat + id da mensagem); nunca por identificador no payload.
+      const telegramClient = createTelegramClient(telegram, fetchImpl);
+      const handleCallback = createTelegramCallbackHandler(database, telegramClient, telegram);
       const inbox = {
         offset: store.offset,
         advance: store.advance,
+        callback: handleCallback,
         async accept(image: TelegramImage, download: () => Promise<Buffer>) {
           const inboxId = await store.accept(
             telegramContext,

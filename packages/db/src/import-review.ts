@@ -12,6 +12,7 @@ import { createAttachmentStore, type ObjectStorage } from './attachments.js';
 import { FinanceError } from './finance-core.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 import { createImportDraftService } from './telegram-sync.js';
+import { freebetAllowedByPolicy } from './layout-policy.js';
 
 export async function findDuplicates(
   client: Pick<PoolClient, 'query'>,
@@ -250,19 +251,29 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             [id],
           )
         ).rows[0]!;
-        const credits = (
-          await client.query<{
-            id: string;
-            bookmaker_id: string;
-            amount: string;
-            expires_text: string;
-            stake_returned: boolean;
-          }>(
-            "select id,bookmaker_id,amount,to_char(expires_on,'YYYY-MM-DD') as expires_text,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and used_by is null order by expires_on asc,id asc limit 50",
-          )
-        ).rows;
         const captionBookmakerId = match('bookmaker', labels.bookmaker);
         const extractedBookmakerId = match('bookmaker', extraction?.bookmaker ?? null);
+        const draftBookmakerId = captionBookmakerId ?? extractedBookmakerId;
+        const draftStake = extraction?.stake ?? null;
+        // STK-G0-19-R6: somente créditos compatíveis com o rascunho (casa
+        // resolvida, valor da stake, validade, disponibilidade e política
+        // aprovada). A interface nunca é a única barreira — o PATCH repete a
+        // validação completa sob lock antes de gravar.
+        const credits =
+          draftBookmakerId && draftStake && freebetAllowedByPolicy(draftBookmakerId) !== false
+            ? (
+                await client.query<{
+                  id: string;
+                  bookmaker_id: string;
+                  amount: string;
+                  expires_text: string;
+                  stake_returned: boolean;
+                }>(
+                  "select id,bookmaker_id,amount,to_char(expires_on,'YYYY-MM-DD') as expires_text,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date and bookmaker_id=$1 and amount=$2 order by expires_on asc,id asc limit 50",
+                  [draftBookmakerId, draftStake],
+                )
+              ).rows
+            : [];
         const duplicates = await findDuplicates(client, id, {
           bookmakerId:
             captionBookmakerId ?? extractedBookmakerId ?? '00000000-0000-0000-0000-000000000000',
