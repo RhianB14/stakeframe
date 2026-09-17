@@ -45,7 +45,7 @@ export function OnboardingPage({ workspace, open }: { workspace: Workspace; open
   });
   if (status.isPending)
     return (
-      <div className="panel">
+      <div className="panel" aria-busy="true">
         <div className="section-heading">
           <div>
             <h2>Primeiros passos</h2>
@@ -109,6 +109,11 @@ function OnboardingFlow({
         </div>
         <span className="onboarding-progress" role="status">
           {step <= 3 ? `Passo ${step} de 3` : 'Concluído'}
+          <span className="sr-only">
+            {step <= 3
+              ? ` — Etapa ${step}: ${stepTitles[step - 1]}`
+              : ' — Primeiros passos concluídos'}
+          </span>
         </span>
       </div>
       <ol className="onboarding-steps" aria-label="Etapas dos primeiros passos">
@@ -130,6 +135,8 @@ function OnboardingFlow({
                 {done ? '✓' : number}
               </span>
               {title}
+              {done ? <span className="sr-only"> (concluída)</span> : null}
+              {number === step ? <span className="sr-only"> (etapa atual)</span> : null}
             </li>
           );
         })}
@@ -151,18 +158,24 @@ function ProfileStep({ status }: { status: OnboardingStatus }) {
         : 'America/Sao_Paulo'),
   );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    field: 'displayName' | 'timezone' | 'form';
+    message: string;
+  } | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     const name = displayName.trim();
     if (name.length === 0) {
-      setError('Informe o nome que deve aparecer na sua conta.');
+      setError({ field: 'displayName', message: 'Informe o nome que deve aparecer na sua conta.' });
       return;
     }
     const zone = timezone.trim();
     if (!isValidTimeZone(zone)) {
-      setError('Informe um fuso horário IANA válido, como America/Sao_Paulo.');
+      setError({
+        field: 'timezone',
+        message: 'Informe um fuso horário IANA válido, como America/Sao_Paulo.',
+      });
       return;
     }
     setSaving(true);
@@ -175,7 +188,10 @@ function ProfileStep({ status }: { status: OnboardingStatus }) {
       await client.invalidateQueries({ queryKey: ['product'] });
       await client.invalidateQueries({ queryKey: ['owner-session'] });
     } catch (reason) {
-      setError(message(reason, 'Não foi possível salvar seu perfil. Tente novamente.'));
+      setError({
+        field: 'form',
+        message: message(reason, 'Não foi possível salvar seu perfil. Tente novamente.'),
+      });
     } finally {
       setSaving(false);
     }
@@ -194,12 +210,17 @@ function ProfileStep({ status }: { status: OnboardingStatus }) {
         }}
       >
         <fieldset disabled={saving}>
+          <legend className="sr-only">Seu perfil</legend>
           <div className="form-grid">
             <Field label="Nome exibido">
               <input
                 required
                 maxLength={120}
                 value={displayName}
+                aria-invalid={error?.field === 'displayName' || undefined}
+                aria-describedby={
+                  error?.field === 'displayName' ? 'onboarding-profile-error' : undefined
+                }
                 onChange={(event) => setDisplayName(event.target.value)}
               />
             </Field>
@@ -208,6 +229,10 @@ function ProfileStep({ status }: { status: OnboardingStatus }) {
                 required
                 list="onboarding-timezones"
                 value={timezone}
+                aria-invalid={error?.field === 'timezone' || undefined}
+                aria-describedby={
+                  error?.field === 'timezone' ? 'onboarding-profile-error' : undefined
+                }
                 onChange={(event) => setTimezone(event.target.value)}
               />
             </Field>
@@ -219,8 +244,8 @@ function ProfileStep({ status }: { status: OnboardingStatus }) {
           </div>
         </fieldset>
         {error ? (
-          <p className="form-error" role="alert">
-            {error}
+          <p className="form-error" role="alert" id="onboarding-profile-error">
+            {error.message}
           </p>
         ) : null}
         <div className="form-actions">
@@ -252,16 +277,17 @@ function BankrollStep({
           Sua banca inicial já está configurada.
         </p>
       ) : houses.length === 0 ? (
-        <>
+        <div className="onboarding-empty">
           <p className="form-intro">
-            Comece indicando a casa onde você aposta e o saldo disponível nela.
+            Nenhuma casa cadastrada ainda. Comece indicando a casa onde você aposta e o saldo
+            disponível nela.
           </p>
           <div className="onboarding-actions">
             <Button onClick={() => open({ kind: 'catalog', catalogKind: 'bookmaker' })}>
               Adicionar casa
             </Button>
           </div>
-        </>
+        </div>
       ) : (
         <>
           <p className="form-intro">
@@ -320,7 +346,7 @@ function FirstBetStep({ status, open }: { status: OnboardingStatus; open: OpenMo
           você pode seguir sem registrar uma aposta agora — a escolha fica registrada.
         </p>
       )}
-      <div className="onboarding-actions">
+      <div className="onboarding-actions" role="group" aria-label="Escolha da primeira aposta">
         <Button onClick={() => open({ kind: 'bet' })}>Registrar aposta manual</Button>
         <Button variant="secondary" onClick={() => setShowTelegram(true)}>
           Conectar Telegram
@@ -334,11 +360,20 @@ function FirstBetStep({ status, open }: { status: OnboardingStatus; open: OpenMo
         </p>
       ) : null}
       {error ? (
-        <p className="form-error" role="alert">
+        <p className="form-error" role="alert" id="onboarding-first-bet-error">
           {error}
         </p>
       ) : null}
       <div className="form-actions">
+        {error ? (
+          <Button
+            variant="secondary"
+            onClick={() => void finish(resolution ?? 'deferred')}
+            disabled={saving}
+          >
+            Tentar novamente
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           onClick={() => void finish(resolution ?? 'deferred')}

@@ -744,7 +744,7 @@
 .form-field textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid #414d63;
+  border: 1px solid #5b6984;
   background: #151c27;
   color: #e4ebf8;
   border-radius: 6px;
@@ -765,7 +765,7 @@
   background: #242d3b;
 }
 .form-field input::placeholder {
-  color: #727f94;
+  color: #8490a6;
 }
 .form-field textarea {
   resize: vertical;
@@ -1347,7 +1347,16 @@
 .report-table .report-event {
   white-space: normal;
 }
+/* STK-F2-01: tokens locais do onboarding. A paleta é a mesma do produto (tema escuro
+   único); centralizada aqui para um tema claro futuro trocar apenas valores. */
 .onboarding-panel {
+  --onb-border: #2c3340;
+  --onb-surface: #1c2434;
+  --onb-accent: #94afff;
+  --onb-accent-contrast: #111b31;
+  --onb-done: #a9c6b2;
+  --onb-done-bg: #24402f;
+  --onb-muted: #7e899b;
   max-width: 780px;
 }
 .onboarding-progress {
@@ -1379,7 +1388,7 @@
   padding: 7px 13px;
 }
 .onboarding-step.active {
-  border-color: #4a5f8f;
+  border-color: #586ea6;
   background: #1c2434;
   color: #c9d5f4;
 }
@@ -1418,9 +1427,34 @@
   gap: 10px;
   margin: 6px 0 4px;
 }
+.onboarding-empty {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  border: 1px dashed #3d4e72;
+  border-radius: 9px;
+  padding: 16px 18px;
+}
+.onboarding-empty .form-intro {
+  margin: 0 0 4px;
+}
 @media (max-width: 760px) {
   .onboarding-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+  .onboarding-panel .ui-button {
+    min-height: 44px;
+  }
+  .onboarding-step {
+    font-size: 11px;
+    padding: 6px 11px;
+  }
+  .onboarding-progress {
+    white-space: normal;
+    text-align: center;
+  }
+  .onboarding-section {
+    padding-top: 16px;
   }
 }
