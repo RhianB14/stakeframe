@@ -29,7 +29,12 @@ Limites de admissão: 2.000 entradas não encerradas e 1 GiB de imagens locais.
 A legenda segue primeira linha tipster, segunda linha casa e terceira linha o
 tipo da aposta (`real` ou `freebet`). O legado de duas linhas continua
 disponível para revisão manual e nunca autoriza importação automática;
-terceiro valor ausente, desconhecido ou ambíguo falha fechado. Aliases ativos
+terceiro valor ausente, desconhecido ou ambíguo falha fechado. A quarta linha
+é opcional e informa a data e hora da aposta (`DD/MM/AAAA HH:mm`); ela é
+obrigatória para a automação quando a imagem não traz data legível, e imagem e
+contexto precisam apontar para o mesmo instante (divergência ou ambiguidade
+permanece em revisão; o horário de upload nunca é usado como horário da
+aposta). Aliases ativos
 resolvem nomes sem diferenciar caixa/acentos. Divergência entre legenda e
 extração fica explícita e impede preselecionar a casa no formulário. Datas
 escritas permanecem evidência: o formulário exige confirmar o instante da
@@ -49,14 +54,20 @@ Com uma política privada aprovada e ativação explícita no worker, a identifi
 do layout usa descrição visual, modelo fixo e digest da política. O servidor
 exige casa e tipster resolvidos por aliases ativos, concordância da casa com o
 layout e o bilhete, moeda BRL, tipo da aposta informado na legenda (contexto
-confiável, com a leitura visual apenas como detecção de conflito), referência,
+confiável, com a leitura visual apenas como detecção de conflito), referência
+(vazia é aceita quando a casa não a apresenta: nenhuma referência sintética é
+gravada e a deduplicação por imagem/similaridade segue bloqueando colisões),
 stake/odd e seleções válidas, nenhuma dúvida na extração e instante da aposta
 interpretável pelo formato aprovado. Não reduz textos para fazê-los caber.
 Datas sem ano, datas futuras e horários ambíguos/inexistentes no horário de
 verão ficam em revisão. Eventos com data explícita entram como estimados;
 ausências permanecem pendentes e horários não são inventados.
 
-O retorno potencial, quando escrito, deve conferir centavo a centavo. O tipo
+Os rótulos autorizados de retorno potencial vêm da política da casa (ex.:
+Bet365 `Retorno Total`; Superbet `Prêmio` e `Ganho Potencial`); rótulos como
+`Retorno Obtido`, `Retorno Líquido`, cashout, saldo, stake e odds nunca
+preenchem o campo, e uma divergência entre OCR e modelo mantém a revisão. O
+retorno potencial, quando escrito, deve conferir centavo a centavo. O tipo
 informado decide a criação: dinheiro real nunca consome crédito promocional e
 um conflito visual de freebet (`FREEBET_CONFLICT`) bloqueia a importação.
 Freebets exigem permissão na política e exatamente um crédito disponível da

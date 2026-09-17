@@ -52,8 +52,7 @@ async function candidate(
     extraction.warnings.length ||
     extraction.currency !== 'BRL' ||
     !extraction.stake ||
-    !extraction.odds ||
-    !extraction.reference?.trim()
+    !extraction.odds
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
   if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
@@ -82,13 +81,31 @@ async function candidate(
   const tipsterId = match('tipster', labels.tipster);
   const bookmakerId = match('bookmaker', labels.bookmaker);
   if (!tipsterId || !bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };
-  if (
-    bookmakerId !== layout.bookmakerId ||
-    match('bookmaker', extraction.bookmaker) !== bookmakerId
-  )
+  // A casa informada no contexto é a fonte de verdade. A leitura visual só
+  // pesa como conflito quando aponta para OUTRA casa cadastrada; texto visual
+  // não resolvido permanece em revisão (fail-closed) e marca ausente (null)
+  // não invalida o bilhete. O contexto nunca é copiado para a extração.
+  const visualBookmakerId = match('bookmaker', extraction.bookmaker);
+  if (bookmakerId !== layout.bookmakerId) return { reason: 'BOOKMAKER_CONFLICT' };
+  if (extraction.bookmaker !== null && visualBookmakerId === null)
     return { reason: 'BOOKMAKER_CONFLICT' };
-  const placedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
-  if (!placedAt || Date.parse(placedAt) > now.getTime()) return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (visualBookmakerId !== null && visualBookmakerId !== bookmakerId)
+    return { reason: 'BOOKMAKER_CONFLICT' };
+  // Data: a imagem e a fonte primaria; a 4a linha da legenda e o contexto
+  // confiavel (obrigatoria para automatizar quando a imagem nao traz data
+  // parseavel). Ambos os lados precisam apontar para o MESMO instante;
+  // divergencia, leitura ambigua ou texto nao parseavel permanece em
+  // revisao. O horario de upload nunca e usado como horario da aposta.
+  const visualPlacedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
+  const contextPlacedAt = labels.date ? parseAutomaticPlacedAt(labels.date, 'br-sao-paulo') : null;
+  if (extraction.placedAtText !== null && visualPlacedAt === null)
+    return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (labels.date !== null && contextPlacedAt === null) return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (visualPlacedAt !== null && contextPlacedAt !== null && visualPlacedAt !== contextPlacedAt)
+    return { reason: 'PLACED_AT_UNCERTAIN' };
+  const placedAt = visualPlacedAt ?? contextPlacedAt;
+  if (!placedAt) return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (Date.parse(placedAt) > now.getTime()) return { reason: 'PLACED_AT_UNCERTAIN' };
   let stake: string;
   try {
     stake = money(cents(extraction.stake));
@@ -116,7 +133,11 @@ async function candidate(
     odds: extraction.odds,
     placedAt,
     freebetId,
-    reference: extraction.reference,
+    // Referencia vazia e aceita quando a casa nao a apresenta (ex.: Bet365):
+    // a deduplicacao por imagem/referencia/similaridade acontece na mesma
+    // transacao financeira e colisao segue bloqueando. NUNCA gravamos uma
+    // referencia sintetica.
+    reference: extraction.reference ?? '',
     allowMissingUnit: false,
     selections: extraction.selections.map((selection) => {
       const eventDate = automaticEventDate(selection.eventDateText);

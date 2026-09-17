@@ -377,7 +377,23 @@ describe('Telegram boundary', () => {
       tipster: 'Tipster',
       bookmaker: 'Casa',
       kind: 'real',
+      date: null,
       requiresReview: false,
+    });
+    expect(parseCaption(' Tipster \r\n Casa \r\n real \r\n 07/09/2026 14:51 ')).toEqual({
+      tipster: 'Tipster',
+      bookmaker: 'Casa',
+      kind: 'real',
+      date: '07/09/2026 14:51',
+      requiresReview: false,
+    });
+    expect(parseCaption('Tipster\nCasa\nreal\namanh\u00e3')).toMatchObject({
+      date: null,
+      requiresReview: true,
+    });
+    expect(parseCaption('Tipster\nCasa\nreal\n07/09/2026')).toMatchObject({
+      date: null,
+      requiresReview: true,
     });
     expect(parseCaption('Tipster\nCasa\nFREEBET').kind).toBe('freebet');
     expect(parseCaption('Tipster\nCasa\nfreebet').requiresReview).toBe(false);

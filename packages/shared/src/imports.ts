@@ -114,8 +114,12 @@ export const validatedLayoutSchema = z.strictObject({
   bookmakerId: z.uuid(),
   model: z.enum(OPENROUTER_MODELS),
   description: z.string().trim().min(20).max(1000),
-  placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo']),
+  placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo', 'br-textual-sao-paulo']),
   allowFreebet: z.boolean(),
+  // Rótulos autorizados para potentialReturn — parte do digest da política por
+  // casa (ex.: Bet365: ["Retorno Total"]; Superbet: ["Prêmio", "Ganho
+  // Potencial"]). Opcional para políticas antigas; políticas novas declaram.
+  potentialReturnLabels: z.array(z.string().trim().min(1).max(60)).min(1).max(10).optional(),
   layoutSha256: z.string().regex(/^[a-f0-9]{64}$/),
   coverage: z.strictObject({
     positive: z.number().int().min(20).max(10000),
@@ -161,6 +165,8 @@ export const importDetailSchema = z
       // Tipo da aposta informado na terceira linha da legenda (contexto
       // confiável); null mantém o item em revisão manual.
       kind: z.enum(['real', 'freebet']).nullable(),
+      // Quarta linha opcional da legenda (DD/MM/AAAA HH:mm).
+      date: z.string().nullable(),
       requiresReview: z.boolean(),
     }),
     matches: z.object({
@@ -243,16 +249,22 @@ export function parseCaption(caption: string) {
     .split('\n')
     .map((line) => line.trim());
   const third = (lines[2] ?? '').toLocaleLowerCase('pt-BR');
-  // O tipo da aposta é contexto explícito e fail-closed: o legado de duas
-  // linhas e qualquer terceiro valor ausente, desconhecido ou ambíguo ficam em
-  // revisão manual e nunca autorizam importação automática.
+  const fourth = lines[3] ?? '';
+  const date = /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(fourth) ? fourth : null;
+  // Contexto explícito e fail-closed: tipster + casa + tipo (real|freebet) e,
+  // opcionalmente, a data da aposta em DD/MM/AAAA HH:mm (obrigatória para a
+  // automação quando a imagem não traz data parseável). O legado de duas
+  // linhas e qualquer valor ausente, desconhecido ou ambíguo ficam em revisão
+  // manual e nunca autorizam importação automática.
   return {
     tipster: lines[0] || null,
     bookmaker: lines[1] || null,
     kind: third === 'real' || third === 'freebet' ? (third as 'real' | 'freebet') : null,
+    date,
     requiresReview:
-      lines.length !== 3 ||
+      (lines.length !== 3 && lines.length !== 4) ||
       lines.some((line) => !line || line.length > 100) ||
-      (third !== 'real' && third !== 'freebet'),
+      (third !== 'real' && third !== 'freebet') ||
+      (lines.length === 4 && date === null),
   };
 }

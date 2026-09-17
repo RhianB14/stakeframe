@@ -61,15 +61,49 @@ export function parseAutomaticPlacedAt(
     const value = new Date(text);
     return Number.isFinite(value.getTime()) ? value.toISOString() : null;
   }
+  if (format === 'br-textual-sao-paulo') {
+    // Formato textual do layout Superbet: "D DE MES. DE AAAA - HH:mm" (com
+    // hifen/en-dash/em-dash). Somente o separador entre data e hora e
+    // normalizado; digitos, mes (abreviacao maiuscula com ponto) e horario
+    // permanecem exatos e nunca sao completados.
+    const parts =
+      /^(\d{1,2}) DE (JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\. DE (\d{4})\s*[\u2013\u2014-]\s*(\d{2}):(\d{2})$/.exec(
+        text,
+      );
+    if (!parts) return null;
+    const [, day, monthName, year, hour, minute] = parts;
+    const months = [
+      'JAN',
+      'FEV',
+      'MAR',
+      'ABR',
+      'MAI',
+      'JUN',
+      'JUL',
+      'AGO',
+      'SET',
+      'OUT',
+      'NOV',
+      'DEZ',
+    ];
+    const month = String(months.indexOf(monthName!) + 1).padStart(2, '0');
+    const date = `${year}-${month}-${day!.padStart(2, '0')}`;
+    if (!z.iso.date().safeParse(date).success || +hour! > 23 || +minute! > 59) return null;
+    return saoPauloInstant(date, hour!, minute!, '00');
+  }
   const parts = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text);
   if (!parts) return null;
   const [, day, month, year, hour, minute, second = '00'] = parts;
   const date = `${year}-${month}-${day}`;
   if (!z.iso.date().safeParse(date).success || +hour! > 23 || +minute! > 59 || +second > 59)
     return null;
+  return saoPauloInstant(date, hour!, minute!, second);
+}
+
+// Both historical offsets are tested against IANA data. DST gaps and overlaps
+// yield zero or two matches and must be reviewed instead of guessing an instant.
+function saoPauloInstant(date: string, hour: string, minute: string, second: string) {
   const expected = `${date} ${hour}:${minute}:${second}`;
-  // Both historical offsets are tested against IANA data. DST gaps and overlaps
-  // yield zero or two matches and must be reviewed instead of guessing an instant.
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo',
     year: 'numeric',
@@ -92,7 +126,6 @@ export function parseAutomaticPlacedAt(
     });
   return matches.length === 1 ? matches[0]!.toISOString() : null;
 }
-
 export function automaticEventDate(text: string | null) {
   if (!text) return null;
   const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);

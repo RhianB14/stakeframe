@@ -230,9 +230,11 @@ Convenção da legenda:
 Nome do tipster
 Nome da casa de aposta
 Tipo da aposta (real ou freebet)
+Data da aposta (opcional, DD/MM/AAAA HH:mm)
 ```
 
-A terceira linha é obrigatória para qualquer registro automático: envios de
+A terceira linha é obrigatória para qualquer registro automático; a quarta é
+obrigatória para a automação quando a imagem não traz data legível: envios de
 duas linhas e valores ausentes, desconhecidos ou ambíguos permanecem em revisão
 manual. O tipo informado é a fonte de verdade financeira; a IA apenas sinaliza
 conflito visual.

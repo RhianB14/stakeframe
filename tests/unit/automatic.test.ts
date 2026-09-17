@@ -67,6 +67,31 @@ describe('automatic import policy boundaries', () => {
     for (const value of ['07/09', 'amanhã', '2026-02-30', '07/09/2026 18:00'])
       expect(automaticEventDate(value)).toBeNull();
   });
+  it('parses the strict Superbet textual date and normalizes only the separator', () => {
+    expect(parseAutomaticPlacedAt('7 DE SET. DE 2026 \u2014 14:51', 'br-textual-sao-paulo')).toBe(
+      '2026-09-07T17:51:00.000Z',
+    );
+    expect(parseAutomaticPlacedAt('30 DE AGO. DE 2026 \u2013 09:05', 'br-textual-sao-paulo')).toBe(
+      '2026-08-30T12:05:00.000Z',
+    );
+    expect(parseAutomaticPlacedAt('6 DE SET. DE 2026 - 10:12', 'br-textual-sao-paulo')).toBe(
+      '2026-09-06T13:12:00.000Z',
+    );
+    for (const invalid of [
+      null,
+      '7 DE SET DE 2026 \u2014 14:51',
+      '7 DE SETEMBRO DE 2026 \u2014 14:51',
+      '7 de set. de 2026 \u2014 14:51',
+      '07/09/2026 14:51',
+      '7 DE SET. DE 2026 14:51',
+      '7 DE SET. DE 2026 \u2014 14:5',
+      '7 DE SET. DE 2026 \u2014 24:00',
+      '7 DE SET. DE 2026 \u2014 14:60',
+      '32 DE SET. DE 2026 \u2014 14:00',
+      '7 DE SET. DE 2026 \u2014 14:51 ',
+    ])
+      expect(parseAutomaticPlacedAt(invalid, 'br-textual-sao-paulo')).toBeNull();
+  });
   it('defaults off and validates the private opt-in policy file without exposing paths or contents', () => {
     expect(readAutomaticLayouts({})).toEqual([]);
     expect(
@@ -162,5 +187,98 @@ describe('automatic import policy boundaries', () => {
       ]);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     }
+  });
+  it('binds potential return to the authorized labels and fails closed on OCR divergence', async () => {
+    const completionFor = (potentialReturn: string | null) =>
+      Response.json({
+        id: 'fictional-completion',
+        model: OPENROUTER_MODEL,
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: {
+              content: JSON.stringify({
+                layoutId: layout.id,
+                extraction: {
+                  bookmaker: 'Fictional',
+                  reference: 'fictional-1',
+                  placedAtText: null,
+                  currency: 'BRL',
+                  stake: '10.00',
+                  odds: '2.00',
+                  potentialReturn,
+                  freebet: false,
+                  selections: [
+                    {
+                      event: 'A x B',
+                      sport: null,
+                      market: 'Result',
+                      selection: 'A',
+                      odds: null,
+                      eventDateText: null,
+                    },
+                  ],
+                  warnings: [],
+                },
+              }),
+            },
+          },
+        ],
+      });
+    const ocrWith = (line: string) => ({
+      text: `Bilhete ficticio\nA x B\nResult\nA\nfictional-1\n10,00\n2,00\n${line}`,
+      pages: [
+        {
+          width: 10,
+          height: 10,
+          unit: 'pixels' as const,
+          qualityScore: 1,
+          blocks: [{ text: 'Bilhete ficticio', confidence: 1, boundingPoly: [{ x: 0, y: 0 }] }],
+          lines: [{ text: line, confidence: 1, boundingPoly: [{ x: 0, y: 0 }] }],
+        },
+      ],
+      averageConfidence: 1,
+      averageQualityScore: 1,
+    });
+    const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
+    const run = async (
+      potentialReturn: string | null,
+      ocrLine: string,
+      labels: string[] = ['Retorno Total'],
+    ) => {
+      const layouts = validatedLayoutsSchema.parse([{ ...layout, potentialReturnLabels: labels }]);
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () => completionFor(potentialReturn));
+      const result = await extractTicket({
+        apiKey: 'fictional-key',
+        image,
+        layouts,
+        ocr: ocrWith(ocrLine),
+        fetchImpl,
+      });
+      return { result, fetchImpl };
+    };
+    // Bet365: rotulo autorizado com valor consistente.
+    expect((await run('20.00', 'Retorno Total 20,00')).result.ocrConsistent).toBe(true);
+    // Superbet: Premio e Ganho Potencial sao os rotulos autorizados.
+    expect(
+      (await run('26.50', 'PREMIO 26,50 R$', ['Prêmio', 'Ganho Potencial'])).result.ocrConsistent,
+    ).toBe(true);
+    expect(
+      (await run('0.53', 'Ganho Potencial 0,53 R$', ['Prêmio', 'Ganho Potencial'])).result
+        .ocrConsistent,
+    ).toBe(true);
+    // Rotulo autorizado visivel + omissao do modelo.
+    expect((await run(null, 'Retorno Total 20,00')).result.ocrConsistent).toBe(false);
+    // Valor divergente do OCR.
+    expect((await run('21.00', 'Retorno Total 20,00')).result.ocrConsistent).toBe(false);
+    // Rotulo nao autorizado nunca preenche o campo.
+    expect((await run('20.00', 'Retorno Liquido 20,00')).result.ocrConsistent).toBe(false);
+    expect((await run('26.50', 'Retorno Obtido 26,50')).result.ocrConsistent).toBe(false);
+    // Os rotulos autorizados viajam no contexto dos layouts.
+    const { fetchImpl } = await run('20.00', 'Retorno Total 20,00');
+    const sent = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
+    expect(sent.messages[0].content).toContain('"potentialReturnLabels":["Retorno Total"]');
   });
 });

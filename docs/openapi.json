@@ -1507,9 +1507,10 @@
               "tipster": { "nullable": true, "type": "string" },
               "bookmaker": { "nullable": true, "type": "string" },
               "kind": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+              "date": { "nullable": true, "type": "string" },
               "requiresReview": { "type": "boolean" }
             },
-            "required": ["tipster", "bookmaker", "kind", "requiresReview"]
+            "required": ["tipster", "bookmaker", "kind", "date", "requiresReview"]
           },
           "matches": {
             "type": "object",
@@ -4536,9 +4537,10 @@
               "tipster": { "nullable": true, "type": "string" },
               "bookmaker": { "nullable": true, "type": "string" },
               "kind": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+              "date": { "nullable": true, "type": "string" },
               "requiresReview": { "type": "boolean" }
             },
-            "required": ["tipster", "bookmaker", "kind", "requiresReview"],
+            "required": ["tipster", "bookmaker", "kind", "date", "requiresReview"],
             "additionalProperties": false
           },
           "matches": {

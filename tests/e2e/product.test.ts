@@ -344,7 +344,13 @@ function importFixture(): ImportDetail {
       ],
       warnings: ['Confira a casa e as datas'],
     },
-    labels: { tipster: 'Analista', bookmaker: 'Bet365', kind: 'real', requiresReview: false },
+    labels: {
+      tipster: 'Analista',
+      bookmaker: 'Bet365',
+      kind: 'real',
+      date: null,
+      requiresReview: false,
+    },
     matches: {
       tipsterId: null,
       captionBookmakerId: house,

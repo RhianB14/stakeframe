@@ -295,9 +295,9 @@ describe('automatic import financial boundary', () => {
   it.each([
     [{ warnings: ['Unreadable'] }, 'EXTRACTION_UNCERTAIN'],
     [{ currency: null }, 'EXTRACTION_UNCERTAIN'],
-    [{ reference: null }, 'EXTRACTION_UNCERTAIN'],
     [{ stake: '10.123' }, 'EXTRACTION_UNCERTAIN'],
     [{ potentialReturn: '199.99' }, 'RETURN_MISMATCH'],
+    [{ odds: null }, 'EXTRACTION_UNCERTAIN'],
     [{ placedAtText: '07/09 10:30' }, 'PLACED_AT_UNCERTAIN'],
     [{ placedAtText: '9999-01-01T00:00:00Z' }, 'PLACED_AT_UNCERTAIN'],
     [{ placedAtText: '2001-01-01T00:00:00Z' }, 'UNIT_REQUIRED'],
@@ -416,6 +416,34 @@ describe('automatic import financial boundary', () => {
       0,
     );
   });
+  it('accepts a missing visual mark and never copies the informed house into the extraction', async () => {
+    const hidden = await input({ bookmaker: null });
+    expect(await complete(hidden)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, hidden.id);
+    expect(detail.extraction?.bookmaker).toBeNull();
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
+    expect(bet.bookmakerId).toBe(layout.bookmakerId);
+  });
+  it('blocks another known house and keeps unresolved visual text in review', async () => {
+    const matching = await input({ bookmaker: 'Bet365' });
+    expect(await complete(matching)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const other = await input({
+      bookmaker: 'Superbet',
+      placedAtText: new Date(Date.now() - 5 * 86400000).toISOString(),
+    });
+    expect(await complete(other)).toMatchObject({ state: 'review', reason: 'BOOKMAKER_CONFLICT' });
+    const unknown = await input({
+      bookmaker: 'Casa Fantasma',
+      placedAtText: new Date(Date.now() - 6 * 86400000).toISOString(),
+    });
+    expect(await complete(unknown)).toMatchObject({
+      state: 'review',
+      reason: 'BOOKMAKER_CONFLICT',
+    });
+    expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
+      1,
+    );
+  });
   it('rejects ambiguity between two eligible promotional credits', async () => {
     for (let i = 0; i < 2; i++)
       await run({
@@ -431,6 +459,38 @@ describe('automatic import financial boundary', () => {
         await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365\nfreebet'),
       ),
     ).toMatchObject({ reason: 'FREEBET_UNRESOLVED' });
+  });
+  it('imports without a reference and never writes a synthetic one', async () => {
+    const value = await input({ reference: null });
+    expect(await complete(value)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, value.id);
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
+    expect(bet.reference).toBe('');
+  });
+  it('uses the caption date when the image has none and blocks divergent instants', async () => {
+    const divergent = await input(
+      { placedAtText: '2026-09-08T10:30:00-03:00' },
+      'Fixture\nBet365\nreal\n07/09/2026 10:30',
+    );
+    expect(await complete(divergent)).toMatchObject({
+      state: 'review',
+      reason: 'PLACED_AT_UNCERTAIN',
+    });
+    const equal = await input(
+      { placedAtText: '2026-09-07T10:30:00-03:00' },
+      'Fixture\nBet365\nreal\n07/09/2026 10:30',
+    );
+    expect(await complete(equal)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, equal.id);
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
+    expect(bet.placedAt).toBe('2026-09-07T13:30:00.000Z');
+  });
+  it('imports from the caption date alone when the image carries no date', async () => {
+    const value = await input({ placedAtText: null }, 'Fixture\nBet365\nreal\n07/09/2026 10:30');
+    expect(await complete(value)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, value.id);
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
+    expect(bet.placedAt).toBe('2026-09-07T13:30:00.000Z');
   });
   it('rolls back all financial effects if recording the decision fails and allows one safe retry', async () => {
     const value = await input();

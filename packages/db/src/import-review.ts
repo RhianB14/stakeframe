@@ -32,10 +32,11 @@ export async function findDuplicates(
     exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 and current.organization_id=other.organization_id where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id) as image,
     ($3::text<>'' and b.bookmaker_id=$2 and lower(trim(b.reference))=lower(trim($3))) as ref,
     (b.bookmaker_id=$2 and b.stake=$4::numeric and b.odds=$5::numeric and (b.placed_at at time zone 'America/Sao_Paulo')::date=($6::timestamptz at time zone 'America/Sao_Paulo')::date) as similar
-    from finance.bet b where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and
+    from finance.bet b where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and (
     exists(select 1 from integration.inbox other join integration.inbox current on current.id=$1 and current.organization_id=other.organization_id where other.organization_id=current_setting($$app.organization_id$$, true)::uuid and other.sha256=current.sha256 and other.imported_bet_id=b.id)
     or ($3::text<>'' and b.bookmaker_id=$2 and lower(trim(b.reference))=lower(trim($3)))
     or (b.bookmaker_id=$2 and b.stake=$4::numeric and b.odds=$5::numeric and (b.placed_at at time zone 'America/Sao_Paulo')::date=($6::timestamptz at time zone 'America/Sao_Paulo')::date)
+    )
     order by b.created_at desc limit 101`,
       [
         importId,
