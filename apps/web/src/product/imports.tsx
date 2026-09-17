@@ -45,6 +45,8 @@ const automaticReasons: Record<AutomaticReason, string> = {
   BOOKMAKER_CONFLICT: 'A casa identificada no bilhete diverge da legenda ou do layout aprovado.',
   PLACED_AT_UNCERTAIN: 'A data ou o horário do registro precisa de conferência.',
   FREEBET_UNRESOLVED: 'O crédito promocional precisa ser escolhido e conferido.',
+  FREEBET_CONFLICT:
+    'A indicação de freebet na imagem contradiz o tipo informado na legenda. Confira antes de registrar.',
   RETURN_MISMATCH:
     'O retorno escrito diverge do cálculo pela stake e pela odd. Confira os valores e as regras da casa.',
   UNIT_REQUIRED: 'A unidade histórica da aposta precisa ser definida antes do registro.',
@@ -290,12 +292,12 @@ export function UploadForm({
           </Field>
           <Field
             label="Legenda (opcional)"
-            hint="Primeira linha: tipster. Segunda linha: casa de aposta."
+            hint="Primeira linha: tipster. Segunda linha: casa de aposta. Terceira linha: real ou freebet."
           >
             <textarea
               rows={3}
               maxLength={1024}
-              placeholder={'Nome do tipster\nNome da casa'}
+              placeholder={'Nome do tipster\nNome da casa\nreal'}
               value={caption}
               onChange={(event) => setCaption(event.target.value)}
             />
@@ -456,9 +458,15 @@ function ReviewContent({
                 {extraction.currency ?? 'Não identificada'}
               </p>
               <p>
-                Origem:{' '}
+                Tipo informado na legenda:{' '}
+                {detail.labels.kind === 'freebet'
+                  ? 'Freebet'
+                  : detail.labels.kind === 'real'
+                    ? 'Dinheiro real'
+                    : 'Não informado (revisão)'}{' '}
+                · Leitura visual:{' '}
                 {extraction.freebet === null
-                  ? 'Não identificada'
+                  ? 'Sem indicação'
                   : extraction.freebet
                     ? 'Freebet'
                     : 'Dinheiro real'}{' '}

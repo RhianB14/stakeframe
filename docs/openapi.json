@@ -1506,9 +1506,10 @@
             "properties": {
               "tipster": { "nullable": true, "type": "string" },
               "bookmaker": { "nullable": true, "type": "string" },
+              "kind": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
               "requiresReview": { "type": "boolean" }
             },
-            "required": ["tipster", "bookmaker", "requiresReview"]
+            "required": ["tipster", "bookmaker", "kind", "requiresReview"]
           },
           "matches": {
             "type": "object",
@@ -1577,6 +1578,7 @@
               "BOOKMAKER_CONFLICT",
               "PLACED_AT_UNCERTAIN",
               "FREEBET_UNRESOLVED",
+              "FREEBET_CONFLICT",
               "RETURN_MISMATCH",
               "UNIT_REQUIRED",
               "DUPLICATE_REVIEW_REQUIRED",
@@ -4533,9 +4535,10 @@
             "properties": {
               "tipster": { "nullable": true, "type": "string" },
               "bookmaker": { "nullable": true, "type": "string" },
+              "kind": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
               "requiresReview": { "type": "boolean" }
             },
-            "required": ["tipster", "bookmaker", "requiresReview"],
+            "required": ["tipster", "bookmaker", "kind", "requiresReview"],
             "additionalProperties": false
           },
           "matches": {
@@ -4607,6 +4610,7 @@
               "BOOKMAKER_CONFLICT",
               "PLACED_AT_UNCERTAIN",
               "FREEBET_UNRESOLVED",
+              "FREEBET_CONFLICT",
               "RETURN_MISMATCH",
               "UNIT_REQUIRED",
               "DUPLICATE_REVIEW_REQUIRED",

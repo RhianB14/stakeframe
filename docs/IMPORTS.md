@@ -26,12 +26,18 @@ chave é recusado. Entradas diferentes podem compartilhar os bytes do mesmo
 hash SHA-256, preservando legenda, origem, extração e situação próprias.
 Limites de admissão: 2.000 entradas não encerradas e 1 GiB de imagens locais.
 
-A legenda segue primeira linha tipster, segunda linha casa. Aliases ativos
+A legenda segue primeira linha tipster, segunda linha casa e terceira linha o
+tipo da aposta (`real` ou `freebet`). O legado de duas linhas continua
+disponível para revisão manual e nunca autoriza importação automática;
+terceiro valor ausente, desconhecido ou ambíguo falha fechado. Aliases ativos
 resolvem nomes sem diferenciar caixa/acentos. Divergência entre legenda e
 extração fica explícita e impede preselecionar a casa no formulário. Datas
 escritas permanecem evidência: o formulário exige confirmar o instante da
-aposta e mantém as datas dos eventos vazias até conferência. Origem em dinheiro
-real ou freebet também exige escolha. Ausência de evento/data não inventa fatos.
+aposta e mantém as datas dos eventos vazias até conferência. O tipo informado
+na legenda é a fonte de verdade financeira; a leitura visual da IA só bloqueia
+quando contradiz esse contexto (`FREEBET_CONFLICT`) e `null` da IA não
+contradiz contexto explícito. Sem tipo na legenda, a escolha manual de origem
+real/freebet permanece. Ausência de evento/data não inventa fatos.
 
 Nenhuma casa vem aprovada por padrão: ainda não existe amostra privada
 representativa aprovada das três casas. Nessas condições, `automatic=false`
@@ -42,16 +48,20 @@ o avaliador de amostras estão em [VALIDATION.md](VALIDATION.md).
 Com uma política privada aprovada e ativação explícita no worker, a identificação
 do layout usa descrição visual, modelo fixo e digest da política. O servidor
 exige casa e tipster resolvidos por aliases ativos, concordância da casa com o
-layout e o bilhete, moeda BRL, origem real/promocional explícita, referência,
+layout e o bilhete, moeda BRL, tipo da aposta informado na legenda (contexto
+confiável, com a leitura visual apenas como detecção de conflito), referência,
 stake/odd e seleções válidas, nenhuma dúvida na extração e instante da aposta
 interpretável pelo formato aprovado. Não reduz textos para fazê-los caber.
 Datas sem ano, datas futuras e horários ambíguos/inexistentes no horário de
 verão ficam em revisão. Eventos com data explícita entram como estimados;
 ausências permanecem pendentes e horários não são inventados.
 
-O retorno potencial, quando escrito, deve conferir centavo a centavo. Freebets
-exigem permissão na política e exatamente um crédito disponível da mesma casa,
-valor e validade; as regras desse crédito determinam a devolução do principal.
+O retorno potencial, quando escrito, deve conferir centavo a centavo. O tipo
+informado decide a criação: dinheiro real nunca consome crédito promocional e
+um conflito visual de freebet (`FREEBET_CONFLICT`) bloqueia a importação.
+Freebets exigem permissão na política e exatamente um crédito disponível da
+mesma casa, valor e validade; as regras desse crédito determinam a devolução do
+principal.
 Unidade histórica ausente e qualquer candidato a duplicata mantêm revisão.
 O sistema nunca justifica duplicata nem escolhe um crédito ambíguo automaticamente.
 

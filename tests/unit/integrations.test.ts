@@ -180,8 +180,22 @@ describe('OpenRouter boundary', () => {
       'bookmaker é independente do contexto',
       '[Warnings]',
       'somente com o objeto JSON',
+      '[Freebet]',
+      'aposta grátis',
+      'Ausência de indicação não prova',
+      '[Eventos empilhados]',
+      'participante 1 x participante 2',
+      'Nunca escolha entre x, v e vs',
     ])
       expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain(rule);
+  });
+  it('does not train freebet:false without explicit evidence and keeps the example neutral', () => {
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('"freebet":null');
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).not.toContain('"freebet":false');
+  });
+  it('marks ambiguity instead of guessing a stacked-event separator', () => {
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('associação for ambígua');
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('warnings');
   });
   it('simplifies provider constraints recursively without weakening local validation', async () => {
     expect(
@@ -358,13 +372,24 @@ describe('Telegram boundary', () => {
     ).rejects.toThrow('database unavailable');
     expect(inbox.advance).not.toHaveBeenCalled();
   });
-  it('parses caption positions deterministically and flags incomplete captions', () => {
-    expect(parseCaption(' Tipster \r\n Casa ')).toEqual({
+  it('parses the three-line caption deterministically and fails closed on incomplete or ambiguous captions', () => {
+    expect(parseCaption(' Tipster \r\n Casa \r\n real ')).toEqual({
       tipster: 'Tipster',
       bookmaker: 'Casa',
+      kind: 'real',
       requiresReview: false,
     });
-    expect(parseCaption('\nCasa').tipster).toBeNull();
-    expect(parseCaption('Tipster\nCasa\nextra').requiresReview).toBe(true);
+    expect(parseCaption('Tipster\nCasa\nFREEBET').kind).toBe('freebet');
+    expect(parseCaption('Tipster\nCasa\nfreebet').requiresReview).toBe(false);
+    // O legado de duas linhas permanece disponível para revisão manual, mas
+    // nunca autoriza importação automática nem presume dinheiro real.
+    expect(parseCaption('Tipster\nCasa')).toMatchObject({ kind: null, requiresReview: true });
+    expect(parseCaption('\nCasa\nreal').tipster).toBeNull();
+    expect(parseCaption('Tipster\nCasa\nbonus')).toMatchObject({
+      kind: null,
+      requiresReview: true,
+    });
+    expect(parseCaption('Tipster\nCasa\n')).toMatchObject({ kind: null, requiresReview: true });
+    expect(parseCaption('Tipster\nCasa\nextra\nreal').requiresReview).toBe(true);
   });
 });

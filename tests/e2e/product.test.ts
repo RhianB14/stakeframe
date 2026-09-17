@@ -313,7 +313,7 @@ function importFixture(): ImportDetail {
     item: {
       id: importId,
       source: 'web',
-      caption: 'Analista\nBet365',
+      caption: 'Analista\nBet365\nreal',
       state: 'review',
       version: 2,
       attempts: 1,
@@ -344,7 +344,7 @@ function importFixture(): ImportDetail {
       ],
       warnings: ['Confira a casa e as datas'],
     },
-    labels: { tipster: 'Analista', bookmaker: 'Bet365', requiresReview: false },
+    labels: { tipster: 'Analista', bookmaker: 'Bet365', kind: 'real', requiresReview: false },
     matches: {
       tipsterId: null,
       captionBookmakerId: house,

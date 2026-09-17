@@ -77,7 +77,10 @@ O contrato executável é `corpusEvaluationInputSchema` em
 
 A avaliação verifica vínculo imagem/modelo/layout, validade do JSON, campos
 essenciais, quantidade/ordem das seleções, presença de dúvidas, omissões e
-valores inventados. Dinheiro/odds com representações como `10` e `10.00` são
+valores inventados. Negativos corretamente rejeitados (`expectedLayoutId=null`
+com `layoutId=null`) validam schema, vínculo e a própria rejeição, mas não têm
+conteúdo comparado — o campo pertence ao corpus da outra casa; falsos positivos
+de layout continuam bloqueando a aprovação. Dinheiro/odds com representações como `10` e `10.00` são
 equivalentes; textos têm apenas normalização Unicode/espaços, sem trocar
 nomes, inferir datas ou corrigir valores. O relatório privado identifica
 índice do caso e campo com erro, sem copiar os valores; a saída de console

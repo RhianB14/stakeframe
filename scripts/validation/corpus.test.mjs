@@ -272,3 +272,90 @@ test('rejects OCR evidence outside the sanitized contract', () => {
   };
   assert.throws(() => evaluateCorpus(unknownProvider), /Invalid option|Invalid enum value/);
 });
+
+// Negativos corretamente rejeitados (expectedLayoutId=null e layoutId=null) são
+// casos de rejeição cross-house: o conteúdo pertence ao corpus da outra casa e
+// não pode gerar erro essencial. Schema, vínculo de imagem/modelo e a própria
+// rejeição de layout continuam sendo validados; um falso positivo de layout
+// continua bloqueando a elegibilidade.
+const foreignExtraction = () => ({
+  bookmaker: 'outra-casa-visivel',
+  reference: 'FOREIGN-REF-99',
+  placedAtText: '01/01/2030 23:59',
+  currency: 'BRL',
+  stake: '999.99',
+  odds: '99.99',
+  potentialReturn: '123.45',
+  freebet: false,
+  selections: [
+    {
+      event: 'Estranho A x Estranho B',
+      sport: 'Futebol',
+      market: 'Mercado Estranho',
+      selection: 'Selecao Estranha',
+      odds: '9.99',
+      eventDateText: '31/12/2030',
+    },
+  ],
+  warnings: ['duvida estranha'],
+});
+const mutateNegatives = (value, mutate) => {
+  for (const item of value.cases.filter((entry) => entry.expectedLayoutId === null)) mutate(item);
+  return value;
+};
+test('does not compare content of a correctly rejected negative with foreign data', () => {
+  const value = mutateNegatives(fixture(), (item) => {
+    item.actual.layoutId = null;
+    item.actual.extraction = foreignExtraction();
+  });
+  const report = evaluateCorpus(value);
+  assert.equal(report.essentialFieldErrors, 0);
+  assert.equal(report.eligibleForOwnerReview, true);
+  assert.equal(report.correctTickets, 25);
+  for (const item of report.cases.filter((entry) => entry.index >= 21)) {
+    assert.deepEqual(item.issues, []);
+    assert.equal(item.correct, true);
+  }
+});
+test('keeps false positive cross-house blocking and counts only the layout error', () => {
+  const value = mutateNegatives(fixture(), (item) => {
+    item.actual.layoutId = 'bet365-fixture';
+    item.actual.extraction = foreignExtraction();
+  });
+  const report = evaluateCorpus(value);
+  assert.equal(report.visualDiagnostics.crossHouseRecognized, 5);
+  assert.equal(report.fieldCounts.layout.mismatches, 5);
+  assert.equal(report.essentialFieldErrors, 5);
+  assert.equal(report.eligibleForOwnerReview, false);
+});
+test('keeps schema, image and model bindings blocking on rejected negatives', () => {
+  const invalidSchema = mutateNegatives(fixture(), (item) => {
+    item.actual.extraction.stake = 10;
+  });
+  assert.equal(evaluateCorpus(invalidSchema).fieldCounts.schema.mismatches, 5);
+  assert.equal(evaluateCorpus(invalidSchema).eligibleForOwnerReview, false);
+  const invalidImage = mutateNegatives(fixture(), (item) => {
+    item.actual.imageSha256 = 'a'.repeat(64);
+    item.actual.extraction = foreignExtraction();
+  });
+  assert.equal(evaluateCorpus(invalidImage).fieldCounts.image.mismatches, 5);
+  assert.equal(evaluateCorpus(invalidImage).eligibleForOwnerReview, false);
+  const invalidModel = mutateNegatives(fixture(), (item) => {
+    item.actual.model = 'outro-modelo';
+    item.actual.extraction = foreignExtraction();
+  });
+  assert.equal(evaluateCorpus(invalidModel).fieldCounts.model.mismatches, 5);
+  assert.equal(evaluateCorpus(invalidModel).eligibleForOwnerReview, false);
+});
+test('keeps negative coverage and cross-house diagnostics counted after the content skip', () => {
+  const value = mutateNegatives(fixture(), (item) => {
+    item.actual.layoutId = null;
+    item.actual.extraction = foreignExtraction();
+  });
+  const report = evaluateCorpus(value);
+  assert.equal(report.coverage.negative, 5);
+  assert.equal(report.coverage.positive, 20);
+  assert.equal(report.visualDiagnostics.crossHouseRejected, 5);
+  assert.equal(report.coveragePassed, true);
+  assert.equal(report.correctTickets, 25);
+});

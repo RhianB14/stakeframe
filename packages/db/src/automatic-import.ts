@@ -51,7 +51,6 @@ async function candidate(
   if (
     extraction.warnings.length ||
     extraction.currency !== 'BRL' ||
-    extraction.freebet === null ||
     !extraction.stake ||
     !extraction.odds ||
     !extraction.reference?.trim()
@@ -59,7 +58,12 @@ async function candidate(
     return { reason: 'EXTRACTION_UNCERTAIN' };
   if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
   const labels = parseCaption(caption);
-  if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
+  if (labels.requiresReview || labels.kind === null) return { reason: 'CAPTION_UNRESOLVED' };
+  // O tipo informado na legenda é a fonte de verdade financeira; a leitura
+  // visual da IA só bloqueia quando contradiz esse contexto explícito.
+  if (labels.kind === 'real' && extraction.freebet === true) return { reason: 'FREEBET_CONFLICT' };
+  if (labels.kind === 'freebet' && extraction.freebet === false)
+    return { reason: 'FREEBET_CONFLICT' };
   const aliases = (
     await client.query<{ catalog_id: string; kind: string; label: string }>(
       'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
@@ -93,7 +97,7 @@ async function candidate(
   }
   let freebetId: string | null = null;
   let stakeReturned = false;
-  if (extraction.freebet) {
+  if (labels.kind === 'freebet') {
     if (!layout.allowFreebet) return { reason: 'FREEBET_UNRESOLVED' };
     const credits = (
       await client.query<{ id: string; stake_returned: boolean }>(
@@ -133,7 +137,9 @@ async function candidate(
     try {
       if (
         cents(extraction.potentialReturn) !==
-        cents(suggestedReturn(stake, extraction.odds, 'win', extraction.freebet, stakeReturned))
+        cents(
+          suggestedReturn(stake, extraction.odds, 'win', labels.kind === 'freebet', stakeReturned),
+        )
       )
         return { reason: 'RETURN_MISMATCH' };
     } catch {

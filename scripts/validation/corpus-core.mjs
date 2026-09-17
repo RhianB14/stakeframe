@@ -87,7 +87,12 @@ export function evaluateCorpus(value) {
       visualDiagnostics.crossHouseRecognized += 1;
       record('layout', 'mismatches');
     }
-    if (actual.success) {
+    if (actual.success && isPositive) {
+      // Negativo corretamente rejeitado (expectedLayoutId=null e layoutId=null)
+      // é rejeição cross-house: o conteúdo pertence ao corpus da outra casa e
+      // não gera erro essencial. Schema, vínculo de imagem/modelo e a própria
+      // rejeição de layout continuam validados acima; um falso positivo de
+      // layout continua bloqueando a elegibilidade.
       const compare = (field, expected, observed, key = field) => {
         if (normalize(expected, key) !== normalize(observed, key))
           record(

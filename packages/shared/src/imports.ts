@@ -88,6 +88,7 @@ export const automaticReasonSchema = z.enum([
   'BOOKMAKER_CONFLICT',
   'PLACED_AT_UNCERTAIN',
   'FREEBET_UNRESOLVED',
+  'FREEBET_CONFLICT',
   'RETURN_MISMATCH',
   'UNIT_REQUIRED',
   'DUPLICATE_REVIEW_REQUIRED',
@@ -157,6 +158,9 @@ export const importDetailSchema = z
     labels: z.object({
       tipster: z.string().nullable(),
       bookmaker: z.string().nullable(),
+      // Tipo da aposta informado na terceira linha da legenda (contexto
+      // confiável); null mantém o item em revisão manual.
+      kind: z.enum(['real', 'freebet']).nullable(),
       requiresReview: z.boolean(),
     }),
     matches: z.object({
@@ -238,9 +242,17 @@ export function parseCaption(caption: string) {
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.trim());
+  const third = (lines[2] ?? '').toLocaleLowerCase('pt-BR');
+  // O tipo da aposta é contexto explícito e fail-closed: o legado de duas
+  // linhas e qualquer terceiro valor ausente, desconhecido ou ambíguo ficam em
+  // revisão manual e nunca autorizam importação automática.
   return {
     tipster: lines[0] || null,
     bookmaker: lines[1] || null,
-    requiresReview: lines.length !== 2 || lines.some((line) => !line || line.length > 100),
+    kind: third === 'real' || third === 'freebet' ? (third as 'real' | 'freebet') : null,
+    requiresReview:
+      lines.length !== 3 ||
+      lines.some((line) => !line || line.length > 100) ||
+      (third !== 'real' && third !== 'freebet'),
   };
 }

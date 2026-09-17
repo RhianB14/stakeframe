@@ -229,7 +229,13 @@ Convenção da legenda:
 ```text
 Nome do tipster
 Nome da casa de aposta
+Tipo da aposta (real ou freebet)
 ```
+
+A terceira linha é obrigatória para qualquer registro automático: envios de
+duas linhas e valores ausentes, desconhecidos ou ambíguos permanecem em revisão
+manual. O tipo informado é a fonte de verdade financeira; a IA apenas sinaliza
+conflito visual.
 
 A legenda é interpretada por regras determinísticas. A IA extrai os dados do
 bilhete, preservando o conteúdo original para conferência.
@@ -551,7 +557,8 @@ silêncio, elogio, ausência de comentários ou sucesso dos testes.
 - Liquidações, estornos, cashouts parciais e freebets.
 - Repetição e concorrência sem lançamentos duplicados.
 - Cálculo da unidade na virada do mês e cadastros retroativos.
-- Legenda com tipster na primeira linha e casa na segunda.
+- Legenda com tipster, casa e tipo da aposta (`real`/`freebet`) como contexto
+  confiável; o legado de duas linhas permanece em revisão manual.
 - Divergências entre legenda e imagem, aliases e ausência de campos.
 - Reenvios, imagens recortadas e apostas legítimas semelhantes.
 - Fusos, virada de dia, horários ausentes, adiamentos e correções manuais.
