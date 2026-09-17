@@ -700,6 +700,7 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
       expectedInboxVersion: detail.item.version,
       decision: {
         kind: 'create',
+        betOrigin: 'real',
         bet: {
           bookmakerId: bookmakerB.id,
           tipsterId: null,
@@ -799,6 +800,7 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
         expectedInboxVersion: (await imports.detail(contextA, distinct.id)).item.version,
         decision: {
           kind: 'create',
+          betOrigin: 'real',
           bet: {
             bookmakerId: bookmakerA.id,
             tipsterId: null,

@@ -14,7 +14,8 @@ import {
 import { Button } from '../components/ui/button.js';
 import { BetForm, Field } from './forms.js';
 import { CommandForm, useFinanceActions } from './actions.js';
-import { ApiFailure, request, dateLabel } from './api.js';
+import { ApiFailure, patchImportDraft, request, dateLabel } from './api.js';
+import { DraftControls } from './drafts.js';
 import { readPendingUpload, savePendingUpload, type PendingUpload } from './upload-storage.js';
 import type { OpenModal } from './ProductApp.js';
 
@@ -42,6 +43,8 @@ const automaticReasons: Record<AutomaticReason, string> = {
   EXTRACTION_UNCERTAIN:
     'Há campos essenciais ausentes ou dúvidas na leitura. Confira os dados antes de registrar.',
   CAPTION_UNRESOLVED: 'A legenda precisa identificar um tipster e uma casa cadastrados.',
+  ORIGIN_UNRESOLVED:
+    'A origem financeira ainda não foi confirmada — informe dinheiro real ou freebet.',
   BOOKMAKER_CONFLICT: 'A casa identificada no bilhete diverge da legenda ou do layout aprovado.',
   PLACED_AT_UNCERTAIN: 'A data ou o horário do registro precisa de conferência.',
   FREEBET_UNRESOLVED: 'O crédito promocional precisa ser escolhido e conferido.',
@@ -458,12 +461,12 @@ function ReviewContent({
                 {extraction.currency ?? 'Não identificada'}
               </p>
               <p>
-                Tipo informado na legenda:{' '}
-                {detail.labels.kind === 'freebet'
+                Origem financeira confirmada:{' '}
+                {detail.betOrigin === 'freebet'
                   ? 'Freebet'
-                  : detail.labels.kind === 'real'
+                  : detail.betOrigin === 'real'
                     ? 'Dinheiro real'
-                    : 'Não informado (revisão)'}{' '}
+                    : 'Ainda não informada (obrigatória para registrar)'}{' '}
                 · Leitura visual:{' '}
                 {extraction.freebet === null
                   ? 'Sem indicação'
@@ -489,6 +492,13 @@ function ReviewContent({
               Você pode preencher e conferir os dados manualmente enquanto a extração está pendente.
             </p>
           )}
+          {!terminal ? (
+            <DraftControls
+              detail={detail}
+              sender={(body) => patchImportDraft(detail.item.id, body)}
+              onSaved={onDone}
+            />
+          ) : null}
           {matches.conflict ? (
             <p className="notice warning" role="alert">
               A casa da legenda diverge da casa lida na imagem. Escolha a casa correta ao conferir o

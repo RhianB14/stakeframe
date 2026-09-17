@@ -11,6 +11,7 @@ import { createInboxStore } from './inbox.js';
 import { createAttachmentStore, type ObjectStorage } from './attachments.js';
 import { FinanceError } from './finance-core.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
+import { createImportDraftService } from './telegram-sync.js';
 
 export async function findDuplicates(
   client: Pick<PoolClient, 'query'>,
@@ -104,12 +105,24 @@ export function createImportService(database: Database, storage?: ObjectStorage)
   const tenant = createTenantContext(database);
   const inbox = createInboxStore(database, undefined, storage);
   const attachments = createAttachmentStore(database, storage);
+  const draft = createImportDraftService(database);
   const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
     tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
   return {
     /** Returns the authenticated user's organization context (provisioning on first use). */
     ensureContext(userId: string) {
       return tenant.ensureOrganizationMembership(userId);
+    },
+    /**
+     * STK-G0-19-R5 — identidade do Mini App: o initData validado no servidor é
+     * vinculado ao proprietário do beta (membership owner); sem correspondência
+     * exata com o Telegram ID configurado retorna null (nunca autoriza).
+     */
+    async telegramOwnerContext(telegramUserId: number, expectedTelegramId: string | null) {
+      if (!expectedTelegramId || String(telegramUserId) !== expectedTelegramId) return null;
+      const owner = await tenant.ownerUserId();
+      if (!owner) return null;
+      return tenant.ensureOrganizationMembership(owner);
     },
     async upload(
       context: OrganizationContext,
@@ -170,6 +183,30 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         };
       });
     },
+    /** Atualização canônica do rascunho (origem/crédito/data do evento). */
+    updateDraft(
+      context: OrganizationContext,
+      id: string,
+      patch: {
+        version: number;
+        betOrigin?: 'real' | 'freebet' | null | undefined;
+        freebetId?: string | null | undefined;
+        eventAt?: string | null | undefined;
+      },
+      actor: string,
+    ) {
+      return draft.updateDraft(context, id, patch, actor);
+    },
+    attachTelegram(
+      context: OrganizationContext,
+      id: string,
+      meta: { chatId: number; sourceMessageId: number; receivedAt: Date },
+    ) {
+      return draft.attachTelegram(context, id, meta);
+    },
+    queueResultMessage(context: OrganizationContext, id: string) {
+      return draft.queueResultMessage(context, id);
+    },
     async detail(context: OrganizationContext, id: string) {
       return read(context, async (client) => {
         const row = (
@@ -201,6 +238,29 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             ? (aliases.find((a) => a.kind === kind && normalized(a.label) === normalized(label))
                 ?.catalog_id ?? null)
             : null;
+        const draftRow = (
+          await client.query<{
+            bet_origin: string | null;
+            freebet_id: string | null;
+            event_at: Date | null;
+            event_date_status: string;
+            telegram_received_at: Date | null;
+          }>(
+            'select bet_origin,freebet_id,event_at,event_date_status,telegram_received_at from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        const credits = (
+          await client.query<{
+            id: string;
+            bookmaker_id: string;
+            amount: string;
+            expires_text: string;
+            stake_returned: boolean;
+          }>(
+            "select id,bookmaker_id,amount,to_char(expires_on,'YYYY-MM-DD') as expires_text,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and used_by is null order by expires_on asc,id asc limit 50",
+          )
+        ).rows;
         const captionBookmakerId = match('bookmaker', labels.bookmaker);
         const extractedBookmakerId = match('bookmaker', extraction?.bookmaker ?? null);
         const duplicates = await findDuplicates(client, id, {
@@ -215,6 +275,23 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           item: item(row),
           extraction,
           labels,
+          betOrigin:
+            draftRow.bet_origin === 'real' || draftRow.bet_origin === 'freebet'
+              ? draftRow.bet_origin
+              : null,
+          freebetId: draftRow.freebet_id,
+          eventAt: draftRow.event_at ? draftRow.event_at.toISOString() : null,
+          eventDateStatus: draftRow.event_date_status === 'confirmed' ? 'confirmed' : 'pending',
+          telegramReceivedAt: draftRow.telegram_received_at
+            ? draftRow.telegram_received_at.toISOString()
+            : null,
+          credits: credits.map((credit) => ({
+            id: credit.id,
+            bookmakerId: credit.bookmaker_id,
+            amount: credit.amount,
+            expiresOn: credit.expires_text,
+            stakeReturned: credit.stake_returned,
+          })),
           matches: {
             tipsterId: match('tipster', labels.tipster),
             captionBookmakerId,

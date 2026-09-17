@@ -83,6 +83,9 @@ export const financeCommandSchema = z
           kind: z.literal('create'),
           bet: betInputSchema,
           duplicateReason: z.string().trim().max(500),
+          // STK-G0-19-R5: origem declarada pelo usuário no próprio comando de
+          // confirmação (formulário web); o rascunho canônico é sincronizado.
+          betOrigin: z.enum(['real', 'freebet']).optional(),
         }),
         z.strictObject({ kind: z.literal('link'), betId: z.uuid(), reason: note }),
       ]),

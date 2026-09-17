@@ -312,11 +312,27 @@ export function createTenantContext(database: Database) {
     return rows.rows.map((row) => systemOrganizationContext(row.id));
   }
 
+  /**
+   * The user of the oldest `owner` membership — single-owner beta identity used
+   * by infrastructure entry points that predate per-user bindings (Telegram
+   * Mini App). Never used for authorization decisions beyond that binding.
+   */
+  async function ownerUserId(): Promise<string | null> {
+    const rows = await database.pool.query<{ user_id: string }>(
+      `SELECT user_id FROM core.membership
+       WHERE role = 'owner'
+       ORDER BY created_at ASC, organization_id ASC
+       LIMIT 1`,
+    );
+    return rows.rows[0]?.user_id ?? null;
+  }
+
   return {
     resolveOrganizationContext,
     withOrganizationTransaction,
     ensureOrganizationMembership,
     founderOrganizationId,
+    ownerUserId,
     listOrganizations,
   };
 }

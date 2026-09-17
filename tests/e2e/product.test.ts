@@ -347,10 +347,14 @@ function importFixture(): ImportDetail {
     labels: {
       tipster: 'Analista',
       bookmaker: 'Bet365',
-      kind: 'real',
-      date: null,
       requiresReview: false,
     },
+    betOrigin: null,
+    freebetId: null,
+    eventAt: null,
+    eventDateStatus: 'pending',
+    telegramReceivedAt: '2026-09-01T18:00:02Z',
+    credits: [],
     matches: {
       tipsterId: null,
       captionBookmakerId: house,
@@ -930,6 +934,108 @@ test('analytics distinguishes missing units and failed data from empty results',
   await expect(
     page.getByText('Nenhuma aposta corresponde a estes filtros.', { exact: true }),
   ).toHaveCount(0);
+});
+
+test('confirms origin and event date on the canonical draft before importing (R5)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.telegramReceivedAt = '2026-09-17T13:00:00Z';
+  detail.credits = [
+    {
+      id: '10000000-0000-4000-8000-000000000009',
+      bookmakerId: house,
+      amount: '50.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+    },
+  ];
+  await importRoutes(page, detail);
+  const patches: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ json: { version: 3 } });
+    }
+    return route.fulfill({ json: detail });
+  });
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  // Data provisória do recebimento no Telegram, editável — nunca persistida como evento.
+  await expect(
+    page.getByText('Data provisória (envio no Telegram)', { exact: false }),
+  ).toBeVisible();
+  await page.getByLabel('Dinheiro real').check();
+  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real', freebetId: null });
+  // Salvar atualiza o registro e fecha o diálogo; reabre para o fluxo de freebet.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  await page.getByLabel('Freebet').check();
+  await page.getByLabel('Crédito de freebet').selectOption('10000000-0000-4000-8000-000000000009');
+  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
+  await expect.poll(() => patches.length).toBe(2);
+  expect(patches[1]).toMatchObject({
+    betOrigin: 'freebet',
+    freebetId: '10000000-0000-4000-8000-000000000009',
+  });
+});
+
+test('edits the same canonical draft from the Telegram Mini App with validated initData (R5)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.telegramReceivedAt = '2026-09-17T13:00:00Z';
+  await importRoutes(page, detail);
+  let patchHeaders: Record<string, string> = {};
+  const patches: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patchHeaders = route.request().headers();
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ json: { version: 3 } });
+    }
+    return route.fulfill({ json: detail });
+  });
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  await page.goto(`/#miniapp?import=${importId}`);
+  await expect(page.getByRole('heading', { name: 'Conferir importação' })).toBeVisible();
+  await page.getByLabel('Dinheiro real').check();
+  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
+  await expect(page.getByText('Rascunho atualizado', { exact: false })).toBeVisible();
+  expect(patches).toHaveLength(1);
+  expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real' });
+  // O Mini App autentica pelo initData validado no servidor; nada de IDs no payload.
+  expect(patchHeaders['x-telegram-init-data']).toBe('stub-initdata');
+});
+
+test('the Mini App explains how to open it when Telegram is unavailable (R5)', async ({ page }) => {
+  await page.route('**/api/v1/system/status', (route) =>
+    route.fulfill({
+      json: {
+        name: 'Stakeframe',
+        stage: 'local-setup',
+        database: 'available',
+        authentication: 'google',
+        productEnabled: true,
+        release: {
+          version: '0.1.0-beta.1',
+          commit: 'a'.repeat(40),
+          builtAt: '2026-09-14T12:00:00Z',
+          environment: 'production',
+        },
+      },
+    }),
+  );
+  await page.goto('/#miniapp?import=10000000-0000-4000-8000-000000000005');
+  await expect(page.getByText('Abra esta tela pelo Telegram', { exact: false })).toBeVisible();
 });
 
 test('owner panel footer shows the stamped release version', async ({ page }) => {

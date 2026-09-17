@@ -52,6 +52,7 @@ export const OPENROUTER_MODELS = [
 export const OPENROUTER_MODEL = OPENROUTER_MODELS[0];
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const text = z.string().min(1).max(500);
+const instant = z.iso.datetime({ offset: true });
 const decimal = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,4})?$/);
 
 // Extraction is evidence for review, never authority to create a financial entry.
@@ -93,6 +94,7 @@ export const automaticReasonSchema = z.enum([
   'LAYOUT_NOT_VALIDATED',
   'EXTRACTION_UNCERTAIN',
   'CAPTION_UNRESOLVED',
+  'ORIGIN_UNRESOLVED',
   'BOOKMAKER_CONFLICT',
   'PLACED_AT_UNCERTAIN',
   'FREEBET_UNRESOLVED',
@@ -170,13 +172,28 @@ export const importDetailSchema = z
     labels: z.object({
       tipster: z.string().nullable(),
       bookmaker: z.string().nullable(),
-      // Tipo da aposta informado na terceira linha da legenda (contexto
-      // confiável); null mantém o item em revisão manual.
-      kind: z.enum(['real', 'freebet']).nullable(),
-      // Quarta linha opcional da legenda (DD/MM/AAAA HH:mm).
-      date: z.string().nullable(),
       requiresReview: z.boolean(),
     }),
+    // Origem financeira declarada pelo usuário (real|freebet) e o crédito
+    // escolhido explicitamente; null significa que ainda não foi informada e
+    // nenhuma aposta financeira é criada (fail-closed).
+    betOrigin: z.enum(['real', 'freebet']).nullable(),
+    freebetId: z.uuid().nullable(),
+    // Data/hora real do evento: o rascunho nasce pendente e exibe
+    // telegramReceivedAt como valor provisório editável.
+    eventAt: instant.nullable(),
+    eventDateStatus: z.enum(['pending', 'confirmed']),
+    telegramReceivedAt: instant.nullable(),
+    // Créditos de freebet disponíveis (nunca ambíguos: escolha explícita).
+    credits: z.array(
+      z.object({
+        id: z.uuid(),
+        bookmakerId: z.uuid(),
+        amount: z.string(),
+        expiresOn: z.string(),
+        stakeReturned: z.boolean(),
+      }),
+    ),
     matches: z.object({
       tipsterId: z.uuid().nullable(),
       captionBookmakerId: z.uuid().nullable(),
@@ -190,6 +207,27 @@ export const importDetailSchema = z
   })
   .meta({ id: 'ImportDetail' });
 export type ImportDetail = z.infer<typeof importDetailSchema>;
+// STK-G0-19-R5: atualização do rascunho canônico antes da confirmação — a
+// origem financeira, o crédito escolhido e a data do evento são declarados
+// pelo usuário; versão otimista evita sobrescrita concorrente.
+export const draftUpdateSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    betOrigin: z.enum(['real', 'freebet']).nullable().optional(),
+    freebetId: z.uuid().nullable().optional(),
+    eventAt: instant.nullable().optional(),
+  })
+  .refine(
+    (value) => {
+      if (value.betOrigin === 'freebet')
+        return value.freebetId !== undefined && value.freebetId !== null;
+      if (value.betOrigin === 'real' || value.betOrigin === null)
+        return value.freebetId === undefined || value.freebetId === null;
+      return true;
+    },
+    { message: 'INVALID_FREEBET_SELECTION' },
+  );
+export type DraftUpdate = z.infer<typeof draftUpdateSchema>;
 export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema);
 
 export const completionSchema = z.object({
@@ -256,23 +294,16 @@ export function parseCaption(caption: string) {
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.trim());
-  const third = (lines[2] ?? '').toLocaleLowerCase('pt-BR');
-  const fourth = lines[3] ?? '';
-  const date = /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(fourth) ? fourth : null;
-  // Contexto explícito e fail-closed: tipster + casa + tipo (real|freebet) e,
-  // opcionalmente, a data da aposta em DD/MM/AAAA HH:mm (obrigatória para a
-  // automação quando a imagem não traz data parseável). O legado de duas
-  // linhas e qualquer valor ausente, desconhecido ou ambíguo ficam em revisão
-  // manual e nunca autorizam importação automática.
+  // STK-G0-19-R5: a legenda contém apenas tipster e casa. A origem financeira
+  // (real|freebet), o crédito e a data do jogo são declarados pelo usuário no
+  // Mini App ou na web — nunca vêm da legenda, da imagem ou da IA. Linhas
+  // extras de envios antigos são toleradas e ignoradas; tipster/casa ausentes
+  // ou fora do limite permanecem em revisão manual.
+  const tipster = lines[0] || null;
+  const bookmaker = lines[1] || null;
   return {
-    tipster: lines[0] || null,
-    bookmaker: lines[1] || null,
-    kind: third === 'real' || third === 'freebet' ? (third as 'real' | 'freebet') : null,
-    date,
-    requiresReview:
-      (lines.length !== 3 && lines.length !== 4) ||
-      lines.some((line) => !line || line.length > 100) ||
-      (third !== 'real' && third !== 'freebet') ||
-      (lines.length === 4 && date === null),
+    tipster,
+    bookmaker,
+    requiresReview: !tipster || !bookmaker || tipster.length > 100 || bookmaker.length > 100,
   };
 }

@@ -59,6 +59,35 @@ export async function request<T>(
   }
   return schema.parse(await response.json());
 }
+const draftResultSchema = {
+  parse: (value: unknown) => {
+    const version = (value as { version?: unknown } | null)?.version;
+    if (typeof version !== 'number' || !Number.isInteger(version) || version < 1)
+      throw new Error('Resposta inválida do servidor.');
+    return { version };
+  },
+};
+// STK-G0-19-R5 — edição canônica do rascunho (web com sessão; Mini App com o
+// initData validado no servidor). A web nunca chama o Telegram diretamente.
+export function patchImportDraft(
+  id: string,
+  body: {
+    version: number;
+    betOrigin?: 'real' | 'freebet' | null;
+    freebetId?: string | null;
+    eventAt?: string | null;
+  },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}`, draftResultSchema, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
 export function sendCommand(command: FinanceCommand, key: string) {
   return request('/api/v1/commands', commandResultSchema, {
     method: 'POST',

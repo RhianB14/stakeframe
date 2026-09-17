@@ -104,12 +104,23 @@ afterEach(async () => {
     await admin.pool.query(`DROP DATABASE "${name}" WITH (FORCE)`);
 });
 afterAll(async () => admin.close());
-async function input(changes: Partial<TicketExtraction> = {}, caption = 'Fixture\nBet365\nreal') {
+async function input(
+  changes: Partial<TicketExtraction> = {},
+  caption = 'Fixture\nBet365',
+  origin: { kind: 'real' | 'freebet' | null; freebetId?: string | null } = { kind: 'real' },
+) {
   const imports = createImportService(database);
   const { id } = await imports.upload(tenantContext, randomUUID(), {
     image: image.toString('base64'),
     caption,
   });
+  // STK-G0-19-R5: a origem é declarada pelo usuário no rascunho canônico.
+  if (origin.kind !== null)
+    await database.pool.query('update integration.inbox set bet_origin=$2,freebet_id=$3 where id=$1', [
+      id,
+      origin.kind,
+      origin.freebetId ?? null,
+    ]);
   const claim = await createInboxStore(database).claim(tenantContext, id);
   expect(claim).not.toBeNull();
   const extraction: TicketExtraction = {
@@ -166,8 +177,9 @@ describe('automatic import financial boundary', () => {
       const imports = createImportService(database);
       const { id } = await imports.upload(tenantContext, randomUUID(), {
         image: image.toString('base64'),
-        caption: 'Fixture\nBet365\nreal',
+        caption: 'Fixture\nBet365',
       });
+      await database.pool.query("update integration.inbox set bet_origin='real' where id=$1", [id]);
       const extraction = {
         bookmaker: 'Bet365',
         reference: 'worker-fixture',
@@ -340,8 +352,8 @@ describe('automatic import financial boundary', () => {
       dateStatus: 'pending',
     });
   });
-  it('uses only a unique matching freebet and does not debit cash', async () => {
-    await run({
+  it('uses the explicitly selected freebet credit and does not debit cash', async () => {
+    const credit = await run({
       type: 'freebet.create',
       bookmakerId: layout.bookmakerId,
       amount: '100.00',
@@ -349,10 +361,10 @@ describe('automatic import financial boundary', () => {
       stakeReturned: false,
       note: 'Fictional credit',
     });
-    const value = await input(
-      { freebet: true, potentialReturn: '100.00' },
-      'Fixture\nBet365\nfreebet',
-    );
+    const value = await input({ freebet: true, potentialReturn: '100.00' }, 'Fixture\nBet365', {
+      kind: 'freebet',
+      freebetId: credit.id,
+    });
     expect(await complete(value)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
     expect(await finance.workspace(tenantContext)).toMatchObject({
       bankroll: '1000.00',
@@ -371,10 +383,18 @@ describe('automatic import financial boundary', () => {
       stakeReturned: false,
       note: 'Fictional credit',
     });
-    const nullable = await input(
-      { freebet: null, potentialReturn: '100.00' },
-      'Fixture\nBet365\nfreebet',
-    );
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: layout.bookmakerId,
+      amount: '100.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Fictional credit',
+    });
+    const nullable = await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365', {
+      kind: 'freebet',
+      freebetId: credit.id,
+    });
     expect(await complete(nullable)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
     const detail = await createImportService(database).detail(tenantContext, nullable.id);
     expect((await finance.workspace(tenantContext)).freebets[0]?.usedBy).toBe(detail.item.betId);
@@ -395,7 +415,7 @@ describe('automatic import financial boundary', () => {
       state: 'review',
       reason: 'FREEBET_CONFLICT',
     });
-    const freebetFalse = await input({ freebet: false }, 'Fixture\nBet365\nfreebet');
+    const freebetFalse = await input({ freebet: false }, 'Fixture\nBet365', { kind: 'freebet' });
     expect(await complete(freebetFalse)).toMatchObject({
       state: 'review',
       reason: 'FREEBET_CONFLICT',
@@ -405,16 +425,16 @@ describe('automatic import financial boundary', () => {
       1,
     );
   });
-  it('never auto-imports legacy two-line captions or ambiguous types', async () => {
-    const legacy = await input({}, 'Fixture\nBet365');
-    expect(await complete(legacy)).toMatchObject({
+  it('keeps imports without a declared origin in review and fails closed on incomplete captions', async () => {
+    const undeclared = await input({}, 'Fixture\nBet365', { kind: null });
+    expect(await complete(undeclared)).toMatchObject({
       state: 'review',
-      reason: 'CAPTION_UNRESOLVED',
+      reason: 'ORIGIN_UNRESOLVED',
     });
-    const unknown = await input({}, 'Fixture\nBet365\nbonus');
-    expect(await complete(unknown)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
-    const empty = await input({}, 'Fixture\nBet365\n');
-    expect(await complete(empty)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    const missingHouse = await input({}, 'Fixture\n');
+    expect(await complete(missingHouse)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    const singleLine = await input({}, 'Fixture');
+    expect(await complete(singleLine)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
     );
@@ -447,21 +467,31 @@ describe('automatic import financial boundary', () => {
       1,
     );
   });
-  it('rejects ambiguity between two eligible promotional credits', async () => {
-    for (let i = 0; i < 2; i++)
-      await run({
-        type: 'freebet.create',
-        bookmakerId: layout.bookmakerId,
-        amount: '100.00',
-        expiresOn: '9999-01-01',
-        stakeReturned: false,
-        note: 'Fictional credit',
-      });
+  it('requires the explicit credit for a freebet origin and refuses incompatible credits', async () => {
+    // Sem crédito escolhido: fail-closed (a IA não escolhe por ninguém).
+    expect(
+      await complete(await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365', { kind: 'freebet' })),
+    ).toMatchObject({ reason: 'FREEBET_UNRESOLVED' });
+    // Crédito de valor incompatível com a stake também é recusado.
+    const small = await run({
+      type: 'freebet.create',
+      bookmakerId: layout.bookmakerId,
+      amount: '50.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Fictional small credit',
+    });
     expect(
       await complete(
-        await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365\nfreebet'),
+        await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365', {
+          kind: 'freebet',
+          freebetId: small.id,
+        }),
       ),
     ).toMatchObject({ reason: 'FREEBET_UNRESOLVED' });
+    expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
+      0,
+    );
   });
   it('imports without a reference and never writes a synthetic one', async () => {
     const value = await input({ reference: null });
@@ -470,28 +500,13 @@ describe('automatic import financial boundary', () => {
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet.reference).toBe('');
   });
-  it('uses the caption date when the image has none and blocks divergent instants', async () => {
-    const divergent = await input(
-      { placedAtText: '2026-09-08T10:30:00-03:00' },
-      'Fixture\nBet365\nreal\n07/09/2026 10:30',
-    );
-    expect(await complete(divergent)).toMatchObject({
-      state: 'review',
-      reason: 'PLACED_AT_UNCERTAIN',
-    });
-    const equal = await input(
-      { placedAtText: '2026-09-07T10:30:00-03:00' },
-      'Fixture\nBet365\nreal\n07/09/2026 10:30',
-    );
-    expect(await complete(equal)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
-    const detail = await createImportService(database).detail(tenantContext, equal.id);
-    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
-    expect(bet.placedAt).toBe('2026-09-07T13:30:00.000Z');
-  });
-  it('imports from the caption date alone when the image carries no date', async () => {
-    const value = await input({ placedAtText: null }, 'Fixture\nBet365\nreal\n07/09/2026 10:30');
-    expect(await complete(value)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
-    const detail = await createImportService(database).detail(tenantContext, value.id);
+  it('keeps a case without a readable placedAt in review and never invents an instant', async () => {
+    // R5: a legenda não carrega mais data; placedAt vem apenas do texto visual.
+    const noDate = await input({ placedAtText: null });
+    expect(await complete(noDate)).toMatchObject({ state: 'review', reason: 'PLACED_AT_UNCERTAIN' });
+    const migrated = await input({ placedAtText: '2026-09-07T10:30:00-03:00' }, 'Fixture\nBet365\nreal\n07/09/2026 10:30');
+    expect(await complete(migrated)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, migrated.id);
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet.placedAt).toBe('2026-09-07T13:30:00.000Z');
   });

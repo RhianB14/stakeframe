@@ -3,6 +3,7 @@ import { cents, money, saoPauloDate, type FinanceCommand } from '@stakeframe/sha
 import type { PoolClient } from 'pg';
 import { findDuplicates } from './import-review.js';
 import { enqueueExtraction } from './inbox.js';
+import { enqueueBetSync, enqueueCleanupForBet, enqueueOutbox } from './telegram-sync.js';
 import { updateEvent } from './events.js';
 import {
   FinanceError,
@@ -55,8 +56,12 @@ export async function applyFinanceCommand(
         version: number;
         attachment_id: string;
         extraction: unknown;
+        bet_origin: string | null;
+        freebet_id: string | null;
+        telegram_chat_id: string | null;
+        telegram_result_message_id: string | null;
       }>(
-        'select id,state,version,attachment_id,extraction from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+        'select id,state,version,attachment_id,extraction,bet_origin,freebet_id,telegram_chat_id,telegram_result_message_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
         [command.importId],
       )
     ).rows[0];
@@ -98,6 +103,37 @@ export async function applyFinanceCommand(
       await getBetRow(client, command.decision.betId);
       betId = command.decision.betId;
     } else {
+      // STK-G0-19-R5: sem origem financeira declarada pelo usuário nenhuma
+      // aposta financeira é criada (fail-closed); a escolha nunca vem da IA.
+      const declared = command.decision.betOrigin ?? null;
+      const canonical =
+        row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null;
+      if (canonical !== null && declared !== null && canonical !== declared)
+        throw new FinanceError('STATE_CONFLICT');
+      // Crédito escolhido explicitamente pelo usuário também é declaração de
+      // freebet (nunca inferência de IA); dinheiro real exige declaração.
+      const inferred = command.decision.bet.freebetId === null ? null : 'freebet';
+      const effective = declared ?? canonical ?? inferred;
+      if (effective === null) throw new FinanceError('ORIGIN_REQUIRED');
+      if (effective === 'real' && command.decision.bet.freebetId !== null)
+        throw new FinanceError('STATE_CONFLICT');
+      if (effective === 'freebet' && command.decision.bet.freebetId === null)
+        throw new FinanceError('FREEBET_UNRESOLVED');
+      if (
+        effective === 'freebet' &&
+        row.bet_origin === 'freebet' &&
+        command.decision.bet.freebetId !== row.freebet_id
+      )
+        throw new FinanceError('FREEBET_UNRESOLVED');
+      // Primeira confirmação: a origem escolhida vira estado canônico do
+      // rascunho na MESMA transação (fail-closed se o update não aplicar).
+      if (row.bet_origin === null) {
+        const applied = await client.query(
+          'update integration.inbox set bet_origin=$2,freebet_id=$3,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bet_origin is null',
+          [row.id, effective, effective === 'freebet' ? command.decision.bet.freebetId : null],
+        );
+        if (applied.rowCount !== 1) throw new FinanceError('STATE_CONFLICT');
+      }
       const duplicates = await findDuplicates(client, row.id, command.decision.bet);
       if (duplicates.length && command.decision.duplicateReason.trim().length < 3)
         throw new FinanceError('DUPLICATE_REVIEW_REQUIRED');
@@ -114,10 +150,13 @@ export async function applyFinanceCommand(
       'delete from integration.extraction_request where organization_id=current_setting($$app.organization_id$$, true)::uuid and inbox_id=$1',
       [row.id],
     );
-    await client.query(
-      "update integration.inbox set state='imported',imported_bet_id=$2,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+    const imported = await client.query<{ version: number }>(
+      "update integration.inbox set state='imported',imported_bet_id=$2,version=version+1,telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
       [row.id, betId],
     );
+    // A resposta final passa a refletir o registro importado (mesma transação).
+    if (row.telegram_chat_id && row.telegram_result_message_id)
+      await enqueueOutbox(client, row.id, 'edit_result_message', imported.rows[0]!.version);
     return { id: betId, before: row };
   }
   if (type === 'catalog.create') {
@@ -389,6 +428,8 @@ export async function applyFinanceCommand(
       [command.id, command.tipsterId, command.reference],
     );
     await saveSelections(client, command.id, command.selections);
+    // R5: a resposta final do Telegram reflete o registro canônico atualizado.
+    await enqueueBetSync(client, command.id);
     return { id: command.id, before: { ...before, selections } };
   }
   if (type === 'bet.cancel') {
@@ -411,6 +452,8 @@ export async function applyFinanceCommand(
       "update finance.bet set state='cancelled',remaining=0 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
       [command.id],
     );
+    // R5: saiu de pendente → limpeza do Telegram enfileirada na mesma transação.
+    await enqueueCleanupForBet(client, command.id);
     if (before.freebet_id)
       await client.query(
         'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
@@ -467,6 +510,8 @@ export async function applyFinanceCommand(
       'update finance.bet set remaining=$2,state=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
       [command.id, money(remaining), remaining === 0n ? 'settled' : 'open'],
     );
+    // R5: liquidação total (saiu de pendente) → limpeza do Telegram.
+    if (remaining === 0n) await enqueueCleanupForBet(client, command.id);
     // A full unused promotional stake voided without real payout can be used again.
     if (
       before.freebet_id &&

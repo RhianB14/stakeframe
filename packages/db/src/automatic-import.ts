@@ -42,6 +42,7 @@ async function candidate(
   caption: string,
   result: Evidence,
   layout: ValidatedLayout,
+  origin: { kind: 'real' | 'freebet' | null; freebetId: string | null },
   now: Date,
 ): Promise<{ reason: AutomaticReason; bet?: BetInput }> {
   const evidence = ticketExtractionSchema.safeParse(result.extraction);
@@ -56,11 +57,14 @@ async function candidate(
     return { reason: 'EXTRACTION_UNCERTAIN' };
   if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
   const labels = parseCaption(caption);
-  if (labels.requiresReview || labels.kind === null) return { reason: 'CAPTION_UNRESOLVED' };
-  // O tipo informado na legenda é a fonte de verdade financeira; a leitura
-  // visual da IA só bloqueia quando contradiz esse contexto explícito.
-  if (labels.kind === 'real' && extraction.freebet === true) return { reason: 'FREEBET_CONFLICT' };
-  if (labels.kind === 'freebet' && extraction.freebet === false)
+  if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
+  // STK-G0-19-R5: a origem financeira é declarada pelo usuário (Mini App/web);
+  // sem ela nenhuma aposta financeira é criada (fail-closed). A leitura visual
+  // da IA é apenas diagnóstico: um conflito explícito encaminha para revisão e
+  // nunca altera automaticamente a escolha do usuário.
+  if (origin.kind === null) return { reason: 'ORIGIN_UNRESOLVED' };
+  if (origin.kind === 'real' && extraction.freebet === true) return { reason: 'FREEBET_CONFLICT' };
+  if (origin.kind === 'freebet' && extraction.freebet === false)
     return { reason: 'FREEBET_CONFLICT' };
   const aliases = (
     await client.query<{ catalog_id: string; kind: string; label: string }>(
@@ -90,20 +94,13 @@ async function candidate(
     return { reason: 'BOOKMAKER_CONFLICT' };
   if (visualBookmakerId !== null && visualBookmakerId !== bookmakerId)
     return { reason: 'BOOKMAKER_CONFLICT' };
-  // Data: a imagem e a fonte primaria; a 4a linha da legenda e o contexto
-  // confiavel (obrigatoria para automatizar quando a imagem nao traz data
-  // parseavel). Ambos os lados precisam apontar para o MESMO instante;
-  // divergencia, leitura ambigua ou texto nao parseavel permanece em
-  // revisao. O horario de upload nunca e usado como horario da aposta.
-  const visualPlacedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
-  const contextPlacedAt = labels.date ? parseAutomaticPlacedAt(labels.date, 'br-sao-paulo') : null;
-  if (extraction.placedAtText !== null && visualPlacedAt === null)
+  // Data da aposta: somente o texto visual do comprovante (a data do jogo é
+  // outro campo — eventAt, declarado pelo usuário e inicialmente pendente). O
+  // horário de upload/Telegram nunca é usado como horário da aposta.
+  const placedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
+  if (extraction.placedAtText !== null && placedAt === null)
     return { reason: 'PLACED_AT_UNCERTAIN' };
-  if (labels.date !== null && contextPlacedAt === null) return { reason: 'PLACED_AT_UNCERTAIN' };
-  if (visualPlacedAt !== null && contextPlacedAt !== null && visualPlacedAt !== contextPlacedAt)
-    return { reason: 'PLACED_AT_UNCERTAIN' };
-  const placedAt = visualPlacedAt ?? contextPlacedAt;
-  if (!placedAt) return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (placedAt === null) return { reason: 'PLACED_AT_UNCERTAIN' };
   if (Date.parse(placedAt) > now.getTime()) return { reason: 'PLACED_AT_UNCERTAIN' };
   let stake: string;
   try {
@@ -113,12 +110,14 @@ async function candidate(
   }
   let freebetId: string | null = null;
   let stakeReturned = false;
-  if (labels.kind === 'freebet') {
+  if (origin.kind === 'freebet') {
     if (!layout.allowFreebet) return { reason: 'FREEBET_UNRESOLVED' };
+    // O crédito é o escolhido explicitamente pelo usuário; nunca ambíguo.
+    if (!origin.freebetId) return { reason: 'FREEBET_UNRESOLVED' };
     const credits = (
       await client.query<{ id: string; stake_returned: boolean }>(
-        'select id,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and bookmaker_id=$1 and amount=$2 and used_by is null and expires_on >= $3::date order by id limit 2 for update',
-        [bookmakerId, stake, saoPauloDate(new Date(placedAt))],
+        'select id,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= $4::date for update',
+        [origin.freebetId, bookmakerId, stake, saoPauloDate(new Date(placedAt))],
       )
     ).rows;
     if (credits.length !== 1) return { reason: 'FREEBET_UNRESOLVED' };
@@ -159,7 +158,7 @@ async function candidate(
       if (
         cents(extraction.potentialReturn) !==
         cents(
-          suggestedReturn(stake, extraction.odds, 'win', labels.kind === 'freebet', stakeReturned),
+          suggestedReturn(stake, extraction.odds, 'win', origin.kind === 'freebet', stakeReturned),
         )
       )
         return { reason: 'RETURN_MISMATCH' };
@@ -193,8 +192,13 @@ export function createAutomaticImportService(
           )
         ).rows[0]!;
         const row = (
-          await client.query<{ caption: string; version: number }>(
-            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version",
+          await client.query<{
+            caption: string;
+            version: number;
+            bet_origin: string | null;
+            freebet_id: string | null;
+          }>(
+            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version,bet_origin,freebet_id",
             [id, JSON.stringify(result), attempt],
           )
         ).rows[0];
@@ -212,7 +216,18 @@ export function createAutomaticImportService(
         if (layout) {
           await client.query('savepoint automatic_finance');
           try {
-            const assessed = await candidate(client, row.caption, result, layout, now);
+            const assessed = await candidate(
+              client,
+              row.caption,
+              result,
+              layout,
+              {
+                kind:
+                  row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null,
+                freebetId: row.freebet_id,
+              },
+              now,
+            );
             reason = assessed.reason;
             if (assessed.bet) {
               const command = financeCommandSchema.parse({

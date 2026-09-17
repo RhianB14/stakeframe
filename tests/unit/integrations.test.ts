@@ -372,40 +372,30 @@ describe('Telegram boundary', () => {
     ).rejects.toThrow('database unavailable');
     expect(inbox.advance).not.toHaveBeenCalled();
   });
-  it('parses the three-line caption deterministically and fails closed on incomplete or ambiguous captions', () => {
+  it('parses the tipster+house caption deterministically and fails closed on incomplete captions', () => {
+    // R5: a legenda canônica tem exatamente tipster + casa; nenhuma origem,
+    // data ou valor é exigido nela (a origem é declarada pelo usuário na UI).
+    expect(parseCaption(' Tipster \r\n Casa ')).toEqual({
+      tipster: 'Tipster',
+      bookmaker: 'Casa',
+      requiresReview: false,
+    });
+    // Linhas extras do legado são toleradas e ignoradas, nunca interpretadas
+    // como origem financeira ou data.
     expect(parseCaption(' Tipster \r\n Casa \r\n real ')).toEqual({
       tipster: 'Tipster',
       bookmaker: 'Casa',
-      kind: 'real',
-      date: null,
       requiresReview: false,
     });
-    expect(parseCaption(' Tipster \r\n Casa \r\n real \r\n 07/09/2026 14:51 ')).toEqual({
+    expect(parseCaption('Tipster\nCasa\nfreebet\n07/09/2026 14:51')).toEqual({
       tipster: 'Tipster',
       bookmaker: 'Casa',
-      kind: 'real',
-      date: '07/09/2026 14:51',
       requiresReview: false,
     });
-    expect(parseCaption('Tipster\nCasa\nreal\namanh\u00e3')).toMatchObject({
-      date: null,
-      requiresReview: true,
-    });
-    expect(parseCaption('Tipster\nCasa\nreal\n07/09/2026')).toMatchObject({
-      date: null,
-      requiresReview: true,
-    });
-    expect(parseCaption('Tipster\nCasa\nFREEBET').kind).toBe('freebet');
-    expect(parseCaption('Tipster\nCasa\nfreebet').requiresReview).toBe(false);
-    // O legado de duas linhas permanece disponível para revisão manual, mas
-    // nunca autoriza importação automática nem presume dinheiro real.
-    expect(parseCaption('Tipster\nCasa')).toMatchObject({ kind: null, requiresReview: true });
-    expect(parseCaption('\nCasa\nreal').tipster).toBeNull();
-    expect(parseCaption('Tipster\nCasa\nbonus')).toMatchObject({
-      kind: null,
-      requiresReview: true,
-    });
-    expect(parseCaption('Tipster\nCasa\n')).toMatchObject({ kind: null, requiresReview: true });
-    expect(parseCaption('Tipster\nCasa\nextra\nreal').requiresReview).toBe(true);
+    expect(parseCaption('\nCasa').tipster).toBeNull();
+    expect(parseCaption('\nCasa').requiresReview).toBe(true);
+    expect(parseCaption('Tipster\n').bookmaker).toBeNull();
+    expect(parseCaption('Tipster\n').requiresReview).toBe(true);
+    expect(parseCaption('Tipster\n' + 'a'.repeat(101)).requiresReview).toBe(true);
   });
 });

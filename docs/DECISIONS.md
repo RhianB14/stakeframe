@@ -579,3 +579,27 @@ recebem status `Superseded` e apontam a substituta.
   integração.
 - **Segurança:** chaves somente em arquivos privados; nenhum bilhete, imagem,
   texto OCR ou resposta bruta em Git, logs, PR ou Kanban.
+
+## D033 — Fluxo definitivo de importação Telegram/Web (2026-09-17)
+
+- **Contexto:** a homologação da PR #136 provou a extração e a decisão, mas o
+  fluxo de produto ainda misturava responsabilidades: a legenda carregava o
+  tipo financeiro e a data, a web e o Telegram não eram interfaces explícitas
+  do mesmo registro e a limpeza do chat não era automática.
+- **Decisão:** a legenda passa a conter apenas tipster + casa; a origem
+  financeira (`real | freebet | null`) é declarada pelo usuário no Mini App ou
+  no formulário web (nulo ⇒ nenhuma aposta é criada; freebet exige crédito
+  explícito); o retorno potencial é calculado server-side (`stake × totalOdds`,
+  decimal exato) com o valor visual apenas diagnóstico; as datas ganham
+  semânticas separadas (`telegramReceivedAt` imutável, `placedAt`, `eventAt`
+  nulo até confirmação, `eventDateStatus`); o banco é a fonte canônica única
+  com outbox idempotente para o Telegram e limpeza automática da foto e da
+  resposta quando a aposta deixa de estar pendente.
+- **Gates:** `AUTOMATIC_IMPORT_ENABLED=false`; zero operação real no Telegram
+  nesta fase (mocks do Bot API); migração 0011 aditiva local/CI, forward-only
+  e compatível com registros existentes (sem migração em produção); nenhum
+  identificador Telegram, token ou conteúdo privado em logs, PR, Kanban ou
+  memória; a importação automática permanece desativada até política aprovada.
+- **Segurança:** `initData` do Mini App validado no servidor (HMAC) e vinculado
+  ao Telegram ID do proprietário; a web nunca chama o Telegram diretamente;
+  auditoria sanitizada por edição.

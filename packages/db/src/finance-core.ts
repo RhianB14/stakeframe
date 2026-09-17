@@ -13,6 +13,8 @@ export class FinanceError extends Error {
       | 'UNIT_REQUIRED'
       | 'NOT_INITIALIZED'
       | 'ALIAS_CONFLICT'
+      | 'ORIGIN_REQUIRED'
+      | 'FREEBET_UNRESOLVED'
       | 'NOT_FOUND',
   ) {
     super(code);

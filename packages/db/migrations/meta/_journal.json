@@ -78,6 +78,13 @@
       "when": 1789573949436,
       "tag": "0010_finance_tenant_isolation",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789671578273,
+      "tag": "0011_telegram_sync",
+      "breakpoints": true
     }
   ]
 }

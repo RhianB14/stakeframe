@@ -11,8 +11,13 @@ import { KNOWN_BOOKMAKERS, normalizeEvent, normalizeMarket } from './corpus-core
 // fluxo: (1) schema, (2) layout selecionado, (3) modelo aprovado, (4)
 // política/digest (verificada no fluxo real; o corpus offline não carrega o
 // artefato completo da política), (5) OCR consistente, (6) contexto informado,
-// (7) casa e aliases, (8) tipo real/freebet, (9) placedAt, (10) financeiro,
-// (11) duplicidade, (12) dados efetivamente persistidos.
+// (7) casa e aliases, (8) ORIGEM declarada pelo usuário (real/freebet —
+// betOrigin), (9) placedAt, (10) financeiro, (11) duplicidade, (12) dados
+// efetivamente persistidos. R5: a origem nunca vem da imagem/IA/legenda — o
+// contexto privado registra a declaração do proprietário; o retorno potencial
+// é CALCULADO (stake × odds, decimal exato) e o valor visual é somente
+// diagnóstico de fidelidade — divergência indica stake/odd possivelmente
+// incorretos e encaminha para revisão, nunca substitui o cálculo.
 // A data/hora do evento NÃO participa da decisão: eventDateText é
 // reservado/depreciado, nunca autoriza nem bloqueia, nunca é persistido, e
 // toda seleção automática nasce pendente de enriquecimento (eventDate e
@@ -149,6 +154,8 @@ function actualSide(item, layout, contextCase, duplicateImage) {
   // (10) financeiro
   if (value.warnings.length || value.currency !== 'BRL' || !value.stake || !value.odds)
     issues.push('EXTRACTION_UNCERTAIN');
+  // R5: o valor visual é diagnóstico; o potencial persistido é sempre o
+  // CALCULADO (stake × odds). Divergência visual ⇒ stake/odd suspeitos ⇒ revisão.
   if (value.potentialReturn !== null) {
     try {
       const suggested = suggestedReturn(value.stake, value.odds, 'win', kind === 'freebet', false);

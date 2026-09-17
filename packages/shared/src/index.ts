@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { releaseInfoSchema } from './release.js';
 export * from './imports.js';
+export * from './telegram.js';
 export * from './decimal.js';
 export * from './finance.js';
 export * from './release.js';
@@ -41,6 +42,8 @@ export const apiErrorCodeSchema = z.enum([
   'UNIT_REQUIRED',
   'NOT_INITIALIZED',
   'ALIAS_CONFLICT',
+  'ORIGIN_REQUIRED',
+  'FREEBET_UNRESOLVED',
   'DUPLICATE_REVIEW_REQUIRED',
   'INVALID_INBOX_IMAGE',
   'INBOX_BUSY',

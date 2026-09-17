@@ -458,7 +458,16 @@ export function BetForm({
   const [stake, setStake] = useState(bet?.stake ?? review?.extraction?.stake ?? '');
   const [odds, setOdds] = useState(bet?.odds ?? review?.extraction?.odds ?? '');
   const [placedAt, setPlaced] = useState(() => (review ? '' : localNow()));
-  const [freebetId, setFreebet] = useState(bet?.freebetId ?? (review ? 'unconfirmed' : ''));
+  const [freebetId, setFreebet] = useState(
+    bet?.freebetId ??
+      (review
+        ? review.betOrigin === 'real'
+          ? ''
+          : review.betOrigin === 'freebet' && review.freebetId
+            ? review.freebetId
+            : 'unconfirmed'
+        : ''),
+  );
   const [reference, setReference] = useState(bet?.reference ?? review?.extraction?.reference ?? '');
   const [duplicateReason, setDuplicateReason] = useState('');
   const [selections, setSelections] = useState<SelectionForm[]>(() =>
@@ -548,6 +557,7 @@ export function BetForm({
                 decision: {
                   kind: 'create',
                   duplicateReason,
+                  betOrigin: freebetId && freebetId !== 'unconfirmed' ? 'freebet' : 'real',
                   bet: {
                     bookmakerId,
                     tipsterId: tipsterId || null,

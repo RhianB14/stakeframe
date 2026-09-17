@@ -10,8 +10,10 @@ import {
   importDetailSchema,
   uploadSchema,
   commandHeadersSchema,
+  draftUpdateSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
+import { validateTelegramInitData } from './telegram-init-data.js';
 import { ownerSessionSecurity } from './openapi.js';
 import { sendApiError } from './api-errors.js';
 
@@ -46,6 +48,26 @@ export function registerImportRoutes(
     if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
     // The organization always comes from the authenticated user — never from the client.
     contexts.set(request, await service.ensureContext(owner.user.id));
+  };
+  // STK-G0-19-R5 — edição canônica do rascunho por duas interfaces do MESMO
+  // registro: sessão web (cookie) ou Mini App (initData validado no servidor,
+  // vinculado ao Telegram ID do proprietário). A web nunca chama o Telegram.
+  const authorizeDraft = async (request: FastifyRequest, reply: FastifyReply) => {
+    const initData = request.headers['x-telegram-init-data'];
+    if (typeof initData === 'string' && initData.length > 0) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+      const expectedTelegramId = process.env.TELEGRAM_OWNER_USER_ID?.trim() ?? null;
+      if (!botToken || !expectedTelegramId)
+        return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      const validated = validateTelegramInitData(initData, botToken);
+      if (!validated) return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
+      if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
+      const context = await service.telegramOwnerContext(validated.user.id, expectedTelegramId);
+      if (!context) return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
+      contexts.set(request, context);
+      return;
+    }
+    return authorize(request, reply);
   };
   const execute = async (
     request: FastifyRequest,
@@ -112,6 +134,33 @@ export function registerImportRoutes(
           uploadSchema.parse(request.body),
         ),
       ),
+  );
+  app.patch(
+    '/api/v1/imports/:id',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'updateImportDraft',
+        summary: 'Atualizar rascunho da importação (origem, crédito e data do evento)',
+        params,
+        body: draftUpdateSchema,
+        response: {
+          200: z.object({ version: z.number().int().positive() }),
+          ...errors,
+        },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, async () => {
+        const actor = request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web';
+        return service!.updateDraft(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          draftUpdateSchema.parse(request.body),
+          actor,
+        );
+      }),
   );
   app.get(
     '/api/v1/imports/:id',

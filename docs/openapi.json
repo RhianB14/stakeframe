@@ -258,7 +258,8 @@
                         ],
                         "additionalProperties": false
                       },
-                      "duplicateReason": { "type": "string", "maxLength": 500 }
+                      "duplicateReason": { "type": "string", "maxLength": 500 },
+                      "betOrigin": { "type": "string", "enum": ["real", "freebet"] }
                     },
                     "required": ["kind", "bet", "duplicateReason"],
                     "additionalProperties": false
@@ -1507,11 +1508,51 @@
             "properties": {
               "tipster": { "nullable": true, "type": "string" },
               "bookmaker": { "nullable": true, "type": "string" },
-              "kind": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
-              "date": { "nullable": true, "type": "string" },
               "requiresReview": { "type": "boolean" }
             },
-            "required": ["tipster", "bookmaker", "kind", "date", "requiresReview"]
+            "required": ["tipster", "bookmaker", "requiresReview"]
+          },
+          "betOrigin": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+          "freebetId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "eventAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "eventDateStatus": { "type": "string", "enum": ["pending", "confirmed"] },
+          "telegramReceivedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "credits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "amount": { "type": "string" },
+                "expiresOn": { "type": "string" },
+                "stakeReturned": { "type": "boolean" }
+              },
+              "required": ["id", "bookmakerId", "amount", "expiresOn", "stakeReturned"]
+            }
           },
           "matches": {
             "type": "object",
@@ -1577,6 +1618,7 @@
               "LAYOUT_NOT_VALIDATED",
               "EXTRACTION_UNCERTAIN",
               "CAPTION_UNRESOLVED",
+              "ORIGIN_UNRESOLVED",
               "BOOKMAKER_CONFLICT",
               "PLACED_AT_UNCERTAIN",
               "FREEBET_UNRESOLVED",
@@ -1592,6 +1634,12 @@
           "item",
           "extraction",
           "labels",
+          "betOrigin",
+          "freebetId",
+          "eventAt",
+          "eventDateStatus",
+          "telegramReceivedAt",
+          "credits",
           "matches",
           "duplicates",
           "duplicateCount",
@@ -2752,6 +2800,8 @@
                   "UNIT_REQUIRED",
                   "NOT_INITIALIZED",
                   "ALIAS_CONFLICT",
+                  "ORIGIN_REQUIRED",
+                  "FREEBET_UNRESOLVED",
                   "DUPLICATE_REVIEW_REQUIRED",
                   "INVALID_INBOX_IMAGE",
                   "INBOX_BUSY",
@@ -3272,7 +3322,8 @@
                         ],
                         "additionalProperties": false
                       },
-                      "duplicateReason": { "type": "string", "maxLength": 500 }
+                      "duplicateReason": { "type": "string", "maxLength": 500 },
+                      "betOrigin": { "type": "string", "enum": ["real", "freebet"] }
                     },
                     "required": ["kind", "bet", "duplicateReason"],
                     "additionalProperties": false
@@ -4538,12 +4589,53 @@
             "properties": {
               "tipster": { "nullable": true, "type": "string" },
               "bookmaker": { "nullable": true, "type": "string" },
-              "kind": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
-              "date": { "nullable": true, "type": "string" },
               "requiresReview": { "type": "boolean" }
             },
-            "required": ["tipster", "bookmaker", "kind", "date", "requiresReview"],
+            "required": ["tipster", "bookmaker", "requiresReview"],
             "additionalProperties": false
+          },
+          "betOrigin": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+          "freebetId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "eventAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "eventDateStatus": { "type": "string", "enum": ["pending", "confirmed"] },
+          "telegramReceivedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "credits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "amount": { "type": "string" },
+                "expiresOn": { "type": "string" },
+                "stakeReturned": { "type": "boolean" }
+              },
+              "required": ["id", "bookmakerId", "amount", "expiresOn", "stakeReturned"],
+              "additionalProperties": false
+            }
           },
           "matches": {
             "type": "object",
@@ -4611,6 +4703,7 @@
               "LAYOUT_NOT_VALIDATED",
               "EXTRACTION_UNCERTAIN",
               "CAPTION_UNRESOLVED",
+              "ORIGIN_UNRESOLVED",
               "BOOKMAKER_CONFLICT",
               "PLACED_AT_UNCERTAIN",
               "FREEBET_UNRESOLVED",
@@ -4626,6 +4719,12 @@
           "item",
           "extraction",
           "labels",
+          "betOrigin",
+          "freebetId",
+          "eventAt",
+          "eventDateStatus",
+          "telegramReceivedAt",
+          "credits",
           "matches",
           "duplicates",
           "duplicateCount",
@@ -5818,6 +5917,8 @@
                   "UNIT_REQUIRED",
                   "NOT_INITIALIZED",
                   "ALIAS_CONFLICT",
+                  "ORIGIN_REQUIRED",
+                  "FREEBET_UNRESOLVED",
                   "DUPLICATE_REVIEW_REQUIRED",
                   "INVALID_INBOX_IMAGE",
                   "INBOX_BUSY",
@@ -7991,6 +8092,133 @@
       }
     },
     "/api/v1/imports/{id}": {
+      "patch": {
+        "operationId": "updateImportDraft",
+        "summary": "Atualizar rascunho da importação (origem, crédito e data do evento)",
+        "tags": ["Importações"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "betOrigin": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+                  "freebetId": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "eventAt": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  }
+                },
+                "required": ["version"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["version"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "getImport",
         "summary": "Conferir extração, aliases e possíveis duplicações",

@@ -204,7 +204,7 @@ describe('private import review', () => {
       type: 'import.confirm',
       importId: id,
       expectedInboxVersion: 1,
-      decision: { kind: 'create', bet, duplicateReason: '' },
+      decision: { kind: 'create', bet, duplicateReason: '', betOrigin: 'real' },
     });
     const settled = await run({
       type: 'bet.settle',
@@ -272,7 +272,7 @@ describe('private import review', () => {
       importId: id,
       expectedInboxVersion: 1,
       expectedVersion: (await finance.workspace(tenantContext)).version,
-      decision: { kind: 'create', bet, duplicateReason: '' },
+      decision: { kind: 'create', bet, duplicateReason: '', betOrigin: 'real' },
     };
     await expect(
       finance.command(tenantContext, randomUUID(), {
@@ -281,6 +281,7 @@ describe('private import review', () => {
           kind: 'create',
           bet: { ...bet, placedAt: '2099-01-01T00:00:00Z' },
           duplicateReason: '',
+          betOrigin: 'real',
         },
       }),
     ).rejects.toThrow('INVALID_FINANCIAL_OPERATION');
@@ -304,7 +305,7 @@ describe('private import review', () => {
       type: 'import.confirm',
       importId: first.id,
       expectedInboxVersion: 1,
-      decision: { kind: 'create', bet, duplicateReason: '' },
+      decision: { kind: 'create', bet, duplicateReason: '', betOrigin: 'real' },
     });
     const second = await upload();
     const detail = importDetailSchema.parse(await imports.detail(tenantContext, second.id));
@@ -315,7 +316,7 @@ describe('private import review', () => {
         type: 'import.confirm',
         importId: second.id,
         expectedInboxVersion: 1,
-        decision: { kind: 'create', bet, duplicateReason: '' },
+        decision: { kind: 'create', bet, duplicateReason: '', betOrigin: 'real' },
       }),
     ).rejects.toThrow('DUPLICATE_REVIEW_REQUIRED');
     await run({
@@ -330,7 +331,7 @@ describe('private import review', () => {
       type: 'import.confirm',
       importId: third.id,
       expectedInboxVersion: 1,
-      decision: { kind: 'create', bet, duplicateReason: 'São dois bilhetes distintos conferidos' },
+      decision: { kind: 'create', bet, duplicateReason: 'São dois bilhetes distintos conferidos', betOrigin: 'real' },
     });
     expect((await finance.workspace(tenantContext)).exposure).toBe('200.00');
   });
@@ -475,7 +476,7 @@ describe('private import review', () => {
       type: 'import.confirm',
       importId: id,
       expectedInboxVersion: 1,
-      decision: { kind: 'create', bet, duplicateReason: '' },
+      decision: { kind: 'create', bet, duplicateReason: '', betOrigin: 'real' },
     });
     const files = createAttachmentStore(database);
     await database.pool.query("update integration.inbox set updated_at=now()-interval '31 days'");
