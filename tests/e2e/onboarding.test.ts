@@ -355,6 +355,28 @@ test('an invalid time zone keeps the user on the profile step with a clear error
   await expect(page.getByRole('heading', { name: 'Seu perfil' })).toBeVisible();
 });
 
+test('a field error preserves both hint and error references for screen readers', async ({
+  page,
+}) => {
+  const harness = await enableOnboarding(page);
+  await page.goto('/');
+  const zone = page.getByLabel('Fuso horário');
+  await zone.fill('Invalid/Zone');
+  await page.getByRole('button', { name: 'Salvar e continuar' }).click();
+  await expect(zone).toHaveAttribute('aria-invalid', 'true');
+  const hintId = await page.locator('small').filter({ hasText: 'Formato IANA' }).getAttribute('id');
+  expect(hintId).toBeTruthy();
+  const ids = ((await zone.getAttribute('aria-describedby')) ?? '').split(/\s+/);
+  expect(ids).toContain('onboarding-profile-error');
+  expect(ids).toContain(hintId as string);
+  await expect(page.locator('#onboarding-profile-error')).toHaveAttribute('role', 'alert');
+  await expect(page.locator('#onboarding-profile-error')).toContainText(
+    'Informe um fuso horário IANA válido',
+  );
+  await expect(page.getByRole('heading', { name: 'Seu perfil' })).toBeVisible();
+  expect(harness.profilePosts).toHaveLength(0);
+});
+
 test('a pending consent shows the consent screen instead of the onboarding', async ({ page }) => {
   await enableOnboarding(page, { consentRequired: true });
   await page.route('**/api/v1/consents/status', (route) =>
@@ -419,4 +441,147 @@ test('the Telegram route only explains the upcoming connector and writes nothing
   expect(harness.finishPosts).toHaveLength(0);
   expect(harness.finishChoices).toHaveLength(0);
   expect(harness.commands).toHaveLength(0);
+});
+
+test('the stepper resumes on the first incomplete step with accessible progress', async ({
+  page,
+}) => {
+  const onboarding = pendingOnboarding();
+  onboarding.timezone = 'America/Sao_Paulo';
+  onboarding.steps.profile = { completed: true, completedAt: '2026-09-16T12:00:00.000Z' };
+  const harness = await enableOnboarding(page, { onboarding });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Sua primeira banca' })).toBeVisible();
+  const steps = page.getByRole('list', { name: 'Etapas dos primeiros passos' });
+  await expect(steps.getByRole('listitem').first()).toContainText('(concluída)');
+  await expect(steps.locator('[aria-current="step"]')).toContainText('Primeira banca');
+  await expect(page.locator('.onboarding-progress')).toContainText('Passo 2 de 3');
+  expect(harness.profilePosts).toHaveLength(0);
+});
+
+test('the onboarding is fully operable by keyboard with visible focus', async ({ page }) => {
+  const harness = await enableOnboarding(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Seu perfil' })).toBeVisible();
+  await page.getByLabel('Nome exibido').focus();
+  await page.keyboard.type('Rhian Teclado');
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Fuso horário')).toBeFocused();
+  await page.keyboard.type('America/Sao_Paulo');
+  await page.keyboard.press('Tab');
+  const save = page.getByRole('button', { name: 'Salvar e continuar' });
+  await expect(save).toBeFocused();
+  const outline = await page.evaluate(() => {
+    const el = document.activeElement;
+    if (!(el instanceof HTMLElement)) return null;
+    const style = getComputedStyle(el);
+    return { style: style.outlineStyle, width: style.outlineWidth };
+  });
+  expect(outline).not.toBeNull();
+  expect(outline && outline.style === 'solid' && outline.width !== '0px').toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Sua primeira banca' })).toBeVisible();
+  const add = page.getByRole('button', { name: 'Adicionar casa' });
+  await add.focus();
+  await add.press('Enter');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByLabel('Nome', { exact: true }).fill('Bet365');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.getByLabel('Bet365 (R$)', { exact: true })).toBeVisible();
+  await page.getByLabel('Reserva (R$)', { exact: true }).fill('400,00');
+  await page.getByLabel('Bet365 (R$)', { exact: true }).fill('200,00');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Confirmar saldos iniciais' }).click();
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Escolha da primeira aposta' })).toBeVisible();
+  const defer = page.getByRole('button', { name: 'Continuar sem registrar aposta' });
+  await defer.focus();
+  await defer.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  expect(harness.finishChoices).toEqual(['deferred']);
+});
+
+test('double submits of the profile step are prevented while the save is in flight', async ({
+  page,
+}) => {
+  const harness = await enableOnboarding(page);
+  await page.route('**/api/v1/onboarding', async (route) => {
+    const req = route.request();
+    if (req.method() !== 'POST') return route.fallback();
+    const body = req.postDataJSON() as { step?: string; displayName?: string; timezone?: string };
+    if (body.step !== 'profile') return route.fallback();
+    harness.profilePosts.push(1);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    harness.onboarding.steps.profile = { completed: true, completedAt: new Date().toISOString() };
+    harness.onboarding.displayName = body.displayName ?? harness.onboarding.displayName;
+    harness.onboarding.timezone = body.timezone ?? harness.onboarding.timezone;
+    return route.fulfill({ json: harness.onboarding });
+  });
+  await page.goto('/');
+  await page.getByLabel('Nome exibido').fill('Rhian Duplo');
+  await page.getByLabel('Fuso horário').fill('America/Sao_Paulo');
+  const save = page.getByRole('button', { name: /Salvar|Salvando/ });
+  await save.click();
+  await expect(save).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Sua primeira banca' })).toBeVisible();
+  expect(harness.profilePosts).toHaveLength(1);
+});
+
+test('a finish failure keeps the step open, is announced and offers an explicit retry', async ({
+  page,
+}) => {
+  let failing = true;
+  const onboarding = pendingOnboarding();
+  onboarding.timezone = 'America/Sao_Paulo';
+  onboarding.steps.profile = { completed: true, completedAt: '2026-09-16T12:00:00.000Z' };
+  onboarding.steps.bankroll = { completed: true };
+  const workspace = emptyWorkspace();
+  workspace.initialized = true;
+  const harness = await enableOnboarding(page, { onboarding, workspace });
+  await page.route('**/api/v1/onboarding', async (route) => {
+    const req = route.request();
+    const body = req.postDataJSON() as { step?: string } | null;
+    if (req.method() === 'POST' && body?.step === 'finish' && failing) {
+      return route.fulfill({
+        status: 500,
+        json: {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Não foi possível concluir a solicitação.',
+            requestId: '00000000-0000-4000-8000-000000000000',
+          },
+        },
+      });
+    }
+    return route.fallback();
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
+  await expect(page.getByRole('alert')).toContainText('Não foi possível concluir a solicitação.');
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toHaveCount(0);
+  failing = false;
+  await page.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  expect(harness.finishChoices).toEqual(['deferred']);
+});
+
+test('the onboarding adapts to a mobile viewport without horizontal overflow', async ({
+  page,
+}, info) => {
+  await enableOnboarding(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Primeiros passos', level: 2 })).toBeVisible();
+  await noHorizontalOverflow(page);
+  await page.getByLabel('Nome exibido').fill('Rhian Mobile');
+  await page.getByLabel('Fuso horário').fill('America/Sao_Paulo');
+  await page.getByRole('button', { name: 'Salvar e continuar' }).click();
+  await expect(page.getByRole('heading', { name: 'Sua primeira banca' })).toBeVisible();
+  const add = page.getByRole('button', { name: 'Adicionar casa' });
+  await expect(add).toBeVisible();
+  const box = await add.boundingBox();
+  expect(box && box.height >= 40).toBe(true);
+  await page.screenshot({ path: info.outputPath('onboarding-mobile.png'), fullPage: true });
+  await noHorizontalOverflow(page);
 });

@@ -146,7 +146,8 @@ ONBOARDING_PREREQUISITE`, sem gravação; `firstBet` ausente ⇒ `400`; `registe
 - Moeda única do produto (BRL); nenhuma preferência multi-moeda foi criada.
 - Consentimentos continuam sendo da STK-F1-07 — nenhum mecanismo duplicado.
 - Redesign incremental/acessibilidade ampla (temas/WCAG AA) é o card "STK-F2-01" do board
-  (redesign), dependente deste.
+  (redesign), dependente deste. Implementado em `docs/F2-01-ONBOARDING-REDESIGN.md` (sem
+  mudanças funcionais nesta unidade).
 - O finance multi-tenant é a STK-F1-13 (ver §1).
 
 ## 7. Zero produção
