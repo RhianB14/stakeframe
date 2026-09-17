@@ -11,14 +11,40 @@ no dia 1 em UTC, confirmada no console. Isso não ativa recarga de saldo.
 As variáveis de [.env.example](../.env.example) descrevem o contrato do runtime:
 
 - Provedor `openrouter`, endpoint `https://openrouter.ai/api/v1/chat/completions`.
-- Modelo exato `google/gemini-3.8-flash`; não usar alias `latest` ou roteamento
-  automático entre modelos.
+- Cadeia fixa e versionada, sem aliases: `google/gemini-3.8-flash` →
+  `qwen/qwen3-vl-32b-instruct` →
+  `deepseek/deepseek-v4-flash-vision-exp`. A ordem reflete a triagem privada de
+  15/09/2026; a OpenRouter só avança quando o modelo anterior falha.
 - `OPENROUTER_API_KEY_FILE`: caminho absoluto para segredo fora do Git.
-- Até 2.048 tokens de saída, raciocínio `low`, prazo de 60 segundos.
+- Até 4.096 tokens de saída, raciocínio desabilitado, `seed: 0` e prazo de 60
+  segundos. Raciocínio e temperatura não são enviados porque não pertencem ao
+  conjunto de parâmetros comum dos três modelos.
 - Schema JSON explícito e `provider.require_parameters=true`.
-- `provider.allow_fallbacks=false`, preservando a configuração do teste.
-- Erros de crédito/cota preservam o trabalho para revisão; não recarregam
-  saldo, trocam modelo ou repetem uma chamada ambígua automaticamente.
+- `provider.allow_fallbacks=true` com ordenação por throughput permite tanto o
+  failover entre endpoints do mesmo modelo quanto o avanço pela cadeia fixa.
+  Não existe retry da aplicação: toda a cadeia ocorre dentro de uma única
+  requisição HTTP.
+- A chamada não envia `temperature`: esse parâmetro excluiria o endpoint Google
+  Vertex sob `require_parameters=true` e deixaria somente o Google AI Studio.
+  `seed: 0` preserva a intenção determinística sem inutilizar o failover.
+- O modelo e o provedor efetivos ficam na evidência. Qwen e DeepSeek ainda não
+  possuem corpus aprovado; portanto podem produzir uma extração para revisão,
+  mas nunca herdam o digest da política Gemini nem importam automaticamente.
+  Erros finais de crédito/cota preservam o trabalho para revisão e não
+  recarregam saldo.
+- Antes do envio, o worker cria uma cópia visual transitória: respeita a
+  orientação EXIF e aplica realce leve de contraste/nitidez, sem alterar os
+  bytes originais guardados no anexo e sem binarização de OCR.
+
+## OCR auxiliar
+
+O runtime mantém o contrato OCR normalizado com os adaptadores Azure Vision
+(primário) e Google Cloud Vision (fallback), ambos desligados por padrão e
+habilitados apenas pelo overlay `compose.ocr.yml` com credenciais privadas. O
+modelo recebe texto, posições, linhas e confiança como contexto auxiliar junto
+da imagem original; falha de OCR com a camada ativa encerra o job sem chamada
+paga sem OCR. A imagem continua sendo a fonte de verdade e OCR nunca libera
+importação automática sozinho.
 
 Na máquina do proprietário há `project.env`, segredo, metadados e resultado
 em pasta privada com ACL limitada ao proprietário e SYSTEM. O segredo não
@@ -44,6 +70,24 @@ A imagem, seus valores e a transcrição permanecem fora do GitHub.
 A projeção de 1.800 chamadas idênticas seria USD 4,18/mês. É uma extrapolação
 de uma imagem; texto, resolução, saída, raciocínio e novas tentativas variam.
 Os USD 5 escolhidos são um orçamento, não garantia de processar 1.800 bilhetes.
+
+## Fallback operacional e qualificação por modelo
+
+O runtime usa a cadeia fixa; a OpenRouter pode fazer failover entre provedores
+do mesmo modelo dentro de uma única chamada, e o modelo/provedor efetivos ficam
+registrados por caso. Um fallback (Qwen 3 VL 32B, DeepSeek V4 Flash Vision)
+pode produzir resultado para revisão manual, mas nunca importa automaticamente
+enquanto não tiver corpus e política próprios aprovados — o digest da política
+é específico do modelo e não atravessa modelos.
+
+A qualificação isolada de cada combinação casa × modelo roda apenas na
+ferramenta privada (`validation:replay ... --model <modelo>`), que aceita
+exclusivamente os três identificadores da cadeia; a seleção não existe em
+request HTTP, payload de usuário, cookie, query string, variável pública ou
+configuração da aplicação. A avaliação mede exatamente o modelo selecionado
+(uma chamada por caso), sem fallback entre modelos; a execução registra o
+modelo solicitado e o retornado, e um retorno divergente aborta de forma
+sanitizada sem gravar corpus ou avaliação.
 
 Fontes: [modelo](https://openrouter.ai/google/gemini-3.8-flash),
 [saída estruturada](https://openrouter.ai/docs/guides/features/structured-outputs) e

@@ -3,6 +3,10 @@ import { validatedLayoutSchema, ticketExtractionSchema, type ValidatedLayout } f
 
 export const corpusEvaluationInputSchema = z.strictObject({
   schemaVersion: z.literal(1),
+  // Contexto da casa: 'user-informed' = o usuário informa a casa e a IA não é
+  // fonte de verdade para o bookmaker; 'visual-only' = modo legado, em que a
+  // classificação visual de layout e o texto do modelo decidiam.
+  bookmakerContext: z.enum(['user-informed', 'visual-only']).optional(),
   layout: validatedLayoutSchema.omit({
     layoutSha256: true,
     coverage: true,
@@ -23,11 +27,23 @@ export const corpusEvaluationInputSchema = z.strictObject({
         actual: z.strictObject({
           imageSha256: z.string().regex(/^[a-f0-9]{64}$/),
           model: z.string().max(200),
+          provider: z.string().max(200).nullable().optional(),
           layoutId: z.string().nullable(),
           extraction: z.unknown(),
           latencyMs: z.number().finite().nonnegative(),
           requestCount: z.number().int().min(1).max(100),
           costUsd: z.number().finite().nonnegative().nullable(),
+          // Evidência OCR sanitizada da rota atual (ausente em corpora
+          // visual-only): provedor efetivo, uso do fallback e latência, além
+          // do diagnóstico OCR×modelo. Nunca inclui texto ou coordenadas.
+          ocr: z
+            .strictObject({
+              provider: z.enum(['azure', 'google']),
+              fallbackUsed: z.boolean(),
+              latencyMs: z.number().finite().nonnegative(),
+            })
+            .optional(),
+          ocrConsistent: z.boolean().nullable().optional(),
         }),
       }),
     )

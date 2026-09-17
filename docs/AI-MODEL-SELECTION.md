@@ -1,7 +1,9 @@
 # Seleção de IA para leitura dos bilhetes
 
 > Decisão aprovada pelo proprietário em 06/09/2026, após comparação por Codex.
-> Escolha vigente: Gemini 3.8 Flash via OpenRouter (D018), após ensaio privado.
+> Escolha vigente: Gemini 3.8 Flash como principal via OpenRouter (D018), com
+> Qwen3 VL 32B e DeepSeek V4 Flash Vision como contingências em revisão manual
+> (D028).
 > Há uma imagem real conferida; não há benchmark representativo nem integração implantada.
 
 ## Recomendação
@@ -14,6 +16,14 @@ A chave dedicada foi ajustada para USD 5 por mês, com renovação no dia 1 UTC.
 É um limite de consumo de créditos, não uma assinatura nem recarga automática.
 Configuração e credencial ficam em arquivo privado fora do Git. Procedimento
 em [OPENROUTER.md](OPENROUTER.md).
+
+Após os 429 persistentes do endpoint Google, uma triagem comparativa autorizada
+em 15/09/2026 testou nove candidatos sintéticos e sete em dois bilhetes privados
+difíceis. Gemini permaneceu primeiro (1 e 2 divergências); Qwen3 VL 32B e
+DeepSeek V4 Flash Vision foram escolhidos como contingências pela combinação de
+visão, schema estruturado e infraestrutura independente. Nenhum fallback teve
+acerto integral nos dois casos: enquanto não passar seu próprio corpus, sua
+resposta é somente evidência para revisão e não autoriza importação automática.
 
 A comparação inicial com a API Google direta priorizou
 `gemini-3.5-flash-lite`, mas a prova real retornou indisponibilidade para ele
@@ -137,3 +147,24 @@ configuração de modelo e credencial fora do código de processamento.
 O backup do OmniRoute local preserva a opção de usá-lo depois. Não é necessário
 instalá-lo na VPS apenas para consumir uma API Gemini, e a comparação atual
 não autoriza migração de sessões ou contratação de outro plano.
+
+## Qualificação independente dos fallbacks
+
+Cada combinação casa × modelo (Bet365/Superbet × Gemini/Qwen 3 VL 32B/DeepSeek
+V4 Flash Vision) exige ensaio e política próprios; aprovar um fallback usando o
+corpus, o digest ou o resultado do Gemini é proibido. A ferramenta privada de
+replay aceita `--model` com a allowlist exata da cadeia e grava o modelo
+solicitado e o retornado; divergência de modelo aborta de forma sanitizada e
+não produz avaliação elegível. Enquanto um modelo não tiver corpus e política
+próprios por casa, seu resultado permanece somente evidência para revisão
+humana, e a importação automática continua desabilitada por combinação.
+
+## OCR auxiliar
+
+O pipeline conserva um contrato OCR provider-neutral, agora com os adaptadores
+Azure Vision (primário) e Google Cloud Vision (fallback) integrados e
+desligados por padrão. Eles entregam texto, coordenadas, linhas e confiança ao
+modelo multimodal, que continua recebendo a imagem original. OCR é apenas
+contexto auxiliar e não aprova uma extração sozinho. A importação automática
+permanece fechada até o corpus e a política correspondentes serem aprovados
+pelo proprietário.

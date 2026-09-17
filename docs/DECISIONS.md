@@ -406,3 +406,176 @@ recebem status `Superseded` e apontam a substituta.
   autorização anterior; CI verde não autoriza merge; merge, deploy, migração,
   credenciais, permissões e exclusões destrutivas continuam exigindo
   autorização específica. Origem: issues #70 e #72.
+
+## D025 — Escopo de casas do corpus no beta inicial (2026-09-14)
+
+- **Decisão do proprietário:** Novibet não faz parte desta rodada nem do escopo
+  inicial do beta. O corpus do subgate de avaliação cobre somente Bet365 e
+  Superbet, cada uma com layout próprio e ensaio independente.
+- **Substituição:** a decisão posterior do proprietário substitui, para o beta
+  atual, a lista original de três casas do plano mestre; o arquivo externo do
+  plano não é reescrito. Quando a Novibet voltar ao escopo, exige o próprio
+  ensaio com os mesmos mínimos de cobertura e aprovação.
+- **Limites:** o allowlist técnico do avaliador continua aceitando as três
+  casas; isso não é cobertura nem aprovação. O fechamento do subgate do corpus
+  não fecha o Gate 0: as demais pendências herdadas permanecem independentes.
+
+## D026 — Casa do bilhete como contexto confiável da importação (2026-09-15)
+
+- **Decisão do proprietário:** o usuário informa explicitamente qual é a casa
+  do bilhete. `bookmakerId` vem desse contexto confiável e é validado contra a
+  casa cadastrada; a IA não substitui, infere ou sobrescreve esse contexto. O
+  texto extraído pelo modelo é evidência, nunca fonte de verdade para a casa —
+  um bookmaker inventado pelo modelo não é aceito.
+- **Sem casa informada:** a importação permanece em revisão. A ausência de
+  marca no print não gera bookmaker inventado nem descarta um bilhete válido;
+  a aplicação preenche o bookmaker final a partir do contexto e mantém a
+  origem rastreável (`bookmakerOrigin: 'context'`, com o layoutId visual
+  registrado à parte como evidência).
+- **Avaliação:** o ensaio distingue o caminho com casa informada
+  (`bookmakerContext: 'user-informed'`) do diagnóstico de layout cross-house.
+  Separadores isolados de confronto (`x`, `v`, `vs`, `-`, `–`, `—`) e glifos
+  ordinais `º`/`°` em mercados são normalizados somente no comparador; nada
+  mais é relaxado (odds, valores, datas, seleções, ordem e schema permanecem
+  exatos). Falsos positivos cross-house e conflitos de casa continuam
+  bloqueando a aprovação e são reportados separadamente.
+- **Escopo:** Bet365 e Superbet seguem como as casas do beta atual; Novibet
+  permanece fora (D025). A confirmação humana continua obrigatória antes de
+  qualquer escrita financeira, e a importação automática segue desabilitada
+  fora de política aprovada. Importação, contexto, revisão e escrita
+  permanecem fail-closed: incerteza, contexto ausente ou conflito vão para
+  revisão, sem bypass por request, cookie, localStorage ou variável externa.
+
+## D027 — Retornos financeiros, eventos empilhados e erros residuais (2026-09-15)
+
+- **Contexto:** a avaliação real de G0-07 mediu os erros residuais (Bet365 16;
+  Superbet 6). As classes dominantes não são de classificação de casa
+  (conflitos zero) e sim de transcrição/contrato: omissões de retorno visível
+  (`0,00`), transcrição de rótulo não-Total, separadores empilhados
+  não-determinísticos e leituras incertas de data/referência.
+- **Decisão (retornos):** o prompt do extrator passa a exigir a leitura do
+  bloco financeiro final do comprovante — transcrever o valor do rótulo de
+  retorno exatamente como exibido (inclusive `0.00` visível), distinguir
+  retorno, retorno potencial, prêmio e valor da aposta, não transformar
+  ausência em zero e não derivar retorno do status. Nenhuma heurística inventa
+  valores; normalização decimal e validação continuam determinísticas e
+  fail-closed.
+- **Decisão (datas e referências):** transcrever exatamente o visível, sem
+  inferir ano, completar dígitos ou corrigir grafia; `null` quando a leitura
+  não for confiável; ambiguidade permanece em revisão.
+- **Eventos empilhados:** o comparador trata a estrutura estrita em que
+  exatamente dois lados não vazios aparecem separados por quebra de linha como
+  equivalente ao separador de confronto; a ausência total de separador
+  permanece divergência e hífens/nomes permanecem exatos.
+- **Respostas inválidas:** a investigação dos dois `AI_RESPONSE_INVALID`
+  (G0-07) confirmou que o envelope estrito (finish_reason `stop`, modelo
+  literal, recusa nula) é a fronteira correta de validação; nenhum conteúdo
+  bruto é preservado e as falhas permanecem como revisão obrigatória, sem
+  afrouxar o schema (JSON truncado, campos extras, campos ausentes, números em
+  vez de strings e schema inválido continuam recusados, com testes).
+- **Ground truth v5:** único ajuste — grafia de um sobrenome em que o modelo
+  estava correto e o v4 tinha erro de transcrição (o caso pertence ao corpus
+  Bet365); nenhum outro valor foi adaptado ao observado e nenhum erro
+  confirmado existiu no corpus Superbet. A elegibilidade do subgate continua
+  pendente de nova avaliação real autorizada.
+
+## D028 — Fallback multimodelo com aprovação separada (2026-09-15)
+
+- **Contexto:** mesmo com failover entre Google AI Studio e Vertex elegível, as
+  avaliações privadas foram interrompidas por HTTP 429. Uma triagem autorizada
+  comparou nove modelos multimodais em imagem sintética e sete finalistas em um
+  caso Bet365 e um Superbet, sempre com o mesmo contrato e sem retry.
+- **Decisão:** usar a ordem fixa `google/gemini-3.8-flash` →
+  `qwen/qwen3-vl-32b-instruct` →
+  `deepseek/deepseek-v4-flash-vision-exp`. Não usar alias, auto-router ou modelo
+  fora da lista. A OpenRouter executa a cadeia dentro de uma única requisição;
+  o worker registra o modelo/provedor retornado e não repete a chamada.
+- **Parâmetros comuns:** schema JSON estrito, `seed: 0`, 4.096 tokens e
+  `require_parameters=true`. Raciocínio e temperatura ficam ausentes porque
+  excluiriam endpoints/modelos da cadeia.
+- **Fail-closed automático:** políticas são específicas por modelo. Enquanto
+  Qwen e DeepSeek não tiverem corpus individual aprovado, podem preservar uma
+  extração para revisão, mas recebem `policyDigest=null` e nunca importam
+  automaticamente usando a aprovação do Gemini.
+- **Evidência comparativa:** Gemini teve 1/2 divergências nos dois casos; Qwen
+  32B teve 3/schema inválido; DeepSeek Vision teve 4/3. A triagem escolhe
+  contingência operacional, não comprova elegibilidade automática. OpenCode Go
+  permanece fora do runtime de bilhetes por ser destinado a tráfego de agentes
+  de programação.
+
+## D029 — Qualificação independente por casa e modelo dos fallbacks
+
+- **Contexto:** a cadeia fixa (Gemini → Qwen 3 VL 32B → DeepSeek V4 Flash
+  Vision) pode servir qualquer um dos modelos; um fallback sem corpus próprio
+  não pode herdar a política do Gemini (D028), e o digest de política é
+  específico do modelo que o produziu.
+- **Decisão:** cada combinação casa × modelo tem avaliação e política
+  independentes (Bet365/Superbet × Gemini/Qwen/DeepSeek); a seleção explícita de
+  um modelo existe apenas na ferramenta privada de avaliação (allowlist exata
+  da cadeia, sem fallback entre modelos, sem seleção por request, payload,
+  cookie, query string ou variável pública), que grava o modelo solicitado e o
+  retornado e aborta de forma sanitizada em divergência; os artefatos ficam
+  separados por rodada, casa e modelo. O runtime do worker continua usando
+  exclusivamente a cadeia fixa.
+- **Consequências:** aprovar um modelo com o corpus de outro é proibido; o
+  layout validado declara o modelo a que pertence e o digest nunca atravessa
+  modelos; mudança de modelo, prompt, schema ou normalização invalida a
+  política correspondente; enquanto não houver corpus aprovado por combinação,
+  a importação automática permanece desabilitada e todo resultado de fallback
+  fica em revisão humana.
+
+## D030 — OCR auxiliar com Google Document AI (2026-09-15)
+
+> **Supersedida pela D031.** A integração foi removida antes de qualquer
+> ativação operacional; nenhuma credencial Google permanece no runtime.
+
+- **Contexto:** os erros residuais dos bilhetes incluem referências, datas,
+  valores pequenos e caracteres que se beneficiam de texto e coordenadas
+  independentes, mas a estrutura visual continua necessária para relacionar
+  mercado, seleção e retorno.
+- **Decisão:** adicionar uma integração opcional com o Google Document AI
+  Enterprise OCR antes da chamada multimodal. O processor retorna texto,
+  coordenadas, blocos, linhas, confiança e qualidade; a imagem original segue
+  obrigatoriamente para Gemini/Qwen/DeepSeek.
+- **Fail-closed:** OCR é contexto auxiliar, nunca fonte única. Falha do OCR
+  aborta o job antes da chamada multimodal quando a camada estiver ativada;
+  divergência OCR × modelo ou baixa confiança mantém revisão humana. O OCR
+  não fornece `policyDigest` e não libera importação automática.
+- **Segurança:** ativação explícita, projeto/localização/processor fixos e
+  credencial OAuth de service account somente em arquivo privado. O OCR fica
+  desligado por padrão; nenhuma credencial, imagem, texto ou resposta bruta
+  entra no repositório, logs, PR ou Kanban.
+
+## D031 — Azure Vision como provedor OCR planejado (2026-09-15)
+
+- **Contexto:** o projeto precisa de OCR estruturado para apoiar a leitura de
+  bilhetes, mas o projeto Google usado na prova de conceito não possui uma
+  rota operacional de faturamento disponível.
+- **Decisão:** remover a integração Google Document AI do runtime e preparar o
+  contrato provider-neutral para Azure Vision. A configuração de endpoint e
+  segredo será feita separadamente pelo proprietário.
+- **Gates:** Azure permanece desligado até a credencial ser configurada, a
+  conectividade ser verificada e o mesmo corpus privado medir os campos
+  essenciais. Nenhum resultado OCR aprova importação sozinho.
+- **Segurança:** chaves somente por arquivo/segredo privado; nenhum bilhete,
+  texto OCR ou resposta bruta em Git, logs, PR ou Kanban; falha do provedor
+  deve ser sanitizada e fail-closed.
+
+## D032 — Azure Vision + Google Vision no candidato da homologação final (2026-09-17)
+
+- **Contexto:** a homologação privada final da importação automática (G0-19)
+  mede os campos essenciais pela rota atual — OCR estruturado (Azure primário,
+  Google fallback) antes da extração multimodal — sobre o harness de
+  replay/corpus desta linha, que ainda não chamava OCR.
+- **Decisão:** portar os adaptadores finais da `main` (#134) para esta linha
+  (candidato), fiar o OCR no replay (configuração por env, pacing entre
+  chamadas, abortos fail-closed) e registrar a evidência OCR sanitizada no
+  próprio `actual` do corpus (provedor efetivo, uso do fallback, latência e
+  `ocrConsistent`).
+- **Gates:** `AUTOMATIC_IMPORT_ENABLED=false`; nenhum resultado OCR aprova
+  importação; falha de OCR não vira chamada paga sem OCR; configuração
+  inválida falha antes de qualquer rede/escrita; corpus e política preservados
+  por SHA-256. O candidato fica sujeito à revisão do Codex antes de qualquer
+  integração.
+- **Segurança:** chaves somente em arquivos privados; nenhum bilhete, imagem,
+  texto OCR ou resposta bruta em Git, logs, PR ou Kanban.

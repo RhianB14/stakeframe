@@ -35,6 +35,24 @@ test('reports invented values, omissions, selection count and wrong layouts as e
   assert.equal(report.fieldCounts['selections.length'].mismatches, 1);
   assert.equal(report.fieldCounts.layout.mismatches, 1);
 });
+test('counts an invented sport when the evidence does not show it', () => {
+  const value = fixture();
+  value.cases[0].expected.selections[0].sport = null;
+  value.cases[0].actual.extraction.selections[0].sport = 'Futebol';
+  const report = evaluateCorpus(value);
+  assert.equal(report.eligibleForOwnerReview, false);
+  assert.equal(report.fieldCounts['selections.sport'].invented, 1);
+  assert.equal(
+    report.cases[0].issues.some(
+      (issue) => issue.field === 'selections.sport' && issue.kind === 'invented',
+    ),
+    true,
+  );
+  const coherent = fixture();
+  coherent.cases[0].expected.selections[0].sport = 'Futebol';
+  coherent.cases[0].actual.extraction.selections[0].sport = 'Futebol';
+  assert.equal(evaluateCorpus(coherent).fieldCounts['selections.sport'], undefined);
+});
 test('binds each result to its image and model, rejects invalid schemas and missed warnings', () => {
   const value = fixture();
   value.cases[0].actual.imageSha256 = 'a'.repeat(64);
@@ -79,4 +97,178 @@ test('does not use missing fields from negative images to qualify the approved l
   assert.equal(report.coverage.missingFields, 0);
   assert.equal(report.coveragePassed, false);
   assert.equal(report.eligibleForOwnerReview, false);
+});
+
+test('treats isolated confrontation separators as equivalent without touching real hyphens', () => {
+  for (const actual of [
+    'Fictional A — B',
+    'Fictional A – B',
+    'Fictional A - B',
+    'Fictional A vs B',
+    'Fictional A v B',
+    'Fictional A x B',
+  ]) {
+    const value = fixture();
+    value.cases[0].expected.selections[0].event = 'Fictional A x B';
+    value.cases[0].actual.extraction.selections[0].event = actual;
+    assert.equal(evaluateCorpus(value).essentialFieldErrors, 0, actual);
+  }
+  const hyphen = fixture();
+  hyphen.cases[0].expected.selections[0].event = 'Jean-Luc Picard x Outro';
+  hyphen.cases[0].actual.extraction.selections[0].event = 'Jean Luc Picard x Outro';
+  assert.equal(evaluateCorpus(hyphen).essentialFieldErrors, 1);
+  const substantive = fixture();
+  substantive.cases[0].actual.extraction.selections[0].event = 'Fictional C x B';
+  assert.equal(evaluateCorpus(substantive).essentialFieldErrors, 1);
+});
+
+test('treats ordinal glyphs as equivalent in markets only', () => {
+  const value = fixture();
+  value.cases[0].expected.selections[0].market = '2º Set - Total de Games';
+  value.cases[0].actual.extraction.selections[0].market = '2° Set - Total de Games';
+  assert.equal(evaluateCorpus(value).essentialFieldErrors, 0);
+  const different = fixture();
+  different.cases[0].expected.selections[0].market = '3º Set - Total de Games';
+  different.cases[0].actual.extraction.selections[0].market = '2° Set - Total de Games';
+  assert.equal(evaluateCorpus(different).essentialFieldErrors, 1);
+  const selection = fixture();
+  selection.cases[0].expected.selections[0].selection = 'A 2º game';
+  selection.cases[0].actual.extraction.selections[0].selection = 'A 2° game';
+  assert.equal(evaluateCorpus(selection).essentialFieldErrors, 1);
+});
+
+test('accepts a null or matching visual bookmaker with a user-informed house and flags real conflicts', () => {
+  const value = fixture();
+  value.bookmakerContext = 'user-informed';
+  value.cases[0].expected.bookmaker = 'bet365';
+  value.cases[0].actual.extraction.bookmaker = null;
+  const report = evaluateCorpus(value);
+  assert.equal(report.essentialFieldErrors, 0);
+  assert.equal(report.contextDiagnostics.bookmakerAbsent, 1);
+  assert.equal(report.cases[0].correct, true);
+  const confirmed = fixture();
+  confirmed.bookmakerContext = 'user-informed';
+  confirmed.cases[0].expected.bookmaker = 'bet365';
+  confirmed.cases[0].actual.extraction.bookmaker = 'Bet365';
+  const confirmedReport = evaluateCorpus(confirmed);
+  assert.equal(confirmedReport.essentialFieldErrors, 0);
+  assert.equal(confirmedReport.contextDiagnostics.bookmakerConfirmed, 20);
+  const conflict = fixture();
+  conflict.bookmakerContext = 'user-informed';
+  conflict.cases[0].expected.bookmaker = 'bet365';
+  conflict.cases[0].actual.extraction.bookmaker = 'superbet';
+  const conflictReport = evaluateCorpus(conflict);
+  assert.equal(conflictReport.essentialFieldErrors, 1);
+  assert.equal(conflictReport.fieldCounts.bookmaker.mismatches, 1);
+  assert.equal(conflictReport.contextDiagnostics.bookmakerConflicts, 1);
+  assert.equal(conflictReport.eligibleForOwnerReview, false);
+});
+
+test('separates visual layout diagnostics from the main user-informed path', () => {
+  const value = fixture();
+  value.bookmakerContext = 'user-informed';
+  for (const item of value.cases.filter((entry) => entry.expectedLayoutId !== null))
+    item.actual.layoutId = null;
+  const report = evaluateCorpus(value);
+  assert.equal(report.essentialFieldErrors, 0);
+  assert.equal(report.eligibleForOwnerReview, true);
+  assert.equal(report.visualDiagnostics.positiveUnrecognized, 20);
+  assert.equal(report.visualDiagnostics.crossHouseRejected, 5);
+  const falsePositive = fixture();
+  falsePositive.bookmakerContext = 'user-informed';
+  falsePositive.cases[24].actual.layoutId = 'bet365-fixture';
+  const falsePositiveReport = evaluateCorpus(falsePositive);
+  assert.equal(falsePositiveReport.eligibleForOwnerReview, false);
+  assert.equal(falsePositiveReport.essentialFieldErrors, 1);
+  assert.equal(falsePositiveReport.visualDiagnostics.crossHouseRecognized, 1);
+  assert.equal(falsePositiveReport.fieldCounts.layout.mismatches, 1);
+});
+
+test('keeps the legacy visual-only contract closed when no context is declared', () => {
+  const value = fixture();
+  for (const item of value.cases.filter((entry) => entry.expectedLayoutId !== null))
+    item.actual.layoutId = null;
+  const report = evaluateCorpus(value);
+  assert.equal(report.bookmakerContext, 'visual-only');
+  assert.equal(report.essentialFieldErrors, 20);
+  assert.equal(report.eligibleForOwnerReview, false);
+});
+
+test('treats stacked sides separated by a line break as a confrontation separator only when strict', () => {
+  const stacked = fixture();
+  stacked.cases[0].expected.selections[0].event = 'Fictional A x B';
+  stacked.cases[0].actual.extraction.selections[0].event = 'Fictional A\nB';
+  assert.equal(evaluateCorpus(stacked).essentialFieldErrors, 0);
+  const uncertain = fixture();
+  uncertain.cases[0].expected.selections[0].event = 'Fictional A x B';
+  uncertain.cases[0].actual.extraction.selections[0].event = 'Fictional A B';
+  assert.equal(evaluateCorpus(uncertain).essentialFieldErrors, 1);
+  const multi = fixture();
+  multi.cases[0].expected.selections[0].event = 'Real Madrid x Bayern de Munique';
+  multi.cases[0].actual.extraction.selections[0].event = 'Real Madrid — Bayern de Munique';
+  assert.equal(evaluateCorpus(multi).essentialFieldErrors, 0);
+  const broken = fixture();
+  broken.cases[0].expected.selections[0].event = 'Guilherme Clezar x Outro';
+  broken.cases[0].actual.extraction.selections[0].event = 'Guilherme\nClezar x Outro';
+  assert.equal(evaluateCorpus(broken).essentialFieldErrors, 1);
+});
+
+test('keeps potential return, prize and stake as distinct exact values', () => {
+  const value = fixture();
+  value.cases[0].expected.potentialReturn = '0.53';
+  value.cases[0].actual.extraction.potentialReturn = '0.53';
+  assert.equal(evaluateCorpus(value).essentialFieldErrors, 0);
+  const swapped = fixture();
+  swapped.cases[0].expected.potentialReturn = '0.53';
+  swapped.cases[0].actual.extraction.potentialReturn = '1.02';
+  assert.equal(evaluateCorpus(swapped).essentialFieldErrors, 1);
+  const asStake = fixture();
+  asStake.cases[0].expected.potentialReturn = null;
+  asStake.cases[0].actual.extraction.potentialReturn = '50.00';
+  assert.equal(evaluateCorpus(asStake).essentialFieldErrors, 1);
+});
+
+test('preserves visible zero returns, exact odds and absence of value', () => {
+  const value = fixture();
+  value.cases[0].expected.potentialReturn = '0.00';
+  value.cases[0].actual.extraction.potentialReturn = '0.00';
+  assert.equal(evaluateCorpus(value).essentialFieldErrors, 0);
+  const omitted = fixture();
+  omitted.cases[0].expected.potentialReturn = '0.00';
+  omitted.cases[0].actual.extraction.potentialReturn = null;
+  assert.equal(evaluateCorpus(omitted).essentialFieldErrors, 1);
+  const invented = fixture();
+  invented.cases[0].actual.extraction.potentialReturn = '0.00';
+  assert.equal(evaluateCorpus(invented).essentialFieldErrors, 1);
+  const odds = fixture();
+  odds.cases[0].expected.selections[0].odds = '1.57';
+  odds.cases[0].actual.extraction.selections[0].odds = '1.58';
+  assert.equal(evaluateCorpus(odds).essentialFieldErrors, 1);
+});
+
+test('accepts sanitized OCR evidence on the actual result without leaking it to the report', () => {
+  const value = fixture();
+  value.cases[0].actual = {
+    ...value.cases[0].actual,
+    ocr: { provider: 'azure', fallbackUsed: false, latencyMs: 42 },
+    ocrConsistent: true,
+  };
+  const report = evaluateCorpus(value);
+  assert.equal(report.eligibleForOwnerReview, true);
+  assert.equal(JSON.stringify(report).includes('azure'), false);
+});
+
+test('rejects OCR evidence outside the sanitized contract', () => {
+  const extra = fixture();
+  extra.cases[0].actual = {
+    ...extra.cases[0].actual,
+    ocr: { provider: 'azure', fallbackUsed: false, latencyMs: 42, text: 'vazamento' },
+  };
+  assert.throws(() => evaluateCorpus(extra), /Unrecognized key/);
+  const unknownProvider = fixture();
+  unknownProvider.cases[0].actual = {
+    ...unknownProvider.cases[0].actual,
+    ocr: { provider: 'documentai', fallbackUsed: false, latencyMs: 42 },
+  };
+  assert.throws(() => evaluateCorpus(unknownProvider), /Invalid option|Invalid enum value/);
 });
