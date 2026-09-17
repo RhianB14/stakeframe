@@ -355,6 +355,28 @@ test('an invalid time zone keeps the user on the profile step with a clear error
   await expect(page.getByRole('heading', { name: 'Seu perfil' })).toBeVisible();
 });
 
+test('a field error preserves both hint and error references for screen readers', async ({
+  page,
+}) => {
+  const harness = await enableOnboarding(page);
+  await page.goto('/');
+  const zone = page.getByLabel('Fuso horário');
+  await zone.fill('Invalid/Zone');
+  await page.getByRole('button', { name: 'Salvar e continuar' }).click();
+  await expect(zone).toHaveAttribute('aria-invalid', 'true');
+  const hintId = await page.locator('small').filter({ hasText: 'Formato IANA' }).getAttribute('id');
+  expect(hintId).toBeTruthy();
+  const ids = ((await zone.getAttribute('aria-describedby')) ?? '').split(/\s+/);
+  expect(ids).toContain('onboarding-profile-error');
+  expect(ids).toContain(hintId as string);
+  await expect(page.locator('#onboarding-profile-error')).toHaveAttribute('role', 'alert');
+  await expect(page.locator('#onboarding-profile-error')).toContainText(
+    'Informe um fuso horário IANA válido',
+  );
+  await expect(page.getByRole('heading', { name: 'Seu perfil' })).toBeVisible();
+  expect(harness.profilePosts).toHaveLength(0);
+});
+
 test('a pending consent shows the consent screen instead of the onboarding', async ({ page }) => {
   await enableOnboarding(page, { consentRequired: true });
   await page.route('**/api/v1/consents/status', (route) =>

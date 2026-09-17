@@ -22,11 +22,19 @@ export function Field({
   children: ReactElement<{ id?: string; 'aria-describedby'?: string }>;
 }) {
   const id = useId();
+  const hintId = `${id}-hint`;
+  const existing = children.props['aria-describedby'];
+  // O hint nunca sobrescreve referências de erro do filho: mescla e deduplica os IDs.
+  const describedBy = hint
+    ? Array.from(
+        new Set([existing, hintId].filter((value): value is string => typeof value === 'string')),
+      ).join(' ')
+    : existing;
   return (
     <div className="form-field">
       <label htmlFor={id}>{label}</label>
-      {cloneElement(children, { id, ...(hint ? { 'aria-describedby': `${id}-hint` } : {}) })}
-      {hint ? <small id={`${id}-hint`}>{hint}</small> : null}
+      {cloneElement(children, { id, ...(describedBy ? { 'aria-describedby': describedBy } : {}) })}
+      {hint ? <small id={hintId}>{hint}</small> : null}
     </div>
   );
 }

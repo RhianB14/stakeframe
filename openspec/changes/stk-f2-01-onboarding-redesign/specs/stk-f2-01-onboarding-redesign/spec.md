@@ -71,6 +71,21 @@ A UI do onboarding DEVE (MUST) atender os critérios abaixo:
 - **THEN** todos os controles interativos recebem foco em ordem lógica
 - **AND** o indicador de foco é visível
 
+### Requirement: Associação de erro com hint (Field)
+
+O componente `Field` DEVE (MUST) preservar as referências `aria-describedby` já
+presentes no input filho quando renderiza um hint, mesclando-as com o ID do hint
+em uma única lista, sem IDs duplicados; os demais formulários NÃO DEVEM (MUST NOT)
+ter seu comportamento alterado. A mensagem de erro permanece sanitizada, sem
+detalhes internos.
+
+#### Scenario: erro de fuso horário com hint
+
+- **WHEN** o input de fuso horário (que possui hint) recebe erro de validação
+- **THEN** `aria-invalid="true"` é mantido no input
+- **AND** `aria-describedby` referencia tanto o ID do hint quanto o ID da mensagem de erro (`role="alert"`)
+- **AND** a mensagem é anunciada por leitor de tela e o fluxo não avança de passo
+
 ### Requirement: Responsividade e temas
 
 - A UI DEVE (MUST) manter layout íntegro em viewport mobile (360×640) e desktop (1280×720).
