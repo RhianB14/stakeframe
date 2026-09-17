@@ -331,7 +331,12 @@ describe('private import review', () => {
       type: 'import.confirm',
       importId: third.id,
       expectedInboxVersion: 1,
-      decision: { kind: 'create', bet, duplicateReason: 'São dois bilhetes distintos conferidos', betOrigin: 'real' },
+      decision: {
+        kind: 'create',
+        bet,
+        duplicateReason: 'São dois bilhetes distintos conferidos',
+        betOrigin: 'real',
+      },
     });
     expect((await finance.workspace(tenantContext)).exposure).toBe('200.00');
   });

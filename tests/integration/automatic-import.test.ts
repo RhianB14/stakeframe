@@ -116,11 +116,10 @@ async function input(
   });
   // STK-G0-19-R5: a origem é declarada pelo usuário no rascunho canônico.
   if (origin.kind !== null)
-    await database.pool.query('update integration.inbox set bet_origin=$2,freebet_id=$3 where id=$1', [
-      id,
-      origin.kind,
-      origin.freebetId ?? null,
-    ]);
+    await database.pool.query(
+      'update integration.inbox set bet_origin=$2,freebet_id=$3 where id=$1',
+      [id, origin.kind, origin.freebetId ?? null],
+    );
   const claim = await createInboxStore(database).claim(tenantContext, id);
   expect(claim).not.toBeNull();
   const extraction: TicketExtraction = {
@@ -470,7 +469,11 @@ describe('automatic import financial boundary', () => {
   it('requires the explicit credit for a freebet origin and refuses incompatible credits', async () => {
     // Sem crédito escolhido: fail-closed (a IA não escolhe por ninguém).
     expect(
-      await complete(await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365', { kind: 'freebet' })),
+      await complete(
+        await input({ freebet: null, potentialReturn: '100.00' }, 'Fixture\nBet365', {
+          kind: 'freebet',
+        }),
+      ),
     ).toMatchObject({ reason: 'FREEBET_UNRESOLVED' });
     // Crédito de valor incompatível com a stake também é recusado.
     const small = await run({
@@ -503,8 +506,14 @@ describe('automatic import financial boundary', () => {
   it('keeps a case without a readable placedAt in review and never invents an instant', async () => {
     // R5: a legenda não carrega mais data; placedAt vem apenas do texto visual.
     const noDate = await input({ placedAtText: null });
-    expect(await complete(noDate)).toMatchObject({ state: 'review', reason: 'PLACED_AT_UNCERTAIN' });
-    const migrated = await input({ placedAtText: '2026-09-07T10:30:00-03:00' }, 'Fixture\nBet365\nreal\n07/09/2026 10:30');
+    expect(await complete(noDate)).toMatchObject({
+      state: 'review',
+      reason: 'PLACED_AT_UNCERTAIN',
+    });
+    const migrated = await input(
+      { placedAtText: '2026-09-07T10:30:00-03:00' },
+      'Fixture\nBet365\nreal\n07/09/2026 10:30',
+    );
     expect(await complete(migrated)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
     const detail = await createImportService(database).detail(tenantContext, migrated.id);
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
