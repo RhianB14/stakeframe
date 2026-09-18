@@ -38,6 +38,7 @@ reenviada — um alerta real pode ser perdido por falha transitória do Telegram
 
 ## Impacto
 
-- `infra/monitor/worker.mjs` (estado + regras), `infra/monitor/wrangler.jsonc`
-  (vars de configuração), `tests/operations/monitor.test.mjs` (contratos novos
-  - 12 casos obrigatórios). Sem mudança de schema público; sem migração de banco.
+- `infra/monitor/worker.mjs` (estado + regras), `tests/operations/monitor.test.mjs`
+  (contratos novos - 12 casos obrigatórios). `infra/monitor/wrangler.jsonc` fica
+  intocado no diff: as vars `MONITOR_*` são opcionais, com defaults no código
+  (range validado 1..24). Sem mudança de schema público; sem migração de banco.
