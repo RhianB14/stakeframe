@@ -58,6 +58,15 @@ export {
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
 export { createImportService, type ImportService } from './import-review.js';
 export {
+  createImportDraftService,
+  enqueueOutbox,
+  enqueueBetSync,
+  enqueueCleanupForBet,
+  enqueueSyncForSelection,
+  claimOutboxItem,
+  finishOutboxItem,
+} from './telegram-sync.js';
+export {
   createEventService,
   readEventSearchConfig,
   EVENT_LIMITS,

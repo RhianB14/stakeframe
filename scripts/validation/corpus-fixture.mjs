@@ -73,6 +73,7 @@ export function buildPolicyEntry(corpus, report, evaluationSha256, overrides = {
     description: corpus.layout.description,
     placedAtFormat: corpus.layout.placedAtFormat,
     allowFreebet: corpus.layout.allowFreebet,
+    potentialReturnLabels: corpus.layout.potentialReturnLabels ?? ['Retorno Total'],
     layoutSha256: report.layoutSha256,
     coverage: report.coverage,
     corpusSha256: report.corpusSha256,

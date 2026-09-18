@@ -83,6 +83,9 @@ export const financeCommandSchema = z
           kind: z.literal('create'),
           bet: betInputSchema,
           duplicateReason: z.string().trim().max(500),
+          // STK-G0-19-R5: origem declarada pelo usuário no próprio comando de
+          // confirmação (formulário web); o rascunho canônico é sincronizado.
+          betOrigin: z.enum(['real', 'freebet']).optional(),
         }),
         z.strictObject({ kind: z.literal('link'), betId: z.uuid(), reason: note }),
       ]),
@@ -171,6 +174,25 @@ export const financeCommandSchema = z
       type: z.literal('bet.cancel'),
       id: z.uuid(),
       effectiveAt: instant,
+      reason: note,
+    }),
+    // STK-G0-19-R8 — troca de casa canônica de aposta aberta: journal de
+    // reclassificação entre as contas das casas (dinheiro real) e crédito
+    // compatível obrigatório na mesma operação (freebet).
+    command.extend({
+      type: z.literal('bet.bookmaker'),
+      id: z.uuid(),
+      bookmakerId: z.uuid(),
+      freebetId: z.uuid().nullable(),
+      reason: note,
+    }),
+    // STK-G0-19-R8 — troca de origem canônica de aposta aberta (real ↔ freebet
+    // com journals compensatórios e consumo/liberação atômica de crédito).
+    command.extend({
+      type: z.literal('bet.origin'),
+      id: z.uuid(),
+      kind: z.enum(['real', 'freebet']),
+      freebetId: z.uuid().nullable(),
       reason: note,
     }),
     command.extend({

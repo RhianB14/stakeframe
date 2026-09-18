@@ -44,9 +44,15 @@ export const uploadSchema = z.strictObject({
 });
 export const uploadResultSchema = z.object({ id: z.uuid() }).meta({ id: 'UploadResult' });
 
-export const OPENROUTER_MODEL = 'google/gemini-3.8-flash' as const;
+export const OPENROUTER_MODELS = [
+  'google/gemini-3.8-flash',
+  'qwen/qwen3-vl-32b-instruct',
+  'deepseek/deepseek-v4-flash-vision-exp',
+] as const;
+export const OPENROUTER_MODEL = OPENROUTER_MODELS[0];
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const text = z.string().min(1).max(500);
+const instant = z.iso.datetime({ offset: true });
 const decimal = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,4})?$/);
 
 // Extraction is evidence for review, never authority to create a financial entry.
@@ -67,7 +73,15 @@ export const ticketExtractionSchema = z.strictObject({
         market: text.nullable(),
         selection: text.nullable(),
         odds: decimal.nullable(),
-        eventDateText: text.nullable(),
+        // Reservado e depreciado (R3): a importação automática sempre envia
+        // null e ignora o valor. Datas/horários de evento (inclusive período
+        // ao vivo) pertencem ao enriquecimento posterior de eventos e nunca
+        // decidem importação.
+        eventDateText: text
+          .nullable()
+          .describe(
+            'Reservado e depreciado: a importação automática sempre envia null e ignora o valor; datas de evento pertencem ao enriquecimento posterior.',
+          ),
       }),
     )
     .min(1)
@@ -80,9 +94,11 @@ export const automaticReasonSchema = z.enum([
   'LAYOUT_NOT_VALIDATED',
   'EXTRACTION_UNCERTAIN',
   'CAPTION_UNRESOLVED',
+  'ORIGIN_UNRESOLVED',
   'BOOKMAKER_CONFLICT',
   'PLACED_AT_UNCERTAIN',
   'FREEBET_UNRESOLVED',
+  'FREEBET_CONFLICT',
   'RETURN_MISMATCH',
   'UNIT_REQUIRED',
   'DUPLICATE_REVIEW_REQUIRED',
@@ -96,15 +112,24 @@ export const automaticDecisionSchema = z.strictObject({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .nullable(),
+  // Rastreio da casa: o bookmaker aplicado vem do contexto informado pelo
+  // usuário ('context'); a classificação visual fica registrada à parte como
+  // evidência do modelo, nunca como fonte de verdade.
+  bookmakerOrigin: z.literal('context').nullable().optional(),
+  visualLayoutId: z.string().max(200).nullable().optional(),
 });
 export const validatedLayoutSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
   bookmaker: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/),
   bookmakerId: z.uuid(),
-  model: z.literal(OPENROUTER_MODEL),
+  model: z.enum(OPENROUTER_MODELS),
   description: z.string().trim().min(20).max(1000),
-  placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo']),
+  placedAtFormat: z.enum(['iso-offset', 'br-sao-paulo', 'br-textual-sao-paulo']),
   allowFreebet: z.boolean(),
+  // Rótulos autorizados para potentialReturn — parte do digest da política
+  // por casa (Bet365: ["Retorno Total"]; Superbet: ["Prêmio", "Ganho
+  // Potencial"]). Obrigatório: toda política nova/aprovada declara os rótulos.
+  potentialReturnLabels: z.array(z.string().trim().min(1).max(60)).min(1).max(10),
   layoutSha256: z.string().regex(/^[a-f0-9]{64}$/),
   coverage: z.strictObject({
     positive: z.number().int().min(20).max(10000),
@@ -149,12 +174,65 @@ export const importDetailSchema = z
       bookmaker: z.string().nullable(),
       requiresReview: z.boolean(),
     }),
+    // Origem financeira declarada pelo usuário (real|freebet) e o crédito
+    // escolhido explicitamente; null significa que ainda não foi informada e
+    // nenhuma aposta financeira é criada (fail-closed).
+    betOrigin: z.enum(['real', 'freebet']).nullable(),
+    freebetId: z.uuid().nullable(),
+    // Data/hora real do evento: o rascunho nasce pendente e exibe
+    // telegramReceivedAt como valor provisório editável.
+    eventAt: instant.nullable(),
+    eventDateStatus: z.enum(['pending', 'confirmed']),
+    telegramReceivedAt: instant.nullable(),
+    // Créditos de freebet disponíveis (nunca ambíguos: escolha explícita).
+    credits: z.array(
+      z.object({
+        id: z.uuid(),
+        bookmakerId: z.uuid(),
+        amount: z.string(),
+        expiresOn: z.string(),
+        stakeReturned: z.boolean(),
+      }),
+    ),
     matches: z.object({
       tipsterId: z.uuid().nullable(),
       captionBookmakerId: z.uuid().nullable(),
       extractedBookmakerId: z.uuid().nullable(),
       conflict: z.boolean(),
     }),
+    // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa") e o
+    // catálogo ativo da organização para a escolha explícita.
+    bookmakerOverrideId: z.uuid().nullable(),
+    bookmakers: z.array(z.object({ id: z.uuid(), name: z.string() })),
+    // Aposta vinculada (quando a importação já foi registrada): alimenta a
+    // seção "Alterar Status" com o estado canônico e os valores da liquidação.
+    bet: z
+      .object({
+        id: z.uuid(),
+        state: z.enum(['open', 'settled', 'cancelled']),
+        stake: z.string(),
+        odds: z.string(),
+        remaining: z.string(),
+        // R8: casa canônica da aposta (finance.bet) e seleções com datas —
+        // alimentam as seções pós-importação do Mini App.
+        bookmakerId: z.uuid(),
+        bookmakerName: z.string().nullable(),
+        freebetId: z.uuid().nullable(),
+        selections: z.array(
+          z.object({
+            id: z.uuid(),
+            event: z.string(),
+            market: z.string(),
+            selection: z.string(),
+            eventAt: instant.nullable(),
+            dateStatus: z.enum(['confirmed', 'estimated', 'pending']),
+          }),
+        ),
+      })
+      .nullable(),
+    // Estado da política automática (aviso sanitizado; nunca uma decisão do
+    // cliente). 'disabled' quando AUTOMATIC_IMPORT_ENABLED=false.
+    automaticPolicy: z.enum(['disabled', 'absent', 'invalid', 'approved']),
     duplicates: z.array(duplicateSchema),
     duplicateCount: z.number().int().nonnegative(),
     automatic: z.boolean(),
@@ -162,11 +240,128 @@ export const importDetailSchema = z
   })
   .meta({ id: 'ImportDetail' });
 export type ImportDetail = z.infer<typeof importDetailSchema>;
+// STK-G0-19-R5: atualização do rascunho canônico antes da confirmação — a
+// origem financeira, o crédito escolhido e a data do evento são declarados
+// pelo usuário; versão otimista evita sobrescrita concorrente.
+export const draftUpdateSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    betOrigin: z.enum(['real', 'freebet']).nullable().optional(),
+    freebetId: z.uuid().nullable().optional(),
+    eventAt: instant.nullable().optional(),
+    // STK-G0-19-R7: casa declarada pelo usuário (seção "Alterar Casa"); null
+    // limpa a escolha e volta à casa resolvida pela legenda/extração.
+    bookmakerId: z.uuid().nullable().optional(),
+  })
+  .refine(
+    (value) => {
+      if (value.betOrigin === 'freebet')
+        return value.freebetId !== undefined && value.freebetId !== null;
+      if (value.betOrigin === 'real' || value.betOrigin === null)
+        return value.freebetId === undefined || value.freebetId === null;
+      return true;
+    },
+    { message: 'INVALID_FREEBET_SELECTION' },
+  );
+export type DraftUpdate = z.infer<typeof draftUpdateSchema>;
+
+// STK-G0-19-R7 — resultado da edição do rascunho: versão + avisos sanitizados
+// (crédito removido por incompatibilidade de casa; estado da política
+// automática — nunca uma decisão, apenas o que informar ao usuário).
+export const draftUpdateResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    freebetCleared: z.boolean(),
+    automaticPolicy: z.enum(['disabled', 'absent', 'invalid', 'approved']),
+  })
+  .meta({ id: 'DraftUpdateResult' });
+export type DraftUpdateResult = z.infer<typeof draftUpdateResultSchema>;
+
+// STK-G0-19-R7 — transições REAIS de status disponíveis para a aposta de uma
+// importação pendente no Mini App (seção "Alterar Status").
+export const IMPORT_STATUS_ACTIONS = ['win', 'loss'] as const;
+export const importStatusSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    action: z.enum(IMPORT_STATUS_ACTIONS),
+  })
+  .meta({ id: 'ImportStatusUpdate' });
+export type ImportStatusUpdate = z.infer<typeof importStatusSchema>;
+export const importStatusResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string(),
+  })
+  .meta({ id: 'ImportStatusResult' });
+
+// STK-G0-19-R8 — ações canônicas pós/pré-importação: casa, origem e data do
+// evento. As rotas roteiam rascunho (inbox) ou aposta (comandos financeiros);
+// o cliente envia apenas ação + versão otimista.
+export const importBookmakerActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    bookmakerId: z.uuid(),
+    freebetId: z.uuid().nullable().optional(),
+  })
+  .meta({ id: 'ImportBookmakerAction' });
+export const importBookmakerResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+    bookmakerId: z.uuid(),
+    bookmakerName: z.string().nullable(),
+    freebetCleared: z.boolean(),
+  })
+  .meta({ id: 'ImportBookmakerResult' });
+export const importOriginActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    kind: z.enum(['real', 'freebet']),
+    freebetId: z.uuid().nullable().optional(),
+  })
+  .meta({ id: 'ImportOriginAction' });
+export const importOriginResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+    kind: z.enum(['real', 'freebet']),
+    freebetCleared: z.boolean(),
+  })
+  .meta({ id: 'ImportOriginResult' });
+export const importEventActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    selectionId: z.uuid(),
+    eventAt: instant.nullable(),
+  })
+  .meta({ id: 'ImportEventAction' });
+export const importEventResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+  })
+  .meta({ id: 'ImportEventResult' });
+// STK-G0-19-R9 — créditos freebet válidos PARA A CASA DE DESTINO.
+export const importCreditsQuerySchema = z.object({ bookmakerId: z.uuid() });
+export const importCreditsResultSchema = z
+  .object({
+    credits: z.array(
+      z.object({
+        id: z.uuid(),
+        bookmakerId: z.uuid(),
+        amount: z.string(),
+        expiresOn: z.iso.date(),
+        stakeReturned: z.boolean(),
+      }),
+    ),
+  })
+  .meta({ id: 'ImportCreditsResult' });
 export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema);
 
 export const completionSchema = z.object({
   id: z.string().min(1).max(200),
-  model: z.literal(OPENROUTER_MODEL),
+  model: z.enum(OPENROUTER_MODELS),
+  provider: z.string().min(1).max(200).optional(),
   choices: z
     .array(
       z.object({
@@ -227,9 +422,16 @@ export function parseCaption(caption: string) {
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.trim());
+  // STK-G0-19-R5: a legenda contém apenas tipster e casa. A origem financeira
+  // (real|freebet), o crédito e a data do jogo são declarados pelo usuário no
+  // Mini App ou na web — nunca vêm da legenda, da imagem ou da IA. Linhas
+  // extras de envios antigos são toleradas e ignoradas; tipster/casa ausentes
+  // ou fora do limite permanecem em revisão manual.
+  const tipster = lines[0] || null;
+  const bookmaker = lines[1] || null;
   return {
-    tipster: lines[0] || null,
-    bookmaker: lines[1] || null,
-    requiresReview: lines.length !== 2 || lines.some((line) => !line || line.length > 100),
+    tipster,
+    bookmaker,
+    requiresReview: !tipster || !bookmaker || tipster.length > 100 || bookmaker.length > 100,
   };
 }

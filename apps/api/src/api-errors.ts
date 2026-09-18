@@ -6,6 +6,7 @@ const messages: Record<ApiErrorCode, string> = {
   EVENT_PROVIDER_DISABLED:
     'Esta fonte de eventos ainda não está ativada. Você pode informar a data manualmente.',
   EVENT_QUEUE_FULL: 'Há muitas consultas pendentes. Aguarde antes de solicitar outra busca.',
+  IDEMPOTENCY_KEY_REQUIRED: 'Confirmação sem chave de idempotência válida. Tente novamente.',
   INVALID_REQUEST: 'Solicitação inválida.',
   INTERNAL_ERROR: 'Não foi possível concluir a solicitação.',
   AUTH_NOT_CONFIGURED: 'Autenticação indisponível neste ambiente.',
@@ -35,6 +36,8 @@ const messages: Record<ApiErrorCode, string> = {
     'A unidade deste mês está pendente. Informe a unidade histórica ou confirme a revisão.',
   NOT_INITIALIZED: 'Confira os saldos iniciais antes de continuar.',
   ALIAS_CONFLICT: 'Este nome ou alias já pertence a outro cadastro.',
+  ORIGIN_REQUIRED: 'Confirme a origem da aposta (dinheiro real ou freebet) antes de registrar.',
+  FREEBET_UNRESOLVED: 'Confira o crédito de freebet escolhido para esta aposta.',
   DUPLICATE_REVIEW_REQUIRED:
     'Há uma aposta possivelmente repetida. Confira e justifique o novo registro.',
   INVALID_INBOX_IMAGE: 'Envie uma imagem PNG ou JPEG válida, com até 8 MiB e 40 milhões de pixels.',

@@ -300,13 +300,14 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     const policies = await database.pool.query(
       "select count(*) from pg_policies where schemaname in ('finance','integration')",
     );
-    expect(policies.rows[0].count).toBe('18');
+    // R9: a migração 0013 soma a policy de integration.import_action_receipt.
+    expect(policies.rows[0].count).toBe('19');
     // Policies exist (fail-closed for non-owner roles). FORCE is deliberately absent so the
     // owner-run backup/restore cycle keeps working with a single database role.
     const enabled = await database.pool.query(
       "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relrowsecurity",
     );
-    expect(enabled.rows[0].count).toBe('18');
+    expect(enabled.rows[0].count).toBe('19');
     // The isolation proven in this suite runs as the database owner, which the enabled policies
     // do not reach (no FORCE anywhere): the explicit predicates are the effective guard.
     const forced = await database.pool.query(
@@ -657,5 +658,175 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
       state: 'failed',
       errorCode: 'EVENT_QUOTA_REACHED',
     });
+  });
+
+  it('never exposes or blocks another organization duplicate candidate (image, reference and similarity)', async () => {
+    const { contextA, contextB } = await setup();
+    const bookmakerA = await initialize(contextA);
+    const bookmakerB = await initialize(contextB);
+    const betA = await registerBet(contextA, bookmakerA.id);
+    await registerBet(contextB, bookmakerB.id);
+    // A FK composta (bookmaker_id + organization_id) ja impede fabricar a
+    // colisao real; derrubamos a FK APENAS neste banco descartavel para provar
+    // que a propria consulta de duplicatas tambem se defende (precedencia).
+    await database.pool.query('alter table finance.bet drop constraint bet_bookmaker_fk');
+    // A unica colisao possivel entre organizacoes: o bilhete de A com a chave
+    // (casa/stake/odds/data/referencia) que B usaria. B nunca pode ve-lo.
+    const collisionRef = 'CROSS-' + randomUUID().slice(0, 8);
+    const placedAt = new Date().toISOString();
+    await database.pool.query(
+      'update finance.bet set bookmaker_id=$2, reference=$3, stake=$4, odds=$5, placed_at=$6 where id=$1',
+      [betA.betId, bookmakerB.id, collisionRef, '77.00', '7.77', placedAt],
+    );
+    const imports = createImportService(database);
+    const inboxA = await imports.upload(contextA, randomUUID(), {
+      image: image.toString('base64'),
+      caption: 'Fixture\nBet365',
+    });
+    await database.pool.query('update integration.inbox set imported_bet_id=$2 where id=$1', [
+      inboxA.id,
+      betA.betId,
+    ]);
+    const inboxB = await imports.upload(contextB, randomUUID(), {
+      image: image.toString('base64'),
+      caption: 'Fixture\nBet365',
+    });
+    const detail = await imports.detail(contextB, inboxB.id);
+    expect(detail.duplicates).toEqual([]);
+    expect(detail.duplicateCount).toBe(0);
+    await finance.command(contextB, randomUUID(), {
+      type: 'import.confirm',
+      expectedVersion: (await finance.workspace(contextB)).version,
+      importId: inboxB.id,
+      expectedInboxVersion: detail.item.version,
+      decision: {
+        kind: 'create',
+        betOrigin: 'real',
+        bet: {
+          bookmakerId: bookmakerB.id,
+          tipsterId: null,
+          stake: '77.00',
+          odds: '7.77',
+          placedAt,
+          freebetId: null,
+          reference: collisionRef,
+          allowMissingUnit: false,
+          selections: [
+            {
+              event: 'Time A x Time B',
+              sport: 'Futebol',
+              market: 'Gols',
+              selection: 'Mais de 2,5',
+              odds: null,
+              eventDate: '2026-09-10',
+              eventAt: null,
+              dateStatus: 'confirmed',
+            },
+          ],
+        },
+        duplicateReason: '',
+      },
+    } as FinanceCommand);
+    const count = await database.pool.query<{ n: string }>(
+      'select count(*)::int n from finance.bet where organization_id=$1',
+      [contextB.organizationId],
+    );
+    expect(count.rows[0]!.n).toBe(2);
+  });
+  it('keeps image, reference and similarity candidates inside one organization', async () => {
+    const { contextA } = await setup();
+    const bookmakerA = await initialize(contextA);
+    const bet = await registerBet(contextA, bookmakerA.id);
+    const imports = createImportService(database);
+    const linked = await imports.upload(contextA, randomUUID(), {
+      image: image.toString('base64'),
+      caption: 'Fixture\nBet365',
+    });
+    await database.pool.query('update integration.inbox set imported_bet_id=$2 where id=$1', [
+      linked.id,
+      bet.betId,
+    ]);
+    const sameImage = await imports.upload(contextA, randomUUID(), {
+      image: image.toString('base64'),
+      caption: 'Fixture\nBet365',
+    });
+    const byImage = await imports.detail(contextA, sameImage.id);
+    expect(byImage.duplicates.some((item) => item.reasons.includes('image'))).toBe(true);
+    const extraction = {
+      bookmaker: null,
+      reference: bet.reference,
+      placedAtText: null,
+      currency: 'BRL',
+      stake: null,
+      odds: null,
+      potentialReturn: null,
+      freebet: null,
+      selections: [
+        {
+          event: 'Time A x Time B',
+          sport: null,
+          market: null,
+          selection: null,
+          odds: null,
+          eventDateText: null,
+        },
+      ],
+      warnings: [],
+    };
+    await database.pool.query('update integration.inbox set extraction=$2::jsonb where id=$1', [
+      sameImage.id,
+      JSON.stringify({ extraction }),
+    ]);
+    const byReference = await imports.detail(contextA, sameImage.id);
+    expect(byReference.duplicates.some((item) => item.reasons.includes('reference'))).toBe(true);
+    const tiny = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const distinct = await imports.upload(contextA, randomUUID(), {
+      image: tiny.toString('base64'),
+      caption: 'Fixture\nBet365',
+    });
+    const row = (
+      await database.pool.query<{ placed_at: Date; stake: string; odds: string }>(
+        'select placed_at, stake, odds from finance.bet where id=$1',
+        [bet.betId],
+      )
+    ).rows[0]!;
+    await expect(
+      finance.command(contextA, randomUUID(), {
+        type: 'import.confirm',
+        expectedVersion: (await finance.workspace(contextA)).version,
+        importId: distinct.id,
+        expectedInboxVersion: (await imports.detail(contextA, distinct.id)).item.version,
+        decision: {
+          kind: 'create',
+          betOrigin: 'real',
+          bet: {
+            bookmakerId: bookmakerA.id,
+            tipsterId: null,
+            stake: row.stake,
+            odds: row.odds,
+            placedAt: row.placed_at.toISOString(),
+            freebetId: null,
+            reference: 'NOVA-' + randomUUID().slice(0, 8),
+            allowMissingUnit: false,
+            selections: [
+              {
+                event: 'Time A x Time B',
+                sport: 'Futebol',
+                market: 'Gols',
+                selection: 'Mais de 2,5',
+                odds: null,
+                eventDate: '2026-09-10',
+                eventAt: null,
+                dateStatus: 'confirmed',
+              },
+            ],
+          },
+          duplicateReason: '',
+        },
+      } as FinanceCommand),
+    ).rejects.toMatchObject({ code: 'DUPLICATE_REVIEW_REQUIRED' });
   });
 });

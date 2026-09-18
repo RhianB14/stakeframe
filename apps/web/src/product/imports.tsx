@@ -14,7 +14,8 @@ import {
 import { Button } from '../components/ui/button.js';
 import { BetForm, Field } from './forms.js';
 import { CommandForm, useFinanceActions } from './actions.js';
-import { ApiFailure, request, dateLabel } from './api.js';
+import { ApiFailure, patchImportDraft, request, dateLabel } from './api.js';
+import { DraftControls } from './drafts.js';
 import { readPendingUpload, savePendingUpload, type PendingUpload } from './upload-storage.js';
 import type { OpenModal } from './ProductApp.js';
 
@@ -42,9 +43,13 @@ const automaticReasons: Record<AutomaticReason, string> = {
   EXTRACTION_UNCERTAIN:
     'Há campos essenciais ausentes ou dúvidas na leitura. Confira os dados antes de registrar.',
   CAPTION_UNRESOLVED: 'A legenda precisa identificar um tipster e uma casa cadastrados.',
+  ORIGIN_UNRESOLVED:
+    'A origem financeira ainda não foi confirmada — informe dinheiro real ou freebet.',
   BOOKMAKER_CONFLICT: 'A casa identificada no bilhete diverge da legenda ou do layout aprovado.',
   PLACED_AT_UNCERTAIN: 'A data ou o horário do registro precisa de conferência.',
   FREEBET_UNRESOLVED: 'O crédito promocional precisa ser escolhido e conferido.',
+  FREEBET_CONFLICT:
+    'A indicação de freebet na imagem contradiz o tipo informado na legenda. Confira antes de registrar.',
   RETURN_MISMATCH:
     'O retorno escrito diverge do cálculo pela stake e pela odd. Confira os valores e as regras da casa.',
   UNIT_REQUIRED: 'A unidade histórica da aposta precisa ser definida antes do registro.',
@@ -290,12 +295,12 @@ export function UploadForm({
           </Field>
           <Field
             label="Legenda (opcional)"
-            hint="Primeira linha: tipster. Segunda linha: casa de aposta."
+            hint="Primeira linha: tipster. Segunda linha: casa de aposta. Terceira linha: real ou freebet."
           >
             <textarea
               rows={3}
               maxLength={1024}
-              placeholder={'Nome do tipster\nNome da casa'}
+              placeholder={'Nome do tipster\nNome da casa\nreal'}
               value={caption}
               onChange={(event) => setCaption(event.target.value)}
             />
@@ -456,9 +461,15 @@ function ReviewContent({
                 {extraction.currency ?? 'Não identificada'}
               </p>
               <p>
-                Origem:{' '}
+                Origem financeira confirmada:{' '}
+                {detail.betOrigin === 'freebet'
+                  ? 'Freebet'
+                  : detail.betOrigin === 'real'
+                    ? 'Dinheiro real'
+                    : 'Ainda não informada (obrigatória para registrar)'}{' '}
+                · Leitura visual:{' '}
                 {extraction.freebet === null
-                  ? 'Não identificada'
+                  ? 'Sem indicação'
                   : extraction.freebet
                     ? 'Freebet'
                     : 'Dinheiro real'}{' '}
@@ -481,6 +492,13 @@ function ReviewContent({
               Você pode preencher e conferir os dados manualmente enquanto a extração está pendente.
             </p>
           )}
+          {!terminal ? (
+            <DraftControls
+              detail={detail}
+              sender={(body) => patchImportDraft(detail.item.id, body)}
+              onSaved={onDone}
+            />
+          ) : null}
           {matches.conflict ? (
             <p className="notice warning" role="alert">
               A casa da legenda diverge da casa lida na imagem. Escolha a casa correta ao conferir o

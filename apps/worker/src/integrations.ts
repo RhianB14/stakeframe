@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { PgBoss } from 'pg-boss';
 import {
   createInboxStore,
+  createImportDraftService,
   createR2Storage,
   createAutomaticImportService,
   createTenantContext,
@@ -12,8 +13,15 @@ import {
   type ObjectStorage,
 } from '@stakeframe/db';
 import { readAiConfig, extractTicket } from './openrouter.js';
-import { pollTelegramOnce, readTelegramConfig, type TelegramImage } from './telegram.js';
+import {
+  createTelegramClient,
+  pollTelegramOnce,
+  readTelegramConfig,
+  type TelegramImage,
+} from './telegram.js';
+import { createTelegramCallbackHandler } from './telegram-callbacks.js';
 import { IntegrationError } from './http.js';
+import { startTelegramOutbox } from './telegram-outbox.js';
 import { readAutomaticLayouts } from './automatic-config.js';
 import { extractConfiguredOcr, readOcrProvidersConfig } from './ocr-providers.js';
 
@@ -100,6 +108,7 @@ export async function startIntegrations(
   if (ocrProviders && !ai) throw new IntegrationError('OCR_REQUIRES_AI');
   const layouts = readAutomaticLayouts(env);
   const automatic = createAutomaticImportService(database, layouts);
+  const draft = createImportDraftService(database);
   const telegram = readTelegramConfig(env);
   if (!ai && !telegram) return { stop: async () => {}, check: () => {} };
   await assertRecoveryReviewed(database);
@@ -154,7 +163,12 @@ export async function startIntegrations(
             layouts,
             ...(ocr ? { ocr: ocr.result } : {}),
           });
-          return await automatic.complete(context, inboxId, claim.attempt, result);
+          const completed = await automatic.complete(context, inboxId, claim.attempt, result);
+          // R5: a resposta final é enfileirada somente após o rascunho persistido;
+          // sem vínculo Telegram é no-op e nunca duplica mensagem.
+          if (completed.state === 'review' || completed.state === 'imported')
+            await draft.queueResultMessage(context, inboxId);
+          return completed;
         } catch (error) {
           const code = error instanceof IntegrationError ? error.code : 'AI_OUTCOME_UNCERTAIN';
           await store.fail(context, inboxId, claim.attempt, code);
@@ -171,11 +185,16 @@ export async function startIntegrations(
       // Losing this session invalidates leadership immediately, including an in-flight poll.
       leader.on('error', () => controller.abort());
       const telegramContext = systemOrganizationContext(founder!);
+      // R6: callbacks dos botões são resolvidos pelo vínculo canônico
+      // (chat + id da mensagem); nunca por identificador no payload.
+      const telegramClient = createTelegramClient(telegram, fetchImpl);
+      const handleCallback = createTelegramCallbackHandler(database, telegramClient, telegram);
       const inbox = {
         offset: store.offset,
         advance: store.advance,
+        callback: handleCallback,
         async accept(image: TelegramImage, download: () => Promise<Buffer>) {
-          await store.accept(
+          const inboxId = await store.accept(
             telegramContext,
             {
               sourceKey: `telegram:${telegram.userId}:${image.messageId}`,
@@ -191,6 +210,13 @@ export async function startIntegrations(
             },
             download,
           );
+          // R5: vínculo privado com a mensagem de origem + temporária imediata
+          // (enfileirada na fonte canônica; a entrega é da outbox).
+          await draft.attachTelegram(telegramContext, inboxId, {
+            chatId: Number(telegram.chatId),
+            sourceMessageId: image.messageId,
+            receivedAt: image.receivedAt,
+          });
         },
       };
       tasks.push(
@@ -205,6 +231,20 @@ export async function startIntegrations(
             }
           }
         })(),
+      );
+      // R5: executor idempotente da outbox (mocks nos testes; zero operação real aqui).
+      const stopOutbox = startTelegramOutbox(database, telegram, fetchImpl);
+      tasks.push(
+        new Promise<void>((resolve) => {
+          controller.signal.addEventListener(
+            'abort',
+            () => {
+              stopOutbox();
+              resolve();
+            },
+            { once: true },
+          );
+        }),
       );
     }
     tasks.push(

@@ -67,7 +67,7 @@ describe('production configuration boundaries', () => {
       AI_ENABLED: 'true',
       AI_PROVIDER: 'openrouter',
       OPENROUTER_MODEL,
-      OPENROUTER_ALLOW_FALLBACKS: 'false',
+      OPENROUTER_ALLOW_FALLBACKS: 'true',
       OPENROUTER_API_KEY_FILE: join(directory, 'ai'),
     };
     const telegram = {
@@ -76,6 +76,7 @@ describe('production configuration boundaries', () => {
       TELEGRAM_BOT_TOKEN_FILE: join(directory, 'token'),
       TELEGRAM_OWNER_USER_ID_FILE: join(directory, 'owner'),
       TELEGRAM_OWNER_CHAT_ID_FILE: join(directory, 'owner'),
+      TELEGRAM_MINIAPP_URL: 'https://miniapp.example.test',
     };
     const storage = {
       ...environment,

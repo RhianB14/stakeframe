@@ -2,6 +2,11 @@ import {
   apiErrorSchema,
   financeCommandSchema,
   commandResultSchema,
+  importStatusResultSchema,
+  importBookmakerResultSchema,
+  importOriginResultSchema,
+  importEventResultSchema,
+  importCreditsResultSchema,
   cents,
   money,
   saoPauloDate,
@@ -58,6 +63,152 @@ export async function request<T>(
     );
   }
   return schema.parse(await response.json());
+}
+type DraftResult = {
+  version: number;
+  freebetCleared: boolean;
+  automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
+};
+const draftResultSchema = {
+  parse: (value: unknown): DraftResult => {
+    const result = value as {
+      version?: unknown;
+      freebetCleared?: unknown;
+      automaticPolicy?: unknown;
+    } | null;
+    const version = result?.version;
+    if (typeof version !== 'number' || !Number.isInteger(version) || version < 1)
+      throw new Error('Resposta inválida do servidor.');
+    const policy = result?.automaticPolicy;
+    return {
+      version,
+      freebetCleared: result?.freebetCleared === true,
+      automaticPolicy:
+        policy === 'approved' || policy === 'absent' || policy === 'invalid'
+          ? policy
+          : ('disabled' as const),
+    };
+  },
+};
+// STK-G0-19-R5 — edição canônica do rascunho (web com sessão; Mini App com o
+// initData validado no servidor). A web nunca chama o Telegram diretamente.
+export function patchImportDraft(
+  id: string,
+  body: {
+    version: number;
+    betOrigin?: 'real' | 'freebet' | null;
+    freebetId?: string | null;
+    eventAt?: string | null;
+    bookmakerId?: string | null;
+  },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}`, draftResultSchema, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+// STK-G0-19-R8 — ações canônicas por importação (rascunho OU aposta
+// importada): casa, origem e data do evento por seleção.
+export function applyImportBookmaker(
+  id: string,
+  body: { version: number; bookmakerId: string; freebetId?: string | null },
+  initData?: string,
+) {
+  // R9 — chave NOVA por confirmação intencional; retry de transporte repete
+  // uma única vez com a MESMA chave (replay legítimo, sem efeito duplicado).
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/bookmaker`, importBookmakerResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
+}
+async function sendWithIdempotentRetry<T>(send: () => Promise<T>): Promise<T> {
+  try {
+    return await send();
+  } catch (error) {
+    // STK-G0-19-R10 — retry REAL de transporte: SOMENTE `ApiFailure` com
+    // status 0 e código NETWORK_ERROR (a requisição pode ter sido aplicada e a
+    // resposta perdida). Exatamente UMA repetição, reutilizando a MESMA chave
+    // de idempotência e o mesmo corpo — o servidor devolve o recibo. Respostas
+    // HTTP (4xx/5xx) nunca são repetidas automaticamente; a segunda falha
+    // devolve o erro acionável original ao usuário.
+    if (error instanceof ApiFailure && error.status === 0 && error.code === 'NETWORK_ERROR')
+      return send();
+    throw error;
+  }
+}
+export function applyImportOrigin(
+  id: string,
+  body: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null },
+  initData?: string,
+) {
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/origin`, importOriginResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
+}
+export function applyImportEvent(
+  id: string,
+  body: { version: number; selectionId: string; eventAt: string | null },
+  initData?: string,
+) {
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/event`, importEventResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
+}
+// R9 — créditos freebet válidos PARA A CASA DE DESTINO (filtro integral no
+// servidor); o crédito já consumido nunca aparece.
+export function getImportCredits(id: string, bookmakerId: string, initData?: string) {
+  return request(
+    `/api/v1/imports/${id}/credits?bookmakerId=${bookmakerId}`,
+    importCreditsResultSchema,
+    { headers: { ...(initData ? { 'x-telegram-init-data': initData } : {}) } },
+  );
+}
+// STK-G0-19-R7 — liquidação real pelo Mini App (seção "Alterar Status"):
+// vitória/derrota de aposta pendente pelo comando canônico no servidor.
+export function setImportStatus(
+  id: string,
+  body: { version: number; action: 'win' | 'loss' },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}/status`, importStatusResultSchema, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
 }
 export function sendCommand(command: FinanceCommand, key: string) {
   return request('/api/v1/commands', commandResultSchema, {

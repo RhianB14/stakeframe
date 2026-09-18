@@ -6,6 +6,7 @@ import { InviteAccess } from './InviteAccess.js';
 import { PasswordResetGate } from './PasswordReset.js';
 import { ConsentScreen } from './ConsentScreen.js';
 import { ProductApp } from './product/ProductApp.js';
+import { MiniAppPage } from './product/MiniApp.js';
 
 async function loadStatus() {
   const response = await fetch('/api/v1/system/status', { signal: AbortSignal.timeout(5_000) });
@@ -47,6 +48,9 @@ export function App() {
     if (owner.isError || owner.data === null) client.removeQueries({ queryKey: ['product'] });
   }, [client, owner.isError, owner.data]);
   const session = owner.data && owner.data !== 'consent-required' ? owner.data : null;
+  // STK-G0-19-R5 — o Mini App autentica por initData validado no servidor e
+  // não depende da sessão web do proprietário.
+  if (window.location.hash.startsWith('#miniapp')) return <MiniAppPage />;
   if (status.data?.productEnabled && session && !owner.isError) {
     return <ProductApp owner={session.user} release={status.data?.release} />;
   }

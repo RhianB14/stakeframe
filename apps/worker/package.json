@@ -13,6 +13,7 @@
     "@stakeframe/db": "workspace:*",
     "@stakeframe/shared": "workspace:*",
     "pg-boss": "12.30.0",
+    "sharp": "0.35.4",
     "zod": "4.5.4"
   }
 }

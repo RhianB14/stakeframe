@@ -7,10 +7,8 @@ import {
   financeCommandSchema,
   cents,
   money,
-  suggestedReturn,
   saoPauloDate,
   parseAutomaticPlacedAt,
-  automaticEventDate,
   type ValidatedLayout,
   type AutomaticReason,
   type BetInput,
@@ -43,6 +41,7 @@ async function candidate(
   caption: string,
   result: Evidence,
   layout: ValidatedLayout,
+  origin: { kind: 'real' | 'freebet' | null; freebetId: string | null },
   now: Date,
 ): Promise<{ reason: AutomaticReason; bet?: BetInput }> {
   const evidence = ticketExtractionSchema.safeParse(result.extraction);
@@ -51,15 +50,21 @@ async function candidate(
   if (
     extraction.warnings.length ||
     extraction.currency !== 'BRL' ||
-    extraction.freebet === null ||
     !extraction.stake ||
-    !extraction.odds ||
-    !extraction.reference?.trim()
+    !extraction.odds
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
   if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
   const labels = parseCaption(caption);
   if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
+  // STK-G0-19-R5: a origem financeira é declarada pelo usuário (Mini App/web);
+  // sem ela nenhuma aposta financeira é criada (fail-closed). A leitura visual
+  // da IA é apenas diagnóstico: um conflito explícito encaminha para revisão e
+  // nunca altera automaticamente a escolha do usuário.
+  if (origin.kind === null) return { reason: 'ORIGIN_UNRESOLVED' };
+  if (origin.kind === 'real' && extraction.freebet === true) return { reason: 'FREEBET_CONFLICT' };
+  if (origin.kind === 'freebet' && extraction.freebet === false)
+    return { reason: 'FREEBET_CONFLICT' };
   const aliases = (
     await client.query<{ catalog_id: string; kind: string; label: string }>(
       'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
@@ -78,13 +83,24 @@ async function candidate(
   const tipsterId = match('tipster', labels.tipster);
   const bookmakerId = match('bookmaker', labels.bookmaker);
   if (!tipsterId || !bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };
-  if (
-    bookmakerId !== layout.bookmakerId ||
-    match('bookmaker', extraction.bookmaker) !== bookmakerId
-  )
+  // A casa informada no contexto é a fonte de verdade. A leitura visual só
+  // pesa como conflito quando aponta para OUTRA casa cadastrada; texto visual
+  // não resolvido permanece em revisão (fail-closed) e marca ausente (null)
+  // não invalida o bilhete. O contexto nunca é copiado para a extração.
+  const visualBookmakerId = match('bookmaker', extraction.bookmaker);
+  if (bookmakerId !== layout.bookmakerId) return { reason: 'BOOKMAKER_CONFLICT' };
+  if (extraction.bookmaker !== null && visualBookmakerId === null)
     return { reason: 'BOOKMAKER_CONFLICT' };
+  if (visualBookmakerId !== null && visualBookmakerId !== bookmakerId)
+    return { reason: 'BOOKMAKER_CONFLICT' };
+  // Data da aposta: somente o texto visual do comprovante (a data do jogo é
+  // outro campo — eventAt, declarado pelo usuário e inicialmente pendente). O
+  // horário de upload/Telegram nunca é usado como horário da aposta.
   const placedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
-  if (!placedAt || Date.parse(placedAt) > now.getTime()) return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (extraction.placedAtText !== null && placedAt === null)
+    return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (placedAt === null) return { reason: 'PLACED_AT_UNCERTAIN' };
+  if (Date.parse(placedAt) > now.getTime()) return { reason: 'PLACED_AT_UNCERTAIN' };
   let stake: string;
   try {
     stake = money(cents(extraction.stake));
@@ -92,18 +108,20 @@ async function candidate(
     return { reason: 'EXTRACTION_UNCERTAIN' };
   }
   let freebetId: string | null = null;
-  let stakeReturned = false;
-  if (extraction.freebet) {
+  if (origin.kind === 'freebet') {
     if (!layout.allowFreebet) return { reason: 'FREEBET_UNRESOLVED' };
+    // O crédito é o escolhido explicitamente pelo usuário; nunca ambíguo.
+    if (!origin.freebetId) return { reason: 'FREEBET_UNRESOLVED' };
     const credits = (
       await client.query<{ id: string; stake_returned: boolean }>(
-        'select id,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and bookmaker_id=$1 and amount=$2 and used_by is null and expires_on >= $3::date order by id limit 2 for update',
-        [bookmakerId, stake, saoPauloDate(new Date(placedAt))],
+        'select id,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= $4::date for update',
+        [origin.freebetId, bookmakerId, stake, saoPauloDate(new Date(placedAt))],
       )
     ).rows;
     if (credits.length !== 1) return { reason: 'FREEBET_UNRESOLVED' };
+    // O stake_returned do crédito é aplicado na própria transação financeira
+    // (finance-commands lê o crédito sob lock); aqui basta o vínculo.
     freebetId = credits[0]!.id;
-    stakeReturned = credits[0]!.stake_returned;
   }
   const parsed = betInputSchema.safeParse({
     bookmakerId,
@@ -112,34 +130,32 @@ async function candidate(
     odds: extraction.odds,
     placedAt,
     freebetId,
-    reference: extraction.reference,
+    // Referencia vazia e aceita quando a casa nao a apresenta (ex.: Bet365):
+    // a deduplicacao por imagem/referencia/similaridade acontece na mesma
+    // transacao financeira e colisao segue bloqueando. NUNCA gravamos uma
+    // referencia sintetica.
+    reference: extraction.reference ?? '',
     allowMissingUnit: false,
-    selections: extraction.selections.map((selection) => {
-      const eventDate = automaticEventDate(selection.eventDateText);
-      return {
-        event: selection.event,
-        sport: selection.sport,
-        market: selection.market,
-        selection: selection.selection,
-        odds: selection.odds,
-        eventDate,
-        eventAt: null,
-        dateStatus: eventDate ? 'estimated' : 'pending',
-      };
-    }),
+    // Data/hora do evento NÃO pertence à importação automática desta fase:
+    // toda seleção nasce pendente de enriquecimento (eventDate e eventAt
+    // nulos, dateStatus 'pending'). eventDateText é reservado e depreciado —
+    // nunca é convertido em data, nunca autoriza nem bloqueia a importação.
+    selections: extraction.selections.map((selection) => ({
+      event: selection.event,
+      sport: selection.sport,
+      market: selection.market,
+      selection: selection.selection,
+      odds: selection.odds,
+      eventDate: null,
+      eventAt: null,
+      dateStatus: 'pending' as const,
+    })),
   });
   if (!parsed.success) return { reason: 'EXTRACTION_UNCERTAIN' };
-  if (extraction.potentialReturn !== null) {
-    try {
-      if (
-        cents(extraction.potentialReturn) !==
-        cents(suggestedReturn(stake, extraction.odds, 'win', extraction.freebet, stakeReturned))
-      )
-        return { reason: 'RETURN_MISMATCH' };
-    } catch {
-      return { reason: 'RETURN_MISMATCH' };
-    }
-  }
+  // STK-G0-19-R6: o retorno visual é somente diagnóstico de fidelidade —
+  // nunca bloqueia a importação. A base financeira é a stake validada, a odd
+  // total validada e o cálculo decimal server-side (stake × totalOdds); uma
+  // divergência visual não é prova de que stake/odd estejam erradas.
   return { reason: 'IMPORTED', bet: parsed.data };
 }
 
@@ -166,8 +182,13 @@ export function createAutomaticImportService(
           )
         ).rows[0]!;
         const row = (
-          await client.query<{ caption: string; version: number }>(
-            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version",
+          await client.query<{
+            caption: string;
+            version: number;
+            bet_origin: string | null;
+            freebet_id: string | null;
+          }>(
+            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version,bet_origin,freebet_id",
             [id, JSON.stringify(result), attempt],
           )
         ).rows[0];
@@ -185,7 +206,18 @@ export function createAutomaticImportService(
         if (layout) {
           await client.query('savepoint automatic_finance');
           try {
-            const assessed = await candidate(client, row.caption, result, layout, now);
+            const assessed = await candidate(
+              client,
+              row.caption,
+              result,
+              layout,
+              {
+                kind:
+                  row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null,
+                freebetId: row.freebet_id,
+              },
+              now,
+            );
             reason = assessed.reason;
             if (assessed.bet) {
               const command = financeCommandSchema.parse({

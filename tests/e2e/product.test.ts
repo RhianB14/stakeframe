@@ -313,7 +313,7 @@ function importFixture(): ImportDetail {
     item: {
       id: importId,
       source: 'web',
-      caption: 'Analista\nBet365',
+      caption: 'Analista\nBet365\nreal',
       state: 'review',
       version: 2,
       attempts: 1,
@@ -344,7 +344,21 @@ function importFixture(): ImportDetail {
       ],
       warnings: ['Confira a casa e as datas'],
     },
-    labels: { tipster: 'Analista', bookmaker: 'Bet365', requiresReview: false },
+    labels: {
+      tipster: 'Analista',
+      bookmaker: 'Bet365',
+      requiresReview: false,
+    },
+    betOrigin: null,
+    freebetId: null,
+    eventAt: null,
+    eventDateStatus: 'pending',
+    telegramReceivedAt: '2026-09-01T18:00:02Z',
+    bookmakerOverrideId: null,
+    bookmakers: [],
+    bet: null,
+    automaticPolicy: 'disabled',
+    credits: [],
     matches: {
       tipsterId: null,
       captionBookmakerId: house,
@@ -390,12 +404,12 @@ test('an automatic import shows its origin and keeps financial creation controls
 test('a refused automatic import explains the review reason', async ({ page }) => {
   await enabledProduct(page);
   const detail = importFixture();
-  detail.automaticReason = 'RETURN_MISMATCH';
+  detail.automaticReason = 'EXTRACTION_UNCERTAIN';
   await importRoutes(page, detail);
   await page.goto('/#imports');
   await page.getByRole('button', { name: /Analista · Bet365/ }).click();
   await expect(page.getByRole('dialog')).toContainText(
-    'O retorno escrito diverge do cálculo pela stake e pela odd',
+    'Há campos essenciais ausentes ou dúvidas na leitura',
   );
   await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toBeVisible();
 });
@@ -926,9 +940,311 @@ test('analytics distinguishes missing units and failed data from empty results',
   ).toHaveCount(0);
 });
 
+test('confirms origin and event date on the canonical draft before importing (R5)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.telegramReceivedAt = '2026-09-17T13:00:00Z';
+  detail.credits = [
+    {
+      id: '10000000-0000-4000-8000-000000000009',
+      bookmakerId: house,
+      amount: '50.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+    },
+  ];
+  await importRoutes(page, detail);
+  const patches: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ json: { version: 3 } });
+    }
+    return route.fulfill({ json: detail });
+  });
+  await page.goto('/#imports');
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  // Data provisória do recebimento no Telegram, editável — nunca persistida como evento.
+  await expect(
+    page.getByText('Data provisória (envio no Telegram)', { exact: false }),
+  ).toBeVisible();
+  await page.getByLabel('Dinheiro real').check();
+  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real', freebetId: null });
+  // Salvar atualiza o registro e fecha o diálogo; reabre para o fluxo de freebet.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: /Analista · Bet365/ }).click();
+  await page.getByLabel('Freebet').check();
+  await page.getByLabel('Crédito de freebet').selectOption('10000000-0000-4000-8000-000000000009');
+  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
+  await expect.poll(() => patches.length).toBe(2);
+  expect(patches[1]).toMatchObject({
+    betOrigin: 'freebet',
+    freebetId: '10000000-0000-4000-8000-000000000009',
+  });
+});
+
+test('edits the same canonical draft from the Telegram Mini App with validated initData (R5)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.telegramReceivedAt = '2026-09-17T13:00:00Z';
+  await importRoutes(page, detail);
+  let patchHeaders: Record<string, string> = {};
+  const patches: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patchHeaders = route.request().headers();
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ json: { version: 3 } });
+    }
+    return route.fulfill({ json: detail });
+  });
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  await page.goto(`/#miniapp?import=${importId}`);
+  await expect(page.getByRole('heading', { name: 'Conferir importação' })).toBeVisible();
+  await page.getByLabel('Dinheiro real').check();
+  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
+  await expect(page.getByText('Rascunho atualizado', { exact: false })).toBeVisible();
+  expect(patches).toHaveLength(1);
+  expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real' });
+  // O Mini App autentica pelo initData validado no servidor; nada de IDs no payload.
+  expect(patchHeaders['x-telegram-init-data']).toBe('stub-initdata');
+});
+
+test('opens the status section from the Telegram button and liquidates for real (R7)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.item.state = 'imported';
+  detail.item.betId = betId;
+  detail.bet = {
+    id: betId,
+    state: 'open',
+    stake: '25.50',
+    odds: '2.1000',
+    remaining: '25.50',
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    freebetId: null,
+    selections: [
+      {
+        id: '10000000-0000-4000-8000-00000000000a',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  const posts: { body: unknown; headers: Record<string, string> }[] = [];
+  await page.route(`**/api/v1/imports/${importId}/status`, (route) => {
+    posts.push({ body: route.request().postDataJSON(), headers: route.request().headers() });
+    return route.fulfill({ json: { version: 2, betState: 'settled' } });
+  });
+  await page.goto(`/#miniapp?import=${importId}&section=status`);
+  await expect(page.getByRole('heading', { name: 'Alterar status' })).toBeVisible();
+  await expect(page.getByText('Estado atual:', { exact: false })).toBeVisible();
+  await page.getByLabel(/Ganhou/).check();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  // Confirmação explícita antes da gravação (dois passos).
+  await page.getByRole('button', { name: 'Confirmar liquidação' }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]!.body).toMatchObject({ version: 2, action: 'win' });
+  expect(posts[0]!.headers['x-telegram-init-data']).toBe('stub-initdata');
+  await expect(page.getByText('Liquidação registrada', { exact: false })).toBeVisible();
+});
+
+test('opens the bookmaker section and never keeps an incompatible credit silently (R7)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const superbet = '10000000-0000-4000-8000-000000000002';
+  const detail = importFixture();
+  detail.bookmakers = [
+    { id: house, name: 'Bet365' },
+    { id: superbet, name: 'Superbet' },
+  ];
+  detail.betOrigin = 'freebet';
+  detail.freebetId = '10000000-0000-4000-8000-000000000009';
+  detail.credits = [
+    {
+      id: '10000000-0000-4000-8000-000000000009',
+      bookmakerId: house,
+      amount: '25.50',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+    },
+  ];
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  const patches: unknown[] = [];
+  // R8: a seção grava pela ROTA canônica (rascunho ou aposta importada).
+  await page.route(`**/api/v1/imports/${importId}/bookmaker`, (route) => {
+    patches.push(route.request().postDataJSON());
+    return route.fulfill({
+      json: {
+        version: 2,
+        betState: null,
+        bookmakerId: superbet,
+        bookmakerName: 'Superbet',
+        freebetCleared: true,
+      },
+    });
+  });
+  await page.route(`**/api/v1/imports/${importId}`, (route) => route.fulfill({ json: detail }));
+  await page.goto(`/#miniapp?import=${importId}&section=bookmaker`);
+  await expect(page.getByRole('heading', { name: 'Alterar casa' })).toBeVisible();
+  await page.getByLabel('Nova casa').selectOption(superbet);
+  await page.getByRole('button', { name: 'Salvar casa' }).click();
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0]).toMatchObject({ version: 2, bookmakerId: superbet });
+  await expect(page.getByText('não é compatível', { exact: false })).toBeVisible();
+});
+
+test('the Mini App explains how to open it when Telegram is unavailable (R5)', async ({ page }) => {
+  await page.route('**/api/v1/system/status', (route) =>
+    route.fulfill({
+      json: {
+        name: 'Stakeframe',
+        stage: 'local-setup',
+        database: 'available',
+        authentication: 'google',
+        productEnabled: true,
+        release: {
+          version: '0.1.0-beta.1',
+          commit: 'a'.repeat(40),
+          builtAt: '2026-09-14T12:00:00Z',
+          environment: 'production',
+        },
+      },
+    }),
+  );
+  await page.goto('/#miniapp?import=10000000-0000-4000-8000-000000000005');
+  await expect(page.getByText('Abra esta tela pelo Telegram', { exact: false })).toBeVisible();
+});
+
 test('owner panel footer shows the stamped release version', async ({ page }) => {
   await enabledProduct(page);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
   await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
+});
+
+test('freebet house change loads credits for the DESTINATION house and saves atomically (R9)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const superbet = '10000000-0000-4000-8000-000000000002';
+  const bet365Credit = '10000000-0000-4000-8000-000000000009';
+  const superbetCredit = '20000000-0000-4000-8000-0000000000aa';
+  const detail = importFixture();
+  detail.bookmakers = [
+    { id: house, name: 'Bet365' },
+    { id: superbet, name: 'Superbet' },
+  ];
+  detail.betOrigin = 'freebet';
+  // Lista antiga VAZIA de propósito: a UI não pode reutilizá-la.
+  detail.credits = [];
+  detail.bet = {
+    id: '30000000-0000-4000-8000-0000000000b1',
+    state: 'open',
+    stake: '100.00',
+    odds: '2.0000',
+    remaining: '100.00',
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    freebetId: bet365Credit,
+    selections: [
+      {
+        id: '30000000-0000-4000-8000-0000000000c1',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  const creditCalls: string[] = [];
+  await page.route(`**/api/v1/imports/${importId}/credits*`, (route) => {
+    const bookmakerId = new URL(route.request().url()).searchParams.get('bookmakerId');
+    creditCalls.push(String(bookmakerId));
+    return route.fulfill({
+      json: {
+        credits:
+          bookmakerId === superbet
+            ? [
+                {
+                  id: superbetCredit,
+                  bookmakerId: superbet,
+                  amount: '100.00',
+                  expiresOn: '2026-12-31',
+                  stakeReturned: false,
+                },
+              ]
+            : [],
+      },
+    });
+  });
+  const posts: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}/bookmaker`, (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({
+      json: {
+        version: 3,
+        betState: 'open',
+        bookmakerId: superbet,
+        bookmakerName: 'Superbet',
+        freebetCleared: false,
+      },
+    });
+  });
+  await page.route(`**/api/v1/imports/${importId}`, (route) => route.fulfill({ json: detail }));
+  await page.goto(`/#miniapp?import=${importId}&section=bookmaker`);
+  await expect(page.getByRole('heading', { name: 'Alterar casa' })).toBeVisible();
+  await expect(page.getByText('aposta registrada', { exact: false })).toBeVisible();
+  // Escolhe a NOVA casa: os créditos carregam DA CASA DE DESTINO.
+  // (regex ancorada: o nome do <select> concatena as opções; o label do
+  // crédito contém "nova casa" no meio — só a âncora ^Nova casa o separa.)
+  await page.getByLabel(/^Nova casa/).selectOption(superbet);
+  await expect.poll(() => creditCalls.length).toBeGreaterThan(0);
+  expect(creditCalls.at(-1)).toBe(superbet);
+  const creditSelect = page.getByLabel(/^Crédito de freebet para a nova casa/);
+  await expect(creditSelect).toBeVisible();
+  // Sem crédito escolhido, a confirmação fica DESABILITADA.
+  const save = page.getByRole('button', { name: 'Salvar casa' });
+  await expect(save).toBeDisabled();
+  await creditSelect.selectOption(superbetCredit);
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ bookmakerId: superbet, freebetId: superbetCredit });
+  await expect(page.getByText('Casa salva: Superbet', { exact: false })).toBeVisible();
 });

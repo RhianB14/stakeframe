@@ -159,6 +159,9 @@ importers:
       pg-boss:
         specifier: 12.30.0
         version: 12.30.0
+      sharp:
+        specifier: 0.35.4
+        version: 0.35.4(@types/node@24.10.13)
       zod:
         specifier: 4.5.4
         version: 4.5.4
