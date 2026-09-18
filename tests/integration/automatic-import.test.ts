@@ -600,9 +600,11 @@ describe('automatic import financial boundary', () => {
       stakeReturned: false,
       note: 'Fictional credit',
     });
-    await database.pool.query('update finance.freebet set expires_on=current_date-1 where id=$1', [
-      expired.id,
-    ]);
+    // Fuso: expirar no relógio de São Paulo (current_date é UTC no servidor).
+    await database.pool.query(
+      "update finance.freebet set expires_on=(now() at time zone 'America/Sao_Paulo')::date - 1 where id=$1",
+      [expired.id],
+    );
     expect(
       await complete(
         await input({ freebet: null }, 'Fixture\nBet365', {

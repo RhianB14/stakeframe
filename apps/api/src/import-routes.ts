@@ -14,6 +14,12 @@ import {
   draftUpdateResultSchema,
   importStatusSchema,
   importStatusResultSchema,
+  importBookmakerActionSchema,
+  importBookmakerResultSchema,
+  importOriginActionSchema,
+  importOriginResultSchema,
+  importEventActionSchema,
+  importEventResultSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { validateTelegramInitData } from './telegram-init-data.js';
@@ -211,6 +217,81 @@ export function registerImportRoutes(
     (request, reply) =>
       execute(request, reply, () =>
         service!.detail(contexts.get(request)!, params.parse(request.params).id),
+      ),
+  );
+  // STK-G0-19-R8 — ações canônicas por importação: casa, origem e data do
+  // evento. Cada rota roteia o rascunho (updateDraft) ou a aposta importada
+  // (comandos financeiros canônicos com versão otimista e idempotência) — o
+  // cliente nunca escreve direto na inbox quando há aposta registrada.
+  const actorOf = (request: FastifyRequest) =>
+    request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web';
+  app.post(
+    '/api/v1/imports/:id/bookmaker',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'updateImportBookmaker',
+        summary: 'Trocar a casa do rascunho ou da aposta importada',
+        params,
+        body: importBookmakerActionSchema,
+        response: { 200: importBookmakerResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.applyBookmaker(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importBookmakerActionSchema.parse(request.body),
+          actorOf(request),
+        ),
+      ),
+  );
+  app.post(
+    '/api/v1/imports/:id/origin',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'updateImportOrigin',
+        summary: 'Trocar a origem (real/freebet) do rascunho ou da aposta importada',
+        params,
+        body: importOriginActionSchema,
+        response: { 200: importOriginResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.applyOrigin(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importOriginActionSchema.parse(request.body),
+          actorOf(request),
+        ),
+      ),
+  );
+  app.post(
+    '/api/v1/imports/:id/event',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'updateImportEventDate',
+        summary: 'Salvar a data do evento de uma seleção (simples ou múltipla)',
+        params,
+        body: importEventActionSchema,
+        response: { 200: importEventResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.applyEvent(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importEventActionSchema.parse(request.body),
+          actorOf(request),
+        ),
       ),
   );
   app.get(

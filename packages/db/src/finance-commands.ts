@@ -528,6 +528,177 @@ export async function applyFinanceCommand(
       );
     return { id, before };
   }
+  if (type === 'bet.bookmaker') {
+    // STK-G0-19-R8 — troca de casa canônica de aposta ABERTA. Dinheiro real:
+    // journal de reclassificação move o valor entre as contas das casas sem
+    // alterar banca nem exposição totais. Freebet: o crédito da casa antiga
+    // nunca permanece vinculado à casa nova — um crédito compatível é exigido
+    // NA MESMA operação, trocado atomicamente, ou a troca é recusada.
+    const before = await getBetRow(client, command.id);
+    if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+    await activeCatalog(client, command.bookmakerId, 'bookmaker');
+    if (before.bookmaker_id === command.bookmakerId) return { id: command.id, before };
+    const remaining = cents(before.remaining);
+    if (before.freebet_id) {
+      if (!command.freebetId) throw new FinanceError('FREEBET_UNRESOLVED');
+      const promo = (
+        await client.query<{
+          id: string;
+          bookmaker_id: string;
+          amount: string;
+          used_by: string | null;
+          stake_returned: boolean;
+          expires_on: string;
+        }>(
+          'select id,bookmaker_id,amount,used_by,stake_returned,expires_on::text as expires_on from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          [command.freebetId],
+        )
+      ).rows[0];
+      if (
+        !promo ||
+        promo.bookmaker_id !== command.bookmakerId ||
+        promo.used_by !== null ||
+        cents(promo.amount) !== cents(before.stake) ||
+        promo.expires_on < saoPauloDate(now)
+      )
+        throw new FinanceError('FREEBET_UNRESOLVED');
+      await client.query(
+        'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
+        [before.freebet_id, command.id],
+      );
+      await client.query(
+        'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.freebetId, command.id],
+      );
+      await client.query(
+        'update finance.bet set bookmaker_id=$2,freebet_id=$3,promotional_stake_returned=$4 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.id, command.bookmakerId, command.freebetId, promo.stake_returned],
+      );
+      await writeJournal(client, {
+        kind: 'bet_bookmaker_change',
+        effectiveAt: now,
+        actor,
+        reason: command.reason,
+        postings: [],
+      });
+    } else {
+      const oldHouse = await accountByKind(client, 'bookmaker', before.bookmaker_id);
+      const newHouse = await accountByKind(client, 'bookmaker', command.bookmakerId);
+      await writeJournal(client, {
+        kind: 'bet_bookmaker_change',
+        effectiveAt: now,
+        actor,
+        reason: command.reason,
+        postings: [
+          { accountId: oldHouse.id, amount: remaining },
+          { accountId: newHouse.id, amount: -remaining },
+        ],
+      });
+      await client.query(
+        'update finance.bet set bookmaker_id=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.id, command.bookmakerId],
+      );
+    }
+    await enqueueBetSync(client, command.id);
+    return { id: command.id, before };
+  }
+  if (type === 'bet.origin') {
+    // STK-G0-19-R8 — troca de origem canônica de aposta ABERTA. Journals
+    // compensatórios (nunca reescrever journals antigos) e crédito
+    // consumido/liberado atomicamente. Depois de liquidar/cancelar: recusa.
+    const before = await getBetRow(client, command.id);
+    if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+    const current: 'real' | 'freebet' = before.freebet_id ? 'freebet' : 'real';
+    if (current === command.kind) {
+      if (command.kind === 'real' || (command.freebetId && command.freebetId === before.freebet_id))
+        return { id: command.id, before };
+      if (!command.freebetId) throw new FinanceError('FREEBET_UNRESOLVED');
+    }
+    const remaining = cents(before.remaining);
+    if (command.kind === 'freebet') {
+      if (!command.freebetId || command.freebetId === before.freebet_id)
+        throw new FinanceError('FREEBET_UNRESOLVED');
+      const promo = (
+        await client.query<{
+          amount: string;
+          bookmaker_id: string;
+          used_by: string | null;
+          stake_returned: boolean;
+          expires_on: string;
+        }>(
+          'select amount,bookmaker_id,used_by,stake_returned,expires_on::text as expires_on from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          [command.freebetId],
+        )
+      ).rows[0];
+      if (
+        !promo ||
+        promo.bookmaker_id !== before.bookmaker_id ||
+        promo.used_by !== null ||
+        cents(promo.amount) !== cents(before.stake) ||
+        promo.expires_on < saoPauloDate(now)
+      )
+        throw new FinanceError('FREEBET_UNRESOLVED');
+      if (current === 'freebet') {
+        await client.query(
+          'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
+          [before.freebet_id, command.id],
+        );
+        await writeJournal(client, {
+          kind: 'bet_origin_change',
+          effectiveAt: now,
+          actor,
+          reason: command.reason,
+          postings: [],
+        });
+      } else {
+        // real → freebet: retira a exposição de dinheiro real (compensatório).
+        const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
+        const exposure = await accountByKind(client, 'exposure');
+        await writeJournal(client, {
+          kind: 'bet_origin_change',
+          effectiveAt: now,
+          actor,
+          reason: command.reason,
+          postings: [
+            { accountId: exposure.id, amount: -remaining },
+            { accountId: house.id, amount: remaining },
+          ],
+        });
+      }
+      await client.query(
+        'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.freebetId, command.id],
+      );
+      await client.query(
+        'update finance.bet set freebet_id=$2,promotional_stake_returned=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.id, command.freebetId, promo.stake_returned],
+      );
+    } else {
+      // freebet → real: libera o crédito e cria a exposição de dinheiro real.
+      const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
+      const exposure = await accountByKind(client, 'exposure');
+      await writeJournal(client, {
+        kind: 'bet_origin_change',
+        effectiveAt: now,
+        actor,
+        reason: command.reason,
+        postings: [
+          { accountId: house.id, amount: -remaining },
+          { accountId: exposure.id, amount: remaining },
+        ],
+      });
+      await client.query(
+        'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
+        [before.freebet_id, command.id],
+      );
+      await client.query(
+        'update finance.bet set freebet_id=null,promotional_stake_returned=false where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [command.id],
+      );
+    }
+    await enqueueBetSync(client, command.id);
+    return { id: command.id, before };
+  }
   if (type === 'settlement.reverse') {
     // Retention takes the settings lock first, then claims the attachment before external deletion.
     const deleting = await client.query(

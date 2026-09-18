@@ -176,6 +176,25 @@ export const financeCommandSchema = z
       effectiveAt: instant,
       reason: note,
     }),
+    // STK-G0-19-R8 — troca de casa canônica de aposta aberta: journal de
+    // reclassificação entre as contas das casas (dinheiro real) e crédito
+    // compatível obrigatório na mesma operação (freebet).
+    command.extend({
+      type: z.literal('bet.bookmaker'),
+      id: z.uuid(),
+      bookmakerId: z.uuid(),
+      freebetId: z.uuid().nullable(),
+      reason: note,
+    }),
+    // STK-G0-19-R8 — troca de origem canônica de aposta aberta (real ↔ freebet
+    // com journals compensatórios e consumo/liberação atômica de crédito).
+    command.extend({
+      type: z.literal('bet.origin'),
+      id: z.uuid(),
+      kind: z.enum(['real', 'freebet']),
+      freebetId: z.uuid().nullable(),
+      reason: note,
+    }),
     command.extend({
       type: z.literal('bet.settle'),
       id: z.uuid(),

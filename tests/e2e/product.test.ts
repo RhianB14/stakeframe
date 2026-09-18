@@ -1027,7 +1027,26 @@ test('opens the status section from the Telegram button and liquidates for real 
   const detail = importFixture();
   detail.item.state = 'imported';
   detail.item.betId = betId;
-  detail.bet = { id: betId, state: 'open', stake: '25.50', odds: '2.1000', remaining: '25.50' };
+  detail.bet = {
+    id: betId,
+    state: 'open',
+    stake: '25.50',
+    odds: '2.1000',
+    remaining: '25.50',
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    freebetId: null,
+    selections: [
+      {
+        id: '10000000-0000-4000-8000-00000000000a',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
   await importRoutes(page, detail);
   await page.addInitScript(() => {
     (window as unknown as { Telegram: unknown }).Telegram = {
@@ -1080,15 +1099,20 @@ test('opens the bookmaker section and never keeps an incompatible credit silentl
     };
   });
   const patches: unknown[] = [];
-  await page.route(`**/api/v1/imports/${importId}`, (route) => {
-    if (route.request().method() === 'PATCH') {
-      patches.push(route.request().postDataJSON());
-      return route.fulfill({
-        json: { version: 2, freebetCleared: true, automaticPolicy: 'disabled' },
-      });
-    }
-    return route.fulfill({ json: detail });
+  // R8: a seção grava pela ROTA canônica (rascunho ou aposta importada).
+  await page.route(`**/api/v1/imports/${importId}/bookmaker`, (route) => {
+    patches.push(route.request().postDataJSON());
+    return route.fulfill({
+      json: {
+        version: 2,
+        betState: null,
+        bookmakerId: superbet,
+        bookmakerName: 'Superbet',
+        freebetCleared: true,
+      },
+    });
   });
+  await page.route(`**/api/v1/imports/${importId}`, (route) => route.fulfill({ json: detail }));
   await page.goto(`/#miniapp?import=${importId}&section=bookmaker`);
   await expect(page.getByRole('heading', { name: 'Alterar casa' })).toBeVisible();
   await page.getByLabel('Nova casa').selectOption(superbet);

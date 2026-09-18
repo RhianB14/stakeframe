@@ -509,7 +509,7 @@ describe('freebet compatibility on the canonical draft (R6)', () => {
       note: '',
     });
     await database.pool.query(
-      'update finance.freebet set expires_on = current_date - 1 where id=$1',
+      "update finance.freebet set expires_on = (now() at time zone 'America/Sao_Paulo')::date - 1 where id=$1",
       [expired.id],
     );
     await expect(

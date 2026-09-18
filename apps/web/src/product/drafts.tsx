@@ -24,6 +24,8 @@ export type DraftBody = {
 export function DraftControls({
   detail,
   sender,
+  originSender,
+  eventSender,
   onSaved,
 }: {
   detail: ImportDetail;
@@ -32,8 +34,36 @@ export function DraftControls({
     freebetCleared: boolean;
     automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
   }>;
+  /** R8: presente no Mini App — origem canônica (rascunho ou aposta). */
+  originSender?: (body: {
+    version: number;
+    kind: 'real' | 'freebet';
+    freebetId?: string | null;
+  }) => Promise<{
+    version: number;
+    betState: string | null;
+    kind: 'real' | 'freebet';
+    freebetCleared: boolean;
+  }>;
+  /** R8: presente no Mini App — data por seleção (aposta importada). */
+  eventSender?: (body: {
+    version: number;
+    selectionId: string;
+    eventAt: string | null;
+  }) => Promise<{ version: number; betState: string | null }>;
   onSaved: () => void;
 }) {
+  // R8 — depois da importação a fonte é a aposta financeira: nada de PATCH
+  // de rascunho; origem e datas seguem as rotas canônicas.
+  if (detail.bet && originSender && eventSender)
+    return (
+      <ImportedControls
+        detail={detail}
+        originSender={originSender}
+        eventSender={eventSender}
+        onSaved={onSaved}
+      />
+    );
   const [origin, setOrigin] = useState<'real' | 'freebet' | null>(detail.betOrigin);
   const [credit, setCredit] = useState(detail.freebetId ?? '');
   const [eventDate, setEventDate] = useState('');
@@ -144,6 +174,168 @@ export function DraftControls({
       <Button onClick={() => void save()} disabled={busy}>
         {busy ? 'Salvando…' : 'Salvar origem e data'}
       </Button>
+    </div>
+  );
+}
+
+// STK-G0-19-R8 — edição de aposta REGISTRADA (pós-importação): origem e datas
+// gravam nos comandos financeiros canônicos por seleção; nunca só na inbox.
+function ImportedControls({
+  detail,
+  originSender,
+  eventSender,
+  onSaved,
+}: {
+  detail: ImportDetail;
+  originSender: (body: {
+    version: number;
+    kind: 'real' | 'freebet';
+    freebetId?: string | null;
+  }) => Promise<{
+    version: number;
+    betState: string | null;
+    kind: 'real' | 'freebet';
+    freebetCleared: boolean;
+  }>;
+  eventSender: (body: {
+    version: number;
+    selectionId: string;
+    eventAt: string | null;
+  }) => Promise<{ version: number; betState: string | null }>;
+  onSaved: () => void;
+}) {
+  const bet = detail.bet!;
+  const [origin, setOrigin] = useState<'real' | 'freebet'>(bet.freebetId ? 'freebet' : 'real');
+  const [credit, setCredit] = useState('');
+  const [dates, setDates] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const saveOrigin = async () => {
+    if (origin === 'freebet' && !credit && bet.freebetId === null) {
+      setError('Escolha o crédito da freebet.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      await originSender({
+        version: detail.item.version,
+        kind: origin,
+        ...(origin === 'freebet' ? { freebetId: credit || bet.freebetId } : {}),
+      });
+      setSaved(
+        `Origem salva para ${origin === 'freebet' ? 'Freebet' : 'Dinheiro real'}. A mensagem do Telegram será sincronizada.`,
+      );
+      onSaved();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Não foi possível salvar a origem.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveDate = async (selectionId: string) => {
+    const value = dates[selectionId];
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      await eventSender({
+        version: detail.item.version,
+        selectionId,
+        eventAt: value ? localInstant(value) : null,
+      });
+      setSaved('Data da seleção salva. A mensagem do Telegram será sincronizada.');
+      onSaved();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Não foi possível salvar a data.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="draft-controls">
+      <h3>Origem da aposta registrada</h3>
+      <fieldset>
+        <legend>Origem *</legend>
+        <label>
+          <input
+            type="radio"
+            name="bet-origin"
+            checked={origin === 'real'}
+            onChange={() => setOrigin('real')}
+          />{' '}
+          Dinheiro real
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="bet-origin"
+            checked={origin === 'freebet'}
+            onChange={() => setOrigin('freebet')}
+          />{' '}
+          Freebet
+        </label>
+      </fieldset>
+      {origin === 'freebet' ? (
+        <Field label="Crédito de freebet">
+          <select value={credit} onChange={(event) => setCredit(event.target.value)}>
+            <option value="">
+              {bet.freebetId ? 'Manter o crédito atual' : 'Selecione o crédito'}
+            </option>
+            {detail.credits.map((item) => (
+              <option key={item.id} value={item.id}>
+                {`${formatBRL(item.amount)} · expira ${item.expiresOn}${
+                  item.stakeReturned ? ' · devolve principal' : ''
+                }`}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      <p className="notice">
+        A troca de origem gera journal compensatório no servidor (nunca reescreve o passado);
+        crédito é consumido/liberado atomicamente.
+      </p>
+      <Button onClick={() => void saveOrigin()} disabled={busy}>
+        {busy ? 'Salvando…' : 'Salvar origem'}
+      </Button>
+      <h3>Data dos jogos</h3>
+      {bet.selections.map((item) => (
+        <div key={item.id} className="selection-date-row">
+          <span>
+            {item.event} — {item.selection}{' '}
+            {item.eventAt
+              ? `· ${instantFormat.format(new Date(item.eventAt))} (confirmada)`
+              : '· data pendente'}
+          </span>
+          <input
+            type="datetime-local"
+            aria-label={`Data de ${item.event}`}
+            value={dates[item.id] ?? ''}
+            onChange={(event) => setDates({ ...dates, [item.id]: event.target.value })}
+          />
+          <Button onClick={() => void saveDate(item.id)} disabled={busy}>
+            Salvar data
+          </Button>
+        </div>
+      ))}
+      {bet.selections.length > 1 ? (
+        <p className="notice">
+          Múltipla: cada seleção tem a própria data — nenhuma data global é aplicada.
+        </p>
+      ) : null}
+      {error ? (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <p className="notice" role="status">
+          {saved}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -213,6 +213,21 @@ export const importDetailSchema = z
         stake: z.string(),
         odds: z.string(),
         remaining: z.string(),
+        // R8: casa canônica da aposta (finance.bet) e seleções com datas —
+        // alimentam as seções pós-importação do Mini App.
+        bookmakerId: z.uuid(),
+        bookmakerName: z.string().nullable(),
+        freebetId: z.uuid().nullable(),
+        selections: z.array(
+          z.object({
+            id: z.uuid(),
+            event: z.string(),
+            market: z.string(),
+            selection: z.string(),
+            eventAt: instant.nullable(),
+            dateStatus: z.enum(['confirmed', 'estimated', 'pending']),
+          }),
+        ),
       })
       .nullable(),
     // Estado da política automática (aviso sanitizado; nunca uma decisão do
@@ -278,6 +293,54 @@ export const importStatusResultSchema = z
     betState: z.string(),
   })
   .meta({ id: 'ImportStatusResult' });
+
+// STK-G0-19-R8 — ações canônicas pós/pré-importação: casa, origem e data do
+// evento. As rotas roteiam rascunho (inbox) ou aposta (comandos financeiros);
+// o cliente envia apenas ação + versão otimista.
+export const importBookmakerActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    bookmakerId: z.uuid(),
+    freebetId: z.uuid().nullable().optional(),
+  })
+  .meta({ id: 'ImportBookmakerAction' });
+export const importBookmakerResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+    bookmakerId: z.uuid(),
+    bookmakerName: z.string().nullable(),
+    freebetCleared: z.boolean(),
+  })
+  .meta({ id: 'ImportBookmakerResult' });
+export const importOriginActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    kind: z.enum(['real', 'freebet']),
+    freebetId: z.uuid().nullable().optional(),
+  })
+  .meta({ id: 'ImportOriginAction' });
+export const importOriginResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+    kind: z.enum(['real', 'freebet']),
+    freebetCleared: z.boolean(),
+  })
+  .meta({ id: 'ImportOriginResult' });
+export const importEventActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    selectionId: z.uuid(),
+    eventAt: instant.nullable(),
+  })
+  .meta({ id: 'ImportEventAction' });
+export const importEventResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+  })
+  .meta({ id: 'ImportEventResult' });
 export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema);
 
 export const completionSchema = z.object({

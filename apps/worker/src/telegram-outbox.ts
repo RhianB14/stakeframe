@@ -42,6 +42,17 @@ type InboxRow = ImportMessageRow & {
   telegram_synced_version: number | null;
   telegram_deleted_at: Date | null;
   version: number;
+  // R8 — colunas canônicas do LEFT JOIN (finance.bet/catalog), presentes
+  // quando a importação já tem aposta registrada.
+  override_bookmaker: string | null;
+  bet_id: string | null;
+  bet_state: string | null;
+  bet_stake: string | null;
+  bet_odds: string | null;
+  bet_placed_at: Date | null;
+  bet_freebet_id: string | null;
+  bet_bookmaker: string | null;
+  bet_tipster: string | null;
 };
 
 export function createTelegramOutboxService(
@@ -69,12 +80,53 @@ export function createTelegramOutboxService(
   ) {
     const row = (
       await db.query(
-        'select id,state,version,caption,extraction,bet_origin,event_at,event_date_status,telegram_received_at,telegram_chat_id,telegram_source_message_id,telegram_processing_message_id,telegram_result_message_id,telegram_synced_version,telegram_deleted_at from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        `select i.id,i.state,i.version,i.caption,i.extraction,i.bet_origin,i.event_at,i.event_date_status,i.telegram_received_at,i.telegram_chat_id,i.telegram_source_message_id,i.telegram_processing_message_id,i.telegram_result_message_id,i.telegram_synced_version,i.telegram_deleted_at,
+                c.name as override_bookmaker,
+                b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,
+                bc.name as bet_bookmaker,t.name as bet_tipster
+         from integration.inbox i
+         left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
+         left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
+         left join finance.catalog bc on bc.id=b.bookmaker_id and bc.organization_id=b.organization_id
+         left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id
+         where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1`,
         [item.inbox_id],
       )
     ).rows[0] as InboxRow | undefined;
     if (!row || row.telegram_chat_id === null) return; // nada a operar (nunca recriar)
     const chatId = Number(row.telegram_chat_id);
+    // R8 — fonte canônica pós-importação: aposta, casa, tipster, origem e as
+    // seleções/datas saem das tabelas financeiras (nunca de dados antigos).
+    if (row.bet_id) {
+      const selections = (
+        await db.query(
+          'select event,market,selection,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+          [row.bet_id],
+        )
+      ).rows as {
+        event: string;
+        market: string;
+        selection: string;
+        event_at: Date | null;
+        date_status: string;
+      }[];
+      row.canonical = {
+        state: row.bet_state ?? 'open',
+        bookmaker: row.bet_bookmaker,
+        tipster: row.bet_tipster,
+        origin: row.bet_freebet_id ? 'freebet' : 'real',
+        stake: row.bet_stake ?? '0.00',
+        odds: row.bet_odds ?? '1.0000',
+        placedAt: row.bet_placed_at,
+        selections: selections.map((selection) => ({
+          event: selection.event,
+          market: selection.market,
+          selection: selection.selection,
+          eventAt: selection.event_at,
+          dateStatus: selection.date_status,
+        })),
+      };
+    }
 
     switch (item.operation) {
       case 'send_processing_message': {

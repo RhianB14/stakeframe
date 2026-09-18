@@ -1,7 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { importDetailSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
-import { request, patchImportDraft, setImportStatus } from './api.js';
+import {
+  request,
+  patchImportDraft,
+  setImportStatus,
+  applyImportBookmaker,
+  applyImportOrigin,
+  applyImportEvent,
+} from './api.js';
 import { DraftControls } from './drafts.js';
 import { BookmakerSection, StatusSection } from './MiniAppSections.js';
 
@@ -97,13 +104,15 @@ export function MiniAppPage() {
       ) : section === 'bookmaker' ? (
         <BookmakerSection
           detail={detail.data}
-          sender={(body) => patchImportDraft(id, body, initData)}
+          sender={(body) => applyImportBookmaker(id, body, initData)}
           onSaved={() => void detail.refetch()}
         />
       ) : (
         <DraftControls
           detail={detail.data}
           sender={(body) => patchImportDraft(id, body, initData)}
+          originSender={(body) => applyImportOrigin(id, body, initData)}
+          eventSender={(body) => applyImportEvent(id, body, initData)}
           onSaved={() => void detail.refetch()}
         />
       )}

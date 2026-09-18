@@ -3,6 +3,9 @@ import {
   financeCommandSchema,
   commandResultSchema,
   importStatusResultSchema,
+  importBookmakerResultSchema,
+  importOriginResultSchema,
+  importEventResultSchema,
   cents,
   money,
   saoPauloDate,
@@ -101,6 +104,50 @@ export function patchImportDraft(
 ) {
   return request(`/api/v1/imports/${id}`, draftResultSchema, {
     method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+// STK-G0-19-R8 — ações canônicas por importação (rascunho OU aposta
+// importada): casa, origem e data do evento por seleção.
+export function applyImportBookmaker(
+  id: string,
+  body: { version: number; bookmakerId: string; freebetId?: string | null },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}/bookmaker`, importBookmakerResultSchema, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+export function applyImportOrigin(
+  id: string,
+  body: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}/origin`, importOriginResultSchema, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(initData ? { 'x-telegram-init-data': initData } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+export function applyImportEvent(
+  id: string,
+  body: { version: number; selectionId: string; eventAt: string | null },
+  initData?: string,
+) {
+  return request(`/api/v1/imports/${id}/event`, importEventResultSchema, {
+    method: 'POST',
     headers: {
       'content-type': 'application/json',
       ...(initData ? { 'x-telegram-init-data': initData } : {}),

@@ -38,6 +38,25 @@ export function grossReturn(stake: string, odds: string): string | null {
   return `${whole}.${fraction}`;
 }
 
+// STK-G0-19-R8 — dados canônicos da aposta importada (finance.bet/selection):
+// depois da importação a mensagem NÃO usa legenda/OCR como fonte prioritária.
+export type CanonicalBetData = {
+  state: string;
+  bookmaker: string | null;
+  tipster: string | null;
+  origin: 'real' | 'freebet';
+  stake: string;
+  odds: string;
+  placedAt: Date | null;
+  selections: {
+    event: string | null;
+    market: string | null;
+    selection: string | null;
+    eventAt: Date | null;
+    dateStatus: string;
+  }[];
+};
+
 export type ImportMessageRow = {
   id: string;
   state: string;
@@ -47,6 +66,10 @@ export type ImportMessageRow = {
   event_at: Date | null;
   event_date_status: string;
   telegram_received_at: Date | null;
+  /** Casa declarada no rascunho (seção "Alterar Casa"), quando houver. */
+  override_bookmaker?: string | null;
+  /** Presente quando a importação já tem aposta registrada. */
+  canonical?: CanonicalBetData | null;
 };
 
 export function buildImportMessage(row: ImportMessageRow): string {
@@ -57,6 +80,41 @@ export function buildImportMessage(row: ImportMessageRow): string {
       : row.extraction;
   const parsed = ticketExtractionSchema.safeParse(evidence);
   const extraction = parsed.success ? parsed.data : null;
+  if (row.canonical) {
+    // R8 — pós-importação: os dados vêm integralmente das tabelas
+    // financeiras canônicas (aposta, casa, tipster, origem, seleções e datas); legenda e
+    // leitura visual não são fonte prioritária.
+    const canonical = row.canonical;
+    const stateLabel =
+      canonical.state === 'open'
+        ? 'Aposta registrada'
+        : canonical.state === 'settled'
+          ? 'Aposta liquidada'
+          : 'Aposta cancelada';
+    const stake = canonical.stake;
+    const odds = canonical.odds;
+    return renderImportMessage({
+      status: row.state,
+      statusLabel: stateLabel,
+      kind: canonical.selections.length > 1 ? 'multiple' : 'simple',
+      origin: canonical.origin,
+      bookmaker: canonical.bookmaker,
+      tipster: canonical.tipster,
+      stake,
+      odds,
+      potentialReturn: stake && odds ? grossReturn(stake, odds) : null,
+      placedAt: canonical.placedAt ? formatInstant(canonical.placedAt) : null,
+      eventAt: null,
+      provisionalAt: null,
+      sport: null,
+      selections: canonical.selections.map((item) => ({
+        event: item.event,
+        market: item.market,
+        selection: item.selection,
+        eventAt: item.eventAt ? formatInstant(item.eventAt) : null,
+      })),
+    });
+  }
   const origin = row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null;
   const stake = extraction?.stake ?? null;
   const odds = extraction?.odds ?? null;
@@ -66,7 +124,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
     statusLabel: STATUS_LABELS[row.state] ?? 'Bilhete atualizado',
     kind: (extraction?.selections.length ?? 1) > 1 ? 'multiple' : 'simple',
     origin,
-    bookmaker: labels.bookmaker ?? extraction?.bookmaker ?? null,
+    bookmaker: row.override_bookmaker ?? labels.bookmaker ?? extraction?.bookmaker ?? null,
     tipster: labels.tipster,
     stake,
     odds,

@@ -10,7 +10,7 @@ import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { createInboxStore } from './inbox.js';
 import { createAttachmentStore, type ObjectStorage } from './attachments.js';
-import { FinanceError, type SettingsRow } from './finance-core.js';
+import { FinanceError, getBetRow, type SettingsRow } from './finance-core.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 import { createImportDraftService } from './telegram-sync.js';
 import { executeFinancialCommand } from './finance-transaction.js';
@@ -316,12 +316,30 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 stake: string;
                 odds: string;
                 remaining: string;
+                bookmaker_id: string;
+                bookmaker_name: string;
+                freebet_id: string | null;
               }>(
-                'select id,state,stake,odds,remaining from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,c.name as bookmaker_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
                 [row.imported_bet_id],
               )
             ).rows[0] ?? null)
           : null;
+        const betSelections = bet
+          ? (
+              await client.query<{
+                id: string;
+                event: string;
+                market: string;
+                selection: string;
+                event_at: Date | null;
+                date_status: string;
+              }>(
+                'select id,event,market,selection,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+                [bet.id],
+              )
+            ).rows
+          : [];
         const duplicates = await findDuplicates(client, id, {
           bookmakerId: draftBookmakerId ?? '00000000-0000-0000-0000-000000000000',
           reference: extraction?.reference ?? '',
@@ -362,6 +380,20 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 stake: bet.stake,
                 odds: bet.odds,
                 remaining: bet.remaining,
+                bookmakerId: bet.bookmaker_id,
+                bookmakerName: bet.bookmaker_name,
+                freebetId: bet.freebet_id,
+                selections: betSelections.map((item) => ({
+                  id: item.id,
+                  event: item.event,
+                  market: item.market,
+                  selection: item.selection,
+                  eventAt: item.event_at ? item.event_at.toISOString() : null,
+                  dateStatus:
+                    item.date_status === 'confirmed' || item.date_status === 'estimated'
+                      ? item.date_status
+                      : ('pending' as const),
+                })),
               }
             : null,
           automaticPolicy: automaticPolicyNotice(),
@@ -464,6 +496,316 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           )
         ).rows[0]!;
         return { version: updated.version, betState: settledBet.state };
+      });
+    },
+    /**
+     * STK-G0-19-R8 — troca de casa canônica. Pré-importação: rascunho (inbox)
+     * segue como fonte (mesmo updateDraft do PATCH). Pós-importação: comando
+     * financeiro `bet.bookmaker` na MESMA transação da leitura, com versão
+     * otimista da inbox, crédito compatível exigido para freebet e sync do
+     * Telegram por outbox — a inbox nunca diverge da aposta.
+     */
+    async applyBookmaker(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number; bookmakerId: string; freebetId?: string | null | undefined },
+      actor: string,
+    ) {
+      const route = await read(context, async (client) => {
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return row;
+      });
+      if (!route.imported_bet_id) {
+        const saved = await draft.updateDraft(
+          context,
+          id,
+          {
+            version: input.version,
+            bookmakerId: input.bookmakerId,
+            ...(input.freebetId !== undefined ? { freebetId: input.freebetId } : {}),
+          },
+          actor,
+        );
+        const name = await read(context, async (client) => {
+          const house = (
+            await client.query<{ name: string }>(
+              'select name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+              [input.bookmakerId],
+            )
+          ).rows[0];
+          return house?.name ?? null;
+        });
+        return {
+          version: saved.version,
+          betState: null,
+          bookmakerId: input.bookmakerId,
+          bookmakerName: name,
+          freebetCleared: saved.freebetCleared,
+        };
+      }
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        const bet = await getBetRow(client, row.imported_bet_id);
+        const command = financeCommandSchema.parse({
+          type: 'bet.bookmaker',
+          id: bet.id,
+          bookmakerId: input.bookmakerId,
+          freebetId: input.freebetId ?? null,
+          reason: 'Troca de casa pelo Mini App',
+          expectedVersion: settings.version,
+        });
+        const key = deterministicKey(
+          `bet-bookmaker:${bet.id}:${input.bookmakerId}:${input.freebetId ?? ''}`,
+        );
+        await executeFinancialCommand(client, actor, key, command, settings);
+        const updated = (
+          await client.query<{ state: string; bookmaker_id: string }>(
+            'select state,bookmaker_id from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [bet.id],
+          )
+        ).rows[0]!;
+        const name = (
+          await client.query<{ name: string }>(
+            'select name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [updated.bookmaker_id],
+          )
+        ).rows[0];
+        const fresh = (
+          await client.query<{ version: number }>(
+            'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        return {
+          version: fresh.version,
+          betState: updated.state,
+          bookmakerId: updated.bookmaker_id,
+          bookmakerName: name?.name ?? null,
+          freebetCleared: false,
+        };
+      });
+    },
+    /**
+     * STK-G0-19-R8 — troca de origem canônica (real ↔ freebet) com journals
+     * compensatórios pós-importação; pré-importação continua no rascunho.
+     */
+    async applyOrigin(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null | undefined },
+      actor: string,
+    ) {
+      const route = await read(context, async (client) => {
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return row;
+      });
+      const credit = input.kind === 'freebet' ? (input.freebetId ?? null) : null;
+      if (!route.imported_bet_id) {
+        const saved = await draft.updateDraft(
+          context,
+          id,
+          { version: input.version, betOrigin: input.kind, freebetId: credit },
+          actor,
+        );
+        return {
+          version: saved.version,
+          betState: null,
+          kind: input.kind,
+          freebetCleared: saved.freebetCleared,
+        };
+      }
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        const bet = await getBetRow(client, row.imported_bet_id);
+        const command = financeCommandSchema.parse({
+          type: 'bet.origin',
+          id: bet.id,
+          kind: input.kind,
+          freebetId: credit,
+          reason: 'Troca de origem pelo Mini App',
+          expectedVersion: settings.version,
+        });
+        const key = deterministicKey(`bet-origin:${bet.id}:${input.kind}:${credit ?? ''}`);
+        await executeFinancialCommand(client, actor, key, command, settings);
+        const updated = (
+          await client.query<{ state: string }>(
+            'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [bet.id],
+          )
+        ).rows[0]!;
+        const fresh = (
+          await client.query<{ version: number }>(
+            'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        return {
+          version: fresh.version,
+          betState: updated.state,
+          kind: input.kind,
+          freebetCleared: false,
+        };
+      });
+    },
+    /**
+     * STK-G0-19-R8 — data do evento canônica. Pré-importação: rascunho (data
+     * global). Pós-importação: comando canônico de evento por SELEÇÃO (nunca
+     * uma data global silenciosa em múltipla) via `bet.update` montado aqui.
+     */
+    async applyEvent(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number; selectionId: string; eventAt: string | null },
+      actor: string,
+    ) {
+      const route = await read(context, async (client) => {
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return row;
+      });
+      if (!route.imported_bet_id) {
+        const saved = await draft.updateDraft(
+          context,
+          id,
+          { version: input.version, eventAt: input.eventAt },
+          actor,
+        );
+        return { version: saved.version, betState: null };
+      }
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        const bet = await getBetRow(client, row.imported_bet_id);
+        if (bet.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+        const selections = (
+          await client.query<{
+            id: string;
+            position: number;
+            event: string;
+            sport: string | null;
+            market: string;
+            selection: string;
+            odds: string | null;
+            event_date: string | null;
+            event_at: Date | null;
+            date_status: string;
+          }>(
+            'select id,position,event,sport,market,selection,odds::text as odds,event_date::text as event_date,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+            [bet.id],
+          )
+        ).rows;
+        const target = selections.find((item) => item.id === input.selectionId);
+        if (!target) throw new FinanceError('NOT_FOUND');
+        const rebuilt = selections.map((item) => ({
+          id: item.id,
+          event: item.event,
+          sport: item.sport,
+          market: item.market,
+          selection: item.selection,
+          odds: item.odds,
+          eventDate:
+            item.id === input.selectionId
+              ? input.eventAt
+                ? input.eventAt.slice(0, 10)
+                : null
+              : item.event_date,
+          eventAt:
+            item.id === input.selectionId
+              ? input.eventAt
+              : item.event_at
+                ? item.event_at.toISOString()
+                : null,
+          dateStatus:
+            item.id === input.selectionId
+              ? input.eventAt
+                ? ('confirmed' as const)
+                : ('pending' as const)
+              : (item.date_status as 'confirmed' | 'estimated' | 'pending'),
+        }));
+        const command = financeCommandSchema.parse({
+          type: 'bet.update',
+          id: bet.id,
+          tipsterId: bet.tipster_id,
+          reference: bet.reference,
+          selections: rebuilt,
+          reason: 'Correção de data pelo Mini App',
+          expectedVersion: settings.version,
+        });
+        const key = deterministicKey(
+          `bet-event:${bet.id}:${input.selectionId}:${input.eventAt ?? 'null'}`,
+        );
+        await executeFinancialCommand(client, actor, key, command, settings);
+        const updated = (
+          await client.query<{ state: string }>(
+            'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [bet.id],
+          )
+        ).rows[0]!;
+        const fresh = (
+          await client.query<{ version: number }>(
+            'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        return { version: fresh.version, betState: updated.state };
       });
     },
     async image(context: OrganizationContext, id: string) {

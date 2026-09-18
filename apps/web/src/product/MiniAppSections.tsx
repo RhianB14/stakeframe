@@ -137,40 +137,68 @@ export function BookmakerSection({
   onSaved,
 }: {
   detail: ImportDetail;
-  sender: (body: { version: number; bookmakerId: string | null }) => Promise<{
+  // R8 — rota canônica: rascunho (inbox) OU aposta importada (comando
+  // financeiro com journal de reclassificação). Freebet exige crédito
+  // compatível NA MESMA operação.
+  sender: (body: { version: number; bookmakerId: string; freebetId?: string | null }) => Promise<{
     version: number;
+    betState: string | null;
+    bookmakerId: string;
+    bookmakerName: string | null;
     freebetCleared: boolean;
-    automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
   }>;
   onSaved: () => void;
 }) {
-  const [choice, setChoice] = useState(detail.bookmakerOverrideId ?? '');
+  const imported = detail.bet !== null;
+  const [choice, setChoice] = useState(
+    imported ? (detail.bet?.bookmakerId ?? '') : (detail.bookmakerOverrideId ?? ''),
+  );
+  const [credit, setCredit] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [cleared, setCleared] = useState(false);
-  const current =
-    detail.bookmakers.find((item) => item.id === detail.bookmakerOverrideId)?.name ??
-    (detail.bookmakerOverrideId
-      ? 'casa declarada'
-      : detail.matches.captionBookmakerId || detail.matches.extractedBookmakerId
-        ? 'resolvida pela legenda/leitura'
-        : 'não resolvida');
+  const [saved, setSaved] = useState<string | null>(null);
+  const needsCredit = imported && !!detail.bet?.freebetId;
+  const current = imported
+    ? (detail.bet?.bookmakerName ?? 'casa da aposta registrada')
+    : (detail.bookmakers.find((item) => item.id === detail.bookmakerOverrideId)?.name ??
+      (detail.bookmakerOverrideId
+        ? 'casa declarada'
+        : detail.matches.captionBookmakerId || detail.matches.extractedBookmakerId
+          ? 'resolvida pela legenda/leitura'
+          : 'não resolvida'));
   const save = async () => {
+    if (!choice) {
+      setError('Escolha a nova casa.');
+      return;
+    }
+    if (needsCredit && !credit) {
+      setError('Escolha um crédito compatível com a casa nova.');
+      return;
+    }
     setBusy(true);
     setError(null);
-    setSaved(false);
+    setSaved(null);
     try {
       const result = await sender({
         version: detail.item.version,
-        bookmakerId: choice ? choice : null,
+        bookmakerId: choice,
+        ...(needsCredit ? { freebetId: credit || null } : {}),
       });
-      setCleared(result.freebetCleared);
-      setSaved(true);
+      setSaved(
+        [
+          `Casa salva${result.bookmakerName ? `: ${result.bookmakerName}` : ''}.`,
+          result.freebetCleared
+            ? ' O crédito anterior não é compatível com a casa nova e foi removido — escolha outro crédito em “Editar”.'
+            : '',
+          ' A mensagem do Telegram será sincronizada.',
+        ].join(''),
+      );
       onSaved();
     } catch (failure) {
       setError(
-        failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
+        failure instanceof Error
+          ? failure.message
+          : 'Não foi possível salvar a casa. Tente novamente.',
       );
     } finally {
       setBusy(false);
@@ -181,12 +209,13 @@ export function BookmakerSection({
       <h3>Casa da aposta</h3>
       <p role="status">
         Casa atual: <strong>{current}</strong>
-        {detail.bookmakerOverrideId ? ' (escolhida por você)' : ''}
+        {!imported && detail.bookmakerOverrideId ? ' (escolhida por você)' : ''}
+        {imported ? ' (aposta registrada)' : ''}
       </p>
       <label>
         Nova casa
         <select value={choice} onChange={(event) => setChoice(event.target.value)}>
-          <option value="">Voltar para a casa da legenda/leitura</option>
+          {!imported ? <option value="">Voltar para a casa da legenda/leitura</option> : null}
           {detail.bookmakers.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
@@ -194,9 +223,23 @@ export function BookmakerSection({
           ))}
         </select>
       </label>
+      {needsCredit ? (
+        <label>
+          Crédito de freebet para a nova casa
+          <select value={credit} onChange={(event) => setCredit(event.target.value)}>
+            <option value="">Selecione o crédito</option>
+            {detail.credits.map((item) => (
+              <option key={item.id} value={item.id}>
+                {`${formatBRL(item.amount)} · expira ${item.expiresOn}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <p className="notice">
-        Trocar a casa revalida o crédito de freebet associado; um crédito incompatível é removido e
-        você precisará escolher novamente.
+        {imported
+          ? 'A troca de casa reclassifica a exposição entre as casas e sincroniza a mensagem do Telegram. Aposta com freebet exige um crédito da casa nova na mesma operação.'
+          : 'Trocar a casa revalida o crédito de freebet associado; um crédito incompatível é removido e você precisará escolher novamente.'}
       </p>
       {error ? (
         <p className="notice warning" role="alert">
@@ -205,9 +248,7 @@ export function BookmakerSection({
       ) : null}
       {saved ? (
         <p className="notice" role="status">
-          {cleared
-            ? 'Casa salva. O crédito anterior não é compatível com a casa nova e foi removido — escolha outro crédito em “Editar”.'
-            : 'Casa salva. A mensagem do Telegram será sincronizada.'}
+          {saved}
         </p>
       ) : null}
       <Button onClick={() => void save()} disabled={busy}>

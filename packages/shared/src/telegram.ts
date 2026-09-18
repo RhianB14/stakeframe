@@ -53,7 +53,13 @@ export type ImportMessageInput = {
   eventAt: string | null;
   provisionalAt: string | null;
   sport: string | null;
-  selections: { event: string | null; market: string | null; selection: string | null }[];
+  selections: {
+    event: string | null;
+    market: string | null;
+    selection: string | null;
+    /** R8: data canônica por seleção (apostas importadas), já formatada. */
+    eventAt?: string | null;
+  }[];
 };
 
 const displayMoney = (value: string) =>
@@ -77,7 +83,10 @@ export function renderImportMessage(input: ImportMessageInput): string {
     const parts = [item.event, item.market, item.selection].filter(
       (value): value is string => !!value,
     );
-    if (parts.length) lines.push(`${count > 1 ? `${index + 1}. ` : ''}${parts.join(' — ')}`);
+    if (parts.length)
+      lines.push(
+        `${count > 1 ? `${index + 1}. ` : ''}${parts.join(' — ')}${item.eventAt ? ` — ${item.eventAt}` : ''}`,
+      );
     if (!parts.length && count > 1) lines.push(`${index + 1}. (seleção sem texto legível)`);
   }
   if (input.sport) lines.push(`Esporte: ${input.sport}`);
@@ -86,12 +95,13 @@ export function renderImportMessage(input: ImportMessageInput): string {
   if (input.potentialReturn)
     lines.push(`Retorno potencial: R$ ${displayMoney(input.potentialReturn)}`);
   if (input.placedAt) lines.push(`Aposta registrada em: ${input.placedAt}`);
+  const perSelectionDates = input.selections.some((item) => item.eventAt);
   if (input.eventAt) lines.push(`Jogo: ${input.eventAt} (confirmado)`);
   else if (input.provisionalAt)
     lines.push(
       `Jogo: ${input.provisionalAt} — data provisória (a foto foi recebida neste horário; edite para a data real do jogo)`,
     );
-  else lines.push('Jogo: confirmar data e hora (pendente)');
+  else if (!perSelectionDates) lines.push('Jogo: confirmar data e hora (pendente)');
   return lines.join('\n');
 }
 
