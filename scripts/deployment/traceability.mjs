@@ -3,6 +3,16 @@
 // deployment fails closed instead of being reported as verified.
 export const DEFAULT_REPOSITORY_PREFIX = 'ghcr.io/rhianb14/stakeframe';
 export const DEFAULT_SERVICES = ['api', 'worker', 'migrate', 'web', 'operations'];
+// The web artifact is built and published as `stakeframe-web-production` (Dockerfile
+// target), while its Compose service and WEB_IMAGE key are named `web`; the expected
+// repository must follow the published name, not the service name.
+export const SERVICE_REPOSITORY = {
+  api: 'api',
+  worker: 'worker',
+  migrate: 'migrate',
+  web: 'web-production',
+  operations: 'operations',
+};
 const ENV_KEYS = {
   API_IMAGE: 'api',
   WORKER_IMAGE: 'worker',
@@ -44,7 +54,7 @@ export function parsePinnedImages(text, { repositoryPrefix = DEFAULT_REPOSITORY_
     if (separator === -1) throw new TraceabilityError(`PIN_NOT_DIGEST ${service}`);
     const repository = reference.slice(0, separator);
     const digest = reference.slice(separator + 1);
-    if (repository !== `${repositoryPrefix}-${service}`)
+    if (repository !== `${repositoryPrefix}-${SERVICE_REPOSITORY[service]}`)
       throw new TraceabilityError(`PIN_REPOSITORY_REFUSED ${service}`);
     if (!DIGEST_PATTERN.test(digest)) throw new TraceabilityError(`PIN_DIGEST_REQUIRED ${service}`);
     pins.set(service, { reference, repository, digest });
