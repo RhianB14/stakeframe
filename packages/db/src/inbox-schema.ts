@@ -7,6 +7,7 @@ import {
   index,
   integer,
   jsonb,
+  primaryKey,
   pgSchema,
   text,
   timestamp,
@@ -189,6 +190,35 @@ export const telegramOutbox = integrationNamespace.table(
       columns: [table.organizationId, table.inboxId],
       foreignColumns: [inbox.organizationId, inbox.id],
     }),
+  ],
+);
+// STK-G0-19-R10 — recibos idempotentes das ações de importação (por
+// organização+chave do cliente): hash SHA-256 do pedido, ação declarada e
+// resultado sanitizado em jsonb, validado pelo schema da ação no replay.
+// RLS habilitada na migração 0013 (isolamento por organização).
+export const importActionReceipt = integrationNamespace.table(
+  'import_action_receipt',
+  {
+    organizationId: organizationId(),
+    key: uuid('key').notNull(),
+    action: text('action').notNull(),
+    actor: text('actor').notNull(),
+    hash: text('hash').notNull(),
+    result: jsonb('result').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'import_action_receipt_pk',
+      columns: [table.organizationId, table.key],
+    }),
+    check(
+      'import_action_receipt_action_check',
+      sql`${table.action} in ('bookmaker', 'origin', 'event')`,
+    ),
+    check('import_action_receipt_hash_check', sql`${table.hash} ~ '^[a-f0-9]{64}$'`),
+    check('import_action_receipt_actor_check', sql`char_length(${table.actor}) between 1 and 200`),
   ],
 );
 export const extractionRequest = integrationNamespace.table(

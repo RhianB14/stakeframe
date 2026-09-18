@@ -129,4 +129,29 @@ describe('executable API contracts', () => {
       expect(response.body).not.toMatch(/private-input|private-invalid-date|email|token|stack/);
     },
   );
+
+  it('declares the mandatory idempotency-key header on every import action operation', async () => {
+    const { app } = createContractApp();
+    await app.ready();
+    const document = app.swagger() as OpenAPIV3.Document;
+    for (const path of [
+      '/api/v1/imports/{id}/bookmaker',
+      '/api/v1/imports/{id}/origin',
+      '/api/v1/imports/{id}/event',
+    ]) {
+      const operation = document.paths[path]?.post;
+      expect(operation, path).toBeDefined();
+      const header = (operation!.parameters ?? []).find(
+        (parameter) =>
+          'in' in parameter && parameter.in === 'header' && parameter.name === 'idempotency-key',
+      );
+      expect(header, `${path} must declare idempotency-key`).toBeDefined();
+      expect('required' in header! && header.required).toBe(true);
+      expect('schema' in header! ? header.schema : undefined).toMatchObject({
+        type: 'string',
+        format: 'uuid',
+      });
+      expect(operation!.responses['400']).toBeDefined();
+    }
+  });
 });

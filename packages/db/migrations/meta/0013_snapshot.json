@@ -3677,7 +3677,7 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true,
-          "default": "current_setting('app.organization_id', true)"
+          "default": "current_setting('app.organization_id', true)::uuid"
         },
         "key": {
           "name": "key",
@@ -3705,7 +3705,7 @@
         },
         "result": {
           "name": "result",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
@@ -3738,6 +3738,14 @@
         "import_action_receipt_action_check": {
           "name": "import_action_receipt_action_check",
           "value": "\"integration\".\"import_action_receipt\".\"action\" in ('bookmaker', 'origin', 'event')"
+        },
+        "import_action_receipt_hash_check": {
+          "name": "import_action_receipt_hash_check",
+          "value": "\"integration\".\"import_action_receipt\".\"hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "import_action_receipt_actor_check": {
+          "name": "import_action_receipt_actor_check",
+          "value": "char_length(\"integration\".\"import_action_receipt\".\"actor\") between 1 and 200"
         }
       },
       "isRLSEnabled": false

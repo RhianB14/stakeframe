@@ -4,6 +4,9 @@ import {
   ticketExtractionSchema,
   automaticDecisionSchema,
   financeCommandSchema,
+  importBookmakerResultSchema,
+  importOriginResultSchema,
+  importEventResultSchema,
   type BetInput,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
@@ -40,11 +43,12 @@ function deterministicKey(seed: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
 }
 
-// STK-G0-19-R9 — recibos idempotentes das ações de importação (por organização
-// e chave do cliente). O hash cobre ação + alvo + corpo normalizado; o resultado
-// gravado é sanitizado (nunca conteúdo de bilhete).
+// STK-G0-19-R9/R10 — recibos idempotentes das ações de importação (por
+// organização e chave do cliente). O hash cobre ação + alvo + corpo normalizado;
+// o resultado gravado é sanitizado (nunca conteúdo de bilhete) e vive em
+// `result jsonb`, validado pelo schema específico da ação no replay.
 type ImportActionKind = 'bookmaker' | 'origin' | 'event';
-type ImportActionReceiptRow = { action: string; hash: string; result: string };
+type ImportActionReceiptRow = { action: string; hash: string; result: unknown };
 type BookmakerResult = {
   version: number;
   betState: string | null;
@@ -81,18 +85,23 @@ const insertReceiptRow = async (
 ): Promise<void> => {
   await client.query(
     'insert into integration.import_action_receipt(organization_id,key,action,actor,hash,result) values(current_setting($$app.organization_id$$, true)::uuid,$1,$2,$3,$4,$5)',
-    [key, action, actor, hash, JSON.stringify(result)],
+    [key, action, actor, hash, result],
   );
 };
+// R10 — replay tipado: o resultado é validado pelo schema da própria ação;
+// recibo ausente/adulterado falha FECHADO e sanitizado (nunca cast cego).
 const receiptReplay = <T>(
   receipt: ImportActionReceiptRow | null,
   action: ImportActionKind,
   hash: string,
+  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
 ): T | null => {
   if (!receipt) return null;
   if (receipt.action !== action || receipt.hash !== hash)
     throw new FinanceError('IDEMPOTENCY_CONFLICT');
-  return JSON.parse(receipt.result) as T;
+  const parsed = schema.safeParse(receipt.result);
+  if (!parsed.success) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+  return parsed.data;
 };
 
 export async function findDuplicates(
@@ -190,22 +199,6 @@ export function createImportService(database: Database, storage?: ObjectStorage)
   const draft = createImportDraftService(database);
   const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
     tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
-  // R9 — recibo da ação: leitura na txn de leitura; gravação junto do efeito
-  // (mesma transação do comando quando pós-importação; transação própria no
-  // caminho de rascunho, que já serializa por versão no próprio updateDraft).
-  const readReceipt = (context: OrganizationContext, key: string) =>
-    read(context, async (client) => readReceiptRow(client, key));
-  const storeReceipt = (
-    context: OrganizationContext,
-    key: string,
-    action: ImportActionKind,
-    actor: string,
-    hash: string,
-    result: unknown,
-  ) =>
-    tenant.withOrganizationTransaction(context, (client) =>
-      insertReceiptRow(client, key, action, actor, hash, result),
-    );
   return {
     /** Returns the authenticated user's organization context (provisioning on first use). */
     ensureContext(userId: string) {
@@ -598,42 +591,48 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         bookmakerId: input.bookmakerId,
         freebetId: input.freebetId ?? null,
       });
-      // R9 — replay legítimo ANTES de qualquer validação de versão.
-      const replay = receiptReplay<BookmakerResult>(
-        await readReceipt(context, idempotencyKey),
-        'bookmaker',
-        requestHash,
-      );
-      if (replay) return replay;
       if (!route.imported_bet_id) {
-        const saved = await draft.updateDraft(
-          context,
-          id,
-          {
-            version: input.version,
-            bookmakerId: input.bookmakerId,
-            ...(input.freebetId !== undefined ? { freebetId: input.freebetId } : {}),
-          },
-          actor,
-        );
-        const name = await read(context, async (client) => {
-          const house = (
+        // R10 — rascunho ATÔMICO: advisory lock por organização+chave, replay do
+        // recibo sob o mesmo lock, efeito + auditoria + outbox + RECIBO na MESMA
+        // transação/cliente — queda entre efeito e recibo é impossível.
+        return tenant.withOrganizationTransaction(context, async (client) => {
+          await client.query(
+            'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+            [idempotencyKey],
+          );
+          const lockedReplay = receiptReplay<BookmakerResult>(
+            await readReceiptRow(client, idempotencyKey),
+            'bookmaker',
+            requestHash,
+            importBookmakerResultSchema,
+          );
+          if (lockedReplay) return lockedReplay;
+          const saved = await draft.updateDraftWithin(
+            client,
+            id,
+            {
+              version: input.version,
+              bookmakerId: input.bookmakerId,
+              ...(input.freebetId !== undefined ? { freebetId: input.freebetId } : {}),
+            },
+            actor,
+          );
+          const name = (
             await client.query<{ name: string }>(
               'select name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
               [input.bookmakerId],
             )
           ).rows[0];
-          return house?.name ?? null;
+          const result: BookmakerResult = {
+            version: saved.version,
+            betState: null,
+            bookmakerId: input.bookmakerId,
+            bookmakerName: name?.name ?? null,
+            freebetCleared: saved.freebetCleared,
+          };
+          await insertReceiptRow(client, idempotencyKey, 'bookmaker', actor, requestHash, result);
+          return result;
         });
-        const result: BookmakerResult = {
-          version: saved.version,
-          betState: null,
-          bookmakerId: input.bookmakerId,
-          bookmakerName: name,
-          freebetCleared: saved.freebetCleared,
-        };
-        await storeReceipt(context, idempotencyKey, 'bookmaker', actor, requestHash, result);
-        return result;
       }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -652,6 +651,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           await readReceiptRow(client, idempotencyKey),
           'bookmaker',
           requestHash,
+          importBookmakerResultSchema,
         );
         if (lockedReplay) return lockedReplay;
         const row = (
@@ -732,27 +732,35 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         kind: input.kind,
         freebetId: credit,
       });
-      const replay = receiptReplay<OriginResult>(
-        await readReceipt(context, idempotencyKey),
-        'origin',
-        requestHash,
-      );
-      if (replay) return replay;
       if (!route.imported_bet_id) {
-        const saved = await draft.updateDraft(
-          context,
-          id,
-          { version: input.version, betOrigin: input.kind, freebetId: credit },
-          actor,
-        );
-        const result: OriginResult = {
-          version: saved.version,
-          betState: null,
-          kind: input.kind,
-          freebetCleared: saved.freebetCleared,
-        };
-        await storeReceipt(context, idempotencyKey, 'origin', actor, requestHash, result);
-        return result;
+        // R10 — rascunho ATÔMICO (mesmo desenho do bookmaker).
+        return tenant.withOrganizationTransaction(context, async (client) => {
+          await client.query(
+            'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+            [idempotencyKey],
+          );
+          const lockedReplay = receiptReplay<OriginResult>(
+            await readReceiptRow(client, idempotencyKey),
+            'origin',
+            requestHash,
+            importOriginResultSchema,
+          );
+          if (lockedReplay) return lockedReplay;
+          const saved = await draft.updateDraftWithin(
+            client,
+            id,
+            { version: input.version, betOrigin: input.kind, freebetId: credit },
+            actor,
+          );
+          const result: OriginResult = {
+            version: saved.version,
+            betState: null,
+            kind: input.kind,
+            freebetCleared: saved.freebetCleared,
+          };
+          await insertReceiptRow(client, idempotencyKey, 'origin', actor, requestHash, result);
+          return result;
+        });
       }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -769,6 +777,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           await readReceiptRow(client, idempotencyKey),
           'origin',
           requestHash,
+          importOriginResultSchema,
         );
         if (lockedReplay) return lockedReplay;
         const row = (
@@ -840,22 +849,30 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         selectionId: input.selectionId,
         eventAt: input.eventAt,
       });
-      const replay = receiptReplay<EventResult>(
-        await readReceipt(context, idempotencyKey),
-        'event',
-        requestHash,
-      );
-      if (replay) return replay;
       if (!route.imported_bet_id) {
-        const saved = await draft.updateDraft(
-          context,
-          id,
-          { version: input.version, eventAt: input.eventAt },
-          actor,
-        );
-        const result: EventResult = { version: saved.version, betState: null };
-        await storeReceipt(context, idempotencyKey, 'event', actor, requestHash, result);
-        return result;
+        // R10 — rascunho ATÔMICO (mesmo desenho do bookmaker).
+        return tenant.withOrganizationTransaction(context, async (client) => {
+          await client.query(
+            'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+            [idempotencyKey],
+          );
+          const lockedReplay = receiptReplay<EventResult>(
+            await readReceiptRow(client, idempotencyKey),
+            'event',
+            requestHash,
+            importEventResultSchema,
+          );
+          if (lockedReplay) return lockedReplay;
+          const saved = await draft.updateDraftWithin(
+            client,
+            id,
+            { version: input.version, eventAt: input.eventAt },
+            actor,
+          );
+          const result: EventResult = { version: saved.version, betState: null };
+          await insertReceiptRow(client, idempotencyKey, 'event', actor, requestHash, result);
+          return result;
+        });
       }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -872,6 +889,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           await readReceiptRow(client, idempotencyKey),
           'event',
           requestHash,
+          importEventResultSchema,
         );
         if (lockedReplay) return lockedReplay;
         const row = (

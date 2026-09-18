@@ -137,7 +137,18 @@ export function createApp(options: {
       _error instanceof Error && 'statusCode' in _error ? _error.statusCode : undefined;
     const status =
       typeof candidate === 'number' && candidate >= 400 && candidate < 500 ? candidate : 500;
-    const code = status >= 500 ? 'INTERNAL_ERROR' : 'INVALID_REQUEST';
+    // STK-G0-19-R10 — as três ações de importação exigem `idempotency-key`; a
+    // ausência do header na validação de schema responde com o código estável e
+    // sanitizado documentado no contrato (IDEMPOTENCY_KEY_REQUIRED).
+    const actionPath = /^\/api\/v1\/imports\/[^/]+\/(bookmaker|origin|event)$/.test(
+      request.url.split('?')[0]!,
+    );
+    const code =
+      status >= 500
+        ? 'INTERNAL_ERROR'
+        : status === 400 && actionPath && !request.headers['idempotency-key']
+          ? 'IDEMPOTENCY_KEY_REQUIRED'
+          : 'INVALID_REQUEST';
     app.log.warn({ code, requestId: request.id }, 'Request refused');
     return sendApiError(request, reply, status, code);
   });

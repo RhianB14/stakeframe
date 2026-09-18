@@ -26,6 +26,165 @@ const normalizeAlias = (value: string) =>
     .toLocaleLowerCase('pt-BR')
     .replace(/\s+/g, ' ');
 
+// STK-G0-19-R10 — operação interna do rascunho sobre um cliente/transação JÁ
+// existentes (sem abrir transação própria): lock da inbox (FOR UPDATE), versão
+// otimista, revalidação de casa/crédito, auditoria e outbox no MESMO PoolClient.
+// O chamador é dono da transação — e do recibo idempotente gravado nela.
+type DraftPatch = {
+  version: number;
+  betOrigin?: 'real' | 'freebet' | null | undefined;
+  freebetId?: string | null | undefined;
+  eventAt?: string | null | undefined;
+  bookmakerId?: string | null | undefined;
+};
+
+async function applyDraftUpdate(
+  client: PoolClient,
+  id: string,
+  patch: DraftPatch,
+  actor: string,
+): Promise<{ version: number; freebetCleared: boolean }> {
+  {
+    const row = (
+      await client.query<{
+        version: number;
+        state: string;
+        bet_origin: string | null;
+        freebet_id: string | null;
+        event_at: string | null;
+        telegram_chat_id: string | null;
+        telegram_result_message_id: string | null;
+        telegram_deleted_at: string | null;
+        caption: string;
+        extraction: unknown;
+        bookmaker_override_id: string | null;
+      }>(
+        'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction,bookmaker_override_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+        [id],
+      )
+    ).rows[0];
+    if (!row) throw new FinanceError('NOT_FOUND');
+    if (row.version !== patch.version) throw new FinanceError('VERSION_CONFLICT');
+    if (!['pending', 'review', 'failed'].includes(row.state))
+      throw new FinanceError('STATE_CONFLICT');
+    let nextOrigin: string | null = row.bet_origin;
+    if (patch.betOrigin !== undefined) nextOrigin = patch.betOrigin;
+    let nextFreebet: string | null = row.freebet_id;
+    if (patch.freebetId !== undefined) nextFreebet = patch.freebetId;
+    if (nextOrigin === 'real' || nextOrigin === null) nextFreebet = null;
+    // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa"):
+    // validada sob lock contra o catálogo ATIVO da organização; a casa
+    // nunca vem do cliente sem revalidação.
+    let nextBookmakerOverride = row.bookmaker_override_id;
+    if (patch.bookmakerId !== undefined) {
+      if (patch.bookmakerId === null) nextBookmakerOverride = null;
+      else {
+        const house = (
+          await client.query<{ id: string }>(
+            'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and active',
+            [patch.bookmakerId],
+          )
+        ).rows[0];
+        if (!house) throw new FinanceError('NOT_FOUND');
+        nextBookmakerOverride = house.id;
+      }
+    }
+    // Resolução efetiva do rascunho: escolha declarada > legenda > leitura visual.
+    const labels = parseCaption(row.caption);
+    const evidence =
+      row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+        ? (row.extraction as { extraction: unknown }).extraction
+        : row.extraction;
+    const parsedExtraction = ticketExtractionSchema.safeParse(evidence);
+    const extraction = parsedExtraction.success ? parsedExtraction.data : null;
+    const aliases = (
+      await client.query<{ catalog_id: string; kind: string; label: string }>(
+        'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+      )
+    ).rows;
+    const matchBookmaker = (label: string | null) =>
+      label
+        ? (aliases.find(
+            (alias) =>
+              alias.kind === 'bookmaker' && normalizeAlias(alias.label) === normalizeAlias(label),
+          )?.catalog_id ?? null)
+        : null;
+    const effectiveBookmakerId =
+      nextBookmakerOverride ??
+      matchBookmaker(labels.bookmaker) ??
+      matchBookmaker(extraction?.bookmaker ?? null);
+    const stake = extraction?.stake ?? null;
+    // R7: troca de casa NUNCA preserva crédito incompatível em silêncio —
+    // casa divergente, consumido ou expirado ⇒ crédito removido e a
+    // origem volta a "não informada" (nova escolha explícita obrigatória).
+    let freebetCleared = false;
+    if (row.freebet_id && patch.freebetId === undefined) {
+      const existing = (
+        await client.query<{ bookmaker_id: string; used_by: string | null; valid: boolean }>(
+          "select bookmaker_id,used_by,(expires_on >= (now() at time zone 'America/Sao_Paulo')::date) as valid from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+          [row.freebet_id],
+        )
+      ).rows[0];
+      if (
+        !existing ||
+        existing.used_by !== null ||
+        !existing.valid ||
+        existing.bookmaker_id !== effectiveBookmakerId
+      ) {
+        freebetCleared = true;
+        nextFreebet = null;
+        nextOrigin = null;
+      }
+    }
+    if (nextOrigin === 'freebet') {
+      if (!nextFreebet) throw new FinanceError('FREEBET_UNRESOLVED');
+      // STK-G0-19-R7: a DECLARAÇÃO valida apenas o crédito da própria
+      // organização (casa efetiva, valor exato da stake, validade,
+      // disponibilidade). A política automática não participa desta
+      // validação — a declaração nunca é bloqueada por ausência de
+      // política; a automação é que permanece fail-closed.
+      if (!effectiveBookmakerId || !stake) throw new FinanceError('FREEBET_UNRESOLVED');
+      const credit = (
+        await client.query<{ id: string }>(
+          "select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update",
+          [nextFreebet, effectiveBookmakerId, stake],
+        )
+      ).rows[0];
+      if (!credit) throw new FinanceError('FREEBET_UNRESOLVED');
+    }
+    const nextEventAt = patch.eventAt === undefined ? row.event_at : patch.eventAt;
+    const updated = await client.query<{ version: number }>(
+      "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
+      [
+        id,
+        nextOrigin,
+        nextFreebet,
+        nextEventAt,
+        nextEventAt ? 'confirmed' : 'pending',
+        nextBookmakerOverride,
+      ],
+    );
+    const version = updated.rows[0]!.version;
+    await client.query(
+      "insert into finance.audit(type,actor,entity_id,after) values('import.draft_update',$2,$1,$3)",
+      [
+        id,
+        actor,
+        JSON.stringify({
+          betOrigin: nextOrigin,
+          freebetSelected: !!nextFreebet,
+          eventDateStatus: nextEventAt ? 'confirmed' : 'pending',
+          bookmakerDeclared: !!nextBookmakerOverride,
+          freebetCleared,
+        }),
+      ],
+    );
+    if (row.telegram_chat_id && row.telegram_result_message_id && !row.telegram_deleted_at)
+      await enqueueOutbox(client, id, 'edit_result_message', version);
+    return { version, freebetCleared };
+  }
+}
+
 export async function enqueueOutbox(
   client: PoolClient,
   inboxId: string,
@@ -107,158 +266,24 @@ export function createImportDraftService(database: Database) {
      * data do evento. Versão otimista, auditoria sanitizada e outbox na mesma
      * transação; a web/Mini App refletem o mesmo registro.
      */
-    async updateDraft(
-      context: OrganizationContext,
-      id: string,
-      patch: {
-        version: number;
-        betOrigin?: 'real' | 'freebet' | null | undefined;
-        freebetId?: string | null | undefined;
-        eventAt?: string | null | undefined;
-        bookmakerId?: string | null | undefined;
-      },
-      actor: string,
-    ) {
-      return withOrg(context, async (client) => {
-        const row = (
-          await client.query<{
-            version: number;
-            state: string;
-            bet_origin: string | null;
-            freebet_id: string | null;
-            event_at: string | null;
-            telegram_chat_id: string | null;
-            telegram_result_message_id: string | null;
-            telegram_deleted_at: string | null;
-            caption: string;
-            extraction: unknown;
-            bookmaker_override_id: string | null;
-          }>(
-            'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction,bookmaker_override_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
-            [id],
-          )
-        ).rows[0];
-        if (!row) throw new FinanceError('NOT_FOUND');
-        if (row.version !== patch.version) throw new FinanceError('VERSION_CONFLICT');
-        if (!['pending', 'review', 'failed'].includes(row.state))
-          throw new FinanceError('STATE_CONFLICT');
-        let nextOrigin: string | null = row.bet_origin;
-        if (patch.betOrigin !== undefined) nextOrigin = patch.betOrigin;
-        let nextFreebet: string | null = row.freebet_id;
-        if (patch.freebetId !== undefined) nextFreebet = patch.freebetId;
-        if (nextOrigin === 'real' || nextOrigin === null) nextFreebet = null;
-        // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa"):
-        // validada sob lock contra o catálogo ATIVO da organização; a casa
-        // nunca vem do cliente sem revalidação.
-        let nextBookmakerOverride = row.bookmaker_override_id;
-        if (patch.bookmakerId !== undefined) {
-          if (patch.bookmakerId === null) nextBookmakerOverride = null;
-          else {
-            const house = (
-              await client.query<{ id: string }>(
-                'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and active',
-                [patch.bookmakerId],
-              )
-            ).rows[0];
-            if (!house) throw new FinanceError('NOT_FOUND');
-            nextBookmakerOverride = house.id;
-          }
-        }
-        // Resolução efetiva do rascunho: escolha declarada > legenda > leitura visual.
-        const labels = parseCaption(row.caption);
-        const evidence =
-          row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
-            ? (row.extraction as { extraction: unknown }).extraction
-            : row.extraction;
-        const parsedExtraction = ticketExtractionSchema.safeParse(evidence);
-        const extraction = parsedExtraction.success ? parsedExtraction.data : null;
-        const aliases = (
-          await client.query<{ catalog_id: string; kind: string; label: string }>(
-            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
-          )
-        ).rows;
-        const matchBookmaker = (label: string | null) =>
-          label
-            ? (aliases.find(
-                (alias) =>
-                  alias.kind === 'bookmaker' &&
-                  normalizeAlias(alias.label) === normalizeAlias(label),
-              )?.catalog_id ?? null)
-            : null;
-        const effectiveBookmakerId =
-          nextBookmakerOverride ??
-          matchBookmaker(labels.bookmaker) ??
-          matchBookmaker(extraction?.bookmaker ?? null);
-        const stake = extraction?.stake ?? null;
-        // R7: troca de casa NUNCA preserva crédito incompatível em silêncio —
-        // casa divergente, consumido ou expirado ⇒ crédito removido e a
-        // origem volta a "não informada" (nova escolha explícita obrigatória).
-        let freebetCleared = false;
-        if (row.freebet_id && patch.freebetId === undefined) {
-          const existing = (
-            await client.query<{ bookmaker_id: string; used_by: string | null; valid: boolean }>(
-              "select bookmaker_id,used_by,(expires_on >= (now() at time zone 'America/Sao_Paulo')::date) as valid from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
-              [row.freebet_id],
-            )
-          ).rows[0];
-          if (
-            !existing ||
-            existing.used_by !== null ||
-            !existing.valid ||
-            existing.bookmaker_id !== effectiveBookmakerId
-          ) {
-            freebetCleared = true;
-            nextFreebet = null;
-            nextOrigin = null;
-          }
-        }
-        if (nextOrigin === 'freebet') {
-          if (!nextFreebet) throw new FinanceError('FREEBET_UNRESOLVED');
-          // STK-G0-19-R7: a DECLARAÇÃO valida apenas o crédito da própria
-          // organização (casa efetiva, valor exato da stake, validade,
-          // disponibilidade). A política automática não participa desta
-          // validação — a declaração nunca é bloqueada por ausência de
-          // política; a automação é que permanece fail-closed.
-          if (!effectiveBookmakerId || !stake) throw new FinanceError('FREEBET_UNRESOLVED');
-          const credit = (
-            await client.query<{ id: string }>(
-              "select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update",
-              [nextFreebet, effectiveBookmakerId, stake],
-            )
-          ).rows[0];
-          if (!credit) throw new FinanceError('FREEBET_UNRESOLVED');
-        }
-        const nextEventAt = patch.eventAt === undefined ? row.event_at : patch.eventAt;
-        const updated = await client.query<{ version: number }>(
-          "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
-          [
-            id,
-            nextOrigin,
-            nextFreebet,
-            nextEventAt,
-            nextEventAt ? 'confirmed' : 'pending',
-            nextBookmakerOverride,
-          ],
-        );
-        const version = updated.rows[0]!.version;
-        await client.query(
-          "insert into finance.audit(type,actor,entity_id,after) values('import.draft_update',$2,$1,$3)",
-          [
-            id,
-            actor,
-            JSON.stringify({
-              betOrigin: nextOrigin,
-              freebetSelected: !!nextFreebet,
-              eventDateStatus: nextEventAt ? 'confirmed' : 'pending',
-              bookmakerDeclared: !!nextBookmakerOverride,
-              freebetCleared,
-            }),
-          ],
-        );
-        if (row.telegram_chat_id && row.telegram_result_message_id && !row.telegram_deleted_at)
-          await enqueueOutbox(client, id, 'edit_result_message', version);
-        return { version, freebetCleared, automaticPolicy: automaticPolicyNotice() };
-      });
+    /**
+     * STK-G0-19-R10 — operação interna sobre um cliente/transação existentes:
+     * usada pelos serviços de ação (bookmaker/origin/event) para gravar efeito,
+     * auditoria, outbox e RECIBO na mesma transação (nunca aninhando transações).
+     */
+    async updateDraftWithin(client: PoolClient, id: string, patch: DraftPatch, actor: string) {
+      return applyDraftUpdate(client, id, patch, actor);
+    },
+    /**
+     * Atualização canônica do rascunho: origem financeira, crédito escolhido,
+     * casa declarada e data do evento. Versão otimista, auditoria sanitizada e
+     * outbox na mesma transação; a web/Mini App refletem o mesmo registro.
+     */
+    async updateDraft(context: OrganizationContext, id: string, patch: DraftPatch, actor: string) {
+      const saved = await withOrg(context, async (client) =>
+        applyDraftUpdate(client, id, patch, actor),
+      );
+      return { ...saved, automaticPolicy: automaticPolicyNotice() };
     },
     /**
      * Vínculo privado com o Telegram no recebimento da foto (idempotente) e o

@@ -138,7 +138,14 @@ async function sendWithIdempotentRetry<T>(send: () => Promise<T>): Promise<T> {
   try {
     return await send();
   } catch (error) {
-    if (error instanceof TypeError) return send();
+    // STK-G0-19-R10 — retry REAL de transporte: SOMENTE `ApiFailure` com
+    // status 0 e código NETWORK_ERROR (a requisição pode ter sido aplicada e a
+    // resposta perdida). Exatamente UMA repetição, reutilizando a MESMA chave
+    // de idempotência e o mesmo corpo — o servidor devolve o recibo. Respostas
+    // HTTP (4xx/5xx) nunca são repetidas automaticamente; a segunda falha
+    // devolve o erro acionável original ao usuário.
+    if (error instanceof ApiFailure && error.status === 0 && error.code === 'NETWORK_ERROR')
+      return send();
     throw error;
   }
 }
