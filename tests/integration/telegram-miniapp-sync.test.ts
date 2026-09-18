@@ -227,6 +227,39 @@ async function drain() {
     guard += 1;
   }
 }
+const journalCount = async (kind: string) =>
+  Number(
+    (
+      await database.pool.query<{ n: string }>(
+        'select count(*)::text as n from finance.journal where kind=$1',
+        [kind],
+      )
+    ).rows[0]!.n,
+  );
+const settlementCount = async (betId: string) =>
+  Number(
+    (
+      await database.pool.query<{ n: string }>(
+        'select count(*)::text as n from finance.settlement where bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!.n,
+  );
+const outboxCount = async () =>
+  Number(
+    (
+      await database.pool.query<{ n: string }>(
+        'select count(*)::text as n from integration.telegram_outbox',
+      )
+    ).rows[0]!.n,
+  );
+const creditUsedBy = async (id: string) =>
+  (
+    await database.pool.query<{ used_by: string | null }>(
+      'select used_by from finance.freebet where id=$1',
+      [id],
+    )
+  ).rows[0]!.used_by;
 const betRow = async (betId: string) =>
   (
     await database.pool.query<{
@@ -256,11 +289,18 @@ const journals = async (kind: string) =>
       [kind],
     )
   ).rows;
-const post = (path: string, payload: Record<string, unknown>, headers: Record<string, string>) =>
+// R9 — toda ação exige idempotency-key; por padrão cada chamada usa uma chave
+// nova (confirmação intencional); replays explícitos passam a MESMA chave.
+const post = (
+  path: string,
+  payload: Record<string, unknown>,
+  headers: Record<string, string>,
+  key: string = randomUUID(),
+) =>
   app.inject({
     method: 'POST',
     url: `/api/v1/imports/${path}`,
-    headers: { ...headers, 'content-type': 'application/json' },
+    headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': key },
     payload,
   });
 
@@ -581,6 +621,8 @@ describe('data canônica e renderização (R8)', () => {
         ...session,
         'content-type': 'application/json',
         origin: 'https://stakeframe.test',
+        // R9 — confirmação intencional carrega a própria chave.
+        'idempotency-key': randomUUID(),
       },
       payload: { version, bookmakerId: await houseId('Superbet') },
     });
@@ -722,5 +764,332 @@ describe('data canônica e renderização (R8)', () => {
       payload: { version, bookmakerId: await houseId() },
     });
     expect(patch.statusCode).toBe(409);
+  });
+});
+
+describe('R9 — idempotência por operação, créditos por destino e bloqueio pós-liquidação', () => {
+  it('casa A→B→A→B aplica todas; replay exato devolve o mesmo resultado; conflito de corpo (R9.1)', async () => {
+    const { importId, betId, version } = await imported();
+    const bet365 = await houseId();
+    const superbet = await houseId('Superbet');
+    const k1 = randomUUID();
+    const k2 = randomUUID();
+    const k3 = randomUUID();
+    const r1 = await post(`${importId}/bookmaker`, { version, bookmakerId: superbet }, tg, k1);
+    expect(r1.statusCode).toBe(200);
+    const r2 = await post(
+      `${importId}/bookmaker`,
+      { version: (r1.json() as { version: number }).version, bookmakerId: bet365 },
+      tg,
+      k2,
+    );
+    expect(r2.statusCode).toBe(200);
+    const v2 = (r2.json() as { version: number }).version;
+    const r3 = await post(`${importId}/bookmaker`, { version: v2, bookmakerId: superbet }, tg, k3);
+    expect(r3.statusCode).toBe(200);
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    expect(await journalCount('bet_bookmaker_change')).toBe(3);
+    // Replay da terceira: mesma chave e mesmo corpo, versão já avançada.
+    const replay = await post(
+      `${importId}/bookmaker`,
+      { version: v2, bookmakerId: superbet },
+      tg,
+      k3,
+    );
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(r3.json());
+    expect(await journalCount('bet_bookmaker_change')).toBe(3);
+    // Mesma chave com casa diferente.
+    const conflict = await post(
+      `${importId}/bookmaker`,
+      { version: (r3.json() as { version: number }).version, bookmakerId: bet365 },
+      tg,
+      k3,
+    );
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toMatchObject({ error: { code: 'IDEMPOTENCY_CONFLICT' } });
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+  });
+
+  it('origem real→X→real→X por chaves novas; replay sem duplo consumo (R9.2)', async () => {
+    const { importId, betId, version } = await imported();
+    const x = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const k1 = randomUUID();
+    const k2 = randomUUID();
+    const k3 = randomUUID();
+    const o1 = await post(
+      `${importId}/origin`,
+      { version, kind: 'freebet', freebetId: x.id },
+      tg,
+      k1,
+    );
+    expect(o1.statusCode).toBe(200);
+    expect((await betRow(betId)).freebet_id).toBe(x.id);
+    expect(await creditUsedBy(x.id)).toBe(betId);
+    const o2 = await post(
+      `${importId}/origin`,
+      { version: (o1.json() as { version: number }).version, kind: 'real' },
+      tg,
+      k2,
+    );
+    expect(o2.statusCode).toBe(200);
+    expect((await betRow(betId)).freebet_id).toBeNull();
+    expect(await creditUsedBy(x.id)).toBeNull();
+    const v3 = (o2.json() as { version: number }).version;
+    const o3 = await post(
+      `${importId}/origin`,
+      { version: v3, kind: 'freebet', freebetId: x.id },
+      tg,
+      k3,
+    );
+    expect(o3.statusCode).toBe(200);
+    expect((await betRow(betId)).freebet_id).toBe(x.id);
+    expect(await creditUsedBy(x.id)).toBe(betId);
+    const journals = await journalCount('bet_origin_change');
+    const replay = await post(
+      `${importId}/origin`,
+      { version: v3, kind: 'freebet', freebetId: x.id },
+      tg,
+      k3,
+    );
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(o3.json());
+    expect(await journalCount('bet_origin_change')).toBe(journals);
+    expect(await creditUsedBy(x.id)).toBe(betId);
+    const conflict = await post(
+      `${importId}/origin`,
+      { version: (o3.json() as { version: number }).version, kind: 'real' },
+      tg,
+      k3,
+    );
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toMatchObject({ error: { code: 'IDEMPOTENCY_CONFLICT' } });
+  });
+
+  it('data D1→D2→D1 em três chaves; replay exato; conflito de corpo (R9.3)', async () => {
+    const { importId, betId, version } = await imported();
+    const selectionId = (
+      await database.pool.query<{ id: string }>(
+        'select id from finance.selection where bet_id=$1 order by position',
+        [betId],
+      )
+    ).rows[0]!.id;
+    const d1 = '2026-10-05T18:30:00-03:00';
+    const d2 = '2026-10-06T20:00:00-03:00';
+    const k1 = randomUUID();
+    const k2 = randomUUID();
+    const k3 = randomUUID();
+    const e1 = await post(`${importId}/event`, { version, selectionId, eventAt: d1 }, tg, k1);
+    expect(e1.statusCode).toBe(200);
+    const e2 = await post(
+      `${importId}/event`,
+      { version: (e1.json() as { version: number }).version, selectionId, eventAt: d2 },
+      tg,
+      k2,
+    );
+    expect(e2.statusCode).toBe(200);
+    const v3 = (e2.json() as { version: number }).version;
+    const e3 = await post(`${importId}/event`, { version: v3, selectionId, eventAt: d1 }, tg, k3);
+    expect(e3.statusCode).toBe(200);
+    const row = async () =>
+      (
+        await database.pool.query<{ event_at: Date; date_status: string }>(
+          'select event_at,date_status from finance.selection where id=$1',
+          [selectionId],
+        )
+      ).rows[0]!;
+    expect((await row()).event_at.toISOString()).toBe(new Date(d1).toISOString());
+    expect((await row()).date_status).toBe('confirmed');
+    const replay = await post(
+      `${importId}/event`,
+      { version: v3, selectionId, eventAt: d1 },
+      tg,
+      k3,
+    );
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(e3.json());
+    const conflict = await post(
+      `${importId}/event`,
+      { version: (e3.json() as { version: number }).version, selectionId, eventAt: d2 },
+      tg,
+      k3,
+    );
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toMatchObject({ error: { code: 'IDEMPOTENCY_CONFLICT' } });
+    expect((await row()).event_at.toISOString()).toBe(new Date(d1).toISOString());
+  });
+
+  it('créditos por casa de destino; o consumido nunca aparece (R9.4)', async () => {
+    const { importId, oldCredit } = await importedFreebet();
+    const superbet = await houseId('Superbet');
+    const creditSB = await run({
+      type: 'freebet.create',
+      bookmakerId: superbet,
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const superList = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}/credits?bookmakerId=${superbet}`,
+      headers: tg,
+    });
+    expect(superList.statusCode).toBe(200);
+    const idsSuper = (superList.json() as { credits: { id: string }[] }).credits.map((c) => c.id);
+    expect(idsSuper).toEqual([creditSB.id]);
+    const bet365 = await houseId();
+    const fresh365 = await run({
+      type: 'freebet.create',
+      bookmakerId: bet365,
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const list365 = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}/credits?bookmakerId=${bet365}`,
+      headers: tg,
+    });
+    expect(list365.statusCode).toBe(200);
+    const ids365 = (list365.json() as { credits: { id: string }[] }).credits.map((c) => c.id);
+    expect(ids365).toContain(fresh365.id);
+    expect(ids365).not.toContain(oldCredit);
+    // Nenhuma lista vaza crédito de OUTRA casa de destino.
+    expect(ids365).not.toContain(creditSB.id);
+    expect(idsSuper).not.toContain(fresh365.id);
+  });
+
+  it('troca de casa de freebet não cria journal vazio e recusa sem crédito novo (R9.5)', async () => {
+    const { importId, betId, version } = await importedFreebet();
+    const superbet = await houseId('Superbet');
+    const before = await journalCount('bet_bookmaker_change');
+    const refused = await post(`${importId}/bookmaker`, { version, bookmakerId: superbet }, tg);
+    expect(refused.statusCode).toBe(409);
+    const creditSB = await run({
+      type: 'freebet.create',
+      bookmakerId: superbet,
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const ok = await post(
+      `${importId}/bookmaker`,
+      { version, bookmakerId: superbet, freebetId: creditSB.id },
+      tg,
+    );
+    expect(ok.statusCode).toBe(200);
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    expect(await journalCount('bet_bookmaker_change')).toBe(before);
+  });
+
+  it('partial cashout bloqueia troca de casa e origem sem efeito parcial (R9.6)', async () => {
+    const { importId, betId, version } = await imported();
+    const partial = await run({
+      type: 'bet.settle',
+      id: betId,
+      outcome: 'partial_cashout',
+      closedPrincipal: '40.00',
+      returnAmount: '25.00',
+      settledAt: new Date().toISOString(),
+      reason: 'Liquidação parcial fictícia',
+    });
+    expect(await settlementCount(betId)).toBe(1);
+    expect((await betRow(betId)).state).toBe('open');
+    const journalsHouse = await journalCount('bet_bookmaker_change');
+    const journalsOrigin = await journalCount('bet_origin_change');
+    const outboxBefore = await outboxCount();
+    const superbet = await houseId('Superbet');
+    const houseTry = await post(`${importId}/bookmaker`, { version, bookmakerId: superbet }, tg);
+    expect(houseTry.statusCode).toBe(409);
+    expect(houseTry.json()).toMatchObject({ error: { code: 'STATE_CONFLICT' } });
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const originTry = await post(
+      `${importId}/origin`,
+      { version, kind: 'freebet', freebetId: credit.id },
+      tg,
+    );
+    expect(originTry.statusCode).toBe(409);
+    expect(originTry.json()).toMatchObject({ error: { code: 'STATE_CONFLICT' } });
+    // Liquidado e REVERTIDO: o fato histórico permanece — mesma recusa mesmo
+    // com o valor de volta ao principal (remaining === stake).
+    await run({
+      type: 'settlement.reverse',
+      id: partial.id,
+      effectiveAt: new Date().toISOString(),
+      reason: 'Reversão fictícia para prova de congelamento',
+    });
+    const reverted = await betRow(betId);
+    expect(reverted.state).toBe('open');
+    const revertedTry = await post(`${importId}/bookmaker`, { version, bookmakerId: superbet }, tg);
+    expect(revertedTry.statusCode).toBe(409);
+    expect(revertedTry.json()).toMatchObject({ error: { code: 'STATE_CONFLICT' } });
+    expect((await betRow(betId)).bookmaker_id).toBe(await houseId());
+    expect((await betRow(betId)).freebet_id).toBeNull();
+    expect(await journalCount('bet_bookmaker_change')).toBe(journalsHouse);
+    expect(await journalCount('bet_origin_change')).toBe(journalsOrigin);
+    expect(await outboxCount()).toBe(outboxBefore);
+    expect(await creditUsedBy(credit.id)).toBeNull();
+  });
+
+  it('etapas A→B→A→B renderizam a casa vigente; replay não gera nova edição (R9.7)', async () => {
+    const { importId, version } = await imported();
+    const bet365 = await houseId();
+    const superbet = await houseId('Superbet');
+    const steps: { id: string; name: string; other: string }[] = [
+      { id: String(superbet), name: 'Superbet', other: 'Bet365' },
+      { id: String(bet365), name: 'Bet365', other: 'Superbet' },
+      { id: String(superbet), name: 'Superbet', other: 'Bet365' },
+    ];
+    let v = version;
+    const keys = [randomUUID(), randomUUID(), randomUUID()];
+    const inputVersions: number[] = [];
+    for (let i = 0; i < steps.length; i += 1) {
+      calls.length = 0;
+      inputVersions.push(v);
+      const response = await post(
+        `${importId}/bookmaker`,
+        { version: v, bookmakerId: steps[i]!.id },
+        tg,
+        keys[i]!,
+      );
+      expect(response.statusCode).toBe(200);
+      v = (response.json() as { version: number }).version;
+      await drain();
+      const edits = calls
+        .filter((c) => c.method === 'editMessageText')
+        .map((c) => String(c.body.text ?? ''));
+      const last = edits.at(-1) ?? '';
+      expect(last).toContain(steps[i]!.name);
+      expect(last).not.toContain(steps[i]!.other);
+    }
+    // Replay da última etapa: MESMA chave e corpo EXATO (versão de entrada) —
+    // o recibo devolve o resultado mesmo com a versão já avançada.
+    calls.length = 0;
+    const replay = await post(
+      `${importId}/bookmaker`,
+      { version: inputVersions[2]!, bookmakerId: superbet },
+      tg,
+      keys[2]!,
+    );
+    expect(replay.statusCode).toBe(200);
+    await drain();
+    expect(calls.filter((c) => c.method === 'editMessageText').length).toBe(0);
   });
 });

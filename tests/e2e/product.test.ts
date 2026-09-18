@@ -1150,3 +1150,101 @@ test('owner panel footer shows the stamped release version', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
   await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
 });
+
+test('freebet house change loads credits for the DESTINATION house and saves atomically (R9)', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const superbet = '10000000-0000-4000-8000-000000000002';
+  const bet365Credit = '10000000-0000-4000-8000-000000000009';
+  const superbetCredit = '20000000-0000-4000-8000-0000000000aa';
+  const detail = importFixture();
+  detail.bookmakers = [
+    { id: house, name: 'Bet365' },
+    { id: superbet, name: 'Superbet' },
+  ];
+  detail.betOrigin = 'freebet';
+  // Lista antiga VAZIA de propósito: a UI não pode reutilizá-la.
+  detail.credits = [];
+  detail.bet = {
+    id: '30000000-0000-4000-8000-0000000000b1',
+    state: 'open',
+    stake: '100.00',
+    odds: '2.0000',
+    remaining: '100.00',
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    freebetId: bet365Credit,
+    selections: [
+      {
+        id: '30000000-0000-4000-8000-0000000000c1',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  const creditCalls: string[] = [];
+  await page.route(`**/api/v1/imports/${importId}/credits*`, (route) => {
+    const bookmakerId = new URL(route.request().url()).searchParams.get('bookmakerId');
+    creditCalls.push(String(bookmakerId));
+    return route.fulfill({
+      json: {
+        credits:
+          bookmakerId === superbet
+            ? [
+                {
+                  id: superbetCredit,
+                  bookmakerId: superbet,
+                  amount: '100.00',
+                  expiresOn: '2026-12-31',
+                  stakeReturned: false,
+                },
+              ]
+            : [],
+      },
+    });
+  });
+  const posts: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}/bookmaker`, (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({
+      json: {
+        version: 3,
+        betState: 'open',
+        bookmakerId: superbet,
+        bookmakerName: 'Superbet',
+        freebetCleared: false,
+      },
+    });
+  });
+  await page.route(`**/api/v1/imports/${importId}`, (route) => route.fulfill({ json: detail }));
+  await page.goto(`/#miniapp?import=${importId}&section=bookmaker`);
+  await expect(page.getByRole('heading', { name: 'Alterar casa' })).toBeVisible();
+  await expect(page.getByText('aposta registrada', { exact: false })).toBeVisible();
+  // Escolhe a NOVA casa: os créditos carregam DA CASA DE DESTINO.
+  // (regex ancorada: o nome do <select> concatena as opções; o label do
+  // crédito contém "nova casa" no meio — só a âncora ^Nova casa o separa.)
+  await page.getByLabel(/^Nova casa/).selectOption(superbet);
+  await expect.poll(() => creditCalls.length).toBeGreaterThan(0);
+  expect(creditCalls.at(-1)).toBe(superbet);
+  const creditSelect = page.getByLabel(/^Crédito de freebet para a nova casa/);
+  await expect(creditSelect).toBeVisible();
+  // Sem crédito escolhido, a confirmação fica DESABILITADA.
+  const save = page.getByRole('button', { name: 'Salvar casa' });
+  await expect(save).toBeDisabled();
+  await creditSelect.selectOption(superbetCredit);
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toMatchObject({ bookmakerId: superbet, freebetId: superbetCredit });
+  await expect(page.getByText('Casa salva: Superbet', { exact: false })).toBeVisible();
+});

@@ -6,6 +6,7 @@ const messages: Record<ApiErrorCode, string> = {
   EVENT_PROVIDER_DISABLED:
     'Esta fonte de eventos ainda não está ativada. Você pode informar a data manualmente.',
   EVENT_QUEUE_FULL: 'Há muitas consultas pendentes. Aguarde antes de solicitar outra busca.',
+  IDEMPOTENCY_KEY_REQUIRED: 'Confirmação sem chave de idempotência válida. Tente novamente.',
   INVALID_REQUEST: 'Solicitação inválida.',
   INTERNAL_ERROR: 'Não foi possível concluir a solicitação.',
   AUTH_NOT_CONFIGURED: 'Autenticação indisponível neste ambiente.',

@@ -341,6 +341,21 @@ export const importEventResultSchema = z
     betState: z.string().nullable(),
   })
   .meta({ id: 'ImportEventResult' });
+// STK-G0-19-R9 — créditos freebet válidos PARA A CASA DE DESTINO.
+export const importCreditsQuerySchema = z.object({ bookmakerId: z.uuid() });
+export const importCreditsResultSchema = z
+  .object({
+    credits: z.array(
+      z.object({
+        id: z.uuid(),
+        bookmakerId: z.uuid(),
+        amount: z.string(),
+        expiresOn: z.iso.date(),
+        stakeReturned: z.boolean(),
+      }),
+    ),
+  })
+  .meta({ id: 'ImportCreditsResult' });
 export const ticketExtractionJsonSchema = z.toJSONSchema(ticketExtractionSchema);
 
 export const completionSchema = z.object({

@@ -51,6 +51,7 @@ export const apiErrorCodeSchema = z.enum([
   'ATTACHMENT_UNAVAILABLE',
   'EVENT_PROVIDER_DISABLED',
   'EVENT_QUEUE_FULL',
+  'IDEMPOTENCY_KEY_REQUIRED',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z

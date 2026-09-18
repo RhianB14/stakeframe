@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatBRL, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
@@ -26,6 +26,7 @@ export function DraftControls({
   sender,
   originSender,
   eventSender,
+  creditsSender,
   onSaved,
 }: {
   detail: ImportDetail;
@@ -51,6 +52,10 @@ export function DraftControls({
     selectionId: string;
     eventAt: string | null;
   }) => Promise<{ version: number; betState: string | null }>;
+  /** R9: presente no Mini App — créditos por casa de destino. */
+  creditsSender?: (
+    bookmakerId: string,
+  ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;
   onSaved: () => void;
 }) {
   // R8 — depois da importação a fonte é a aposta financeira: nada de PATCH
@@ -61,6 +66,7 @@ export function DraftControls({
         detail={detail}
         originSender={originSender}
         eventSender={eventSender}
+        {...(creditsSender ? { creditsSender } : {})}
         onSaved={onSaved}
       />
     );
@@ -184,6 +190,7 @@ function ImportedControls({
   detail,
   originSender,
   eventSender,
+  creditsSender,
   onSaved,
 }: {
   detail: ImportDetail;
@@ -202,16 +209,59 @@ function ImportedControls({
     selectionId: string;
     eventAt: string | null;
   }) => Promise<{ version: number; betState: string | null }>;
+  creditsSender?: (
+    bookmakerId: string,
+  ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;
   onSaved: () => void;
 }) {
   const bet = detail.bet!;
   const [origin, setOrigin] = useState<'real' | 'freebet'>(bet.freebetId ? 'freebet' : 'real');
   const [credit, setCredit] = useState('');
+  const [credits, setCredits] = useState<
+    { id: string; amount: string; expiresOn: string; stakeReturned: boolean }[] | null
+  >(null);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
   const [dates, setDates] = useState<Record<string, string>>({});
+  // R9 — créditos válidos PARA A CASA DA APOSTA (rota autenticada por casa de
+  // destino); o crédito consumido nunca aparece; falha de leitura bloqueia o
+  // envio de um crédito NOVO (manter o atual continua possível).
+  useEffect(() => {
+    if (!creditsSender) {
+      setCredits(
+        detail.credits.map((item) => ({
+          id: item.id,
+          amount: item.amount,
+          expiresOn: item.expiresOn,
+          stakeReturned: item.stakeReturned,
+        })),
+      );
+      return;
+    }
+    let active = true;
+    setCredits(null);
+    setCreditsError(null);
+    creditsSender(bet.bookmakerId)
+      .then((list) => {
+        if (active) setCredits(list);
+      })
+      .catch(() => {
+        if (active)
+          setCreditsError(
+            'Não foi possível carregar os créditos desta casa — escolher um crédito novo está bloqueado até recarregar.',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [bet.bookmakerId]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const saveOrigin = async () => {
+    if (origin === 'freebet' && credit && creditsError) {
+      setError('Créditos desta casa não carregados — tente novamente antes de salvar.');
+      return;
+    }
     if (origin === 'freebet' && !credit && bet.freebetId === null) {
       setError('Escolha o crédito da freebet.');
       return;
@@ -284,7 +334,7 @@ function ImportedControls({
             <option value="">
               {bet.freebetId ? 'Manter o crédito atual' : 'Selecione o crédito'}
             </option>
-            {detail.credits.map((item) => (
+            {(credits ?? []).map((item) => (
               <option key={item.id} value={item.id}>
                 {`${formatBRL(item.amount)} · expira ${item.expiresOn}${
                   item.stakeReturned ? ' · devolve principal' : ''
@@ -293,6 +343,11 @@ function ImportedControls({
             ))}
           </select>
         </Field>
+      ) : null}
+      {origin === 'freebet' && creditsError ? (
+        <p className="notice warning" role="alert">
+          {creditsError}
+        </p>
       ) : null}
       <p className="notice">
         A troca de origem gera journal compensatório no servidor (nunca reescreve o passado);

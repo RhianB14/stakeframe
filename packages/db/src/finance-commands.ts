@@ -21,6 +21,18 @@ import {
   type SettingsRow,
 } from './finance-core.js';
 
+// R9 — histórico de liquidação congela a aposta (parcial, integral ou
+// revertida: o registro do fato permanece e não pode ser relabelado).
+async function hasSettlementHistory(client: PoolClient, betId: string): Promise<boolean> {
+  const row = (
+    await client.query(
+      'select 1 from finance.settlement where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 limit 1',
+      [betId],
+    )
+  ).rows[0];
+  return row !== undefined;
+}
+
 export async function applyFinanceCommand(
   client: PoolClient,
   command: FinanceCommand,
@@ -536,6 +548,12 @@ export async function applyFinanceCommand(
     // NA MESMA operação, trocado atomicamente, ou a troca é recusada.
     const before = await getBetRow(client, command.id);
     if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+    // STK-G0-19-R9 — liquidação (inclusive parcial) congela a aposta:
+    // qualquer histórico de settlement (mesmo revertido — o fato histórico não
+    // é relabelado) e qualquer remaining divergente do principal recusam a
+    // operação sem nenhum efeito parcial.
+    if (await hasSettlementHistory(client, command.id)) throw new FinanceError('STATE_CONFLICT');
+    if (cents(before.remaining) !== cents(before.stake)) throw new FinanceError('STATE_CONFLICT');
     await activeCatalog(client, command.bookmakerId, 'bookmaker');
     if (before.bookmaker_id === command.bookmakerId) return { id: command.id, before };
     const remaining = cents(before.remaining);
@@ -574,13 +592,8 @@ export async function applyFinanceCommand(
         'update finance.bet set bookmaker_id=$2,freebet_id=$3,promotional_stake_returned=$4 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
         [command.id, command.bookmakerId, command.freebetId, promo.stake_returned],
       );
-      await writeJournal(client, {
-        kind: 'bet_bookmaker_change',
-        effectiveAt: now,
-        actor,
-        reason: command.reason,
-        postings: [],
-      });
+      // R9 — troca não monetária (crédito liberado/consumido): o registro fica
+      // na auditoria e no recibo da operação; o ledger não recebe journal vazio.
     } else {
       const oldHouse = await accountByKind(client, 'bookmaker', before.bookmaker_id);
       const newHouse = await accountByKind(client, 'bookmaker', command.bookmakerId);
@@ -608,6 +621,13 @@ export async function applyFinanceCommand(
     // consumido/liberado atomicamente. Depois de liquidar/cancelar: recusa.
     const before = await getBetRow(client, command.id);
     if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+    // STK-G0-19-R9 — liquidação (inclusive parcial) congela a aposta:
+    // qualquer histórico de settlement (mesmo revertido — o fato histórico não
+    // é relabelado) e qualquer remaining divergente do principal recusam a
+    // operação sem nenhum efeito parcial.
+    if (await hasSettlementHistory(client, command.id)) throw new FinanceError('STATE_CONFLICT');
+    if (cents(before.remaining) !== cents(before.stake)) throw new FinanceError('STATE_CONFLICT');
+
     const current: 'real' | 'freebet' = before.freebet_id ? 'freebet' : 'real';
     if (current === command.kind) {
       if (command.kind === 'real' || (command.freebetId && command.freebetId === before.freebet_id))
@@ -643,13 +663,7 @@ export async function applyFinanceCommand(
           'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
           [before.freebet_id, command.id],
         );
-        await writeJournal(client, {
-          kind: 'bet_origin_change',
-          effectiveAt: now,
-          actor,
-          reason: command.reason,
-          postings: [],
-        });
+        // R9 — troca freebet→freebet sem movimentação: auditoria/recibo bastam.
       } else {
         // real → freebet: retira a exposição de dinheiro real (compensatório).
         const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);

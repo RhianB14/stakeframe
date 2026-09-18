@@ -20,6 +20,8 @@ import {
   importOriginResultSchema,
   importEventActionSchema,
   importEventResultSchema,
+  importCreditsQuerySchema,
+  importCreditsResultSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { validateTelegramInitData } from './telegram-init-data.js';
@@ -94,6 +96,8 @@ export function registerImportRoutes(
           return sendApiError(request, reply, 400, 'INVALID_INBOX_IMAGE');
         if (error.message === 'IDEMPOTENCY_CONFLICT')
           return sendApiError(request, reply, 409, 'IDEMPOTENCY_CONFLICT');
+        if (error.message === 'IDEMPOTENCY_KEY_REQUIRED')
+          return sendApiError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
         if (error.message === 'INBOX_CAPACITY_REACHED')
           return sendApiError(request, reply, 409, 'INBOX_CAPACITY_REACHED');
         if (error.message === 'ATTACHMENT_UNAVAILABLE')
@@ -225,6 +229,13 @@ export function registerImportRoutes(
   // cliente nunca escreve direto na inbox quando há aposta registrada.
   const actorOf = (request: FastifyRequest) =>
     request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web';
+  // R9 — toda ação de importação exige a chave de idempotência da confirmação
+  // intencional do cliente (UUID); retry reutiliza a MESMA chave.
+  const idempotencyKeyOf = (request: FastifyRequest): string => {
+    const parsed = commandHeadersSchema.safeParse(request.headers);
+    if (!parsed.success) throw new Error('IDEMPOTENCY_KEY_REQUIRED');
+    return parsed.data['idempotency-key'];
+  };
   app.post(
     '/api/v1/imports/:id/bookmaker',
     {
@@ -245,6 +256,7 @@ export function registerImportRoutes(
           params.parse(request.params).id,
           importBookmakerActionSchema.parse(request.body),
           actorOf(request),
+          idempotencyKeyOf(request),
         ),
       ),
   );
@@ -268,6 +280,7 @@ export function registerImportRoutes(
           params.parse(request.params).id,
           importOriginActionSchema.parse(request.body),
           actorOf(request),
+          idempotencyKeyOf(request),
         ),
       ),
   );
@@ -291,6 +304,29 @@ export function registerImportRoutes(
           params.parse(request.params).id,
           importEventActionSchema.parse(request.body),
           actorOf(request),
+          idempotencyKeyOf(request),
+        ),
+      ),
+  );
+  app.get(
+    '/api/v1/imports/:id/credits',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'getImportCredits',
+        summary: 'Créditos de freebet válidos para a casa de destino',
+        params,
+        querystring: importCreditsQuerySchema,
+        response: { 200: importCreditsResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.credits(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importCreditsQuerySchema.parse(request.query).bookmakerId,
         ),
       ),
   );

@@ -40,6 +40,61 @@ function deterministicKey(seed: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
 }
 
+// STK-G0-19-R9 — recibos idempotentes das ações de importação (por organização
+// e chave do cliente). O hash cobre ação + alvo + corpo normalizado; o resultado
+// gravado é sanitizado (nunca conteúdo de bilhete).
+type ImportActionKind = 'bookmaker' | 'origin' | 'event';
+type ImportActionReceiptRow = { action: string; hash: string; result: string };
+type BookmakerResult = {
+  version: number;
+  betState: string | null;
+  bookmakerId: string;
+  bookmakerName: string | null;
+  freebetCleared: boolean;
+};
+type OriginResult = {
+  version: number;
+  betState: string | null;
+  kind: 'real' | 'freebet';
+  freebetCleared: boolean;
+};
+type EventResult = { version: number; betState: string | null };
+const actionHash = (action: ImportActionKind, id: string, body: unknown): string =>
+  createHash('sha256').update(JSON.stringify({ action, id, body })).digest('hex');
+const readReceiptRow = async (
+  client: PoolClient,
+  key: string,
+): Promise<ImportActionReceiptRow | null> =>
+  (
+    await client.query<ImportActionReceiptRow>(
+      'select action,hash,result from integration.import_action_receipt where organization_id=current_setting($$app.organization_id$$, true)::uuid and key=$1',
+      [key],
+    )
+  ).rows[0] ?? null;
+const insertReceiptRow = async (
+  client: PoolClient,
+  key: string,
+  action: ImportActionKind,
+  actor: string,
+  hash: string,
+  result: unknown,
+): Promise<void> => {
+  await client.query(
+    'insert into integration.import_action_receipt(organization_id,key,action,actor,hash,result) values(current_setting($$app.organization_id$$, true)::uuid,$1,$2,$3,$4,$5)',
+    [key, action, actor, hash, JSON.stringify(result)],
+  );
+};
+const receiptReplay = <T>(
+  receipt: ImportActionReceiptRow | null,
+  action: ImportActionKind,
+  hash: string,
+): T | null => {
+  if (!receipt) return null;
+  if (receipt.action !== action || receipt.hash !== hash)
+    throw new FinanceError('IDEMPOTENCY_CONFLICT');
+  return JSON.parse(receipt.result) as T;
+};
+
 export async function findDuplicates(
   client: Pick<PoolClient, 'query'>,
   importId: string,
@@ -135,6 +190,22 @@ export function createImportService(database: Database, storage?: ObjectStorage)
   const draft = createImportDraftService(database);
   const read = <T>(context: OrganizationContext, action: (client: PoolClient) => Promise<T>) =>
     tenant.withOrganizationTransaction(context, action, { isolation: 'repeatable read' });
+  // R9 — recibo da ação: leitura na txn de leitura; gravação junto do efeito
+  // (mesma transação do comando quando pós-importação; transação própria no
+  // caminho de rascunho, que já serializa por versão no próprio updateDraft).
+  const readReceipt = (context: OrganizationContext, key: string) =>
+    read(context, async (client) => readReceiptRow(client, key));
+  const storeReceipt = (
+    context: OrganizationContext,
+    key: string,
+    action: ImportActionKind,
+    actor: string,
+    hash: string,
+    result: unknown,
+  ) =>
+    tenant.withOrganizationTransaction(context, (client) =>
+      insertReceiptRow(client, key, action, actor, hash, result),
+    );
   return {
     /** Returns the authenticated user's organization context (provisioning on first use). */
     ensureContext(userId: string) {
@@ -510,6 +581,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       id: string,
       input: { version: number; bookmakerId: string; freebetId?: string | null | undefined },
       actor: string,
+      idempotencyKey: string,
     ) {
       const route = await read(context, async (client) => {
         const row = (
@@ -521,6 +593,18 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         return row;
       });
+      const requestHash = actionHash('bookmaker', id, {
+        version: input.version,
+        bookmakerId: input.bookmakerId,
+        freebetId: input.freebetId ?? null,
+      });
+      // R9 — replay legítimo ANTES de qualquer validação de versão.
+      const replay = receiptReplay<BookmakerResult>(
+        await readReceipt(context, idempotencyKey),
+        'bookmaker',
+        requestHash,
+      );
+      if (replay) return replay;
       if (!route.imported_bet_id) {
         const saved = await draft.updateDraft(
           context,
@@ -541,13 +625,15 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           ).rows[0];
           return house?.name ?? null;
         });
-        return {
+        const result: BookmakerResult = {
           version: saved.version,
           betState: null,
           bookmakerId: input.bookmakerId,
           bookmakerName: name,
           freebetCleared: saved.freebetCleared,
         };
+        await storeReceipt(context, idempotencyKey, 'bookmaker', actor, requestHash, result);
+        return result;
       }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -556,6 +642,18 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           )
         ).rows[0];
         if (!settings) throw new FinanceError('NOT_FOUND');
+        // R9 — serializa por chave do cliente e reconfere o recibo sob o lock
+        // (corridas concorrentes da MESMA confirmação convergem no replay).
+        await client.query(
+          'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+          [idempotencyKey],
+        );
+        const lockedReplay = receiptReplay<BookmakerResult>(
+          await readReceiptRow(client, idempotencyKey),
+          'bookmaker',
+          requestHash,
+        );
+        if (lockedReplay) return lockedReplay;
         const row = (
           await client.query<{ version: number; imported_bet_id: string | null }>(
             'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
@@ -574,9 +672,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           reason: 'Troca de casa pelo Mini App',
           expectedVersion: settings.version,
         });
-        const key = deterministicKey(
-          `bet-bookmaker:${bet.id}:${input.bookmakerId}:${input.freebetId ?? ''}`,
-        );
+        // R9 — a chave do comando deriva da OPERAÇÃO do cliente (nunca do
+        // alvo): repetir um valor antigo com chave nova aplica de verdade.
+        const key = deterministicKey(`import-action:${idempotencyKey}`);
         await executeFinancialCommand(client, actor, key, command, settings);
         const updated = (
           await client.query<{ state: string; bookmaker_id: string }>(
@@ -596,13 +694,15 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             [id],
           )
         ).rows[0]!;
-        return {
+        const result: BookmakerResult = {
           version: fresh.version,
           betState: updated.state,
           bookmakerId: updated.bookmaker_id,
           bookmakerName: name?.name ?? null,
           freebetCleared: false,
         };
+        await insertReceiptRow(client, idempotencyKey, 'bookmaker', actor, requestHash, result);
+        return result;
       });
     },
     /**
@@ -614,6 +714,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       id: string,
       input: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null | undefined },
       actor: string,
+      idempotencyKey: string,
     ) {
       const route = await read(context, async (client) => {
         const row = (
@@ -626,6 +727,17 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         return row;
       });
       const credit = input.kind === 'freebet' ? (input.freebetId ?? null) : null;
+      const requestHash = actionHash('origin', id, {
+        version: input.version,
+        kind: input.kind,
+        freebetId: credit,
+      });
+      const replay = receiptReplay<OriginResult>(
+        await readReceipt(context, idempotencyKey),
+        'origin',
+        requestHash,
+      );
+      if (replay) return replay;
       if (!route.imported_bet_id) {
         const saved = await draft.updateDraft(
           context,
@@ -633,12 +745,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           { version: input.version, betOrigin: input.kind, freebetId: credit },
           actor,
         );
-        return {
+        const result: OriginResult = {
           version: saved.version,
           betState: null,
           kind: input.kind,
           freebetCleared: saved.freebetCleared,
         };
+        await storeReceipt(context, idempotencyKey, 'origin', actor, requestHash, result);
+        return result;
       }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -647,6 +761,16 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           )
         ).rows[0];
         if (!settings) throw new FinanceError('NOT_FOUND');
+        await client.query(
+          'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+          [idempotencyKey],
+        );
+        const lockedReplay = receiptReplay<OriginResult>(
+          await readReceiptRow(client, idempotencyKey),
+          'origin',
+          requestHash,
+        );
+        if (lockedReplay) return lockedReplay;
         const row = (
           await client.query<{ version: number; imported_bet_id: string | null }>(
             'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
@@ -665,7 +789,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           reason: 'Troca de origem pelo Mini App',
           expectedVersion: settings.version,
         });
-        const key = deterministicKey(`bet-origin:${bet.id}:${input.kind}:${credit ?? ''}`);
+        const key = deterministicKey(`import-action:${idempotencyKey}`);
         await executeFinancialCommand(client, actor, key, command, settings);
         const updated = (
           await client.query<{ state: string }>(
@@ -679,12 +803,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             [id],
           )
         ).rows[0]!;
-        return {
+        const result: OriginResult = {
           version: fresh.version,
           betState: updated.state,
           kind: input.kind,
           freebetCleared: false,
         };
+        await insertReceiptRow(client, idempotencyKey, 'origin', actor, requestHash, result);
+        return result;
       });
     },
     /**
@@ -697,6 +823,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       id: string,
       input: { version: number; selectionId: string; eventAt: string | null },
       actor: string,
+      idempotencyKey: string,
     ) {
       const route = await read(context, async (client) => {
         const row = (
@@ -708,6 +835,17 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         return row;
       });
+      const requestHash = actionHash('event', id, {
+        version: input.version,
+        selectionId: input.selectionId,
+        eventAt: input.eventAt,
+      });
+      const replay = receiptReplay<EventResult>(
+        await readReceipt(context, idempotencyKey),
+        'event',
+        requestHash,
+      );
+      if (replay) return replay;
       if (!route.imported_bet_id) {
         const saved = await draft.updateDraft(
           context,
@@ -715,7 +853,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           { version: input.version, eventAt: input.eventAt },
           actor,
         );
-        return { version: saved.version, betState: null };
+        const result: EventResult = { version: saved.version, betState: null };
+        await storeReceipt(context, idempotencyKey, 'event', actor, requestHash, result);
+        return result;
       }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -724,6 +864,16 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           )
         ).rows[0];
         if (!settings) throw new FinanceError('NOT_FOUND');
+        await client.query(
+          'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+          [idempotencyKey],
+        );
+        const lockedReplay = receiptReplay<EventResult>(
+          await readReceiptRow(client, idempotencyKey),
+          'event',
+          requestHash,
+        );
+        if (lockedReplay) return lockedReplay;
         const row = (
           await client.query<{ version: number; imported_bet_id: string | null }>(
             'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
@@ -789,9 +939,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           reason: 'Correção de data pelo Mini App',
           expectedVersion: settings.version,
         });
-        const key = deterministicKey(
-          `bet-event:${bet.id}:${input.selectionId}:${input.eventAt ?? 'null'}`,
-        );
+        const key = deterministicKey(`import-action:${idempotencyKey}`);
         await executeFinancialCommand(client, actor, key, command, settings);
         const updated = (
           await client.query<{ state: string }>(
@@ -805,7 +953,73 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             [id],
           )
         ).rows[0]!;
-        return { version: fresh.version, betState: updated.state };
+        const result: EventResult = { version: fresh.version, betState: updated.state };
+        await insertReceiptRow(client, idempotencyKey, 'event', actor, requestHash, result);
+        return result;
+      });
+    },
+    /**
+     * STK-G0-19-R9 — créditos freebet válidos PARA A CASA DE DESTINO (a lista
+     * do rascunho é da casa antiga e impedia trocar a casa de uma aposta
+     * freebet pela interface). Filtro integral no servidor: organização, casa
+     * solicitada, valor exato da stake, disponibilidade e validade em São
+     * Paulo; o crédito já consumido nunca aparece; quantidade limitada.
+     */
+    async credits(context: OrganizationContext, id: string, bookmakerId: string) {
+      return read(context, async (client) => {
+        const row = (
+          await client.query<{ imported_bet_id: string | null; extraction: unknown }>(
+            'select imported_bet_id,extraction from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        const house = (
+          await client.query<{ id: string }>(
+            'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind=$2 and active',
+            [bookmakerId, 'bookmaker'],
+          )
+        ).rows[0];
+        if (!house) return { credits: [] };
+        let stake: string | null;
+        if (row.imported_bet_id) {
+          stake =
+            (
+              await client.query<{ stake: string }>(
+                'select stake from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+                [row.imported_bet_id],
+              )
+            ).rows[0]?.stake ?? null;
+        } else {
+          const payload =
+            row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+              ? (row.extraction as { extraction: unknown }).extraction
+              : row.extraction;
+          const parsed = ticketExtractionSchema.safeParse(payload);
+          stake = parsed.success ? parsed.data.stake : null;
+        }
+        if (!stake) return { credits: [] };
+        const credits = (
+          await client.query<{
+            id: string;
+            bookmaker_id: string;
+            amount: string;
+            expires_on: string;
+            stake_returned: boolean;
+          }>(
+            "select id,bookmaker_id,amount::text as amount,expires_on::text as expires_on,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and bookmaker_id=$1 and amount=$2 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date order by expires_on, id limit 20",
+            [bookmakerId, stake],
+          )
+        ).rows;
+        return {
+          credits: credits.map((credit) => ({
+            id: credit.id,
+            bookmakerId: credit.bookmaker_id,
+            amount: credit.amount,
+            expiresOn: credit.expires_on,
+            stakeReturned: credit.stake_returned,
+          })),
+        };
       });
     },
     async image(context: OrganizationContext, id: string) {

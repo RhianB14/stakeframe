@@ -8,6 +8,7 @@ import {
   applyImportBookmaker,
   applyImportOrigin,
   applyImportEvent,
+  getImportCredits,
 } from './api.js';
 import { DraftControls } from './drafts.js';
 import { BookmakerSection, StatusSection } from './MiniAppSections.js';
@@ -105,6 +106,9 @@ export function MiniAppPage() {
         <BookmakerSection
           detail={detail.data}
           sender={(body) => applyImportBookmaker(id, body, initData)}
+          creditsSender={(bookmakerId) =>
+            getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
+          }
           onSaved={() => void detail.refetch()}
         />
       ) : (
@@ -113,6 +117,9 @@ export function MiniAppPage() {
           sender={(body) => patchImportDraft(id, body, initData)}
           originSender={(body) => applyImportOrigin(id, body, initData)}
           eventSender={(body) => applyImportEvent(id, body, initData)}
+          creditsSender={(bookmakerId) =>
+            getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
+          }
           onSaved={() => void detail.refetch()}
         />
       )}

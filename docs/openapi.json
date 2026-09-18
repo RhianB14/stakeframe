@@ -1959,6 +1959,38 @@
         },
         "required": ["version", "betState"]
       },
+      "ImportCreditsResultInput": {
+        "type": "object",
+        "properties": {
+          "credits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "amount": { "type": "string" },
+                "expiresOn": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "stakeReturned": { "type": "boolean" }
+              },
+              "required": ["id", "bookmakerId", "amount", "expiresOn", "stakeReturned"]
+            }
+          }
+        },
+        "required": ["credits"]
+      },
       "CalendarPageInput": {
         "type": "object",
         "properties": {
@@ -3120,7 +3152,8 @@
                   "INBOX_CAPACITY_REACHED",
                   "ATTACHMENT_UNAVAILABLE",
                   "EVENT_PROVIDER_DISABLED",
-                  "EVENT_QUEUE_FULL"
+                  "EVENT_QUEUE_FULL",
+                  "IDEMPOTENCY_KEY_REQUIRED"
                 ]
               },
               "message": { "type": "string" },
@@ -5365,6 +5398,40 @@
         "required": ["version", "betState"],
         "additionalProperties": false
       },
+      "ImportCreditsResult": {
+        "type": "object",
+        "properties": {
+          "credits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "bookmakerId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "amount": { "type": "string" },
+                "expiresOn": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "stakeReturned": { "type": "boolean" }
+              },
+              "required": ["id", "bookmakerId", "amount", "expiresOn", "stakeReturned"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["credits"],
+        "additionalProperties": false
+      },
       "CalendarPage": {
         "type": "object",
         "properties": {
@@ -6557,7 +6624,8 @@
                   "INBOX_CAPACITY_REACHED",
                   "ATTACHMENT_UNAVAILABLE",
                   "EVENT_PROVIDER_DISABLED",
-                  "EVENT_QUEUE_FULL"
+                  "EVENT_QUEUE_FULL",
+                  "IDEMPOTENCY_KEY_REQUIRED"
                 ]
               },
               "message": { "type": "string" },
@@ -9231,6 +9299,100 @@
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ImportEventResult" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/credits": {
+      "get": {
+        "operationId": "getImportCredits",
+        "summary": "Créditos de freebet válidos para a casa de destino",
+        "tags": ["Importações"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "bookmakerId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImportCreditsResult" }
+              }
             }
           },
           "400": {

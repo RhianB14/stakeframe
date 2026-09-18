@@ -6,6 +6,7 @@ import {
   importBookmakerResultSchema,
   importOriginResultSchema,
   importEventResultSchema,
+  importCreditsResultSchema,
   cents,
   money,
   saoPauloDate,
@@ -118,42 +119,73 @@ export function applyImportBookmaker(
   body: { version: number; bookmakerId: string; freebetId?: string | null },
   initData?: string,
 ) {
-  return request(`/api/v1/imports/${id}/bookmaker`, importBookmakerResultSchema, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(initData ? { 'x-telegram-init-data': initData } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  // R9 — chave NOVA por confirmação intencional; retry de transporte repete
+  // uma única vez com a MESMA chave (replay legítimo, sem efeito duplicado).
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/bookmaker`, importBookmakerResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
+}
+async function sendWithIdempotentRetry<T>(send: () => Promise<T>): Promise<T> {
+  try {
+    return await send();
+  } catch (error) {
+    if (error instanceof TypeError) return send();
+    throw error;
+  }
 }
 export function applyImportOrigin(
   id: string,
   body: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null },
   initData?: string,
 ) {
-  return request(`/api/v1/imports/${id}/origin`, importOriginResultSchema, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(initData ? { 'x-telegram-init-data': initData } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/origin`, importOriginResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
 }
 export function applyImportEvent(
   id: string,
   body: { version: number; selectionId: string; eventAt: string | null },
   initData?: string,
 ) {
-  return request(`/api/v1/imports/${id}/event`, importEventResultSchema, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(initData ? { 'x-telegram-init-data': initData } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/event`, importEventResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
+}
+// R9 — créditos freebet válidos PARA A CASA DE DESTINO (filtro integral no
+// servidor); o crédito já consumido nunca aparece.
+export function getImportCredits(id: string, bookmakerId: string, initData?: string) {
+  return request(
+    `/api/v1/imports/${id}/credits?bookmakerId=${bookmakerId}`,
+    importCreditsResultSchema,
+    { headers: { ...(initData ? { 'x-telegram-init-data': initData } : {}) } },
+  );
 }
 // STK-G0-19-R7 — liquidação real pelo Mini App (seção "Alterar Status"):
 // vitória/derrota de aposta pendente pelo comando canônico no servidor.

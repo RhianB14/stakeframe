@@ -300,13 +300,14 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     const policies = await database.pool.query(
       "select count(*) from pg_policies where schemaname in ('finance','integration')",
     );
-    expect(policies.rows[0].count).toBe('18');
+    // R9: a migração 0013 soma a policy de integration.import_action_receipt.
+    expect(policies.rows[0].count).toBe('19');
     // Policies exist (fail-closed for non-owner roles). FORCE is deliberately absent so the
     // owner-run backup/restore cycle keeps working with a single database role.
     const enabled = await database.pool.query(
       "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relrowsecurity",
     );
-    expect(enabled.rows[0].count).toBe('18');
+    expect(enabled.rows[0].count).toBe('19');
     // The isolation proven in this suite runs as the database owner, which the enabled policies
     // do not reach (no FORCE anywhere): the explicit predicates are the effective guard.
     const forced = await database.pool.query(

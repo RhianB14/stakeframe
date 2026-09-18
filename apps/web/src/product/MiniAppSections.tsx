@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatBRL, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 
@@ -134,6 +134,7 @@ export function StatusSection({
 export function BookmakerSection({
   detail,
   sender,
+  creditsSender,
   onSaved,
 }: {
   detail: ImportDetail;
@@ -147,6 +148,11 @@ export function BookmakerSection({
     bookmakerName: string | null;
     freebetCleared: boolean;
   }>;
+  // R9 — créditos válidos PARA A CASA DE DESTINO (nunca da casa anterior);
+  // falha de leitura bloqueia a gravação.
+  creditsSender: (
+    bookmakerId: string,
+  ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;
   onSaved: () => void;
 }) {
   const imported = detail.bet !== null;
@@ -157,7 +163,36 @@ export function BookmakerSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [credits, setCredits] = useState<
+    { id: string; amount: string; expiresOn: string; stakeReturned: boolean }[] | null
+  >(null);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
   const needsCredit = imported && !!detail.bet?.freebetId;
+  // R9 — ao trocar a casa de destino, carrega SOMENTE os créditos compatíveis
+  // com ela; a lista anterior nunca é reutilizada.
+  useEffect(() => {
+    if (!needsCredit || !choice) {
+      setCredits(null);
+      setCreditsError(null);
+      return;
+    }
+    let active = true;
+    setCredits(null);
+    setCreditsError(null);
+    creditsSender(choice)
+      .then((list) => {
+        if (active) setCredits(list);
+      })
+      .catch(() => {
+        if (active)
+          setCreditsError(
+            'Não foi possível carregar os créditos da casa escolhida — a gravação está bloqueada até recarregar.',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [choice, needsCredit]);
   const current = imported
     ? (detail.bet?.bookmakerName ?? 'casa da aposta registrada')
     : (detail.bookmakers.find((item) => item.id === detail.bookmakerOverrideId)?.name ??
@@ -169,6 +204,10 @@ export function BookmakerSection({
   const save = async () => {
     if (!choice) {
       setError('Escolha a nova casa.');
+      return;
+    }
+    if (needsCredit && (creditsError || credits === null)) {
+      setError('Créditos da casa escolhida não carregados — tente novamente antes de salvar.');
       return;
     }
     if (needsCredit && !credit) {
@@ -227,14 +266,30 @@ export function BookmakerSection({
         <label>
           Crédito de freebet para a nova casa
           <select value={credit} onChange={(event) => setCredit(event.target.value)}>
-            <option value="">Selecione o crédito</option>
-            {detail.credits.map((item) => (
+            <option value="">
+              {creditsError
+                ? 'Créditos indisponíveis'
+                : credits === null
+                  ? 'Carregando créditos…'
+                  : 'Selecione o crédito'}
+            </option>
+            {(credits ?? []).map((item) => (
               <option key={item.id} value={item.id}>
                 {`${formatBRL(item.amount)} · expira ${item.expiresOn}`}
               </option>
             ))}
           </select>
         </label>
+      ) : null}
+      {needsCredit && credits !== null && credits.length === 0 && !creditsError ? (
+        <p className="notice warning" role="status">
+          Nenhum crédito compatível com a casa escolhida — a confirmação fica desabilitada.
+        </p>
+      ) : null}
+      {creditsError ? (
+        <p className="notice warning" role="alert">
+          {creditsError}
+        </p>
       ) : null}
       <p className="notice">
         {imported
@@ -251,7 +306,10 @@ export function BookmakerSection({
           {saved}
         </p>
       ) : null}
-      <Button onClick={() => void save()} disabled={busy}>
+      <Button
+        onClick={() => void save()}
+        disabled={busy || (needsCredit && (credits === null || credits.length === 0 || !credit))}
+      >
         {busy ? 'Salvando…' : 'Salvar casa'}
       </Button>
     </div>
