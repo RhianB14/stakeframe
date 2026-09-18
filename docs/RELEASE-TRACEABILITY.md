@@ -68,7 +68,10 @@ O build copia a fonte única e os dados do próprio build para dentro da imagem:
 
 - Imagens são publicadas em `ghcr.io/rhianb14/stakeframe-<alvo>` e **consumidas sempre por
   digest** (`repo@sha256:...`); o Compose de produção recebe os digests por
-  `/etc/stakeframe/deployment.env`.
+  `/etc/stakeframe/deployment.env`. O serviço `web` do Compose usa a imagem do alvo
+  publicado (`stakeframe-web-production`, fiel ao target do `Dockerfile`); o verificador
+  de rastreabilidade e o planejador de rollback validam exatamente o nome publicado para
+  cada serviço (o `WEB_IMAGE` esperado é `…-web-production@sha256:…`).
 - `latest` é proibido como identificador operacional (plano canônico, §vetos) e é
   recusado pelos scripts desta unidade.
 - `scripts/release/verify_oci.py` recusa artefatos sem os labels obrigatórios:

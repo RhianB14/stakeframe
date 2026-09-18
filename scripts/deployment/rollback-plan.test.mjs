@@ -4,14 +4,14 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DEFAULT_REPOSITORY_PREFIX } from './traceability.mjs';
+import { DEFAULT_REPOSITORY_PREFIX, SERVICE_REPOSITORY } from './traceability.mjs';
 
 const digest = (character) => `sha256:${character.repeat(64)}`;
 const pinFile = (entries) =>
   Object.entries(entries)
     .map(
       ([service, character]) =>
-        `${service.toUpperCase()}_IMAGE=${DEFAULT_REPOSITORY_PREFIX}-${service}@${digest(character)}`,
+        `${service.toUpperCase()}_IMAGE=${DEFAULT_REPOSITORY_PREFIX}-${SERVICE_REPOSITORY[service]}@${digest(character)}`,
     )
     .join('\n') + '\n';
 const fullSet = { api: '1', worker: '2', migrate: '3', web: '4', operations: '5' };

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_REPOSITORY_PREFIX,
+  SERVICE_REPOSITORY,
   TraceabilityError,
   parsePinnedImages,
   requireCompletePins,
@@ -17,7 +18,7 @@ const pinFile = (entries = {}) =>
   Object.entries(entries)
     .map(
       ([service, character]) =>
-        `${service.toUpperCase()}_IMAGE=${DEFAULT_REPOSITORY_PREFIX}-${service}@${digest(character)}`,
+        `${service.toUpperCase()}_IMAGE=${DEFAULT_REPOSITORY_PREFIX}-${SERVICE_REPOSITORY[service]}@${digest(character)}`,
     )
     .join('\n');
 const fullSet = { api: '1', worker: '2', migrate: '3', web: '4', operations: '5' };
@@ -26,7 +27,7 @@ const observations = (overrides = {}) => ({
     Object.keys(fullSet).map((service) => [
       service,
       {
-        image: `${DEFAULT_REPOSITORY_PREFIX}-${service}@${digest(fullSet[service])}`,
+        image: `${DEFAULT_REPOSITORY_PREFIX}-${SERVICE_REPOSITORY[service]}@${digest(fullSet[service])}`,
         version: VERSION,
         revision: COMMIT,
       },
@@ -34,6 +35,16 @@ const observations = (overrides = {}) => ({
   ),
   app: { version: VERSION, commit: COMMIT },
   ...overrides,
+});
+
+test('uses the published repository name for the web service', () => {
+  const pins = parsePinnedImages(pinFile(fullSet));
+  assert.equal(pins.get('web').repository, `${DEFAULT_REPOSITORY_PREFIX}-web-production`);
+  const wrong = pinFile(fullSet).replace(
+    `${DEFAULT_REPOSITORY_PREFIX}-web-production`,
+    `${DEFAULT_REPOSITORY_PREFIX}-web`,
+  );
+  assert.throws(() => parsePinnedImages(wrong), /PIN_REPOSITORY_REFUSED web/);
 });
 
 test('parses only digest-pinned images of this project and refuses anything else', () => {
