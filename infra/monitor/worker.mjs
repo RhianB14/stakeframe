@@ -255,13 +255,19 @@ async function deliverNotification(env, fetchImpl, text) {
       throw new Error();
     }
     const result = await json(sent);
-    return (
+    const ok =
       result.ok === true &&
       result.result?.chat?.type === 'private' &&
-      String(result.result.chat.id) === env.TELEGRAM_OWNER_CHAT_ID
-    );
+      String(result.result.chat.id) === env.TELEGRAM_OWNER_CHAT_ID;
+    return {
+      ok,
+      messageId:
+        ok && Number.isSafeInteger(result.result?.message_id)
+          ? String(result.result.message_id)
+          : null,
+    };
   } catch {
-    return false;
+    return { ok: false, messageId: null };
   }
 }
 
@@ -297,21 +303,25 @@ export class StakeframeMonitor {
       ['candidate_count', 'INTEGER'],
       ['notified_signature', 'TEXT'],
       ['notified_at', 'INTEGER'],
+      ['receipt_at', 'INTEGER'],
+      ['receipt_id', 'TEXT'],
     ]) {
       if (!columns.has(name))
         this.storage.sql.exec(`ALTER TABLE monitor ADD COLUMN ${name} ${type}`);
     }
     // One-time upgrade backfill: the state observed before the hysteresis
-    // upgrade is adopted as stable (and as the last notified signature when the
-    // delivery was confirmed) so the first cycle after the upgrade does not
-    // re-alert an unchanged condition. Runs only when the columns were just
-    // created — never on every boot, which would freeze pending candidates.
+    // upgrade is adopted as stable; a confirmed delivery is adopted as the last
+    // notified signature (an unchanged condition is not re-alerted), and an
+    // uncertain delivery keeps its pending notification — the next evaluation
+    // re-offers or reconciles it instead of losing a real alert. Runs only when
+    // the columns were just created — never on every boot, which would freeze
+    // pending candidates.
     if (upgradingHysteresis) {
       this.storage.sql.exec(
         'UPDATE monitor SET stable_signature=signature WHERE stable_signature IS NULL AND signature IS NOT NULL',
       );
       this.storage.sql.exec(
-        "UPDATE monitor SET notified_signature=signature WHERE notified_signature IS NULL AND delivery='confirmed' AND signature IS NOT NULL",
+        "UPDATE monitor SET notified_signature=signature WHERE notified_signature IS NULL AND signature IS NOT NULL AND delivery IN ('confirmed','uncertain')",
       );
     }
   }
@@ -382,7 +392,7 @@ export class StakeframeMonitor {
       const completion = this.storage.transactionSync(() => {
         const row = this.storage.sql
           .exec(
-            'SELECT lease_until,started_at,signature,stable_signature,candidate_signature,candidate_count,notified_signature,notified_at,delivery FROM monitor WHERE id=1',
+            'SELECT lease_until,started_at,signature,stable_signature,candidate_signature,candidate_count,notified_signature,notified_at,delivery,receipt_at,receipt_id FROM monitor WHERE id=1',
           )
           .toArray()[0];
         if (row.lease_until === 0 || row.started_at !== result.startedAt) return null;
@@ -400,7 +410,10 @@ export class StakeframeMonitor {
         let notified = row.notified_signature;
         let notifiedAt = row.notified_at;
         let delivery = row.delivery;
+        let receiptAt = row.receipt_at;
+        let receiptId = row.receipt_id;
         let notification = null;
+        let reconcile = null;
         const threshold = candidate === 'ready' ? policy.recovery : policy.attention;
         if (count >= threshold && candidate !== stable) {
           if (candidate === 'ready') {
@@ -411,6 +424,8 @@ export class StakeframeMonitor {
               notified = 'ready';
               notifiedAt = completedAt;
               delivery = 'uncertain';
+              receiptAt = null;
+              receiptId = null;
             }
             stable = 'ready';
           } else {
@@ -425,17 +440,24 @@ export class StakeframeMonitor {
               notified = candidate;
               notifiedAt = completedAt;
               delivery = 'uncertain';
+              receiptAt = null;
+              receiptId = null;
               stable = candidate;
             }
           }
         }
         // An unconfirmed delivery is re-offered while its signature is still the
-        // stable state, so a failed Telegram send never loses the alert.
-        if (!notification && delivery === 'uncertain' && notified !== null && stable === notified)
-          notification = { signature: notified, text: notificationText(notified) };
+        // stable state, so a failed Telegram send never loses the alert. Once the
+        // provider receipt is persisted, the cycle only reconciles the internal
+        // confirmation — an accepted message is never resent.
+        if (!notification && delivery === 'uncertain' && notified !== null && stable === notified) {
+          if (receiptAt !== null && receiptAt !== undefined)
+            reconcile = { startedAt: result.startedAt, signature: notified };
+          else notification = { signature: notified, text: notificationText(notified) };
+        }
         const failed = observed === 'application:failed';
         this.storage.sql.exec(
-          'UPDATE monitor SET lease_until=0,checked_at=?,signature=?,stable_signature=?,candidate_signature=?,candidate_count=?,notified_signature=?,notified_at=?,delivery=?,completed_at=?,result=?,error=?,http_status=? WHERE id=1',
+          'UPDATE monitor SET lease_until=0,checked_at=?,signature=?,stable_signature=?,candidate_signature=?,candidate_count=?,notified_signature=?,notified_at=?,delivery=?,receipt_at=?,receipt_id=?,completed_at=?,result=?,error=?,http_status=? WHERE id=1',
           completedAt,
           observed,
           stable,
@@ -444,12 +466,14 @@ export class StakeframeMonitor {
           notified,
           notifiedAt,
           delivery,
+          receiptAt,
+          receiptId,
           completedAt,
           failed ? 'failed' : observed === 'ready' ? 'ready' : 'attention',
           failed ? result.failure : null,
           result.httpStatus,
         );
-        return { notification };
+        return { notification, reconcile };
       });
       if (!completion) return new Response(null, { status: 409 });
       return Response.json({
@@ -460,7 +484,41 @@ export class StakeframeMonitor {
               text: completion.notification.text,
             }
           : null,
+        reconcile: completion.reconcile ?? null,
       });
+    }
+    if (path === '/check/record-receipt' && request.method === 'POST') {
+      let receipt;
+      try {
+        receipt = await json(request, 1024);
+      } catch {
+        return new Response(null, { status: 400 });
+      }
+      if (
+        !Number.isSafeInteger(receipt?.startedAt) ||
+        !validSignature(receipt?.signature) ||
+        !/^\d{1,32}$/.test(receipt?.messageId ?? '')
+      )
+        return new Response(null, { status: 400 });
+      const recorded = this.storage.transactionSync(() => {
+        const row = this.storage.sql
+          .exec('SELECT started_at,notified_signature,delivery,receipt_at FROM monitor WHERE id=1')
+          .toArray()[0];
+        if (
+          row.started_at !== receipt.startedAt ||
+          row.notified_signature !== receipt.signature ||
+          row.delivery !== 'uncertain'
+        )
+          return false;
+        if (row.receipt_at === null || row.receipt_at === undefined)
+          this.storage.sql.exec(
+            'UPDATE monitor SET receipt_at=?,receipt_id=? WHERE id=1',
+            this.now(),
+            receipt.messageId,
+          );
+        return true;
+      });
+      return new Response(null, { status: recorded ? 204 : 409 });
     }
     if (path === '/check/confirm-delivery' && request.method === 'POST') {
       let confirmation;
@@ -476,11 +534,11 @@ export class StakeframeMonitor {
         return new Response(null, { status: 400 });
       const accepted = this.storage.transactionSync(() => {
         const row = this.storage.sql
-          .exec('SELECT started_at,signature,delivery FROM monitor WHERE id=1')
+          .exec('SELECT started_at,notified_signature,delivery FROM monitor WHERE id=1')
           .toArray()[0];
         if (
           row.started_at !== confirmation.startedAt ||
-          row.signature !== confirmation.signature ||
+          row.notified_signature !== confirmation.signature ||
           row.delivery !== 'uncertain'
         )
           return false;
@@ -520,23 +578,43 @@ export function createWorker(dependencies = {}) {
             }),
           );
           if (!completed.ok) throw new Error('MONITOR_CHECK_FAILED');
-          const { notification } = await json(completed, 2048);
+          const { notification, reconcile } = await json(completed, 2048);
+          const confirm = (message) =>
+            stub.fetch(
+              new Request('https://monitor.internal/check/confirm-delivery', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(message),
+              }),
+            );
+          if (reconcile) {
+            // The provider already accepted this message; only the internal
+            // confirmation is pending. Reconcile without ever resending.
+            await confirm({ startedAt: reconcile.startedAt, signature: reconcile.signature });
+            return;
+          }
           if (!notification) return;
 
           // The DO claimed delivery as uncertain before returning the message;
           // only an authenticated provider acknowledgement confirms it.
-          if (!(await deliverNotification(env, fetchImpl, notification.text))) return;
-          const confirmed = await stub.fetch(
-            new Request('https://monitor.internal/check/confirm-delivery', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                startedAt: notification.startedAt,
-                signature: notification.signature,
+          const delivered = await deliverNotification(env, fetchImpl, notification.text);
+          if (!delivered.ok) return;
+          // Persist the provider receipt before confirming: an accepted message
+          // is never resent, even when the internal confirmation fails
+          // afterwards (the next cycle reconciles instead of re-sending).
+          if (delivered.messageId !== null)
+            await stub.fetch(
+              new Request('https://monitor.internal/check/record-receipt', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  startedAt: notification.startedAt,
+                  signature: notification.signature,
+                  messageId: delivered.messageId,
+                }),
               }),
-            }),
-          );
-          if (!confirmed.ok) throw new Error('MONITOR_CHECK_FAILED');
+            );
+          await confirm({ startedAt: notification.startedAt, signature: notification.signature });
         })(),
       );
     },

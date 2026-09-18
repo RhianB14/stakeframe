@@ -9,6 +9,11 @@ de IA) em ciclos de poucos minutos geram mensagens alternadas repetidas no
 Telegram. Além disso, entrega incerta (`delivery=uncertain`) nunca é
 reenviada — um alerta real pode ser perdido por falha transitória do Telegram.
 
+A revisão pós-implementação apontou dois bloqueios funcionais: o backfill de
+estado legado descartava uma entrega `uncertain` (assinatura notificada nula —
+um alerta real podia ser perdido) e um envio aceito pelo Telegram mas com a
+confirmação interna falha era reenviado no ciclo seguinte (duplicação).
+
 ## O quê (MUST)
 
 - Transições com estabilidade configurável: `ready → atenção` somente após N
@@ -20,6 +25,15 @@ reenviada — um alerta real pode ser perdido por falha transitória do Telegram
 - Assinatura normalizada (categoria:severidade, ordenada) com deduplicação de
   alertas idênticos; piora real (categoria nova ou escalada warning→failed)
   não é suprimida; cooldown configurável para alertas diferentes não-piores.
+- Backfill de estado legado idempotente e fail-safe: o estado anterior é
+  adotado como estável; entrega `confirmed` não re-alerta; entrega `uncertain`
+  preserva a pendência (`notified_signature`) para reoferta/confirmação —
+  nenhum estado legado válido fica congelado.
+- Receipt e reconciliação: o aceite do Telegram (`ok` + `message_id`) é
+  persistido no Durable Object antes da confirmação interna; com receipt, o
+  ciclo seguinte NÃO reenvia — apenas reconcilia (`/check/confirm-delivery`);
+  sem receipt (falha real de envio), o retry permanece permitido; a janela
+  residual (aceite sem receipt persistido) é documentada e testada.
 - Retry de entrega incerta: falha de envio Telegram não perde o alerta e não
   marca sucesso indevido; a confirmação continua exigindo o ack autenticado do
   provedor (`/check/confirm-delivery`).
@@ -38,7 +52,9 @@ reenviada — um alerta real pode ser perdido por falha transitória do Telegram
 
 ## Impacto
 
-- `infra/monitor/worker.mjs` (estado + regras), `tests/operations/monitor.test.mjs`
-  (contratos novos - 12 casos obrigatórios). `infra/monitor/wrangler.jsonc` fica
-  intocado no diff: as vars `MONITOR_*` são opcionais, com defaults no código
-  (range validado 1..24). Sem mudança de schema público; sem migração de banco.
+- `infra/monitor/worker.mjs` (estado + regras + backfill + receipt),
+  `tests/operations/monitor.test.mjs` (contratos novos — histerese, retry,
+  backfill e receipt/reconciliação) e este change (`proposal.md`, `spec.md`,
+  `tasks.md`). `infra/monitor/wrangler.jsonc` fica intocado no diff: as vars
+  `MONITOR_*` são opcionais, com defaults no código (range validado 1..24).
+  Sem mudança de schema público; sem migração de banco da aplicação.
