@@ -79,6 +79,15 @@ recusa anônima em `/api/v1/me`, login/recarga/logout do proprietário e ausênc
 de portas públicas de banco/API/worker. Conferir também alertas e backup.
 Registrar commit, digests, horário, resultados e autorização no relatório.
 
+O arquivo privado precisa declarar `TELEGRAM_MINIAPP_URL` (URL HTTPS pública do
+Mini App, nunca um segredo) sempre que `compose.integrations.yml` for usado, e
+`AZURE_VISION_ENDPOINT` (HTTPS do recurso Azure Vision) quando `compose.ocr.yml`
+for usado. Antes de subir, o `deployment-check` aceita os overlays autorizados
+por flag (`--integrations`, `--tavily`, `--automatic`, `--operations`, `--ocr`)
+e valida o conjunto resultante: OCR exige Azure primário com Google fallback
+(`OCR_MODE=failover`), os dois segredos montados e o Mini App URL presente com
+HTTPS; qualquer desvio é recusado sem imprimir valores.
+
 ## Reversão preparada
 
 - Guardar os digests anteriores e a configuração antes de atualizar. Em falha

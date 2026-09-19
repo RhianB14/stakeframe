@@ -29,6 +29,8 @@ const knownFiles = [
   'r2_backup_access_key',
   'r2_backup_secret_key',
   'monitor_token',
+  'azure_vision_api_key',
+  'google_vision_api_key',
   'empty.env',
   'deployment.env',
 ];
@@ -182,6 +184,8 @@ async function main() {
     BACKUP_CONFIRM: 'production-with-retention',
     OPERATIONS_IMAGE: images.api,
     AUTOMATIC_IMPORT_POLICIES_FILE: join(directory, 'automatic-import.json').replaceAll('\\', '/'),
+    TELEGRAM_MINIAPP_URL: origin,
+    AZURE_VISION_ENDPOINT: 'https://fictional-ocr.cognitiveservices.azure.com',
   };
   const publishedShape = { ...environment };
   // Syntax fixture only; these are not published digests and are never pulled.
@@ -203,7 +207,9 @@ async function main() {
     ['--integrations', '--tavily'],
     ['--integrations', '--tavily', '--automatic'],
     ['--integrations', '--operations'],
+    ['--integrations', '--ocr'],
     ['--integrations', '--tavily', '--automatic', '--operations'],
+    ['--integrations', '--tavily', '--automatic', '--operations', '--ocr'],
   ]) {
     stage = `configuration${flags.join('')}`;
     await execute(process.execPath, ['scripts/deployment-check.mjs', checkFile, ...flags]);
@@ -294,6 +300,65 @@ async function main() {
     ).stdout,
   );
   assertDeploymentConfig(integrated, { integrations: true });
+  assert.throws(
+    () => assertDeploymentConfig(integrated, { ocr: true }),
+    /OCR_REQUIRES_INTEGRATIONS/,
+  );
+  const ocrShape = JSON.parse(
+    (
+      await docker([
+        'compose',
+        '--env-file',
+        checkFile,
+        '-f',
+        join(root, 'compose.production.yml'),
+        '-f',
+        join(root, 'compose.integrations.yml'),
+        '-f',
+        join(root, 'compose.ocr.yml'),
+        '--profile',
+        'migration',
+        'config',
+        '--format',
+        'json',
+      ])
+    ).stdout,
+  );
+  assertDeploymentConfig(ocrShape, { integrations: true, ocr: true });
+  {
+    const unsafe = structuredClone(ocrShape);
+    delete unsafe.services.worker.environment.TELEGRAM_MINIAPP_URL;
+    assert.throws(
+      () => assertDeploymentConfig(unsafe, { integrations: true, ocr: true }),
+      /TELEGRAM_MINIAPP_URL_REQUIRED/,
+    );
+  }
+  {
+    const unsafe = structuredClone(ocrShape);
+    unsafe.services.worker.environment.TELEGRAM_MINIAPP_URL = 'http://stakeframe.example.test';
+    assert.throws(
+      () => assertDeploymentConfig(unsafe, { integrations: true, ocr: true }),
+      /TELEGRAM_MINIAPP_URL_REQUIRED/,
+    );
+  }
+  for (const mutate of [
+    (value) => {
+      value.services.worker.environment.AZURE_VISION_ENABLED = 'false';
+    },
+    (value) => {
+      delete value.services.worker.environment.GOOGLE_VISION_ENABLED;
+    },
+    (value) => {
+      value.services.worker.environment.OCR_MODE = 'consensus';
+    },
+    (value) => {
+      delete value.services.worker.environment.AZURE_VISION_API_KEY_FILE;
+    },
+  ]) {
+    const unsafe = structuredClone(ocrShape);
+    mutate(unsafe);
+    assert.throws(() => assertDeploymentConfig(unsafe, { integrations: true, ocr: true }));
+  }
   const automatic = JSON.parse(
     (
       await docker([

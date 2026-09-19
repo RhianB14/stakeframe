@@ -10,7 +10,8 @@ try {
   if (
     !file ||
     extra.some(
-      (value) => !['--integrations', '--tavily', '--automatic', '--operations'].includes(value),
+      (value) =>
+        !['--integrations', '--tavily', '--automatic', '--operations', '--ocr'].includes(value),
     ) ||
     new Set(extra).size !== extra.length
   )
@@ -20,6 +21,7 @@ try {
     tavily: extra.includes('--tavily'),
     automatic: extra.includes('--automatic'),
     operations: extra.includes('--operations'),
+    ocr: extra.includes('--ocr'),
   };
   const overlays = [];
   for (const [enabled, filename] of [
@@ -27,6 +29,7 @@ try {
     [options.tavily, 'compose.tavily.yml'],
     [options.automatic, 'compose.automatic-import.yml'],
     [options.operations, 'compose.operations.yml'],
+    [options.ocr, 'compose.ocr.yml'],
   ])
     if (enabled) overlays.push('-f', resolve(root, filename));
   // Configuration rendering only: no daemon, image pull, migration or service startup.

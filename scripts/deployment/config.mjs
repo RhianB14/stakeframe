@@ -10,9 +10,11 @@ export function assertDeploymentConfig(
     tavily = false,
     automatic = false,
     operations = false,
+    ocr = false,
   } = {},
 ) {
   assert.ok(integrations || (!tavily && !automatic && !operations), 'INTEGRATIONS_REQUIRED');
+  assert.ok(!ocr || integrations, 'OCR_REQUIRES_INTEGRATIONS');
   const services = config.services;
   assert.deepEqual(Object.keys(services).sort(), [
     'api',
@@ -141,10 +143,43 @@ export function assertDeploymentConfig(
       OPENROUTER_MAX_OUTPUT_TOKENS: '4096',
       OPENROUTER_REASONING_EFFORT: 'disabled',
       OPENROUTER_TIMEOUT_MS: '60000',
-      AZURE_VISION_ENABLED: 'false',
+      AZURE_VISION_ENABLED: ocr ? 'true' : 'false',
       TELEGRAM_ENABLED: 'true',
     }))
       assert.equal(worker[name], value, 'INTEGRATION_POLICY_REQUIRED');
+    assert.ok(
+      typeof worker.TELEGRAM_MINIAPP_URL === 'string' &&
+        /^https:\/\/[^\s@?#]+(?:\/[^\s?#]*)?$/.test(worker.TELEGRAM_MINIAPP_URL),
+      'TELEGRAM_MINIAPP_URL_REQUIRED',
+    );
+    if (ocr) {
+      for (const [name, value] of Object.entries({
+        GOOGLE_VISION_ENABLED: 'true',
+        OCR_MODE: 'failover',
+        OCR_PRIMARY_PROVIDER: 'azure',
+        OCR_FALLBACK_PROVIDER: 'google',
+        GOOGLE_VISION_ENDPOINT: 'https://vision.googleapis.com',
+        AZURE_VISION_TIMEOUT_MS: '30000',
+        GOOGLE_VISION_TIMEOUT_MS: '30000',
+      }))
+        assert.equal(worker[name], value, 'OCR_POLICY_REQUIRED');
+      assert.match(
+        worker.AZURE_VISION_ENDPOINT ?? '',
+        /^https:\/\/[^\s@?#]+$/,
+        'OCR_ENDPOINT_REQUIRED',
+      );
+      assert.ok(
+        !String(worker.AZURE_VISION_ENDPOINT).endsWith('.localhost'),
+        'OCR_ENDPOINT_REQUIRED',
+      );
+      for (const [name, secret] of Object.entries({
+        AZURE_VISION_API_KEY: 'azure_vision_api_key',
+        GOOGLE_VISION_API_KEY: 'google_vision_api_key',
+      })) {
+        assert.equal(worker[`${name}_FILE`], `/run/secrets/${secret}`);
+        expectedSecrets.worker.push(secret);
+      }
+    }
     for (const [name, secret] of Object.entries({
       OPENROUTER_API_KEY: 'openrouter_api_key',
       TELEGRAM_BOT_TOKEN: 'telegram_bot_token',

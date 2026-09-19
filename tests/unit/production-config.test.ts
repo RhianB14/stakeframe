@@ -164,4 +164,46 @@ describe('production configuration boundaries', () => {
     expect(readSecret({ SECRET_FILE: join(directory, 'db') }, 'SECRET')).toBe('a'.repeat(64));
     expect(readSecret({ SECRET_FILE: join(directory, 'crlf') }, 'SECRET')).toBe('a'.repeat(64));
   });
+  it('never echoes provider material in configuration failure messages', () => {
+    const material = [
+      `sk-or-v1-${'c'.repeat(64)}`,
+      `123456:${'d'.repeat(40)}`,
+      'https://user:pass@app.example.test',
+    ];
+    const telegramBase = {
+      ...environment,
+      TELEGRAM_ENABLED: 'true',
+      TELEGRAM_BOT_TOKEN_FILE: join(directory, 'token'),
+      TELEGRAM_OWNER_USER_ID_FILE: join(directory, 'owner'),
+      TELEGRAM_OWNER_CHAT_ID_FILE: join(directory, 'owner'),
+    };
+    const failures: unknown[] = [];
+    for (const run of [
+      () =>
+        readAiConfig({
+          ...environment,
+          AI_ENABLED: 'true',
+          AI_PROVIDER: 'openrouter',
+          OPENROUTER_MODEL,
+          OPENROUTER_API_KEY: material[0],
+        }),
+      () => readTelegramConfig(telegramBase),
+      () => readTelegramConfig({ ...telegramBase, TELEGRAM_MINIAPP_URL: material[2] }),
+      () => readSecret({ SECRET_FILE: 'private-path' }, 'SECRET'),
+    ]) {
+      let threw = false;
+      try {
+        run();
+      } catch (error) {
+        threw = true;
+        failures.push(error);
+      }
+      expect(threw).toBe(true);
+    }
+    for (const error of failures) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toMatch(/^[A-Z][A-Z0-9_]*$/);
+      for (const value of material) expect(message).not.toContain(value);
+    }
+  });
 });
