@@ -10,6 +10,9 @@ const env = {
   TELEGRAM_BOT_TOKEN: `123456:${'a'.repeat(40)}`,
   TELEGRAM_OWNER_USER_ID: '123456',
   TELEGRAM_OWNER_CHAT_ID: '123456',
+  MONITOR_ATTENTION_OBSERVATIONS: '3',
+  MONITOR_RECOVERY_OBSERVATIONS: '3',
+  MONITOR_ALERT_COOLDOWN_MS: '0',
 };
 const names = [
   'database',
@@ -59,6 +62,7 @@ function setup(options = {}) {
   let now = options.now ?? Date.parse('2026-09-07T12:00:00Z');
   let issue = null;
   let deliveryFailure = false;
+  let confirmFailure = 0;
   let malformed = false;
   let healthFailure = null;
   const flags = {};
@@ -88,15 +92,20 @@ function setup(options = {}) {
           status: 302,
           headers: { location: 'https://redirect.invalid/login' },
         });
-      const checks = Object.fromEntries(
-        names.map((name) => [name, name === issue ? 'failed' : 'ready']),
-      );
+      const checkState = (name) => {
+        if (issue == null) return 'ready';
+        if (typeof issue === 'string') return name === issue ? 'failed' : 'ready';
+        if (Array.isArray(issue)) return issue.includes(name) ? 'failed' : 'ready';
+        return issue[name] ?? 'ready';
+      };
+      const checks = Object.fromEntries(names.map((name) => [name, checkState(name)]));
+      const attention = names.some((name) => ['warning', 'failed'].includes(checkState(name)));
       return Response.json(
         malformed
           ? { token: 'private-provider-payload' }
           : {
               checkedAt: new Date(now).toISOString(),
-              status: issue ? 'attention' : 'ready',
+              status: attention ? 'attention' : 'ready',
               checks,
             },
       );
@@ -112,7 +121,10 @@ function setup(options = {}) {
     assert.ok(!body.text.includes('private-provider-payload'));
     return Response.json({
       ok: true,
-      result: { chat: { id: Number(env.TELEGRAM_OWNER_CHAT_ID), type: 'private' } },
+      result: {
+        message_id: 5150,
+        chat: { id: Number(env.TELEGRAM_OWNER_CHAT_ID), type: 'private' },
+      },
     });
   };
   const instance = (envOverride = env) => {
@@ -134,6 +146,13 @@ function setup(options = {}) {
             async fetch(request) {
               assert.equal(id, 'monitor-id:production');
               durableRequests.push(request);
+              if (
+                confirmFailure > 0 &&
+                new URL(request.url).pathname === '/check/confirm-delivery'
+              ) {
+                confirmFailure -= 1;
+                return new Response(null, { status: 500 });
+              }
               return monitor.fetch(new Request(request));
             },
           }),
@@ -163,6 +182,9 @@ function setup(options = {}) {
     failDelivery(value = true) {
       deliveryFailure = value;
     },
+    failConfirm(count = 1) {
+      confirmFailure = count;
+    },
     malformed() {
       malformed = true;
     },
@@ -174,6 +196,16 @@ function setup(options = {}) {
 
 const statusOf = async (monitor) =>
   (await monitor.fetch(new Request('https://monitor.internal/status'))).json();
+
+const telegramPosts = (fixture) =>
+  fixture.requests.filter((entry) => entry.options.method === 'POST');
+const lastTelegramText = (fixture) => JSON.parse(telegramPosts(fixture).at(-1).options.body).text;
+const cycles = async (fixture, monitor, times) => {
+  for (let index = 0; index < times; index += 1) {
+    await fixture.check(monitor);
+    fixture.step();
+  }
+};
 
 function scheduledEnv(enabled, handler) {
   const calls = [];
@@ -219,6 +251,7 @@ test('records fire, start and conclusion of a healthy check', async () => {
       lastError: null,
       lastHttpStatus: 200,
       lastSignature: 'ready',
+      lastStableSignature: null,
     });
     assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 0);
     assert.deepEqual(
@@ -231,30 +264,31 @@ test('records fire, start and conclusion of a healthy check', async () => {
   }
 });
 
-test('stays quiet while healthy, reports a backup incident once, then recovery', async () => {
+test('stays quiet while healthy, reports a stable backup incident once, then recovery', async () => {
   const fixture = setup();
   try {
     const monitor = fixture.instance();
-    await fixture.check(monitor);
-    fixture.step();
-    await fixture.check(monitor);
-    assert.equal(fixture.requests.length, 2);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 0);
     fixture.issue('backup');
-    fixture.step();
-    await fixture.check(monitor);
-    assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
+    await cycles(fixture, monitor, 2);
+    assert.equal(telegramPosts(fixture).length, 0);
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 1);
     assert.equal(fixture.read().result, 'attention');
     assert.equal(fixture.read().error, null);
     const incident = await statusOf(monitor);
     assert.equal(incident.lastSignature, 'backup:failed');
     assert.equal(incident.lastHttpStatus, 200);
-    fixture.step();
-    await fixture.check(fixture.instance());
-    assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
+    await cycles(fixture, monitor, 2);
+    assert.equal(telegramPosts(fixture).length, 1);
     fixture.issue(null);
-    fixture.step();
-    await fixture.check(monitor);
-    assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 2);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe: os sinais operacionais voltaram ao normal.',
+    );
     assert.equal(fixture.read().result, 'ready');
     assert.equal((await statusOf(monitor)).lastSignature, 'ready');
     assert.equal(
@@ -268,22 +302,87 @@ test('stays quiet while healthy, reports a backup incident once, then recovery',
   }
 });
 
-test('claims before delivery and does not resend an uncertain message after restart', async () => {
+test('retries an uncertain delivery until the provider acknowledges it', async () => {
   const fixture = setup();
   try {
     fixture.issue('backup');
     fixture.failDelivery();
-    await fixture.check(fixture.instance());
-    const row = fixture.read();
-    assert.equal(row.delivery, 'uncertain');
-    assert.equal(row.result, 'attention');
-    assert.equal(row.completed_at, fixture.time());
-    fixture.step();
-    await fixture.check(fixture.instance());
-    assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
-    const status = await statusOf(fixture.instance());
-    assert.equal(status.delivery, 'uncertain');
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 3);
+    assert.equal(fixture.read().delivery, 'uncertain');
+    assert.equal(fixture.read().result, 'attention');
+    assert.ok(!fixture.read().receipt_at);
+    assert.equal(telegramPosts(fixture).length, 1);
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal(fixture.read().delivery, 'uncertain');
+    assert.equal(
+      fixture.durableRequests.filter(
+        (request) => new URL(request.url).pathname === '/check/confirm-delivery',
+      ).length,
+      0,
+    );
+    fixture.failDelivery(false);
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 3);
+    assert.equal(fixture.read().delivery, 'confirmed');
+    assert.ok(fixture.read().receipt_at);
+    assert.ok(fixture.read().receipt_id);
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 3);
+    const status = await statusOf(monitor);
+    assert.equal(status.delivery, 'confirmed');
     assert.equal(status.lastResult, 'attention');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('does not resend when the Telegram accepted the message but the internal confirmation failed', async () => {
+  const fixture = setup();
+  try {
+    fixture.issue('backup');
+    fixture.failConfirm(1);
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(fixture.read().delivery, 'uncertain');
+    assert.ok(fixture.read().receipt_at);
+    assert.ok(fixture.read().receipt_id);
+    assert.equal(
+      fixture.durableRequests.filter(
+        (request) => new URL(request.url).pathname === '/check/record-receipt',
+      ).length,
+      1,
+    );
+    await cycles(fixture, fixture.instance(), 1);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(fixture.read().delivery, 'confirmed');
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 1);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('keeps the recovery under the same receipt reconciliation', async () => {
+  const fixture = setup();
+  try {
+    fixture.issue('retention');
+    fixture.failConfirm(1);
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    fixture.issue(null);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe: os sinais operacionais voltaram ao normal.',
+    );
+    assert.equal(fixture.read().delivery, 'confirmed');
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 2);
   } finally {
     fixture.db.close();
   }
@@ -299,15 +398,16 @@ test('serializes overlapping probes and treats malformed private output as an in
       fixture.requests.filter((entry) => entry.url.startsWith('https://stakeframe.com.br/')).length,
       1,
     );
-    assert.equal(fixture.requests.filter((entry) => entry.options.method === 'POST').length, 1);
+    await cycles(fixture, monitor, 2);
+    assert.equal(telegramPosts(fixture).length, 1);
     const status = await statusOf(monitor);
     assert.equal(status.lastResult, 'failed');
     assert.equal(status.lastError, 'health_check_payload');
     assert.equal(status.lastHttpStatus, 200);
     assert.equal(status.lastSignature, 'application:failed');
     assert.equal(status.state, 'attention');
-    assert.equal(status.lastFiredAt, fixture.time());
-    assert.equal(status.lastCompletedAt, fixture.time());
+    assert.equal(status.lastFiredAt, fixture.time() - 300000);
+    assert.equal(status.lastCompletedAt, fixture.time() - 300000);
   } finally {
     fixture.db.close();
   }
@@ -357,11 +457,32 @@ test('rejects stale or inconsistent completion and delivery messages', async () 
       }),
     );
     assert.equal(completed.status, 200);
+    let latest = claim.startedAt;
+    for (let index = 0; index < 2; index += 1) {
+      fixture.step();
+      const next = await monitor.fetch(
+        new Request('https://monitor.internal/check/start', { method: 'POST' }),
+      );
+      const nextClaim = await next.json();
+      latest = nextClaim.startedAt;
+      const nextCompleted = await monitor.fetch(
+        new Request('https://monitor.internal/check/complete', {
+          method: 'POST',
+          body: JSON.stringify({
+            startedAt: nextClaim.startedAt,
+            signature: 'backup:failed',
+            failure: null,
+            httpStatus: 200,
+          }),
+        }),
+      );
+      assert.equal(nextCompleted.status, 200);
+    }
     assert.equal(fixture.read().delivery, 'uncertain');
     const wrongConfirmation = await monitor.fetch(
       new Request('https://monitor.internal/check/confirm-delivery', {
         method: 'POST',
-        body: JSON.stringify({ startedAt: claim.startedAt, signature: 'worker:failed' }),
+        body: JSON.stringify({ startedAt: latest, signature: 'worker:failed' }),
       }),
     );
     assert.equal(wrongConfirmation.status, 409);
@@ -534,7 +655,7 @@ test('does not follow a Telegram redirect and keeps the delivery uncertain', asy
     fixture.issue('backup');
     fixture.failDelivery('redirect302');
     const monitor = fixture.instance();
-    await fixture.check(monitor);
+    await cycles(fixture, monitor, 3);
     const row = fixture.read();
     assert.equal(row.delivery, 'uncertain');
     assert.equal(row.result, 'attention');
@@ -724,6 +845,11 @@ test('migrates a legacy monitor database without losing the stored trail', async
       'result',
       'error',
       'http_status',
+      'stable_signature',
+      'candidate_signature',
+      'candidate_count',
+      'notified_signature',
+      'notified_at',
     ]) {
       assert.ok(columns.includes(name), `missing column ${name}`);
     }
@@ -735,9 +861,303 @@ test('migrates a legacy monitor database without losing the stored trail', async
     assert.equal(migrated.lastResult, null);
     assert.equal(migrated.lastHttpStatus, null);
     assert.equal(migrated.lastSignature, 'ready');
+    assert.equal(migrated.lastStableSignature, 'ready');
     await fixture.check(monitor);
     assert.equal(fixture.read().result, 'ready');
     assert.equal(fixture.read().fired_at, fixture.time());
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('preserves a legacy uncertain delivery across the upgrade', async () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(
+    'CREATE TABLE monitor (id INTEGER PRIMARY KEY CHECK(id=1), lease_until INTEGER NOT NULL DEFAULT 0, checked_at INTEGER, signature TEXT, delivery TEXT)',
+  );
+  db.prepare(
+    'INSERT INTO monitor(id,lease_until,checked_at,signature,delivery) VALUES(1,0,?,?,?)',
+  ).run(Date.parse('2026-09-07T11:55:00Z'), 'backup:failed', 'uncertain');
+  const fixture = setup({ db, now: Date.parse('2026-09-07T12:00:00Z') });
+  try {
+    const monitor = fixture.instance();
+    const migrated = fixture.read();
+    assert.equal(migrated.stable_signature, 'backup:failed');
+    assert.equal(migrated.notified_signature, 'backup:failed');
+    await fixture.check(monitor);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(fixture.read().delivery, 'confirmed');
+    await cycles(fixture, monitor, 1);
+    assert.equal(telegramPosts(fixture).length, 1);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('adopts a legacy confirmed state without duplicating the alert', async () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(
+    'CREATE TABLE monitor (id INTEGER PRIMARY KEY CHECK(id=1), lease_until INTEGER NOT NULL DEFAULT 0, checked_at INTEGER, signature TEXT, delivery TEXT)',
+  );
+  db.prepare(
+    'INSERT INTO monitor(id,lease_until,checked_at,signature,delivery) VALUES(1,0,?,?,?)',
+  ).run(Date.parse('2026-09-07T11:55:00Z'), 'backup:failed', 'confirmed');
+  const fixture = setup({ db, now: Date.parse('2026-09-07T12:00:00Z') });
+  try {
+    const monitor = fixture.instance();
+    assert.equal(fixture.read().notified_signature, 'backup:failed');
+    await cycles(fixture, monitor, 2);
+    assert.equal(telegramPosts(fixture).length, 0);
+    assert.equal(fixture.read().delivery, 'confirmed');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('keeps quiet across many healthy cycles', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 6);
+    assert.equal(telegramPosts(fixture).length, 0);
+    assert.equal(fixture.read().result, 'ready');
+    assert.equal((await statusOf(monitor)).lastStableSignature, 'ready');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('does not alert on a transient attention blip', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 2);
+    fixture.issue('retention');
+    await cycles(fixture, monitor, 1);
+    fixture.issue(null);
+    await cycles(fixture, monitor, 2);
+    assert.equal(telegramPosts(fixture).length, 0);
+    assert.equal(fixture.read().result, 'ready');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('alerts once for a persistent attention and stays silent afterwards', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    fixture.issue('retention');
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe precisa de atenção: retenção. Confira o procedimento operacional.',
+    );
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal((await statusOf(monitor)).lastStableSignature, 'retention:failed');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('suppresses a different non-worse alert inside the cooldown and emits it after', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance({ ...env, MONITOR_ALERT_COOLDOWN_MS: '1800000' });
+    fixture.issue(['retention', 'disk']);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    fixture.issue(['retention']);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe precisa de atenção: retenção. Confira o procedimento operacional.',
+    );
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('alerts on a new category during a stable attention', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    fixture.issue({ retention: 'warning' });
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    fixture.issue({ retention: 'warning', aiBudget: 'warning' });
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe precisa de atenção: retenção, orçamento de IA. Confira o procedimento operacional.',
+    );
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('alerts on an escalated severity during a stable attention', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    fixture.issue({ retention: 'warning' });
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    fixture.issue({ retention: 'failed' });
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal((await statusOf(monitor)).lastStableSignature, 'retention:failed');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('does not send a recovery when no attention was notified', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 3);
+    fixture.issue('retention');
+    await cycles(fixture, monitor, 1);
+    fixture.issue(null);
+    await cycles(fixture, monitor, 5);
+    assert.equal(telegramPosts(fixture).length, 0);
+    assert.equal((await statusOf(monitor)).lastStableSignature, 'ready');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('sends exactly one recovery per notified attention and can alert again afterwards', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    fixture.issue('worker');
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    fixture.issue(null);
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 2);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe: os sinais operacionais voltaram ao normal.',
+    );
+    await cycles(fixture, monitor, 2);
+    assert.equal(telegramPosts(fixture).length, 2);
+    fixture.issue('aiBudget');
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 3);
+    assert.equal(
+      lastTelegramText(fixture),
+      'Stakeframe precisa de atenção: orçamento de IA. Confira o procedimento operacional.',
+    );
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('preserves hysteresis state across a worker restart', async () => {
+  const fixture = setup();
+  try {
+    const first = fixture.instance();
+    fixture.issue('worker');
+    await cycles(fixture, first, 1);
+    const restarted = fixture.instance();
+    await cycles(fixture, restarted, 2);
+    assert.equal(telegramPosts(fixture).length, 1);
+    await cycles(fixture, fixture.instance(), 2);
+    assert.equal(telegramPosts(fixture).length, 1);
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('serializes concurrent evaluations without duplicate delivery', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    fixture.issue('aiQuota');
+    for (let index = 0; index < 4; index += 1) {
+      await Promise.all([fixture.check(monitor), fixture.check(monitor)]);
+      fixture.step();
+    }
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(fixture.read().delivery, 'confirmed');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('serializes concurrent reconciliations without duplicate delivery', async () => {
+  const fixture = setup();
+  try {
+    fixture.issue('aiQuota');
+    fixture.failConfirm(1);
+    const monitor = fixture.instance();
+    await cycles(fixture, monitor, 3);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(fixture.read().delivery, 'uncertain');
+    await Promise.all([fixture.check(monitor), fixture.check(monitor)]);
+    assert.equal(telegramPosts(fixture).length, 1);
+    assert.equal(fixture.read().delivery, 'confirmed');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('notifies retention, processing and AI budget with their own labels', async () => {
+  const cases = [
+    ['retention', 'retenção'],
+    ['worker', 'processamento'],
+    ['aiBudget', 'orçamento de IA'],
+  ];
+  for (const [name, label] of cases) {
+    const fixture = setup();
+    try {
+      const monitor = fixture.instance();
+      fixture.issue(name);
+      await cycles(fixture, monitor, 3);
+      assert.equal(telegramPosts(fixture).length, 1, `no alert for ${name}`);
+      assert.equal(
+        lastTelegramText(fixture),
+        `Stakeframe precisa de atenção: ${label}. Confira o procedimento operacional.`,
+      );
+    } finally {
+      fixture.db.close();
+    }
+  }
+});
+
+test('rejects an invalid hysteresis configuration', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance({ ...env, MONITOR_ATTENTION_OBSERVATIONS: 'zero' });
+    await assert.rejects(fixture.check(monitor), /MONITOR_CHECK_FAILED/);
+    assert.equal(fixture.requests.length, 0);
+    assert.equal(fixture.read().error, 'configuration');
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test('keeps notification payloads and status free of secrets', async () => {
+  const fixture = setup();
+  try {
+    const monitor = fixture.instance();
+    fixture.issue('retention');
+    await cycles(fixture, monitor, 3);
+    const body = JSON.stringify(telegramPosts(fixture).at(-1).options.body);
+    assert.ok(!body.includes(env.MONITOR_TOKEN));
+    assert.ok(!body.includes(env.TELEGRAM_BOT_TOKEN));
+    const status = JSON.stringify(await statusOf(monitor));
+    assert.ok(!status.includes(env.MONITOR_TOKEN));
+    assert.ok(!status.includes(env.TELEGRAM_BOT_TOKEN));
   } finally {
     fixture.db.close();
   }
