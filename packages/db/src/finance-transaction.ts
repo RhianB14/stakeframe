@@ -44,9 +44,12 @@ export async function executeFinancialCommand(
       .filter((value) => value.kind !== 'counter')
       .reduce((sum, value) => sum + cents(value.amount), 0n),
   );
+  // G0-20 B2b — a exposição de dinheiro real cobre apostas SEM crédito E a
+  // parte real das apostas híbridas (crédito de valor DIFERENTE da stake);
+  // freebet pura (crédito de valor igual) nunca expõe o caixa.
   const open = (
     await client.query<{ amount: string }>(
-      "select coalesce(sum(remaining),0)::text as amount from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and state='open' and freebet_id is null",
+      "select coalesce(sum(b.remaining),0)::text as amount from finance.bet b left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.state='open' and (b.freebet_id is null or f.amount <> b.stake)",
     )
   ).rows[0]!.amount;
   if (cents(open) !== cents(balances.find((value) => value.kind === 'exposure')?.amount ?? '0'))

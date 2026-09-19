@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { cents, money, saoPauloDate, type FinanceCommand } from '@stakeframe/shared';
+import {
+  cents,
+  deriveBetOrigin,
+  money,
+  saoPauloDate,
+  type FinanceCommand,
+} from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import { findDuplicates } from './import-review.js';
 import { enqueueExtraction } from './inbox.js';
@@ -122,7 +128,9 @@ export async function applyFinanceCommand(
       // aposta financeira é criada (fail-closed); a escolha nunca vem da IA.
       const declared = command.decision.betOrigin ?? null;
       const canonical =
-        row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null;
+        row.bet_origin === 'real' || row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+          ? row.bet_origin
+          : null;
       if (canonical !== null && declared !== null && canonical !== declared)
         throw new FinanceError('STATE_CONFLICT');
       // Crédito escolhido explicitamente pelo usuário também é declaração de
@@ -132,11 +140,14 @@ export async function applyFinanceCommand(
       if (effective === null) throw new FinanceError('ORIGIN_REQUIRED');
       if (effective === 'real' && command.decision.bet.freebetId !== null)
         throw new FinanceError('STATE_CONFLICT');
-      if (effective === 'freebet' && command.decision.bet.freebetId === null)
+      if (
+        (effective === 'freebet' || effective === 'hibrida') &&
+        command.decision.bet.freebetId === null
+      )
         throw new FinanceError('FREEBET_UNRESOLVED');
       if (
-        effective === 'freebet' &&
-        row.bet_origin === 'freebet' &&
+        effective !== 'real' &&
+        row.bet_origin === effective &&
         command.decision.bet.freebetId !== row.freebet_id
       )
         throw new FinanceError('FREEBET_UNRESOLVED');
@@ -145,7 +156,7 @@ export async function applyFinanceCommand(
       if (row.bet_origin === null) {
         const applied = await client.query(
           'update integration.inbox set bet_origin=$2,freebet_id=$3,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bet_origin is null',
-          [row.id, effective, effective === 'freebet' ? command.decision.bet.freebetId : null],
+          [row.id, effective, effective !== 'real' ? command.decision.bet.freebetId : null],
         );
         if (applied.rowCount !== 1) throw new FinanceError('STATE_CONFLICT');
       }
@@ -367,6 +378,9 @@ export async function applyFinanceCommand(
     const id = randomUUID();
     const stake = cents(command.stake);
     let stakeReturned = false;
+    // G0-20 B2b — crédito com valor DIFERENTE da stake = híbrida (parte real
+    // exposta + parte freebet); crédito igual = freebet pura (nada do caixa).
+    let hybrid = false;
     if (command.freebetId) {
       const promo = (
         await client.query<{
@@ -384,20 +398,20 @@ export async function applyFinanceCommand(
         !promo ||
         promo.bookmaker_id !== command.bookmakerId ||
         promo.used_by ||
-        cents(promo.amount) !== stake ||
         promo.expires_on < saoPauloDate(placedAt)
       )
         throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+      hybrid = cents(promo.amount) !== stake;
       stakeReturned = promo.stake_returned;
     }
     const house = await accountByKind(client, 'bookmaker', command.bookmakerId);
     const exposure = await accountByKind(client, 'exposure');
-    const realStake = command.freebetId ? 0n : stake;
+    const realStake = command.freebetId && !hybrid ? 0n : stake;
     const journalId = await writeJournal(client, {
       kind: 'bet_stake',
       effectiveAt: placedAt,
       actor,
-      reason: command.freebetId ? 'Uso de crédito promocional' : 'Registro da aposta',
+      reason: command.freebetId && !hybrid ? 'Uso de crédito promocional' : 'Registro da aposta',
       postings: [
         { accountId: house.id, amount: -realStake },
         { accountId: exposure.id, amount: realStake },
@@ -493,9 +507,23 @@ export async function applyFinanceCommand(
     const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
     const exposure = await accountByKind(client, 'exposure');
     const counter = await accountByKind(client, 'counter');
-    const realPrincipal = before.freebet_id ? 0n : principal;
+    // G0-20 B2b — freebet PURA não expõe o caixa; a híbrida expõe a parte real
+    // (o `remaining`/`stake` da aposta é exatamente a parte em dinheiro real).
+    const credit = before.freebet_id
+      ? (
+          await client.query<{ amount: string }>(
+            'select amount from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [before.freebet_id],
+          )
+        ).rows[0]
+      : undefined;
+    const pureFreebet =
+      before.freebet_id !== null &&
+      credit !== undefined &&
+      cents(credit.amount) === cents(before.stake);
+    const realPrincipal = pureFreebet ? 0n : principal;
     const journalId = await writeJournal(client, {
-      kind: before.freebet_id ? 'freebet_return' : 'settlement',
+      kind: pureFreebet ? 'freebet_return' : 'settlement',
       effectiveAt: settledAt,
       actor,
       reason: command.reason,
@@ -628,14 +656,34 @@ export async function applyFinanceCommand(
     if (await hasSettlementHistory(client, command.id)) throw new FinanceError('STATE_CONFLICT');
     if (cents(before.remaining) !== cents(before.stake)) throw new FinanceError('STATE_CONFLICT');
 
-    const current: 'real' | 'freebet' = before.freebet_id ? 'freebet' : 'real';
-    if (current === command.kind) {
-      if (command.kind === 'real' || (command.freebetId && command.freebetId === before.freebet_id))
+    // G0-20 B2b — modalidade corrente DERIVADA do par (stake, crédito): uma
+    // aposta com crédito de valor distinto da stake é híbrida, nunca freebet.
+    const currentCredit = before.freebet_id
+      ? (
+          await client.query<{ amount: string }>(
+            'select amount from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [before.freebet_id],
+          )
+        ).rows[0]
+      : undefined;
+    const current = deriveBetOrigin(before.stake, currentCredit?.amount ?? null);
+    const target = command.kind;
+    if (current === target) {
+      if (target === 'real' || (command.freebetId && command.freebetId === before.freebet_id))
         return { id: command.id, before };
       if (!command.freebetId) throw new FinanceError('FREEBET_UNRESOLVED');
     }
     const remaining = cents(before.remaining);
-    if (command.kind === 'freebet') {
+    const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
+    const exposure = await accountByKind(client, 'exposure');
+    const realExposed = current !== 'freebet';
+    const targetReal = target !== 'freebet';
+    let creditId: string | null = null;
+    let creditStakeReturned = false;
+    if (target !== 'real') {
+      // Crédito compatível com o alvo: mesmo valor da stake na freebet pura,
+      // valor DIFERENTE na híbrida; casa, validade e disponibilidade sempre
+      // revalidadas sob lock.
       if (!command.freebetId || command.freebetId === before.freebet_id)
         throw new FinanceError('FREEBET_UNRESOLVED');
       const promo = (
@@ -650,66 +698,51 @@ export async function applyFinanceCommand(
           [command.freebetId],
         )
       ).rows[0];
-      if (
-        !promo ||
-        promo.bookmaker_id !== before.bookmaker_id ||
-        promo.used_by !== null ||
-        cents(promo.amount) !== cents(before.stake) ||
-        promo.expires_on < saoPauloDate(now)
-      )
-        throw new FinanceError('FREEBET_UNRESOLVED');
-      if (current === 'freebet') {
-        await client.query(
-          'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
-          [before.freebet_id, command.id],
-        );
-        // R9 — troca freebet→freebet sem movimentação: auditoria/recibo bastam.
-      } else {
-        // real → freebet: retira a exposição de dinheiro real (compensatório).
-        const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
-        const exposure = await accountByKind(client, 'exposure');
-        await writeJournal(client, {
-          kind: 'bet_origin_change',
-          effectiveAt: now,
-          actor,
-          reason: command.reason,
-          postings: [
-            { accountId: exposure.id, amount: -remaining },
-            { accountId: house.id, amount: remaining },
-          ],
-        });
-      }
-      await client.query(
-        'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
-        [command.freebetId, command.id],
-      );
-      await client.query(
-        'update finance.bet set freebet_id=$2,promotional_stake_returned=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
-        [command.id, command.freebetId, promo.stake_returned],
-      );
-    } else {
-      // freebet → real: libera o crédito e cria a exposição de dinheiro real.
-      const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
-      const exposure = await accountByKind(client, 'exposure');
+      const matches =
+        !!promo &&
+        promo.bookmaker_id === before.bookmaker_id &&
+        promo.used_by === null &&
+        promo.expires_on >= saoPauloDate(now) &&
+        (target === 'freebet'
+          ? cents(promo.amount) === cents(before.stake)
+          : cents(promo.amount) !== cents(before.stake));
+      if (!matches) throw new FinanceError('FREEBET_UNRESOLVED');
+      creditId = command.freebetId;
+      creditStakeReturned = promo.stake_returned;
+    }
+    if (realExposed !== targetReal) {
+      // A exposição de dinheiro real entra (freebet→real/híbrida) ou sai
+      // (real/híbrida→freebet) por journal compensatório — nunca reescrever.
       await writeJournal(client, {
         kind: 'bet_origin_change',
         effectiveAt: now,
         actor,
         reason: command.reason,
-        postings: [
-          { accountId: house.id, amount: -remaining },
-          { accountId: exposure.id, amount: remaining },
-        ],
+        postings: targetReal
+          ? [
+              { accountId: exposure.id, amount: remaining },
+              { accountId: house.id, amount: -remaining },
+            ]
+          : [
+              { accountId: exposure.id, amount: -remaining },
+              { accountId: house.id, amount: remaining },
+            ],
       });
+    }
+    if (before.freebet_id && before.freebet_id !== creditId)
       await client.query(
         'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',
         [before.freebet_id, command.id],
       );
+    if (creditId)
       await client.query(
-        'update finance.bet set freebet_id=null,promotional_stake_returned=false where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
-        [command.id],
+        'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+        [creditId, command.id],
       );
-    }
+    await client.query(
+      'update finance.bet set freebet_id=$2,promotional_stake_returned=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [command.id, creditId, creditId ? creditStakeReturned : false],
+    );
     await enqueueBetSync(client, command.id);
     return { id: command.id, before };
   }

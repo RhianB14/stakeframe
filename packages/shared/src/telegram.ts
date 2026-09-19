@@ -17,18 +17,39 @@ export type TelegramOperation = z.infer<typeof telegramOperationSchema>;
 
 export const telegramSyncStateSchema = z.enum(['none', 'pending', 'synced', 'failed', 'deleted']);
 
-// STK-G0-19-R7 — callbacks da resposta final restritos a AÇÕES REAIS. Status e
-// casa abrem o Mini App por botões web_app (seções dedicadas); o único callback
-// sobrevivente é a exclusão em dois toques. Nenhum botão responde apenas texto
-// sem oferecer a ação prometida. O payload NUNCA carrega identificadores: a
-// importação é resolvida no servidor por chat + id da mensagem de resultado.
-export const TELEGRAM_CALLBACK_ACTIONS = ['delete', 'delete_confirm', 'delete_cancel'] as const;
+// STK-G0-20 B3 — Casa de aposta e Tipster: callbacks que abrem teclados inline
+// próprios; a seleção carrega SOMENTE o id do cadastro (revalidado no servidor
+// contra o catálogo ativo da organização). A importação continua resolvida por
+// chat + id da mensagem de resultado — nunca por payload. A exclusão segue em
+// dois toques e 'back' restaura o teclado principal.
+export const TELEGRAM_CALLBACK_ACTIONS = [
+  'delete',
+  'delete_confirm',
+  'delete_cancel',
+  'bookmaker',
+  'tipster',
+  'back',
+] as const;
 export type TelegramCallbackAction = (typeof TELEGRAM_CALLBACK_ACTIONS)[number];
 
-export function parseTelegramCallbackData(value: string): TelegramCallbackAction | null {
-  const match = /^sf:v1:(delete|delete:confirm|delete:cancel)$/.exec(value);
+export type TelegramCallbackPayload = {
+  action: TelegramCallbackAction;
+  catalogId: string | null;
+};
+
+const CALLBACK_SELECTION =
+  /^sf:v1:(bookmaker|tipster):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+
+export function parseTelegramCallbackData(value: string): TelegramCallbackPayload | null {
+  const selection = CALLBACK_SELECTION.exec(value);
+  if (selection)
+    return { action: selection[1] as TelegramCallbackAction, catalogId: selection[2]! };
+  const match = /^sf:v1:(delete|delete:confirm|delete:cancel|bookmaker|tipster|back)$/.exec(value);
   if (!match || match[1] === undefined) return null;
-  return match[1].replace('delete:', 'delete_') as TelegramCallbackAction;
+  return {
+    action: match[1].replace('delete:', 'delete_') as TelegramCallbackAction,
+    catalogId: null,
+  };
 }
 export type TelegramSyncState = z.infer<typeof telegramSyncStateSchema>;
 

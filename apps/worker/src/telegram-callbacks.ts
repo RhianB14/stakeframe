@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import {
   createFinanceService,
+  createImportService,
   createTenantContext,
   systemOrganizationContext,
   type Database,
 } from '@stakeframe/db';
 import {
   createTelegramClient,
+  telegramCatalogButtons,
   telegramDeleteConfirmButtons,
   telegramResultButtons,
   type TelegramCallback,
@@ -31,6 +33,15 @@ const discardKey = (inboxId: string) => {
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
 };
 
+// STK-G0-20 B3 — chave idempotente DETERMINÍSTICA por importação + cadastro:
+// repetir a mesma seleção converge no recibo gravado (nunca duplica efeito).
+const selectionKey = (inboxId: string, kind: string, catalogId: string) => {
+  const digest = createHash('sha256')
+    .update(`telegram:${kind}:${inboxId}:${catalogId}`)
+    .digest('hex');
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+};
+
 export function createTelegramCallbackHandler(
   database: Database,
   client: Client,
@@ -38,6 +49,7 @@ export function createTelegramCallbackHandler(
 ) {
   const tenant = createTenantContext(database);
   const finance = createFinanceService(database);
+  const imports = createImportService(database);
   return async function handle(query: TelegramCallback): Promise<void> {
     const founder = await tenant.founderOrganizationId();
     if (!founder) return;
@@ -55,6 +67,63 @@ export function createTelegramCallbackHandler(
       await client.answerCallbackQuery(query.callbackId, {
         text: 'Importação não encontrada nesta conversa.',
       });
+      return;
+    }
+    // STK-G0-20 B3 — Casa de aposta e Tipster: o botão abre SOMENTE o teclado
+    // inline do respectivo cadastro (ATIVOS da organização); a seleção
+    // atualiza a aposta/registro canônico com revalidação no servidor e o
+    // espelho do Telegram vem da outbox (versão otimista + recibo).
+    if (query.action === 'bookmaker' || query.action === 'tipster') {
+      const kind = query.action;
+      if (!query.catalogId) {
+        const catalog = (await finance.workspace(context)).catalog.filter(
+          (item) => item.kind === kind && item.active,
+        );
+        await client.answerCallbackQuery(query.callbackId, {
+          text: kind === 'bookmaker' ? 'Escolha a casa de aposta.' : 'Escolha o tipster.',
+        });
+        await client.editMessageReplyMarkup(
+          Number(config.chatId),
+          query.messageId,
+          telegramCatalogButtons(kind, catalog),
+        );
+        return;
+      }
+      try {
+        const key = selectionKey(row.id, kind, query.catalogId);
+        if (kind === 'bookmaker')
+          await imports.applyBookmaker(
+            context,
+            row.id,
+            { version: row.version, bookmakerId: query.catalogId },
+            'telegram:bot',
+            key,
+          );
+        else
+          await imports.applyTipster(
+            context,
+            row.id,
+            { version: row.version, tipsterId: query.catalogId },
+            'telegram:bot',
+            key,
+          );
+        await client.answerCallbackQuery(query.callbackId, {
+          text: kind === 'bookmaker' ? 'Casa de aposta atualizada.' : 'Tipster atualizado.',
+        });
+      } catch {
+        await client.answerCallbackQuery(query.callbackId, {
+          text: 'Não foi possível atualizar agora.',
+        });
+      }
+      return;
+    }
+    if (query.action === 'back') {
+      await client.answerCallbackQuery(query.callbackId, { text: 'Voltar.' });
+      await client.editMessageReplyMarkup(
+        Number(config.chatId),
+        query.messageId,
+        telegramResultButtons(config.miniAppUrl, row.id),
+      );
       return;
     }
     // STK-G0-19-R7: status e casa são ações REAIS no Mini App (botões web_app
@@ -80,6 +149,9 @@ export function createTelegramCallbackHandler(
       );
       return;
     }
+    // Qualquer outra ação não é exclusão: nada acontece (nunca descartar por
+    // engano — o parser já restringe as ações válidas).
+    if (query.action !== 'delete_confirm') return;
     // delete_confirm — exclusão explícita, idempotente e sanitizada.
     if (row.state === 'discarded') {
       // Repetição do evento após a exclusão: mesmo resultado, nenhuma ação.

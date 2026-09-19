@@ -10,6 +10,7 @@ import {
   importBookmakerResultSchema,
   importOriginResultSchema,
   importEventResultSchema,
+  importTipsterResultSchema,
   type BetInput,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
@@ -36,7 +37,7 @@ function deterministicKey(seed: string): string {
 // organização e chave do cliente). O hash cobre ação + alvo + corpo normalizado;
 // o resultado gravado é sanitizado (nunca conteúdo de bilhete) e vive em
 // `result jsonb`, validado pelo schema específico da ação no replay.
-type ImportActionKind = 'bookmaker' | 'origin' | 'event';
+type ImportActionKind = 'bookmaker' | 'origin' | 'event' | 'tipster';
 type ImportActionReceiptRow = { action: string; hash: string; result: unknown };
 type BookmakerResult = {
   version: number;
@@ -48,10 +49,16 @@ type BookmakerResult = {
 type OriginResult = {
   version: number;
   betState: string | null;
-  kind: 'real' | 'freebet';
+  kind: 'real' | 'freebet' | 'hibrida';
   freebetCleared: boolean;
 };
 type EventResult = { version: number; betState: string | null };
+type TipsterResult = {
+  version: number;
+  betState: string | null;
+  tipsterId: string;
+  tipsterName: string | null;
+};
 const actionHash = (action: ImportActionKind, id: string, body: unknown): string =>
   createHash('sha256').update(JSON.stringify({ action, id, body })).digest('hex');
 const readReceiptRow = async (
@@ -269,7 +276,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       id: string,
       patch: {
         version: number;
-        betOrigin?: 'real' | 'freebet' | null | undefined;
+        betOrigin?: 'real' | 'freebet' | 'hibrida' | null | undefined;
         freebetId?: string | null | undefined;
         eventAt?: string | null | undefined;
       },
@@ -718,7 +725,11 @@ export function createImportService(database: Database, storage?: ObjectStorage)
     async applyOrigin(
       context: OrganizationContext,
       id: string,
-      input: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null | undefined },
+      input: {
+        version: number;
+        kind: 'real' | 'freebet' | 'hibrida';
+        freebetId?: string | null | undefined;
+      },
       actor: string,
       idempotencyKey: string,
     ) {
@@ -732,7 +743,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         return row;
       });
-      const credit = input.kind === 'freebet' ? (input.freebetId ?? null) : null;
+      const credit =
+        input.kind === 'freebet' || input.kind === 'hibrida' ? (input.freebetId ?? null) : null;
       const requestHash = actionHash('origin', id, {
         version: input.version,
         kind: input.kind,
@@ -825,6 +837,119 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           freebetCleared: false,
         };
         await insertReceiptRow(client, idempotencyKey, 'origin', actor, requestHash, result);
+        return result;
+      });
+    },
+    /**
+     * STK-G0-20 B3 — troca de tipster canônica da aposta importada (seleção do
+     * Telegram/Mini App/Web). O rascunho sem aposta não possui campo de
+     * tipster: a operação exige a aposta registrada (STATE_CONFLICT), com
+     * versão otimista da inbox e recibo idempotente na mesma transação — a
+     * inbox nunca diverge da aposta e o Telegram é espelhado pela outbox.
+     */
+    async applyTipster(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number; tipsterId: string },
+      actor: string,
+      idempotencyKey: string,
+    ) {
+      const requestHash = actionHash('tipster', id, {
+        version: input.version,
+        tipsterId: input.tipsterId,
+      });
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        await client.query(
+          'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+          [idempotencyKey],
+        );
+        const lockedReplay = receiptReplay<TipsterResult>(
+          await readReceiptRow(client, idempotencyKey),
+          'tipster',
+          requestHash,
+          importTipsterResultSchema,
+        );
+        if (lockedReplay) return lockedReplay;
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        const bet = await getBetRow(client, row.imported_bet_id);
+        if (bet.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+        const selections = (
+          await client.query<{
+            id: string;
+            event: string;
+            sport: string | null;
+            market: string;
+            selection: string;
+            odds: string | null;
+            event_date: string | null;
+            event_at: Date | null;
+            date_status: string;
+          }>(
+            'select id,event,sport,market,selection,odds::text as odds,event_date::text as event_date,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+            [bet.id],
+          )
+        ).rows;
+        const rebuilt = selections.map((item) => ({
+          id: item.id,
+          event: item.event,
+          sport: item.sport,
+          market: item.market,
+          selection: item.selection,
+          odds: item.odds,
+          eventDate: item.event_date,
+          eventAt: item.event_at ? item.event_at.toISOString() : null,
+          dateStatus: item.date_status as 'confirmed' | 'estimated' | 'pending',
+        }));
+        const command = financeCommandSchema.parse({
+          type: 'bet.update',
+          id: bet.id,
+          tipsterId: input.tipsterId,
+          reference: bet.reference,
+          selections: rebuilt,
+          reason: 'Troca de tipster pelo Telegram',
+          expectedVersion: settings.version,
+        });
+        const key = deterministicKey(`import-action:${idempotencyKey}`);
+        await executeFinancialCommand(client, actor, key, command, settings);
+        const updated = (
+          await client.query<{ state: string; tipster_id: string | null }>(
+            'select state,tipster_id from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [bet.id],
+          )
+        ).rows[0]!;
+        const name = (
+          await client.query<{ name: string }>(
+            'select name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [input.tipsterId],
+          )
+        ).rows[0];
+        const fresh = (
+          await client.query<{ version: number }>(
+            'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        const result: TipsterResult = {
+          version: fresh.version,
+          betState: updated.state,
+          tipsterId: updated.tipster_id ?? input.tipsterId,
+          tipsterName: name?.name ?? null,
+        };
+        await insertReceiptRow(client, idempotencyKey, 'tipster', actor, requestHash, result);
         return result;
       });
     },

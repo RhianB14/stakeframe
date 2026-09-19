@@ -1,6 +1,6 @@
 {
-  "id": "e9582da7-585a-4bc4-8cf2-88eb687228a7",
-  "prevId": "594aab51-89ea-4875-bdd3-9ab2a13f765d",
+  "id": "84d97c2d-b134-4e7a-a319-60be519f7bcb",
+  "prevId": "e9582da7-585a-4bc4-8cf2-88eb687228a7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1222,6 +1222,88 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "integration.import_action_receipt": {
+      "name": "import_action_receipt",
+      "schema": "integration",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "current_setting('app.organization_id', true)::uuid"
+        },
+        "key": {
+          "name": "key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "import_action_receipt_pk": {
+          "name": "import_action_receipt_pk",
+          "columns": ["organization_id", "key"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "import_action_receipt_action_check": {
+          "name": "import_action_receipt_action_check",
+          "value": "\"integration\".\"import_action_receipt\".\"action\" in ('bookmaker', 'origin', 'event', 'tipster')"
+        },
+        "import_action_receipt_hash_check": {
+          "name": "import_action_receipt_hash_check",
+          "value": "\"integration\".\"import_action_receipt\".\"hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "import_action_receipt_actor_check": {
+          "name": "import_action_receipt_actor_check",
+          "value": "char_length(\"integration\".\"import_action_receipt\".\"actor\") between 1 and 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "integration.inbox": {
       "name": "inbox",
       "schema": "integration",
@@ -1320,20 +1402,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
         "bet_origin": {
           "name": "bet_origin",
           "type": "text",
@@ -1419,9 +1487,88 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
+        "inbox_organization_id_source_key_idx": {
+          "name": "inbox_organization_id_source_key_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbox_telegram_source_idx": {
+          "name": "inbox_telegram_source_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "telegram_source_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbox\".\"telegram_source_message_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbox_telegram_result_idx": {
+          "name": "inbox_telegram_result_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "telegram_result_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbox\".\"telegram_result_message_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "inbox_state_created_idx": {
           "name": "inbox_state_created_idx",
           "columns": [
@@ -1484,71 +1631,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "inbox_organization_id_source_key_idx": {
-          "name": "inbox_organization_id_source_key_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "inbox_telegram_source_idx": {
-          "name": "inbox_telegram_source_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "telegram_source_message_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"integration\".\"inbox\".\"telegram_source_message_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "inbox_telegram_result_idx": {
-          "name": "inbox_telegram_result_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "telegram_result_message_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"integration\".\"inbox\".\"telegram_result_message_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1620,7 +1702,7 @@
         },
         "inbox_bet_origin_check": {
           "name": "inbox_bet_origin_check",
-          "value": "\"integration\".\"inbox\".\"bet_origin\" is null or \"integration\".\"inbox\".\"bet_origin\" in ('real', 'freebet')"
+          "value": "\"integration\".\"inbox\".\"bet_origin\" is null or \"integration\".\"inbox\".\"bet_origin\" in ('real', 'freebet', 'hibrida')"
         },
         "inbox_event_date_check": {
           "name": "inbox_event_date_check",
@@ -1657,6 +1739,198 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "integration.telegram_outbox": {
+      "name": "telegram_outbox",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "current_setting('app.organization_id', true)::uuid"
+        },
+        "inbox_id": {
+          "name": "inbox_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "telegram_outbox_idempotency_idx": {
+          "name": "telegram_outbox_idempotency_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "telegram_outbox_due_idx": {
+          "name": "telegram_outbox_due_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_attempt_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "telegram_outbox_inbox_idx": {
+          "name": "telegram_outbox_inbox_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "inbox_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "telegram_outbox_inbox_fk": {
+          "name": "telegram_outbox_inbox_fk",
+          "tableFrom": "telegram_outbox",
+          "tableTo": "inbox",
+          "schemaTo": "integration",
+          "columnsFrom": ["organization_id", "inbox_id"],
+          "columnsTo": ["organization_id", "id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "telegram_outbox_organization_id_id_idx": {
+          "name": "telegram_outbox_organization_id_id_idx",
+          "nullsNotDistinct": false,
+          "columns": ["organization_id", "id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "telegram_outbox_operation_check": {
+          "name": "telegram_outbox_operation_check",
+          "value": "\"integration\".\"telegram_outbox\".\"operation\" in ('send_processing_message', 'send_result_message', 'edit_result_message', 'delete_processing_message', 'delete_source_message', 'delete_result_message')"
+        },
+        "telegram_outbox_state_check": {
+          "name": "telegram_outbox_state_check",
+          "value": "\"integration\".\"telegram_outbox\".\"state\" in ('pending', 'processing', 'done', 'failed', 'skipped')"
+        },
+        "telegram_outbox_attempts_check": {
+          "name": "telegram_outbox_attempts_check",
+          "value": "\"integration\".\"telegram_outbox\".\"attempts\" >= 0 and \"integration\".\"telegram_outbox\".\"version\" > 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "finance.bet": {
@@ -2931,8 +3205,8 @@
         }
       },
       "compositePrimaryKeys": {
-        "posting_organization_id_journal_id_account_id_pk": {
-          "name": "posting_organization_id_journal_id_account_id_pk",
+        "posting_journal_id_account_id_organization_id_pk": {
+          "name": "posting_journal_id_account_id_organization_id_pk",
           "columns": ["journal_id", "account_id", "organization_id"]
         }
       },
@@ -3471,280 +3745,6 @@
         "event_search_provider": {
           "name": "event_search_provider",
           "value": "\"integration\".\"event_search\".\"provider\" in ('thesportsdb','tavily')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "integration.telegram_outbox": {
-      "name": "telegram_outbox",
-      "schema": "integration",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "current_setting('app.organization_id', true)::uuid"
-        },
-        "inbox_id": {
-          "name": "inbox_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "operation": {
-          "name": "operation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_attempt_at": {
-          "name": "next_attempt_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "telegram_outbox_idempotency_idx": {
-          "name": "telegram_outbox_idempotency_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "idempotency_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "telegram_outbox_due_idx": {
-          "name": "telegram_outbox_due_idx",
-          "columns": [
-            {
-              "expression": "state",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "next_attempt_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "telegram_outbox_inbox_idx": {
-          "name": "telegram_outbox_inbox_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "inbox_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "telegram_outbox_inbox_fk": {
-          "name": "telegram_outbox_inbox_fk",
-          "tableFrom": "telegram_outbox",
-          "tableTo": "inbox",
-          "schemaTo": "integration",
-          "columnsFrom": ["organization_id", "inbox_id"],
-          "columnsTo": ["organization_id", "id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "telegram_outbox_organization_id_id_idx": {
-          "name": "telegram_outbox_organization_id_id_idx",
-          "nullsNotDistinct": false,
-          "columns": ["organization_id", "id"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "telegram_outbox_operation_check": {
-          "name": "telegram_outbox_operation_check",
-          "value": "\"integration\".\"telegram_outbox\".\"operation\" in ('send_processing_message', 'send_result_message', 'edit_result_message', 'delete_processing_message', 'delete_source_message', 'delete_result_message')"
-        },
-        "telegram_outbox_state_check": {
-          "name": "telegram_outbox_state_check",
-          "value": "\"integration\".\"telegram_outbox\".\"state\" in ('pending', 'processing', 'done', 'failed', 'skipped')"
-        },
-        "telegram_outbox_attempts_check": {
-          "name": "telegram_outbox_attempts_check",
-          "value": "\"integration\".\"telegram_outbox\".\"attempts\" >= 0 and \"integration\".\"telegram_outbox\".\"version\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "integration.import_action_receipt": {
-      "name": "import_action_receipt",
-      "schema": "integration",
-      "columns": {
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "current_setting('app.organization_id', true)::uuid"
-        },
-        "key": {
-          "name": "key",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor": {
-          "name": "actor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "hash": {
-          "name": "hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "result": {
-          "name": "result",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "import_action_receipt_pk": {
-          "name": "import_action_receipt_pk",
-          "columns": ["organization_id", "key"]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "import_action_receipt_action_check": {
-          "name": "import_action_receipt_action_check",
-          "value": "\"integration\".\"import_action_receipt\".\"action\" in ('bookmaker', 'origin', 'event')"
-        },
-        "import_action_receipt_hash_check": {
-          "name": "import_action_receipt_hash_check",
-          "value": "\"integration\".\"import_action_receipt\".\"hash\" ~ '^[a-f0-9]{64}$'"
-        },
-        "import_action_receipt_actor_check": {
-          "name": "import_action_receipt_actor_check",
-          "value": "char_length(\"integration\".\"import_action_receipt\".\"actor\") between 1 and 200"
         }
       },
       "isRLSEnabled": false

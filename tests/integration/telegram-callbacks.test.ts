@@ -59,11 +59,12 @@ let fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>;
 
 const handler = () =>
   createTelegramCallbackHandler(database, createTelegramClient(config, fetchImpl), config);
-const callback = (action: string, messageId: number) =>
+const callback = (action: string, messageId: number, catalogId: string | null = null) =>
   ({
     updateId: 90,
-    callbackId: `cb-${action}`,
+    callbackId: `cb-${action}${catalogId ? `:${catalogId}` : ''}`,
     action,
+    catalogId,
     messageId,
   }) as never;
 
@@ -209,5 +210,201 @@ describe('telegram result buttons callbacks', () => {
       )
     ).rows[0]!;
     expect(foreign.state).toBe('review');
+  });
+});
+
+// STK-G0-20 B3 — Casa de aposta e Tipster: botões que abrem SOMENTE o teclado
+// inline respectivo com os cadastros ATIVOS da organização; a seleção atualiza
+// a aposta (banco), a Web e a mensagem do Telegram (outbox), com idempotência.
+describe('Casa de aposta e Tipster (G0-20 B3)', () => {
+  const houseOf = async (houseName: string) =>
+    (await finance.workspace(tenantContext)).catalog.find((c) => c.name === houseName)!;
+  const createCatalog = async (
+    kind: 'bookmaker' | 'tipster',
+    catalogName: string,
+    active = true,
+  ) => {
+    const created = await finance.command(tenantContext, randomUUID(), {
+      type: 'catalog.create',
+      kind,
+      name: catalogName,
+      aliases: [],
+      expectedVersion: (await finance.workspace(tenantContext)).version,
+    } as never);
+    if (!active)
+      await finance.command(tenantContext, randomUUID(), {
+        type: 'catalog.update',
+        id: created.id,
+        name: catalogName,
+        aliases: [],
+        active: false,
+        expectedVersion: (await finance.workspace(tenantContext)).version,
+      } as never);
+    return created.id;
+  };
+  async function importedInbox(): Promise<string> {
+    const id = await boundInbox();
+    const house = await houseOf('Bet365');
+    // A confirmação é fail-closed sem origem declarada: o rascunho declara
+    // dinheiro real antes do import.confirm (mesmo fluxo do Mini App).
+    await imports.updateDraft(tenantContext, id, { version: 1, betOrigin: 'real' }, 'web');
+    await finance.command(tenantContext, randomUUID(), {
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 2,
+      decision: {
+        kind: 'create',
+        bet: {
+          bookmakerId: house.id,
+          tipsterId: null,
+          stake: '100.00',
+          odds: '2.00',
+          placedAt: new Date().toISOString(),
+          freebetId: null,
+          reference: 'fixture-ticket',
+          allowMissingUnit: false,
+          selections: [
+            {
+              event: 'A x B',
+              sport: 'Futebol',
+              market: 'Resultado',
+              selection: 'A',
+              odds: null,
+              eventDate: null,
+              eventAt: null,
+              dateStatus: 'pending',
+            },
+          ],
+        },
+        duplicateReason: '',
+      },
+      expectedVersion: (await finance.workspace(tenantContext)).version,
+    } as never);
+    return id;
+  }
+  const betOf = async (id: string) =>
+    (
+      await database.pool.query<{ bookmaker_id: string; tipster_id: string | null }>(
+        'select b.bookmaker_id,b.tipster_id from finance.bet b join integration.inbox i on i.imported_bet_id=b.id where i.id=$1',
+        [id],
+      )
+    ).rows[0]!;
+  const keyboardOf = (call: { body: Record<string, unknown> }) =>
+    (
+      call.body.reply_markup as {
+        inline_keyboard: Array<Array<{ text: string; callback_data?: string }>>;
+      }
+    ).inline_keyboard;
+
+  it('opens only the active houses keyboard', async () => {
+    const id = await boundInbox();
+    await createCatalog('bookmaker', 'CasaInativa', false);
+    calls.length = 0;
+    await handler()(callback('bookmaker', 7777));
+    const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
+    const buttons = keyboardOf(edit).flat();
+    const labels = buttons.map((button) => button.text);
+    expect(labels).toContain('Bet365');
+    expect(labels).not.toContain('CasaInativa');
+    expect(buttons.find((button) => button.text === 'Bet365')!.callback_data).toBe(
+      `sf:v1:bookmaker:${(await houseOf('Bet365')).id}`,
+    );
+    expect(keyboardOf(edit).at(-1)![0]!.callback_data).toBe('sf:v1:back');
+    expect((await inboxState(id)).state).toBe('review');
+  });
+
+  it('opens only the active tipsters keyboard', async () => {
+    await boundInbox();
+    const active = await createCatalog('tipster', 'TipsterAtivo');
+    await createCatalog('tipster', 'TipsterInativo', false);
+    calls.length = 0;
+    await handler()(callback('tipster', 7777));
+    const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
+    const buttons = keyboardOf(edit).flat();
+    const labels = buttons.map((button) => button.text);
+    expect(labels).toContain('TipsterAtivo');
+    expect(labels).not.toContain('TipsterInativo');
+    expect(buttons.find((button) => button.text === 'TipsterAtivo')!.callback_data).toBe(
+      `sf:v1:tipster:${active}`,
+    );
+  });
+
+  it('never shows houses or tipsters from another organization', async () => {
+    await boundInbox();
+    await database.pool.query(
+      "insert into auth.\"user\"(id,name,email) values('fixture-other','Other','other@stk.test') on conflict (id) do nothing",
+    );
+    const otherFinance = createFinanceService(database);
+    const other = await otherFinance.ensureContext('fixture-other');
+    await otherFinance.command(other, randomUUID(), {
+      type: 'catalog.create',
+      kind: 'bookmaker',
+      name: 'CasaAlheia',
+      aliases: [],
+      expectedVersion: (await otherFinance.workspace(other)).version,
+    } as never);
+    await otherFinance.command(other, randomUUID(), {
+      type: 'catalog.create',
+      kind: 'tipster',
+      name: 'TipsterAlheio',
+      aliases: [],
+      expectedVersion: (await otherFinance.workspace(other)).version,
+    } as never);
+    calls.length = 0;
+    await handler()(callback('bookmaker', 7777));
+    expect(
+      keyboardOf(calls.find((call) => call.method === 'editMessageReplyMarkup')!)
+        .flat()
+        .map((button) => button.text),
+    ).not.toContain('CasaAlheia');
+    calls.length = 0;
+    await handler()(callback('tipster', 7777));
+    expect(
+      keyboardOf(calls.find((call) => call.method === 'editMessageReplyMarkup')!)
+        .flat()
+        .map((button) => button.text),
+    ).not.toContain('TipsterAlheio');
+  });
+
+  it('selects a house and updates the bet, the web and the telegram message', async () => {
+    const id = await importedInbox();
+    const casaNova = await createCatalog('bookmaker', 'CasaNova');
+    const before = Number(await editRows(id));
+    calls.length = 0;
+    await handler()(callback('bookmaker', 7777, casaNova));
+    expect(String(calls[0]!.body.text)).toBe('Casa de aposta atualizada.');
+    expect((await betOf(id)).bookmaker_id).toBe(casaNova);
+    expect(Number(await editRows(id))).toBe(before + 1);
+  });
+
+  it('selects a tipster and updates the canonical bet with telegram sync', async () => {
+    const id = await importedInbox();
+    const tipster = await createCatalog('tipster', 'TipsterAtivo');
+    const before = Number(await editRows(id));
+    calls.length = 0;
+    await handler()(callback('tipster', 7777, tipster));
+    expect(String(calls[0]!.body.text)).toBe('Tipster atualizado.');
+    expect((await betOf(id)).tipster_id).toBe(tipster);
+    expect(Number(await editRows(id))).toBe(before + 1);
+  });
+
+  it('replays the same selection idempotently without duplicating effects', async () => {
+    const id = await importedInbox();
+    const casaNova = await createCatalog('bookmaker', 'CasaNova');
+    await handler()(callback('bookmaker', 7777, casaNova));
+    const after = Number(await editRows(id));
+    calls.length = 0;
+    await handler()(callback('bookmaker', 7777, casaNova));
+    expect((await betOf(id)).bookmaker_id).toBe(casaNova);
+    expect(Number(await editRows(id))).toBe(after);
+  });
+
+  it('restores the main keyboard on back', async () => {
+    const id = await boundInbox();
+    calls.length = 0;
+    await handler()(callback('back', 7777));
+    const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
+    const first = keyboardOf(edit)[0]![0] as { web_app?: { url?: string } };
+    expect(first.web_app?.url).toContain(`#miniapp?import=${id}`);
   });
 });

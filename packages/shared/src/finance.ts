@@ -85,7 +85,8 @@ export const financeCommandSchema = z
           duplicateReason: z.string().trim().max(500),
           // STK-G0-19-R5: origem declarada pelo usuário no próprio comando de
           // confirmação (formulário web); o rascunho canônico é sincronizado.
-          betOrigin: z.enum(['real', 'freebet']).optional(),
+          // STK-G0-20: híbrida (valor real + crédito freebet de valor distinto).
+          betOrigin: z.enum(['real', 'freebet', 'hibrida']).optional(),
         }),
         z.strictObject({ kind: z.literal('link'), betId: z.uuid(), reason: note }),
       ]),
@@ -191,7 +192,8 @@ export const financeCommandSchema = z
     command.extend({
       type: z.literal('bet.origin'),
       id: z.uuid(),
-      kind: z.enum(['real', 'freebet']),
+      // STK-G0-20: 'hibrida' = valor real + crédito freebet de valor diferente.
+      kind: z.enum(['real', 'freebet', 'hibrida']),
       freebetId: z.uuid().nullable(),
       reason: note,
     }),

@@ -25,7 +25,26 @@ export function telegramResultButtons(miniAppUrl: string, importId: string) {
       { text: 'Alterar Status', web_app: { url: miniApp('status') } },
       { text: 'Alterar Casa', web_app: { url: miniApp('bookmaker') } },
     ],
+    // STK-G0-20 B3 — cada botão abre SOMENTE o teclado inline do respectivo
+    // cadastro (casas/tipsters ATIVOS da organização); a seleção atualiza a
+    // aposta e o Telegram é espelhado pela outbox.
+    [
+      { text: '🏠 Casa de aposta', callback_data: 'sf:v1:bookmaker' },
+      { text: '🗣️ Tipster', callback_data: 'sf:v1:tipster' },
+    ],
     [{ text: 'Excluir', callback_data: 'sf:v1:delete' }],
+  ];
+}
+
+// STK-G0-20 B3 — teclado de seleção com os cadastros ATIVOS da organização;
+// '◀️ Voltar' restaura o teclado principal da mensagem final.
+export function telegramCatalogButtons(
+  kind: 'bookmaker' | 'tipster',
+  items: { id: string; name: string }[],
+) {
+  return [
+    ...items.map((item) => [{ text: item.name, callback_data: `sf:v1:${kind}:${item.id}` }]),
+    [{ text: '◀️ Voltar', callback_data: 'sf:v1:back' }],
   ];
 }
 
@@ -169,7 +188,13 @@ export function authorizedCallback(update: unknown, config: TelegramConfig) {
   if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId)) return null;
   const action = typeof query.data === 'string' ? parseTelegramCallbackData(query.data) : null;
   if (!action) return null;
-  return { updateId: root.update_id, callbackId: query.id, action, messageId };
+  return {
+    updateId: root.update_id,
+    callbackId: query.id,
+    action: action.action,
+    catalogId: action.catalogId,
+    messageId,
+  };
 }
 export type TelegramCallback = NonNullable<ReturnType<typeof authorizedCallback>>;
 

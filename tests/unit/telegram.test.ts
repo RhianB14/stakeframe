@@ -263,21 +263,56 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     for (const row of [first[0]!, first[1]!]) {
       for (const button of row) expect(button).not.toHaveProperty('callback_data');
     }
+    // G0-20 (B3): Casa de aposta e Tipster abrem teclados inline próprios.
+    expect(first[2]![0]).toMatchObject({
+      callback_data: 'sf:v1:bookmaker',
+      text: '🏠 Casa de aposta',
+    });
+    expect(first[2]![1]).toMatchObject({
+      callback_data: 'sf:v1:tipster',
+      text: '🗣️ Tipster',
+    });
     // Excluir continua callback com confirmação em dois toques.
-    expect(first[2]![0]).toMatchObject({ callback_data: 'sf:v1:delete' });
+    expect(first[3]![0]).toMatchObject({ callback_data: 'sf:v1:delete' });
     const confirm = telegramDeleteConfirmButtons();
     expect(confirm[0]![0]).toMatchObject({ callback_data: 'sf:v1:delete:confirm' });
     expect(confirm[1]![0]).toMatchObject({ callback_data: 'sf:v1:delete:cancel' });
   });
   it('parses callback data strictly and refuses unknown or foreign callbacks', () => {
-    // R7: status/casa deixaram de existir como callbacks (viraram web_app com
-    // seção real); somente a exclusão permanece como callback.
+    // G0-20 (B3): Casa de aposta e Tipster são callbacks que abrem teclados
+    // inline próprios; a exclusão continua em dois toques.
     expect(parseTelegramCallbackData('sf:v1:status')).toBeNull();
-    expect(parseTelegramCallbackData('sf:v1:bookmaker')).toBeNull();
-    expect(parseTelegramCallbackData('sf:v1:delete:confirm')).toBe('delete_confirm');
-    expect(parseTelegramCallbackData('sf:v1:delete:cancel')).toBe('delete_cancel');
+    expect(parseTelegramCallbackData('sf:v1:bookmaker')).toEqual({
+      action: 'bookmaker',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:tipster')).toEqual({
+      action: 'tipster',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:back')).toEqual({ action: 'back', catalogId: null });
+    expect(parseTelegramCallbackData('sf:v1:delete:confirm')).toEqual({
+      action: 'delete_confirm',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:delete:cancel')).toEqual({
+      action: 'delete_cancel',
+      catalogId: null,
+    });
     expect(parseTelegramCallbackData('sf:v1:edit')).toBeNull();
     expect(parseTelegramCallbackData('sf:v1:drop')).toBeNull();
+    const catalog = '11111111-2222-4333-8444-555555555555';
+    expect(parseTelegramCallbackData(`sf:v1:bookmaker:${catalog}`)).toEqual({
+      action: 'bookmaker',
+      catalogId: catalog,
+    });
+    expect(parseTelegramCallbackData(`sf:v1:tipster:${catalog}`)).toEqual({
+      action: 'tipster',
+      catalogId: catalog,
+    });
+    expect(parseTelegramCallbackData('sf:v1:bookmaker:not-a-uuid')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:back:x')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:delete:confirm:x')).toBeNull();
     const callback = (over: Record<string, unknown> = {}) => ({
       update_id: 50,
       callback_query: {
@@ -290,6 +325,7 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     });
     expect(authorizedCallback(callback(), config)).toMatchObject({
       action: 'delete',
+      catalogId: null,
       messageId: 77,
       callbackId: 'cb-1',
     });

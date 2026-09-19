@@ -96,7 +96,7 @@ export function patchImportDraft(
   id: string,
   body: {
     version: number;
-    betOrigin?: 'real' | 'freebet' | null;
+    betOrigin?: 'real' | 'freebet' | 'hibrida' | null;
     freebetId?: string | null;
     eventAt?: string | null;
     bookmakerId?: string | null;
@@ -151,7 +151,7 @@ async function sendWithIdempotentRetry<T>(send: () => Promise<T>): Promise<T> {
 }
 export function applyImportOrigin(
   id: string,
-  body: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null },
+  body: { version: number; kind: 'real' | 'freebet' | 'hibrida'; freebetId?: string | null },
   initData?: string,
 ) {
   const key = crypto.randomUUID();

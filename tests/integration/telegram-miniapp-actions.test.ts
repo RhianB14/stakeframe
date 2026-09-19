@@ -535,3 +535,162 @@ describe('Mini App status transitions by financial modality (G0-20)', () => {
     expect(Number(count)).toBe(0);
   });
 });
+
+// STK-G0-20 B2b — aposta HÍBRIDA: valor real + crédito freebet de valor
+// DIFERENTE da stake. Retorno = (real x odd) + (freebet x (odd - 1)); o valor
+// da freebet nunca retorna; a classificação deriva do par (stake, crédito).
+describe('Mini App hybrid modality (G0-20 B2b)', () => {
+  async function importedHybrid(over: { credit?: string; stake?: string } = {}) {
+    const id = await upload();
+    await seedExtraction(id);
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: over.credit ?? '40.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    await imports.updateDraft(
+      tenantContext,
+      id,
+      { version: 1, betOrigin: 'hibrida', freebetId: credit.id },
+      'web',
+    );
+    const applied = await run({
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 2,
+      decision: {
+        kind: 'create',
+        bet: await betInput({ freebetId: credit.id, stake: over.stake ?? '60.00' }),
+        duplicateReason: '',
+      },
+    } as CommandInput);
+    const version = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.version;
+    return { importId: id, betId: applied.id, version, creditId: credit.id };
+  }
+  const settle = (importId: string, version: number, action: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action },
+    });
+  const lastSettlement = async (betId: string) =>
+    (
+      await database.pool.query<{ outcome: string; return_amount: string }>(
+        'select outcome,return_amount from finance.settlement where bet_id=$1 order by settled_at desc, id desc limit 1',
+        [betId],
+      )
+    ).rows[0]!;
+
+  it('creates a hybrid bet with a real stake and a freebet credit of a different value', async () => {
+    const { betId, creditId } = await importedHybrid();
+    const bet = (
+      await database.pool.query<{ stake: string; freebet_id: string | null }>(
+        'select stake,freebet_id from finance.bet where id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    expect(bet.stake).toBe('60.00');
+    expect(bet.freebet_id).toBe(creditId);
+  });
+
+  it('settles a hybrid win as real x odd + freebet x (odd - 1)', async () => {
+    const { importId, betId, version } = await importedHybrid();
+    const response = await settle(importId, version, 'win');
+    expect(response.statusCode).toBe(200);
+    // 60,00 x 2,00 + 40,00 x (2,00 - 1) = 160,00 — a freebet nao devolve o valor.
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'win',
+      return_amount: '160.00',
+    });
+  });
+
+  it('void returns only the real principal for a hybrid bet', async () => {
+    const { importId, betId, version } = await importedHybrid();
+    const response = await settle(importId, version, 'void');
+    expect(response.statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'void',
+      return_amount: '60.00',
+    });
+  });
+
+  it('refuses a hybrid declaration whose credit equals the stake (freebet is a pure modality)', async () => {
+    const id = await upload();
+    await seedExtraction(id);
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...session, 'content-type': 'application/json' },
+      payload: { version: 1, betOrigin: 'hibrida', freebetId: credit.id },
+    });
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    expect(response.statusCode).toBeLessThan(500);
+  });
+
+  it('keeps organization isolation: foreign credits never resolve and foreign bets stay hidden', async () => {
+    await database.pool.query(
+      "insert into auth.\"user\"(id,name,email) values('fixture-other','Other','other@stk.test') on conflict (id) do nothing",
+    );
+    const otherFinance = createFinanceService(database);
+    const otherContext = await otherFinance.ensureContext('fixture-other');
+    await otherFinance.command(otherContext, randomUUID(), {
+      type: 'bankroll.initialize',
+      reserve: '500.00',
+      balances: [
+        {
+          bookmakerId: (await otherFinance.workspace(otherContext)).catalog.find(
+            (c) => c.name === 'Bet365',
+          )!.id,
+          amount: '500.00',
+        },
+      ],
+      unitPercent: '1.00',
+      expectedVersion: (await otherFinance.workspace(otherContext)).version,
+    } as FinanceCommand);
+    const foreign = await otherFinance.command(otherContext, randomUUID(), {
+      type: 'freebet.create',
+      bookmakerId: (await otherFinance.workspace(otherContext)).catalog.find(
+        (c) => c.name === 'Bet365',
+      )!.id,
+      amount: '40.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+      expectedVersion: (await otherFinance.workspace(otherContext)).version,
+    } as FinanceCommand);
+    const id = await upload();
+    await seedExtraction(id);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: 1, betOrigin: 'hibrida', freebetId: foreign.id },
+    });
+    expect(response.statusCode).toBe(409);
+    const row = (
+      await database.pool.query<{ bet_origin: string | null; freebet_id: string | null }>(
+        'select bet_origin,freebet_id from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!;
+    expect(row.bet_origin).toBeNull();
+    expect(row.freebet_id).toBeNull();
+  });
+});

@@ -246,7 +246,7 @@ export type ImportDetail = z.infer<typeof importDetailSchema>;
 export const draftUpdateSchema = z
   .strictObject({
     version: z.number().int().positive(),
-    betOrigin: z.enum(['real', 'freebet']).nullable().optional(),
+    betOrigin: z.enum(['real', 'freebet', 'hibrida']).nullable().optional(),
     freebetId: z.uuid().nullable().optional(),
     eventAt: instant.nullable().optional(),
     // STK-G0-19-R7: casa declarada pelo usuário (seção "Alterar Casa"); null
@@ -255,7 +255,7 @@ export const draftUpdateSchema = z
   })
   .refine(
     (value) => {
-      if (value.betOrigin === 'freebet')
+      if (value.betOrigin === 'freebet' || value.betOrigin === 'hibrida')
         return value.freebetId !== undefined && value.freebetId !== null;
       if (value.betOrigin === 'real' || value.betOrigin === null)
         return value.freebetId === undefined || value.freebetId === null;
@@ -325,7 +325,7 @@ export const importBookmakerResultSchema = z
 export const importOriginActionSchema = z
   .strictObject({
     version: z.number().int().positive(),
-    kind: z.enum(['real', 'freebet']),
+    kind: z.enum(['real', 'freebet', 'hibrida']),
     freebetId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'ImportOriginAction' });
@@ -333,10 +333,26 @@ export const importOriginResultSchema = z
   .object({
     version: z.number().int().positive(),
     betState: z.string().nullable(),
-    kind: z.enum(['real', 'freebet']),
+    kind: z.enum(['real', 'freebet', 'hibrida']),
     freebetCleared: z.boolean(),
   })
   .meta({ id: 'ImportOriginResult' });
+// STK-G0-20 B3 — troca de tipster canônica da aposta aberta (seleção do
+// Telegram/Mini App/Web com versão otimista e recibo idempotente).
+export const importTipsterActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    tipsterId: z.uuid(),
+  })
+  .meta({ id: 'ImportTipsterAction' });
+export const importTipsterResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+    tipsterId: z.uuid(),
+    tipsterName: z.string().nullable(),
+  })
+  .meta({ id: 'ImportTipsterResult' });
 export const importEventActionSchema = z
   .strictObject({
     version: z.number().int().positive(),
