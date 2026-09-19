@@ -209,14 +209,14 @@ describe('import message rendering (R5)', () => {
     telegram_received_at: new Date('2026-09-17T13:00:00Z'),
     ...over,
   });
-  it('shows the provisional received instant while the event date is pending', () => {
+  it('shows the Telegram instant and a pending event date separately', () => {
     const text = buildImportMessage(row());
-    expect(text).toContain('Origem financeira: confirmar');
-    expect(text).toContain('Retorno potencial: R$ 53,55');
-    expect(text).toContain('data provisória');
-    expect(text).not.toContain('confirmado');
+    expect(text).toContain('🎁 Bônus: pendente');
+    expect(text).toContain('💵 Retorno Potencial: R$ 53,55');
+    expect(text).toContain('📅 Enviado em: 17/09/2026, 10:00');
+    expect(text).toContain('🎮 Evento em: pendente');
   });
-  it('shows the confirmed event date and the declared origin after confirmation', () => {
+  it('shows the confirmed event date and the declared bonus after confirmation', () => {
     const text = buildImportMessage(
       row({
         bet_origin: 'real',
@@ -224,13 +224,16 @@ describe('import message rendering (R5)', () => {
         event_date_status: 'confirmed',
       }),
     );
-    expect(text).toContain('Origem financeira: Dinheiro real');
-    expect(text).toContain('(confirmado)');
-    expect(text).not.toContain('data provisória');
+    expect(text).toContain('🎁 Bônus: Não');
+    expect(text).toContain('🎮 Evento em: 20/09/2026, 15:30');
+    expect(text).toContain('📅 Enviado em: 17/09/2026, 10:00');
   });
-  it('never leaks internal identifiers into the message', () => {
+  it('shows the processing id and never leaks chat or credentials into the message', () => {
     const text = buildImportMessage(row({ bet_origin: 'freebet' }));
-    for (const secret of [row().id, 'chat', '900', 'TOKEN']) expect(text).not.toContain(secret);
+    // G0-20: o UUID do processamento é exibido deliberadamente ("🆔 ID").
+    expect(text).toContain(`🆔 ID: ${row().id}`);
+    expect(text).toContain('🎁 Bônus: Freebet');
+    for (const secret of ['chat', '900', 'TOKEN', 'Bearer']) expect(text).not.toContain(secret);
   });
 });
 

@@ -37,71 +37,70 @@ export type TelegramSyncState = z.infer<typeof telegramSyncStateSchema>;
 export const caseDecisionSchema = z.enum(['would-import', 'review', 'failed']);
 export type CaseDecision = z.infer<typeof caseDecisionSchema>;
 
-// Mensagem final do bot: reflete o registro canônico. Enquanto o evento está
-// pendente, a data exibida é telegramReceivedAt, marcada como provisória.
+// STK-G0-20 — mensagem final do bot (formato fixo com emojis por linha).
+// `sentAt` é SEMPRE a data/hora original do Telegram (imutável); `eventAt` é a
+// data do jogo (editável) e exibe "pendente" enquanto não confirmada.
 export type ImportMessageInput = {
-  status: string;
+  /** UUID do processamento (mesmo identificador do Mini App). */
+  id: string;
   statusLabel: string;
-  kind: 'simple' | 'multiple';
-  origin: 'real' | 'freebet' | null;
-  bookmaker: string | null;
-  tipster: string | null;
+  /** true no estado pendente de processamento/aberto: exibe o topo de sucesso. */
+  success: boolean;
+  bonus: 'real' | 'freebet' | 'hibrida' | null;
+  sport: string | null;
+  event: string | null;
+  country: string | null;
+  /** Texto da aposta (seleção escolhida). */
+  selection: string | null;
+  market: string | null;
   stake: string | null;
   odds: string | null;
   potentialReturn: string | null;
-  placedAt: string | null;
+  kind: 'simple' | 'multiple';
+  sentAt: string | null;
   eventAt: string | null;
-  provisionalAt: string | null;
-  sport: string | null;
-  selections: {
-    event: string | null;
-    market: string | null;
-    selection: string | null;
-    /** R8: data canônica por seleção (apostas importadas), já formatada. */
-    eventAt?: string | null;
-  }[];
+  bookmaker: string | null;
+  tipster: string | null;
 };
 
 const displayMoney = (value: string) =>
   value.includes(',') ? value : value.replace('.', ',').replace(/,(\d)$/, ',$1');
 
-const ORIGIN_LABEL = {
-  real: 'Dinheiro real',
+const BONUS_LABEL = {
+  real: 'Não',
   freebet: 'Freebet',
+  hibrida: 'Híbrida',
 } as const;
 
+const orPending = (value: string | null) => value ?? 'pendente';
+
 export function renderImportMessage(input: ImportMessageInput): string {
-  const lines: string[] = [`${input.statusLabel}`, ''];
-  const origin = input.origin ? ORIGIN_LABEL[input.origin] : 'confirmar';
-  lines.push(`Origem financeira: ${origin}`);
-  if (input.bookmaker) lines.push(`Casa: ${input.bookmaker}`);
-  if (input.tipster) lines.push(`Tipster: ${input.tipster}`);
-  lines.push(`Tipo: ${input.kind === 'multiple' ? 'múltipla' : 'simples'}`);
-  const count = input.selections.length;
-  for (let index = 0; index < count; index += 1) {
-    const item = input.selections[index]!;
-    const parts = [item.event, item.market, item.selection].filter(
-      (value): value is string => !!value,
-    );
-    if (parts.length)
-      lines.push(
-        `${count > 1 ? `${index + 1}. ` : ''}${parts.join(' — ')}${item.eventAt ? ` — ${item.eventAt}` : ''}`,
-      );
-    if (!parts.length && count > 1) lines.push(`${index + 1}. (seleção sem texto legível)`);
-  }
-  if (input.sport) lines.push(`Esporte: ${input.sport}`);
-  if (input.stake) lines.push(`Stake: R$ ${displayMoney(input.stake)}`);
-  if (input.odds) lines.push(`Odd total: ${displayMoney(input.odds)}`);
-  if (input.potentialReturn)
-    lines.push(`Retorno potencial: R$ ${displayMoney(input.potentialReturn)}`);
-  if (input.placedAt) lines.push(`Aposta registrada em: ${input.placedAt}`);
-  const perSelectionDates = input.selections.some((item) => item.eventAt);
-  if (input.eventAt) lines.push(`Jogo: ${input.eventAt} (confirmado)`);
-  else if (input.provisionalAt)
-    lines.push(
-      `Jogo: ${input.provisionalAt} — data provisória (a foto foi recebida neste horário; edite para a data real do jogo)`,
-    );
-  else if (!perSelectionDates) lines.push('Jogo: confirmar data e hora (pendente)');
+  const lines: string[] = [
+    input.success ? '✅ Bilhete processado com sucesso' : input.statusLabel,
+    '',
+    `🆔 ID: ${input.id}`,
+    '💰 Banca: Padrão',
+    '',
+    `⏳ Status: ${input.statusLabel}`,
+  ];
+  if (input.statusLabel === 'Pendente') lines.push('🔹 Sem lucro ou prejuízo.');
+  lines.push(
+    `🎾 Esporte: ${orPending(input.sport)}`,
+    '🏆 Torneio: Definir Manualmente',
+    `⚔️ Evento: ${orPending(input.event)}`,
+    `🌎 País: ${orPending(input.country)}`,
+    `🎰 Aposta: ${orPending(input.selection)}`,
+    `🎯 Mercado: ${orPending(input.market)}`,
+    `💰 Valor Apostado: ${input.stake ? `R$ ${displayMoney(input.stake)}` : 'pendente'}`,
+    `🎲 Odd: ${input.odds ? displayMoney(input.odds) : 'pendente'}`,
+    `💵 Retorno Potencial: ${input.potentialReturn ? `R$ ${displayMoney(input.potentialReturn)}` : 'pendente'}`,
+    `📝 Tipo: ${input.kind === 'multiple' ? 'Múltipla' : 'Simples'}`,
+    `📅 Enviado em: ${orPending(input.sentAt)}`,
+    `🎮 Evento em: ${orPending(input.eventAt)}`,
+    `🎁 Bônus: ${input.bonus ? BONUS_LABEL[input.bonus] : 'pendente'}`,
+    `🏠 Casa: ${orPending(input.bookmaker)}`,
+    `🗣️ Tipster: ${orPending(input.tipster)}`,
+  );
   return lines.join('\n');
 }
 

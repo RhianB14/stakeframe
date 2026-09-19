@@ -279,7 +279,16 @@ export type DraftUpdateResult = z.infer<typeof draftUpdateResultSchema>;
 
 // STK-G0-19-R7 — transições REAIS de status disponíveis para a aposta de uma
 // importação pendente no Mini App (seção "Alterar Status").
-export const IMPORT_STATUS_ACTIONS = ['win', 'loss'] as const;
+// STK-G0-20 — teclado de status (Ganha, Perdida, Meio-Ganha, Meio-Perdida,
+// Reembolsada) + 'pending' (no-op informativo: mantém pendente).
+export const IMPORT_STATUS_ACTIONS = [
+  'win',
+  'loss',
+  'void',
+  'half_win',
+  'half_loss',
+  'pending',
+] as const;
 export const importStatusSchema = z
   .strictObject({
     version: z.number().int().positive(),

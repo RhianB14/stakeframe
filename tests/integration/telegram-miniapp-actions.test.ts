@@ -426,3 +426,112 @@ describe('Mini App bookmaker section (R7)', () => {
     // no teste de liquidação acima (GET com sessão reflete o estado novo).
   });
 });
+
+describe('Mini App status transitions by financial modality (G0-20)', () => {
+  async function importedFreebet() {
+    const id = await upload();
+    await seedExtraction(id);
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    await imports.updateDraft(
+      tenantContext,
+      id,
+      { version: 1, betOrigin: 'freebet', freebetId: credit.id },
+      'web',
+    );
+    const applied = await run({
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 2,
+      decision: {
+        kind: 'create',
+        bet: await betInput({ freebetId: credit.id }),
+        duplicateReason: '',
+      },
+    } as CommandInput);
+    const version = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.version;
+    return { importId: id, betId: applied.id, version };
+  }
+  const settle = (importId: string, version: number, action: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action },
+    });
+  const lastSettlement = async (betId: string) =>
+    (
+      await database.pool.query<{ outcome: string; return_amount: string }>(
+        'select outcome,return_amount from finance.settlement where bet_id=$1 order by settled_at desc, id desc limit 1',
+        [betId],
+      )
+    ).rows[0]!;
+
+  it('freebet win returns the freebet multiplied by (odd - 1), never the stake back', async () => {
+    const { importId, betId, version } = await importedFreebet();
+    const response = await settle(importId, version, 'win');
+    expect(response.statusCode).toBe(200);
+    // 100,00 de freebet x (2,00 - 1) = 100,00 — o valor da freebet nao retorna.
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'win',
+      return_amount: '100.00',
+    });
+  });
+  it('half win returns half of (P x O + P) for real', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect((await settle(importId, version, 'half_win')).statusCode).toBe(200);
+    // (100 x 2 + 100) / 2 = 150,00 (metade ganha + metade anulada).
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'half_win',
+      return_amount: '150.00',
+    });
+  });
+  it('half loss returns P/2 for real', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect((await settle(importId, version, 'half_loss')).statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'half_loss',
+      return_amount: '50.00',
+    });
+  });
+  it('void returns the real principal', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect((await settle(importId, version, 'void')).statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'void',
+      return_amount: '100.00',
+    });
+  });
+  it('void returns zero for a freebet', async () => {
+    const { importId, betId, version } = await importedFreebet();
+    expect((await settle(importId, version, 'void')).statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'void',
+      return_amount: '0.00',
+    });
+  });
+  it('keeps "Pendente" as an informative no-op without any settlement', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    const response = await settle(importId, version, 'pending');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'open' });
+    const count = (
+      await database.pool.query<{ count: string }>(
+        'select count(*) from finance.settlement where bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!.count;
+    expect(Number(count)).toBe(0);
+  });
+});

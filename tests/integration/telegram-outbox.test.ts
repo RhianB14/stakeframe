@@ -145,6 +145,24 @@ describe('telegram outbox executor', () => {
       unknown
     >;
     expect(body).toMatchObject({ chat_id: 42, reply_to_message_id: 900 });
+    // G0-20: texto fixo da mensagem de processamento; somente o UUID varia.
+    expect((body as { text: string }).text).toBe(
+      [
+        '🤖 Sua aposta está sendo processada!',
+        'Estamos analisando as informações enviadas. Caso ocorra alguma instabilidade, o sistema tentará novamente automaticamente. ⏳⚙️',
+        '',
+        'ID do processamento:',
+        id,
+        '',
+        'Status atual:',
+        'Validando informações iniciais da aposta...',
+        '',
+        'Assim que o processamento for concluído, você receberá uma notificação aqui mesmo. ✅',
+        '',
+        'Para acompanhar todos os seus processamentos, digite:',
+        '👉 /fila 👀',
+      ].join('\n'),
+    );
     // Idempotente: uma segunda passada não reenvia.
     expect(await service().processOnce()).toBe(false);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -180,6 +198,51 @@ describe('telegram outbox executor', () => {
     expect(deleteBody).toMatchObject({ chat_id: 42, message_id: 111 });
     expect(row.telegram_sync_state).toBe('synced');
     expect(urls.filter((url) => url.endsWith('/sendMessage'))).toHaveLength(2);
+  });
+
+  it('renders the final message with the fixed emoji layout and the processing UUID', async () => {
+    const id = await boundInbox();
+    responses.push(
+      json({ ok: true, result: { message_id: 111 } }),
+      json({ ok: true, result: { message_id: 222 } }),
+      json({ ok: true, result: true }),
+    );
+    await imports.queueResultMessage(tenantContext, id);
+    let progressed = true;
+    while (progressed) progressed = await service().processOnce();
+    const finalCall = fetchImpl.mock.calls.find(([url, init]) =>
+      String(url).endsWith('/sendMessage')
+        ? String((init as RequestInit).body).includes('Bilhete processado')
+        : false,
+    );
+    expect(finalCall).toBeDefined();
+    const body = JSON.parse(String((finalCall![1] as RequestInit).body)) as { text: string };
+    expect(body.text).toBe(
+      [
+        '✅ Bilhete processado com sucesso',
+        '',
+        `🆔 ID: ${id}`,
+        '💰 Banca: Padrão',
+        '',
+        '⏳ Status: Pendente',
+        '🔹 Sem lucro ou prejuízo.',
+        '🎾 Esporte: Futebol',
+        '🏆 Torneio: Definir Manualmente',
+        '⚔️ Evento: A x B',
+        '🌎 País: pendente',
+        '🎰 Aposta: A',
+        '🎯 Mercado: Resultado',
+        '💰 Valor Apostado: R$ 100,00',
+        '🎲 Odd: 2,00',
+        '💵 Retorno Potencial: R$ 200,00',
+        '📝 Tipo: Simples',
+        '📅 Enviado em: 17/09/2026, 10:00',
+        '🎮 Evento em: pendente',
+        '🎁 Bônus: pendente',
+        '🏠 Casa: Bet365',
+        '🗣️ Tipster: Tipster',
+      ].join('\n'),
+    );
   });
 
   it('respects retry_after on 429 and does not duplicate the message on retry', async () => {
@@ -270,7 +333,8 @@ describe('telegram outbox executor', () => {
     const edits = fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/editMessageText'));
     expect(edits).toHaveLength(1);
     const body = JSON.parse(String((edits[0]![1] as RequestInit).body)) as Record<string, unknown>;
-    expect(String(body.text)).toContain('confirmado');
+    // G0-20: a data confirmada do evento aparece na linha "🎮 Evento em".
+    expect(String(body.text)).toContain('🎮 Evento em: 20/09/2026, 18:30');
   });
 
   it('treats a missing message as an idempotent success during cleanup', async () => {

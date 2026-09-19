@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
 import {
+  deriveBetOrigin,
   parseCaption,
+  settleReturnFor,
   ticketExtractionSchema,
   automaticDecisionSchema,
   financeCommandSchema,
+  type SettleAction,
   importBookmakerResultSchema,
   importOriginResultSchema,
   importEventResultSchema,
@@ -19,22 +22,8 @@ import { createImportDraftService } from './telegram-sync.js';
 import { executeFinancialCommand } from './finance-transaction.js';
 import { automaticPolicyNotice } from './layout-policy.js';
 
-// stake (até 2 casas) × odds (até 4 casas), arredondamento half-up em centavos.
-// Espelha o mesmo cálculo exibido na mensagem do Telegram (fonte única da
-// semântica `potentialReturn = stake × odd`).
-function grossReturn(stake: string, odds: string): string | null {
-  if (!/^\d{1,12}(\.\d{1,2})?$/.test(stake) || !/^\d{1,12}(\.\d{1,4})?$/.test(odds)) return null;
-  const scale = (value: string, decimals: number) => {
-    const [whole = '0', fraction = ''] = value.split('.');
-    return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(`${fraction}0000`.slice(0, decimals));
-  };
-  const centsValue = scale(stake, 2);
-  const scaledOdds = scale(odds, 4);
-  const total = (centsValue * scaledOdds + 5000n) / 10000n;
-  const whole = total / 100n;
-  const fraction = (total % 100n).toString().padStart(2, '0');
-  return `${whole}.${fraction}`;
-}
+// STK-G0-20 — a aritmética dos retornos vive no shared (fonte única entre a
+// mensagem do Telegram, o Mini App, a Web e a liquidação no servidor).
 
 // Chave de idempotência determinística (formato uuid) para repetições do mesmo
 // pedido — nunca duplica efeitos financeiros.
@@ -491,7 +480,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
     async setStatus(
       context: OrganizationContext,
       id: string,
-      input: { version: number; action: 'win' | 'loss' },
+      input: { version: number; action: SettleAction | 'pending' },
       actor: string,
     ) {
       return tenant.withOrganizationTransaction(context, async (client) => {
@@ -511,8 +500,15 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
         const bet = (
-          await client.query<{ id: string; state: string; remaining: string; odds: string }>(
-            'select id,state,remaining,odds from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          await client.query<{
+            id: string;
+            state: string;
+            remaining: string;
+            odds: string;
+            stake: string;
+            freebet_amount: string | null;
+          }>(
+            'select b.id,b.state,b.remaining,b.odds,b.stake,f.amount as freebet_amount from finance.bet b left join finance.freebet f on f.organization_id=b.organization_id and f.id=b.freebet_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1 for update of b',
             [row.imported_bet_id],
           )
         ).rows[0];
@@ -530,10 +526,20 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           throw new FinanceError('STATE_CONFLICT');
         }
         if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
-        // Valor derivado calculado no servidor (stake/odd canônicas): a vitória
-        // devolve o bruto `remaining × odds`; a derrota devolve zero.
-        const returnAmount =
-          input.action === 'win' ? (grossReturn(bet.remaining, bet.odds) ?? '0.00') : '0.00';
+        // G0-20: "Pendente" é um no-op informativo (a aposta permanece aberta).
+        if (input.action === 'pending') return { version: row.version, betState: bet.state };
+        // STK-G0-20 — valor derivado calculado NO SERVIDOR conforme a
+        // modalidade financeira (real, freebet ou híbrida derivada do crédito)
+        // e a transição escolhida no teclado de status / Mini App.
+        const origin = deriveBetOrigin(bet.stake, bet.freebet_amount);
+        const returnAmount = settleReturnFor(
+          input.action,
+          origin,
+          bet.remaining,
+          bet.odds,
+          bet.freebet_amount,
+        );
+        if (returnAmount === null) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
         const command = financeCommandSchema.parse({
           type: 'bet.settle',

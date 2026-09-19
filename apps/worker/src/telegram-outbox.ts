@@ -100,11 +100,12 @@ export function createTelegramOutboxService(
     if (row.bet_id) {
       const selections = (
         await db.query(
-          'select event,market,selection,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+          'select event,sport,market,selection,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
           [row.bet_id],
         )
       ).rows as {
         event: string;
+        sport: string | null;
         market: string;
         selection: string;
         event_at: Date | null;
@@ -120,6 +121,7 @@ export function createTelegramOutboxService(
         placedAt: row.bet_placed_at,
         selections: selections.map((selection) => ({
           event: selection.event,
+          sport: selection.sport,
           market: selection.market,
           selection: selection.selection,
           eventAt: selection.event_at,
@@ -131,13 +133,24 @@ export function createTelegramOutboxService(
     switch (item.operation) {
       case 'send_processing_message': {
         if (row.telegram_processing_message_id) return; // já enviada: idempotente
-        const reference = row.id.slice(0, 8).toUpperCase();
+        // STK-G0-20 — texto fixo (estrutura e emojis preservados); somente o
+        // UUID do processamento varia entre envios.
         const result = await client.sendMessage(
           chatId,
           [
-            'Bilhete recebido!',
-            `Protocolo: ${reference}`,
-            'O processamento está em andamento; você pode acompanhar pela fila no app.',
+            '🤖 Sua aposta está sendo processada!',
+            'Estamos analisando as informações enviadas. Caso ocorra alguma instabilidade, o sistema tentará novamente automaticamente. ⏳⚙️',
+            '',
+            'ID do processamento:',
+            row.id,
+            '',
+            'Status atual:',
+            'Validando informações iniciais da aposta...',
+            '',
+            'Assim que o processamento for concluído, você receberá uma notificação aqui mesmo. ✅',
+            '',
+            'Para acompanhar todos os seus processamentos, digite:',
+            '👉 /fila 👀',
           ].join('\n'),
           {
             ...(row.telegram_source_message_id !== null
