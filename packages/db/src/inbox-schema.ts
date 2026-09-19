@@ -112,7 +112,7 @@ export const inbox = integrationNamespace.table(
     check('inbox_attempts_check', sql`${table.attempts} >= 0 and ${table.version} > 0`),
     check(
       'inbox_bet_origin_check',
-      sql`${table.betOrigin} is null or ${table.betOrigin} in ('real', 'freebet')`,
+      sql`${table.betOrigin} is null or ${table.betOrigin} in ('real', 'freebet', 'hibrida')`,
     ),
     check(
       'inbox_event_date_check',
@@ -215,7 +215,7 @@ export const importActionReceipt = integrationNamespace.table(
     }),
     check(
       'import_action_receipt_action_check',
-      sql`${table.action} in ('bookmaker', 'origin', 'event')`,
+      sql`${table.action} in ('bookmaker', 'origin', 'event', 'tipster')`,
     ),
     check('import_action_receipt_hash_check', sql`${table.hash} ~ '^[a-f0-9]{64}$'`),
     check('import_action_receipt_actor_check', sql`char_length(${table.actor}) between 1 and 200`),

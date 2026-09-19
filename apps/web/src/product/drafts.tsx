@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatBRL, type ImportDetail } from '@stakeframe/shared';
+import { deriveBetOrigin, formatBRL, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { localInstant } from './api.js';
@@ -16,7 +16,7 @@ const instantFormat = new Intl.DateTimeFormat('pt-BR', {
 
 export type DraftBody = {
   version: number;
-  betOrigin?: 'real' | 'freebet' | null;
+  betOrigin?: 'real' | 'freebet' | 'hibrida' | null;
   freebetId?: string | null;
   eventAt?: string | null;
 };
@@ -38,12 +38,12 @@ export function DraftControls({
   /** R8: presente no Mini App — origem canônica (rascunho ou aposta). */
   originSender?: (body: {
     version: number;
-    kind: 'real' | 'freebet';
+    kind: 'real' | 'freebet' | 'hibrida';
     freebetId?: string | null;
   }) => Promise<{
     version: number;
     betState: string | null;
-    kind: 'real' | 'freebet';
+    kind: 'real' | 'freebet' | 'hibrida';
     freebetCleared: boolean;
   }>;
   /** R8: presente no Mini App — data por seleção (aposta importada). */
@@ -70,7 +70,7 @@ export function DraftControls({
         onSaved={onSaved}
       />
     );
-  const [origin, setOrigin] = useState<'real' | 'freebet' | null>(detail.betOrigin);
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida' | null>(detail.betOrigin);
   const [credit, setCredit] = useState(detail.freebetId ?? '');
   const [eventDate, setEventDate] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,7 +88,7 @@ export function DraftControls({
       const result = await sender({
         version: detail.item.version,
         betOrigin: origin,
-        freebetId: origin === 'freebet' ? credit || null : null,
+        freebetId: origin === 'freebet' || origin === 'hibrida' ? credit || null : null,
         ...(eventDate ? { eventAt: localInstant(eventDate) } : {}),
       });
       setSaved(true);
@@ -126,11 +126,20 @@ export function DraftControls({
           />{' '}
           Freebet
         </label>
+        <label>
+          <input
+            type="radio"
+            name="bet-origin"
+            checked={origin === 'hibrida'}
+            onChange={() => setOrigin('hibrida')}
+          />{' '}
+          Híbrida (valor real + freebet)
+        </label>
         {origin === null ? (
           <p className="notice">Informe a origem para liberar o registro.</p>
         ) : null}
       </fieldset>
-      {origin === 'freebet' ? (
+      {origin === 'freebet' || origin === 'hibrida' ? (
         <Field label="Crédito de freebet">
           <select value={credit} onChange={(event) => setCredit(event.target.value)}>
             <option value="">Selecione o crédito</option>
@@ -196,12 +205,12 @@ function ImportedControls({
   detail: ImportDetail;
   originSender: (body: {
     version: number;
-    kind: 'real' | 'freebet';
+    kind: 'real' | 'freebet' | 'hibrida';
     freebetId?: string | null;
   }) => Promise<{
     version: number;
     betState: string | null;
-    kind: 'real' | 'freebet';
+    kind: 'real' | 'freebet' | 'hibrida';
     freebetCleared: boolean;
   }>;
   eventSender: (body: {
@@ -215,7 +224,14 @@ function ImportedControls({
   onSaved: () => void;
 }) {
   const bet = detail.bet!;
-  const [origin, setOrigin] = useState<'real' | 'freebet'>(bet.freebetId ? 'freebet' : 'real');
+  const currentOrigin =
+    detail.betOrigin ??
+    (bet.freebetId
+      ? bet.freebetAmount
+        ? deriveBetOrigin(bet.stake, bet.freebetAmount)
+        : 'freebet'
+      : 'real');
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(currentOrigin);
   const [credit, setCredit] = useState('');
   const [credits, setCredits] = useState<
     { id: string; amount: string; expiresOn: string; stakeReturned: boolean }[] | null
@@ -258,12 +274,17 @@ function ImportedControls({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const saveOrigin = async () => {
-    if (origin === 'freebet' && credit && creditsError) {
+    const usesCredit = origin === 'freebet' || origin === 'hibrida';
+    if (usesCredit && credit && creditsError) {
       setError('Créditos desta casa não carregados — tente novamente antes de salvar.');
       return;
     }
-    if (origin === 'freebet' && !credit && bet.freebetId === null) {
-      setError('Escolha o crédito da freebet.');
+    if (usesCredit && !credit && bet.freebetId === null) {
+      setError(
+        origin === 'hibrida'
+          ? 'Escolha o crédito da parte freebet.'
+          : 'Escolha o crédito da freebet.',
+      );
       return;
     }
     setBusy(true);
@@ -273,10 +294,12 @@ function ImportedControls({
       await originSender({
         version: detail.item.version,
         kind: origin,
-        ...(origin === 'freebet' ? { freebetId: credit || bet.freebetId } : {}),
+        ...(origin === 'freebet' || origin === 'hibrida'
+          ? { freebetId: credit || bet.freebetId }
+          : {}),
       });
       setSaved(
-        `Origem salva para ${origin === 'freebet' ? 'Freebet' : 'Dinheiro real'}. A mensagem do Telegram será sincronizada.`,
+        `Origem salva para ${origin === 'freebet' ? 'Freebet' : origin === 'hibrida' ? 'Híbrida (valor real + freebet)' : 'Dinheiro real'}. A mensagem do Telegram será sincronizada.`,
       );
       onSaved();
     } catch (failure) {
@@ -327,8 +350,17 @@ function ImportedControls({
           />{' '}
           Freebet
         </label>
+        <label>
+          <input
+            type="radio"
+            name="bet-origin"
+            checked={origin === 'hibrida'}
+            onChange={() => setOrigin('hibrida')}
+          />{' '}
+          Híbrida (valor real + freebet)
+        </label>
       </fieldset>
-      {origin === 'freebet' ? (
+      {origin === 'freebet' || origin === 'hibrida' ? (
         <Field label="Crédito de freebet">
           <select value={credit} onChange={(event) => setCredit(event.target.value)}>
             <option value="">

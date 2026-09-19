@@ -259,7 +259,7 @@
                         "additionalProperties": false
                       },
                       "duplicateReason": { "type": "string", "maxLength": 500 },
-                      "betOrigin": { "type": "string", "enum": ["real", "freebet"] }
+                      "betOrigin": { "type": "string", "enum": ["real", "freebet", "hibrida"] }
                     },
                     "required": ["kind", "bet", "duplicateReason"],
                     "additionalProperties": false
@@ -822,7 +822,7 @@
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
-              "kind": { "type": "string", "enum": ["real", "freebet"] },
+              "kind": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
               "freebetId": {
                 "nullable": true,
                 "type": "string",
@@ -1570,7 +1570,11 @@
             },
             "required": ["tipster", "bookmaker", "requiresReview"]
           },
-          "betOrigin": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+          "betOrigin": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["real", "freebet", "hibrida"]
+          },
           "freebetId": {
             "nullable": true,
             "type": "string",
@@ -1658,6 +1662,21 @@
               "required": ["id", "name"]
             }
           },
+          "tipsters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": { "type": "string" }
+              },
+              "required": ["id", "name"]
+            }
+          },
           "bet": {
             "nullable": true,
             "type": "object",
@@ -1677,12 +1696,20 @@
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               "bookmakerName": { "nullable": true, "type": "string" },
+              "tipsterId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "tipsterName": { "nullable": true, "type": "string" },
               "freebetId": {
                 "nullable": true,
                 "type": "string",
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
+              "freebetAmount": { "nullable": true, "type": "string" },
               "selections": {
                 "type": "array",
                 "items": {
@@ -1719,6 +1746,8 @@
               "remaining",
               "bookmakerId",
               "bookmakerName",
+              "tipsterId",
+              "tipsterName",
               "freebetId",
               "selections"
             ]
@@ -1791,6 +1820,7 @@
           "matches",
           "bookmakerOverrideId",
           "bookmakers",
+          "tipsters",
           "bet",
           "automaticPolicy",
           "duplicates",
@@ -1825,7 +1855,21 @@
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
-          "action": { "type": "string", "enum": ["win", "loss"] }
+          "action": {
+            "type": "string",
+            "enum": [
+              "win",
+              "loss",
+              "void",
+              "half_win",
+              "half_loss",
+              "pending",
+              "cashout",
+              "partial_cashout"
+            ]
+          },
+          "returnAmount": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+          "closedPrincipal": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" }
         },
         "required": ["version", "action"],
         "additionalProperties": false
@@ -1896,7 +1940,7 @@
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
-          "kind": { "type": "string", "enum": ["real", "freebet"] },
+          "kind": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
           "freebetId": {
             "nullable": true,
             "type": "string",
@@ -1917,10 +1961,47 @@
             "maximum": 9007199254740991
           },
           "betState": { "nullable": true, "type": "string" },
-          "kind": { "type": "string", "enum": ["real", "freebet"] },
+          "kind": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
           "freebetCleared": { "type": "boolean" }
         },
         "required": ["version", "betState", "kind", "freebetCleared"]
+      },
+      "ImportTipsterActionInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "tipsterId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["version", "tipsterId"],
+        "additionalProperties": false
+      },
+      "ImportTipsterResultInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "betState": { "nullable": true, "type": "string" },
+          "tipsterId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "tipsterName": { "nullable": true, "type": "string" }
+        },
+        "required": ["version", "betState", "tipsterId", "tipsterName"]
       },
       "ImportEventActionInput": {
         "type": "object",
@@ -3668,7 +3749,7 @@
                         "additionalProperties": false
                       },
                       "duplicateReason": { "type": "string", "maxLength": 500 },
-                      "betOrigin": { "type": "string", "enum": ["real", "freebet"] }
+                      "betOrigin": { "type": "string", "enum": ["real", "freebet", "hibrida"] }
                     },
                     "required": ["kind", "bet", "duplicateReason"],
                     "additionalProperties": false
@@ -4231,7 +4312,7 @@
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
-              "kind": { "type": "string", "enum": ["real", "freebet"] },
+              "kind": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
               "freebetId": {
                 "nullable": true,
                 "type": "string",
@@ -4997,7 +5078,11 @@
             "required": ["tipster", "bookmaker", "requiresReview"],
             "additionalProperties": false
           },
-          "betOrigin": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+          "betOrigin": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["real", "freebet", "hibrida"]
+          },
           "freebetId": {
             "nullable": true,
             "type": "string",
@@ -5088,6 +5173,22 @@
               "additionalProperties": false
             }
           },
+          "tipsters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": { "type": "string" }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          },
           "bet": {
             "nullable": true,
             "type": "object",
@@ -5107,12 +5208,20 @@
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               "bookmakerName": { "nullable": true, "type": "string" },
+              "tipsterId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "tipsterName": { "nullable": true, "type": "string" },
               "freebetId": {
                 "nullable": true,
                 "type": "string",
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
+              "freebetAmount": { "nullable": true, "type": "string" },
               "selections": {
                 "type": "array",
                 "items": {
@@ -5150,6 +5259,8 @@
               "remaining",
               "bookmakerId",
               "bookmakerName",
+              "tipsterId",
+              "tipsterName",
               "freebetId",
               "selections"
             ],
@@ -5224,6 +5335,7 @@
           "matches",
           "bookmakerOverrideId",
           "bookmakers",
+          "tipsters",
           "bet",
           "automaticPolicy",
           "duplicates",
@@ -5260,7 +5372,21 @@
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
-          "action": { "type": "string", "enum": ["win", "loss"] }
+          "action": {
+            "type": "string",
+            "enum": [
+              "win",
+              "loss",
+              "void",
+              "half_win",
+              "half_loss",
+              "pending",
+              "cashout",
+              "partial_cashout"
+            ]
+          },
+          "returnAmount": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+          "closedPrincipal": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" }
         },
         "required": ["version", "action"],
         "additionalProperties": false
@@ -5333,7 +5459,7 @@
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
-          "kind": { "type": "string", "enum": ["real", "freebet"] },
+          "kind": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
           "freebetId": {
             "nullable": true,
             "type": "string",
@@ -5354,10 +5480,48 @@
             "maximum": 9007199254740991
           },
           "betState": { "nullable": true, "type": "string" },
-          "kind": { "type": "string", "enum": ["real", "freebet"] },
+          "kind": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
           "freebetCleared": { "type": "boolean" }
         },
         "required": ["version", "betState", "kind", "freebetCleared"],
+        "additionalProperties": false
+      },
+      "ImportTipsterAction": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "tipsterId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["version", "tipsterId"],
+        "additionalProperties": false
+      },
+      "ImportTipsterResult": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "betState": { "nullable": true, "type": "string" },
+          "tipsterId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "tipsterName": { "nullable": true, "type": "string" }
+        },
+        "required": ["version", "betState", "tipsterId", "tipsterName"],
         "additionalProperties": false
       },
       "ImportEventAction": {
@@ -8809,7 +8973,11 @@
                     "exclusiveMinimum": true,
                     "maximum": 9007199254740991
                   },
-                  "betOrigin": { "nullable": true, "type": "string", "enum": ["real", "freebet"] },
+                  "betOrigin": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": ["real", "freebet", "hibrida"]
+                  },
                   "freebetId": {
                     "nullable": true,
                     "type": "string",
@@ -9126,6 +9294,108 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ImportBookmakerResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/tipster": {
+      "post": {
+        "operationId": "updateImportTipster",
+        "summary": "Trocar o tipster do rascunho ou da aposta importada",
+        "tags": ["Importações"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImportTipsterActionInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImportTipsterResult" }
               }
             }
           },

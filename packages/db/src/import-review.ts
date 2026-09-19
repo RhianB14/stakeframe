@@ -1,12 +1,16 @@
 import { createHash } from 'node:crypto';
 import {
+  deriveBetOrigin,
   parseCaption,
+  settleReturnFor,
   ticketExtractionSchema,
   automaticDecisionSchema,
   financeCommandSchema,
+  type SettleAction,
   importBookmakerResultSchema,
   importOriginResultSchema,
   importEventResultSchema,
+  importTipsterResultSchema,
   type BetInput,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
@@ -19,22 +23,8 @@ import { createImportDraftService } from './telegram-sync.js';
 import { executeFinancialCommand } from './finance-transaction.js';
 import { automaticPolicyNotice } from './layout-policy.js';
 
-// stake (até 2 casas) × odds (até 4 casas), arredondamento half-up em centavos.
-// Espelha o mesmo cálculo exibido na mensagem do Telegram (fonte única da
-// semântica `potentialReturn = stake × odd`).
-function grossReturn(stake: string, odds: string): string | null {
-  if (!/^\d{1,12}(\.\d{1,2})?$/.test(stake) || !/^\d{1,12}(\.\d{1,4})?$/.test(odds)) return null;
-  const scale = (value: string, decimals: number) => {
-    const [whole = '0', fraction = ''] = value.split('.');
-    return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(`${fraction}0000`.slice(0, decimals));
-  };
-  const centsValue = scale(stake, 2);
-  const scaledOdds = scale(odds, 4);
-  const total = (centsValue * scaledOdds + 5000n) / 10000n;
-  const whole = total / 100n;
-  const fraction = (total % 100n).toString().padStart(2, '0');
-  return `${whole}.${fraction}`;
-}
+// STK-G0-20 — a aritmética dos retornos vive no shared (fonte única entre a
+// mensagem do Telegram, o Mini App, a Web e a liquidação no servidor).
 
 // Chave de idempotência determinística (formato uuid) para repetições do mesmo
 // pedido — nunca duplica efeitos financeiros.
@@ -47,7 +37,7 @@ function deterministicKey(seed: string): string {
 // organização e chave do cliente). O hash cobre ação + alvo + corpo normalizado;
 // o resultado gravado é sanitizado (nunca conteúdo de bilhete) e vive em
 // `result jsonb`, validado pelo schema específico da ação no replay.
-type ImportActionKind = 'bookmaker' | 'origin' | 'event';
+type ImportActionKind = 'bookmaker' | 'origin' | 'event' | 'tipster';
 type ImportActionReceiptRow = { action: string; hash: string; result: unknown };
 type BookmakerResult = {
   version: number;
@@ -59,10 +49,16 @@ type BookmakerResult = {
 type OriginResult = {
   version: number;
   betState: string | null;
-  kind: 'real' | 'freebet';
+  kind: 'real' | 'freebet' | 'hibrida';
   freebetCleared: boolean;
 };
 type EventResult = { version: number; betState: string | null };
+type TipsterResult = {
+  version: number;
+  betState: string | null;
+  tipsterId: string;
+  tipsterName: string | null;
+};
 const actionHash = (action: ImportActionKind, id: string, body: unknown): string =>
   createHash('sha256').update(JSON.stringify({ action, id, body })).digest('hex');
 const readReceiptRow = async (
@@ -280,7 +276,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       id: string,
       patch: {
         version: number;
-        betOrigin?: 'real' | 'freebet' | null | undefined;
+        betOrigin?: 'real' | 'freebet' | 'hibrida' | null | undefined;
         freebetId?: string | null | undefined;
         eventAt?: string | null | undefined;
       },
@@ -367,9 +363,16 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 )
               ).rows
             : [];
+        // STK-G0-20 B5 — cada lista carrega SOMENTE o próprio tipo de cadastro
+        // ATIVO da organização (casas e tipsters nunca se misturam).
         const bookmakers = (
           await client.query<{ id: string; name: string }>(
-            'select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active order by name asc,id asc limit 200',
+            "select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active and kind='bookmaker' order by name asc,id asc limit 200",
+          )
+        ).rows;
+        const tipsters = (
+          await client.query<{ id: string; name: string }>(
+            "select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active and kind='tipster' order by name asc,id asc limit 200",
           )
         ).rows;
         const bet = row.imported_bet_id
@@ -382,9 +385,12 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 remaining: string;
                 bookmaker_id: string;
                 bookmaker_name: string;
+                tipster_id: string | null;
+                tipster_name: string | null;
                 freebet_id: string | null;
+                freebet_amount: string | null;
               }>(
-                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,c.name as bookmaker_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
+                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,f.amount as freebet_amount,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
                 [row.imported_bet_id],
               )
             ).rows[0] ?? null)
@@ -416,7 +422,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           extraction,
           labels,
           betOrigin:
-            draftRow.bet_origin === 'real' || draftRow.bet_origin === 'freebet'
+            draftRow.bet_origin === 'real' ||
+            draftRow.bet_origin === 'freebet' ||
+            draftRow.bet_origin === 'hibrida'
               ? draftRow.bet_origin
               : null,
           freebetId: draftRow.freebet_id,
@@ -434,6 +442,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           })),
           bookmakerOverrideId: draftRow.bookmaker_override_id,
           bookmakers,
+          tipsters,
           bet: bet
             ? {
                 id: bet.id,
@@ -446,7 +455,10 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 remaining: bet.remaining,
                 bookmakerId: bet.bookmaker_id,
                 bookmakerName: bet.bookmaker_name,
+                tipsterId: bet.tipster_id,
+                tipsterName: bet.tipster_name,
                 freebetId: bet.freebet_id,
+                freebetAmount: bet.freebet_amount,
                 selections: betSelections.map((item) => ({
                   id: item.id,
                   event: item.event,
@@ -491,7 +503,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
     async setStatus(
       context: OrganizationContext,
       id: string,
-      input: { version: number; action: 'win' | 'loss' },
+      input: {
+        version: number;
+        action: SettleAction | 'pending' | 'cashout' | 'partial_cashout';
+        /** STK-G0-20 B4/B5 — cashout: valor recebido informado pelo usuário. */
+        returnAmount?: string | undefined;
+        /** STK-G0-20 B4/B5 — cashout parcial: quanto do valor aberto foi encerrado. */
+        closedPrincipal?: string | undefined;
+      },
       actor: string,
     ) {
       return tenant.withOrganizationTransaction(context, async (client) => {
@@ -511,8 +530,15 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
         const bet = (
-          await client.query<{ id: string; state: string; remaining: string; odds: string }>(
-            'select id,state,remaining,odds from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          await client.query<{
+            id: string;
+            state: string;
+            remaining: string;
+            odds: string;
+            stake: string;
+            freebet_amount: string | null;
+          }>(
+            'select b.id,b.state,b.remaining,b.odds,b.stake,f.amount as freebet_amount from finance.bet b left join finance.freebet f on f.organization_id=b.organization_id and f.id=b.freebet_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1 for update of b',
             [row.imported_bet_id],
           )
         ).rows[0];
@@ -530,19 +556,44 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           throw new FinanceError('STATE_CONFLICT');
         }
         if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
-        // Valor derivado calculado no servidor (stake/odd canônicas): a vitória
-        // devolve o bruto `remaining × odds`; a derrota devolve zero.
-        const returnAmount =
-          input.action === 'win' ? (grossReturn(bet.remaining, bet.odds) ?? '0.00') : '0.00';
+        // G0-20: "Pendente" é um no-op informativo (a aposta permanece aberta).
+        if (input.action === 'pending') return { version: row.version, betState: bet.state };
+        // STK-G0-20 — valor derivado calculado NO SERVIDOR conforme a
+        // modalidade financeira (real, freebet ou híbrida derivada do crédito)
+        // e a transição escolhida no teclado de status / Mini App. O CASHOUT é
+        // a única transição com valor INFORMADO pelo usuário (nunca derivado);
+        // o total encerra todo o valor aberto e o parcial, apenas a parte
+        // declarada — validados pelo comando financeiro canônico.
+        const isCashout = input.action === 'cashout' || input.action === 'partial_cashout';
+        const origin = deriveBetOrigin(bet.stake, bet.freebet_amount);
+        let closedPrincipal: string;
+        let returnAmount: string | null;
+        if (isCashout) {
+          if (!input.returnAmount) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          closedPrincipal =
+            input.action === 'cashout' ? bet.remaining : (input.closedPrincipal ?? '');
+          if (!closedPrincipal) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          returnAmount = input.returnAmount;
+        } else {
+          closedPrincipal = bet.remaining;
+          returnAmount = settleReturnFor(
+            input.action as SettleAction,
+            origin,
+            bet.remaining,
+            bet.odds,
+            bet.freebet_amount,
+          );
+        }
+        if (returnAmount === null) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
         const command = financeCommandSchema.parse({
           type: 'bet.settle',
           id: bet.id,
           outcome: input.action,
-          closedPrincipal: bet.remaining,
+          closedPrincipal,
           returnAmount,
           settledAt: now.toISOString(),
-          reason: 'Liquidação pelo Mini App',
+          reason: isCashout ? 'Cashout pelo Mini App' : 'Liquidação pelo Mini App',
           expectedVersion: settings.version,
         });
         const key = deterministicKey(`import-status:${id}:${input.action}`);
@@ -712,7 +763,11 @@ export function createImportService(database: Database, storage?: ObjectStorage)
     async applyOrigin(
       context: OrganizationContext,
       id: string,
-      input: { version: number; kind: 'real' | 'freebet'; freebetId?: string | null | undefined },
+      input: {
+        version: number;
+        kind: 'real' | 'freebet' | 'hibrida';
+        freebetId?: string | null | undefined;
+      },
       actor: string,
       idempotencyKey: string,
     ) {
@@ -726,7 +781,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         return row;
       });
-      const credit = input.kind === 'freebet' ? (input.freebetId ?? null) : null;
+      const credit =
+        input.kind === 'freebet' || input.kind === 'hibrida' ? (input.freebetId ?? null) : null;
       const requestHash = actionHash('origin', id, {
         version: input.version,
         kind: input.kind,
@@ -819,6 +875,119 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           freebetCleared: false,
         };
         await insertReceiptRow(client, idempotencyKey, 'origin', actor, requestHash, result);
+        return result;
+      });
+    },
+    /**
+     * STK-G0-20 B3 — troca de tipster canônica da aposta importada (seleção do
+     * Telegram/Mini App/Web). O rascunho sem aposta não possui campo de
+     * tipster: a operação exige a aposta registrada (STATE_CONFLICT), com
+     * versão otimista da inbox e recibo idempotente na mesma transação — a
+     * inbox nunca diverge da aposta e o Telegram é espelhado pela outbox.
+     */
+    async applyTipster(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number; tipsterId: string },
+      actor: string,
+      idempotencyKey: string,
+    ) {
+      const requestHash = actionHash('tipster', id, {
+        version: input.version,
+        tipsterId: input.tipsterId,
+      });
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        await client.query(
+          'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+          [idempotencyKey],
+        );
+        const lockedReplay = receiptReplay<TipsterResult>(
+          await readReceiptRow(client, idempotencyKey),
+          'tipster',
+          requestHash,
+          importTipsterResultSchema,
+        );
+        if (lockedReplay) return lockedReplay;
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (!row.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        const bet = await getBetRow(client, row.imported_bet_id);
+        if (bet.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+        const selections = (
+          await client.query<{
+            id: string;
+            event: string;
+            sport: string | null;
+            market: string;
+            selection: string;
+            odds: string | null;
+            event_date: string | null;
+            event_at: Date | null;
+            date_status: string;
+          }>(
+            'select id,event,sport,market,selection,odds::text as odds,event_date::text as event_date,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+            [bet.id],
+          )
+        ).rows;
+        const rebuilt = selections.map((item) => ({
+          id: item.id,
+          event: item.event,
+          sport: item.sport,
+          market: item.market,
+          selection: item.selection,
+          odds: item.odds,
+          eventDate: item.event_date,
+          eventAt: item.event_at ? item.event_at.toISOString() : null,
+          dateStatus: item.date_status as 'confirmed' | 'estimated' | 'pending',
+        }));
+        const command = financeCommandSchema.parse({
+          type: 'bet.update',
+          id: bet.id,
+          tipsterId: input.tipsterId,
+          reference: bet.reference,
+          selections: rebuilt,
+          reason: 'Troca de tipster pelo Telegram',
+          expectedVersion: settings.version,
+        });
+        const key = deterministicKey(`import-action:${idempotencyKey}`);
+        await executeFinancialCommand(client, actor, key, command, settings);
+        const updated = (
+          await client.query<{ state: string; tipster_id: string | null }>(
+            'select state,tipster_id from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [bet.id],
+          )
+        ).rows[0]!;
+        const name = (
+          await client.query<{ name: string }>(
+            'select name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [input.tipsterId],
+          )
+        ).rows[0];
+        const fresh = (
+          await client.query<{ version: number }>(
+            'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0]!;
+        const result: TipsterResult = {
+          version: fresh.version,
+          betState: updated.state,
+          tipsterId: updated.tipster_id ?? input.tipsterId,
+          tipsterName: name?.name ?? null,
+        };
+        await insertReceiptRow(client, idempotencyKey, 'tipster', actor, requestHash, result);
         return result;
       });
     },

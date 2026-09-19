@@ -462,11 +462,13 @@ function ReviewContent({
               </p>
               <p>
                 Origem financeira confirmada:{' '}
-                {detail.betOrigin === 'freebet'
-                  ? 'Freebet'
-                  : detail.betOrigin === 'real'
-                    ? 'Dinheiro real'
-                    : 'Ainda não informada (obrigatória para registrar)'}{' '}
+                {detail.betOrigin === 'hibrida'
+                  ? 'Híbrida'
+                  : detail.betOrigin === 'freebet'
+                    ? 'Freebet'
+                    : detail.betOrigin === 'real'
+                      ? 'Dinheiro real'
+                      : 'Ainda não informada (obrigatória para registrar)'}{' '}
                 · Leitura visual:{' '}
                 {extraction.freebet === null
                   ? 'Sem indicação'

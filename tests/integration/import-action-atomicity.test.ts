@@ -387,10 +387,12 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     expect(rls.relrowsecurity).toBe(true);
   });
 
-  it('upgrades a database at 0012 state to 0013 cleanly', async () => {
+  it('upgrades a database at 0012 state to 0014 cleanly', async () => {
     await database.pool.query('drop table integration.import_action_receipt');
+    // A receipt é criada na 0013 e alterada na 0014: o replay parte do estado
+    // anterior às duas (limit 2 = os markers das duas últimas migrações).
     await database.pool.query(
-      'delete from drizzle.__drizzle_migrations where hash in (select hash from drizzle.__drizzle_migrations order by created_at desc limit 1)',
+      'delete from drizzle.__drizzle_migrations where hash in (select hash from drizzle.__drizzle_migrations order by created_at desc limit 2)',
     );
     await migrateLocalDatabase(database);
     const exists = (

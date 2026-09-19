@@ -6,12 +6,18 @@ import {
   patchImportDraft,
   setImportStatus,
   applyImportBookmaker,
+  applyImportTipster,
   applyImportOrigin,
   applyImportEvent,
   getImportCredits,
 } from './api.js';
 import { DraftControls } from './drafts.js';
-import { BookmakerSection, StatusSection } from './MiniAppSections.js';
+import {
+  BookmakerSection,
+  CashoutSection,
+  StatusSection,
+  TipsterSection,
+} from './MiniAppSections.js';
 
 // STK-G0-19-R5 — Mini App do Telegram: a mesma fonte canônica, autenticada pelo
 // initData validado no servidor (x-telegram-init-data). Nenhum identificador
@@ -36,9 +42,11 @@ function hashParam(name: string): string | null {
   }
 }
 const importId = () => hashParam('import');
-const sectionParam = (): 'status' | 'bookmaker' | null => {
+const sectionParam = (): 'status' | 'bookmaker' | 'tipster' | 'cashout' | null => {
   const value = hashParam('section');
-  return value === 'status' || value === 'bookmaker' ? value : null;
+  return value === 'status' || value === 'bookmaker' || value === 'tipster' || value === 'cashout'
+    ? value
+    : null;
 };
 
 export function MiniAppPage() {
@@ -93,7 +101,11 @@ export function MiniAppPage() {
           ? 'Alterar status'
           : section === 'bookmaker'
             ? 'Alterar casa'
-            : 'Conferir importação'}
+            : section === 'tipster'
+              ? 'Alterar tipster'
+              : section === 'cashout'
+                ? 'Cashout'
+                : 'Conferir importação'}
       </h1>
       <p className="caption-evidence">{detail.data.item.caption || 'Sem legenda'}</p>
       {section === 'status' ? (
@@ -109,6 +121,18 @@ export function MiniAppPage() {
           creditsSender={(bookmakerId) =>
             getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
           }
+          onSaved={() => void detail.refetch()}
+        />
+      ) : section === 'tipster' ? (
+        <TipsterSection
+          detail={detail.data}
+          sender={(body) => applyImportTipster(id, body, initData)}
+          onSaved={() => void detail.refetch()}
+        />
+      ) : section === 'cashout' ? (
+        <CashoutSection
+          detail={detail.data}
+          sender={(body) => setImportStatus(id, body, initData)}
           onSaved={() => void detail.refetch()}
         />
       ) : (

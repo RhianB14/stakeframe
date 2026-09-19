@@ -32,7 +32,7 @@ const normalizeAlias = (value: string) =>
 // O chamador é dono da transação — e do recibo idempotente gravado nela.
 type DraftPatch = {
   version: number;
-  betOrigin?: 'real' | 'freebet' | null | undefined;
+  betOrigin?: 'real' | 'freebet' | 'hibrida' | null | undefined;
   freebetId?: string | null | undefined;
   eventAt?: string | null | undefined;
   bookmakerId?: string | null | undefined;
@@ -136,17 +136,19 @@ async function applyDraftUpdate(
         nextOrigin = null;
       }
     }
-    if (nextOrigin === 'freebet') {
+    if (nextOrigin === 'freebet' || nextOrigin === 'hibrida') {
       if (!nextFreebet) throw new FinanceError('FREEBET_UNRESOLVED');
       // STK-G0-19-R7: a DECLARAÇÃO valida apenas o crédito da própria
-      // organização (casa efetiva, valor exato da stake, validade,
-      // disponibilidade). A política automática não participa desta
-      // validação — a declaração nunca é bloqueada por ausência de
-      // política; a automação é que permanece fail-closed.
+      // organização (casa efetiva, validade, disponibilidade). A política
+      // automática não participa desta validação — a declaração nunca é
+      // bloqueada por ausência de política; a automação é que permanece
+      // fail-closed. G0-20 B2b: freebet pura exige crédito com o valor EXATO
+      // da stake; híbrida exige crédito com valor DIFERENTE (a modalidade
+      // deriva do par stake/crédito).
       if (!effectiveBookmakerId || !stake) throw new FinanceError('FREEBET_UNRESOLVED');
       const credit = (
         await client.query<{ id: string }>(
-          "select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and amount=$3 and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update",
+          `select id from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and bookmaker_id=$2 and ${nextOrigin === 'freebet' ? 'amount=$3' : 'amount<>$3'} and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date for update`,
           [nextFreebet, effectiveBookmakerId, stake],
         )
       ).rows[0];

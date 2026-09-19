@@ -6,6 +6,7 @@ import {
   type Database,
   type OrganizationContext,
 } from '@stakeframe/db';
+import { deriveBetOrigin } from '@stakeframe/shared';
 import {
   TelegramOperationError,
   createTelegramClient,
@@ -51,8 +52,10 @@ type InboxRow = ImportMessageRow & {
   bet_odds: string | null;
   bet_placed_at: Date | null;
   bet_freebet_id: string | null;
+  bet_freebet_amount: string | null;
   bet_bookmaker: string | null;
   bet_tipster: string | null;
+  draft_freebet_amount: string | null;
 };
 
 export function createTelegramOutboxService(
@@ -81,12 +84,14 @@ export function createTelegramOutboxService(
     const row = (
       await db.query(
         `select i.id,i.state,i.version,i.caption,i.extraction,i.bet_origin,i.event_at,i.event_date_status,i.telegram_received_at,i.telegram_chat_id,i.telegram_source_message_id,i.telegram_processing_message_id,i.telegram_result_message_id,i.telegram_synced_version,i.telegram_deleted_at,
-                c.name as override_bookmaker,
-                b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,
+                c.name as override_bookmaker,draftf.amount as draft_freebet_amount,
+                b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,f.amount as bet_freebet_amount,
                 bc.name as bet_bookmaker,t.name as bet_tipster
          from integration.inbox i
-         left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
+          left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
+          left join finance.freebet draftf on draftf.id=i.freebet_id and draftf.organization_id=i.organization_id
          left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
+         left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id
          left join finance.catalog bc on bc.id=b.bookmaker_id and bc.organization_id=b.organization_id
          left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id
          where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1`,
@@ -100,11 +105,12 @@ export function createTelegramOutboxService(
     if (row.bet_id) {
       const selections = (
         await db.query(
-          'select event,market,selection,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+          'select event,sport,market,selection,event_at,date_status from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
           [row.bet_id],
         )
       ).rows as {
         event: string;
+        sport: string | null;
         market: string;
         selection: string;
         event_at: Date | null;
@@ -114,12 +120,17 @@ export function createTelegramOutboxService(
         state: row.bet_state ?? 'open',
         bookmaker: row.bet_bookmaker,
         tipster: row.bet_tipster,
-        origin: row.bet_freebet_id ? 'freebet' : 'real',
+        // G0-20 B2b — a modalidade deriva do par (stake real, crédito): sem
+        // crédito = real; crédito igual à stake = freebet; crédito distinto =
+        // híbrida. O valor do crédito alimenta o retorno potencial exibido.
+        origin: deriveBetOrigin(row.bet_stake ?? '0.00', row.bet_freebet_amount),
         stake: row.bet_stake ?? '0.00',
         odds: row.bet_odds ?? '1.0000',
+        freebetAmount: row.bet_freebet_amount,
         placedAt: row.bet_placed_at,
         selections: selections.map((selection) => ({
           event: selection.event,
+          sport: selection.sport,
           market: selection.market,
           selection: selection.selection,
           eventAt: selection.event_at,
@@ -131,13 +142,24 @@ export function createTelegramOutboxService(
     switch (item.operation) {
       case 'send_processing_message': {
         if (row.telegram_processing_message_id) return; // já enviada: idempotente
-        const reference = row.id.slice(0, 8).toUpperCase();
+        // STK-G0-20 — texto fixo (estrutura e emojis preservados); somente o
+        // UUID do processamento varia entre envios.
         const result = await client.sendMessage(
           chatId,
           [
-            'Bilhete recebido!',
-            `Protocolo: ${reference}`,
-            'O processamento está em andamento; você pode acompanhar pela fila no app.',
+            '🤖 Sua aposta está sendo processada!',
+            'Estamos analisando as informações enviadas. Caso ocorra alguma instabilidade, o sistema tentará novamente automaticamente. ⏳⚙️',
+            '',
+            'ID do processamento:',
+            row.id,
+            '',
+            'Status atual:',
+            'Validando informações iniciais da aposta...',
+            '',
+            'Assim que o processamento for concluído, você receberá uma notificação aqui mesmo. ✅',
+            '',
+            'Para acompanhar todos os seus processamentos, digite:',
+            '👉 /fila 👀',
           ].join('\n'),
           {
             ...(row.telegram_source_message_id !== null

@@ -1507,8 +1507,7 @@
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "with": {},
-          "where": null
+          "with": {}
         },
         "inbox_telegram_source_idx": {
           "name": "inbox_telegram_source_idx",

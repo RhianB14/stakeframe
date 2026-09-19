@@ -426,3 +426,506 @@ describe('Mini App bookmaker section (R7)', () => {
     // no teste de liquidação acima (GET com sessão reflete o estado novo).
   });
 });
+
+describe('Mini App status transitions by financial modality (G0-20)', () => {
+  async function importedFreebet() {
+    const id = await upload();
+    await seedExtraction(id);
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    await imports.updateDraft(
+      tenantContext,
+      id,
+      { version: 1, betOrigin: 'freebet', freebetId: credit.id },
+      'web',
+    );
+    const applied = await run({
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 2,
+      decision: {
+        kind: 'create',
+        bet: await betInput({ freebetId: credit.id }),
+        duplicateReason: '',
+      },
+    } as CommandInput);
+    const version = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.version;
+    return { importId: id, betId: applied.id, version };
+  }
+  const settle = (importId: string, version: number, action: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action },
+    });
+  const lastSettlement = async (betId: string) =>
+    (
+      await database.pool.query<{ outcome: string; return_amount: string }>(
+        'select outcome,return_amount from finance.settlement where bet_id=$1 order by settled_at desc, id desc limit 1',
+        [betId],
+      )
+    ).rows[0]!;
+
+  it('freebet win returns the freebet multiplied by (odd - 1), never the stake back', async () => {
+    const { importId, betId, version } = await importedFreebet();
+    const response = await settle(importId, version, 'win');
+    expect(response.statusCode).toBe(200);
+    // 100,00 de freebet x (2,00 - 1) = 100,00 — o valor da freebet nao retorna.
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'win',
+      return_amount: '100.00',
+    });
+  });
+  it('half win returns half of (P x O + P) for real', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect((await settle(importId, version, 'half_win')).statusCode).toBe(200);
+    // (100 x 2 + 100) / 2 = 150,00 (metade ganha + metade anulada).
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'half_win',
+      return_amount: '150.00',
+    });
+  });
+  it('half loss returns P/2 for real', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect((await settle(importId, version, 'half_loss')).statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'half_loss',
+      return_amount: '50.00',
+    });
+  });
+  it('void returns the real principal', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect((await settle(importId, version, 'void')).statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'void',
+      return_amount: '100.00',
+    });
+  });
+  it('void returns zero for a freebet', async () => {
+    const { importId, betId, version } = await importedFreebet();
+    expect((await settle(importId, version, 'void')).statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'void',
+      return_amount: '0.00',
+    });
+  });
+  it('keeps "Pendente" as an informative no-op without any settlement', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    const response = await settle(importId, version, 'pending');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'open' });
+    const count = (
+      await database.pool.query<{ count: string }>(
+        'select count(*) from finance.settlement where bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!.count;
+    expect(Number(count)).toBe(0);
+  });
+});
+
+// STK-G0-20 B2b — aposta HÍBRIDA: valor real + crédito freebet de valor
+// DIFERENTE da stake. Retorno = (real x odd) + (freebet x (odd - 1)); o valor
+// da freebet nunca retorna; a classificação deriva do par (stake, crédito).
+describe('Mini App hybrid modality (G0-20 B2b)', () => {
+  async function importedHybrid(over: { credit?: string; stake?: string } = {}) {
+    const id = await upload();
+    await seedExtraction(id);
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: over.credit ?? '40.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    await imports.updateDraft(
+      tenantContext,
+      id,
+      { version: 1, betOrigin: 'hibrida', freebetId: credit.id },
+      'web',
+    );
+    const applied = await run({
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 2,
+      decision: {
+        kind: 'create',
+        bet: await betInput({ freebetId: credit.id, stake: over.stake ?? '60.00' }),
+        duplicateReason: '',
+      },
+    } as CommandInput);
+    const version = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.version;
+    return { importId: id, betId: applied.id, version, creditId: credit.id };
+  }
+  const settle = (importId: string, version: number, action: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action },
+    });
+  const lastSettlement = async (betId: string) =>
+    (
+      await database.pool.query<{ outcome: string; return_amount: string }>(
+        'select outcome,return_amount from finance.settlement where bet_id=$1 order by settled_at desc, id desc limit 1',
+        [betId],
+      )
+    ).rows[0]!;
+
+  it('creates a hybrid bet with a real stake and a freebet credit of a different value', async () => {
+    const { betId, creditId } = await importedHybrid();
+    const bet = (
+      await database.pool.query<{ stake: string; freebet_id: string | null }>(
+        'select stake,freebet_id from finance.bet where id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    expect(bet.stake).toBe('60.00');
+    expect(bet.freebet_id).toBe(creditId);
+  });
+
+  it('exposes the hybrid origin and credit amount in the Web/Mini App detail', async () => {
+    const { importId, creditId } = await importedHybrid();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      betOrigin: 'hibrida',
+      bet: { freebetId: creditId, freebetAmount: '40.00' },
+    });
+  });
+
+  it('settles a hybrid win as real x odd + freebet x (odd - 1)', async () => {
+    const { importId, betId, version } = await importedHybrid();
+    const response = await settle(importId, version, 'win');
+    expect(response.statusCode).toBe(200);
+    // 60,00 x 2,00 + 40,00 x (2,00 - 1) = 160,00 — a freebet nao devolve o valor.
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'win',
+      return_amount: '160.00',
+    });
+  });
+
+  it('void returns only the real principal for a hybrid bet', async () => {
+    const { importId, betId, version, creditId } = await importedHybrid();
+    const response = await settle(importId, version, 'void');
+    expect(response.statusCode).toBe(200);
+    expect(await lastSettlement(betId)).toMatchObject({
+      outcome: 'void',
+      return_amount: '60.00',
+    });
+    const credit = (
+      await database.pool.query<{ used_by: string | null }>(
+        'select used_by from finance.freebet where id=$1',
+        [creditId],
+      )
+    ).rows[0]!;
+    expect(credit.used_by).toBeNull();
+  });
+
+  it('refuses a hybrid declaration whose credit equals the stake (freebet is a pure modality)', async () => {
+    const id = await upload();
+    await seedExtraction(id);
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: await houseId(),
+      amount: '100.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+    });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...session, 'content-type': 'application/json' },
+      payload: { version: 1, betOrigin: 'hibrida', freebetId: credit.id },
+    });
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    expect(response.statusCode).toBeLessThan(500);
+  });
+
+  it('keeps organization isolation: foreign credits never resolve and foreign bets stay hidden', async () => {
+    await database.pool.query(
+      "insert into auth.\"user\"(id,name,email) values('fixture-other','Other','other@stk.test') on conflict (id) do nothing",
+    );
+    const otherFinance = createFinanceService(database);
+    const otherContext = await otherFinance.ensureContext('fixture-other');
+    await otherFinance.command(otherContext, randomUUID(), {
+      type: 'bankroll.initialize',
+      reserve: '500.00',
+      balances: [
+        {
+          bookmakerId: (await otherFinance.workspace(otherContext)).catalog.find(
+            (c) => c.name === 'Bet365',
+          )!.id,
+          amount: '500.00',
+        },
+      ],
+      unitPercent: '1.00',
+      expectedVersion: (await otherFinance.workspace(otherContext)).version,
+    } as FinanceCommand);
+    const foreign = await otherFinance.command(otherContext, randomUUID(), {
+      type: 'freebet.create',
+      bookmakerId: (await otherFinance.workspace(otherContext)).catalog.find(
+        (c) => c.name === 'Bet365',
+      )!.id,
+      amount: '40.00',
+      expiresOn: '2026-12-31',
+      stakeReturned: false,
+      note: '',
+      expectedVersion: (await otherFinance.workspace(otherContext)).version,
+    } as FinanceCommand);
+    const id = await upload();
+    await seedExtraction(id);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: 1, betOrigin: 'hibrida', freebetId: foreign.id },
+    });
+    expect(response.statusCode).toBe(409);
+    const row = (
+      await database.pool.query<{ bet_origin: string | null; freebet_id: string | null }>(
+        'select bet_origin,freebet_id from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!;
+    expect(row.bet_origin).toBeNull();
+    expect(row.freebet_id).toBeNull();
+  });
+});
+
+// STK-G0-20 B5 — seção do Tipster: SOMENTE cadastros ATIVOS da organização,
+// separados das casas; a seleção grava no registro canônico e sincroniza o
+// Telegram pela outbox.
+describe('Mini App tipster section (G0-20 B5)', () => {
+  const createTipster = async (tipsterName: string, active = true) => {
+    const created = await run({
+      type: 'catalog.create',
+      kind: 'tipster',
+      name: tipsterName,
+      aliases: [],
+    } as CommandInput);
+    if (!active)
+      await run({
+        type: 'catalog.update',
+        id: created.id,
+        name: tipsterName,
+        aliases: [],
+        active: false,
+      } as CommandInput);
+    return created.id;
+  };
+
+  it('loads the active tipsters separately from the active houses', async () => {
+    const { importId } = await importedWithTelegram();
+    const active = await createTipster('TipsterAtivo');
+    await createTipster('TipsterInativo', false);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: tg,
+    });
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as {
+      tipsters: { id: string; name: string }[];
+      bookmakers: { id: string; name: string }[];
+    };
+    expect(detail.tipsters.map((item) => item.name)).toContain('TipsterAtivo');
+    expect(detail.tipsters.map((item) => item.name)).not.toContain('TipsterInativo');
+    // Casas e tipsters nunca se misturam nas duas listas.
+    expect(detail.bookmakers.map((item) => item.name)).not.toContain('TipsterAtivo');
+    expect(detail.tipsters.map((item) => item.id)).toContain(active);
+  });
+
+  it('selects a tipster and syncs the web view and the telegram message', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    const tipster = await createTipster('TipsterAtivo');
+    const before = (await outbox(importId)).length;
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, tipsterId: tipster },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ tipsterId: tipster, tipsterName: 'TipsterAtivo' });
+    const bet = (
+      await database.pool.query<{ tipster_id: string | null }>(
+        'select tipster_id from finance.bet where id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    expect(bet.tipster_id).toBe(tipster);
+    // Web lê o mesmo registro canônico com o nome resolvido.
+    const viaWeb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(
+      (viaWeb.json() as { bet: { tipsterId: string; tipsterName: string } | null }).bet,
+    ).toMatchObject({ tipsterId: tipster, tipsterName: 'TipsterAtivo' });
+    // Telegram espelhado pela outbox (edição da resposta final).
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops.length).toBeGreaterThan(before);
+    expect(ops).toContain('edit_result_message');
+  });
+
+  it('refuses inactive or foreign tipsters with sanitized errors', async () => {
+    const { importId, version } = await importedWithTelegram();
+    const inactive = await createTipster('TipsterInativo', false);
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, tipsterId: inactive },
+    });
+    expect(refused.statusCode).toBe(409);
+    const foreign = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, tipsterId: '10000000-0000-4000-8000-00000000dead' },
+    });
+    expect(foreign.statusCode).toBe(409);
+  });
+});
+
+// STK-G0-20 B4/B5 — cashout: o valor recebido é INFORMADO pelo usuário (nunca
+// derivado); o total encerra todo o valor aberto e o parcial, apenas a parte
+// declarada — tudo revalidado pelo comando financeiro canônico.
+describe('Mini App cashout section (G0-20 B4/B5)', () => {
+  const settle = async (importId: string, payload: Record<string, unknown>, version: number) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, ...payload },
+    });
+
+  it('registers a total cashout with the informed return and cleans the telegram', async () => {
+    const { importId, version } = await importedWithTelegram();
+    const response = await settle(importId, { action: 'cashout', returnAmount: '150.00' }, version);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'settled' });
+    const settlement = (
+      await database.pool.query<{ outcome: string; return_amount: string }>(
+        'select outcome,return_amount from finance.settlement order by settled_at desc limit 1',
+      )
+    ).rows[0]!;
+    expect(settlement.outcome).toBe('cashout');
+    expect(settlement.return_amount).toBe('150.00');
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    for (const operation of [
+      'delete_source_message',
+      'delete_result_message',
+      'delete_processing_message',
+    ])
+      expect(ops).toContain(operation);
+  });
+
+  it('registers a partial cashout closing only the informed part', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    const response = await settle(
+      importId,
+      { action: 'partial_cashout', returnAmount: '80.00', closedPrincipal: '50.00' },
+      version,
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'open' });
+    const bet = (
+      await database.pool.query<{ state: string; remaining: string }>(
+        'select state,remaining from finance.bet where id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    expect(bet.state).toBe('open');
+    expect(bet.remaining).toBe('50.00');
+    // Parcial não encerra a aposta: nada de limpeza do chat.
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops).not.toContain('delete_result_message');
+    const settlement = (
+      await database.pool.query<{ outcome: string; closed_principal: string }>(
+        'select outcome,closed_principal from finance.settlement order by settled_at desc limit 1',
+      )
+    ).rows[0]!;
+    expect(settlement.outcome).toBe('partial_cashout');
+    expect(settlement.closed_principal).toBe('50.00');
+  });
+
+  it('refuses a cashout without the informed values or closing everything', async () => {
+    const { importId, version } = await importedWithTelegram();
+    // Sem valor informado: o contrato recusa antes de qualquer efeito.
+    expect((await settle(importId, { action: 'cashout' }, version)).statusCode).toBe(400);
+    expect(
+      (await settle(importId, { action: 'partial_cashout', returnAmount: '80.00' }, version))
+        .statusCode,
+    ).toBe(400);
+    // Parcial encerrando o valor aberto inteiro: conflito do comando canônico.
+    expect(
+      (
+        await settle(
+          importId,
+          { action: 'partial_cashout', returnAmount: '80.00', closedPrincipal: '100.00' },
+          version,
+        )
+      ).statusCode,
+    ).toBe(409);
+    const settlements = (
+      await database.pool.query<{ count: string }>('select count(*) from finance.settlement')
+    ).rows[0]!.count;
+    expect(Number(settlements)).toBe(0);
+  });
+
+  it('replays the same cashout idempotently without duplicating effects', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect(
+      (await settle(importId, { action: 'cashout', returnAmount: '150.00' }, version)).statusCode,
+    ).toBe(200);
+    const after = (await outbox(importId)).length;
+    const replay = await settle(importId, { action: 'cashout', returnAmount: '150.00' }, version);
+    expect(replay.statusCode).toBe(200);
+    expect((await outbox(importId)).length).toBe(after);
+    const settlements = (
+      await database.pool.query<{ count: string }>(
+        'select count(*) from finance.settlement where bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!.count;
+    expect(Number(settlements)).toBe(1);
+  });
+});

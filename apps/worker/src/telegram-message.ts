@@ -1,18 +1,23 @@
-import { parseCaption, renderImportMessage, ticketExtractionSchema } from '@stakeframe/shared';
+import {
+  freebetReturn,
+  grossReturn,
+  parseCaption,
+  potentialReturnFor,
+  renderImportMessage,
+  ticketExtractionSchema,
+  type BetOrigin,
+} from '@stakeframe/shared';
 
-// STK-G0-19-R5 — mensagem final do bot a partir do registro canônico.
-// Enquanto eventAt não foi confirmado, exibe telegramReceivedAt como valor
-// provisório; o retorno potencial é calculado (stake × odds, aritmética
-// decimal exata) e o valor visual é apenas diagnóstico.
+// Compat: os cálculos vivem no shared (fonte única) e permanecem exportados
+// deste módulo para os consumidores históricos.
+export { freebetReturn, grossReturn };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Bilhete recebido — em processamento',
-  processing: 'Bilhete recebido — em processamento',
-  review: 'Bilhete analisado — aguardando confirmação',
-  failed: 'Não conseguimos processar o bilhete',
-  discarded: 'Importação descartada',
-  imported: 'Aposta registrada',
-};
+// STK-G0-20 — mensagem final do bot a partir do registro canônico.
+// Layout fixo com emojis por linha (requisito do produto): "📅 Enviado em" usa
+// SEMPRE a data/hora original do Telegram (imutável); "🎮 Evento em" é a data
+// do jogo (editável) — "pendente" enquanto não confirmada. O retorno potencial
+// é calculado no servidor conforme a modalidade financeira (real, freebet ou
+// híbrida); o valor visual da extração é apenas diagnóstico.
 
 const instantFormat = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
@@ -23,33 +28,21 @@ const instantFormat = new Intl.DateTimeFormat('pt-BR', {
 const formatInstant = (value: string | Date | null) =>
   value === null ? null : instantFormat.format(new Date(value));
 
-// stake (até 2 casas) × odds (até 4 casas) com arredondamento half-up em centavos.
-export function grossReturn(stake: string, odds: string): string | null {
-  if (!/^\d{1,12}(\.\d{1,2})?$/.test(stake) || !/^\d{1,12}(\.\d{1,4})?$/.test(odds)) return null;
-  const scale = (value: string, decimals: number) => {
-    const [whole = '0', fraction = ''] = value.split('.');
-    return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(`${fraction}0000`.slice(0, decimals));
-  };
-  const cents = scale(stake, 2);
-  const scaledOdds = scale(odds, 4);
-  const total = (cents * scaledOdds + 5000n) / 10000n;
-  const whole = total / 100n;
-  const fraction = (total % 100n).toString().padStart(2, '0');
-  return `${whole}.${fraction}`;
-}
-
 // STK-G0-19-R8 — dados canônicos da aposta importada (finance.bet/selection):
 // depois da importação a mensagem NÃO usa legenda/OCR como fonte prioritária.
 export type CanonicalBetData = {
   state: string;
   bookmaker: string | null;
   tipster: string | null;
-  origin: 'real' | 'freebet';
+  origin: BetOrigin;
   stake: string;
   odds: string;
+  /** Valor do crédito freebet (apenas na modalidade híbrida). */
+  freebetAmount?: string | null;
   placedAt: Date | null;
   selections: {
     event: string | null;
+    sport: string | null;
     market: string | null;
     selection: string | null;
     eventAt: Date | null;
@@ -70,7 +63,23 @@ export type ImportMessageRow = {
   override_bookmaker?: string | null;
   /** Presente quando a importação já tem aposta registrada. */
   canonical?: CanonicalBetData | null;
+  /** Valor do crédito escolhido no rascunho, quando já declarado. */
+  draft_freebet_amount?: string | null;
 };
+
+const joinValues = (values: (string | null | undefined)[]): string | null => {
+  const parts = values.filter((value): value is string => !!value && value.trim().length > 0);
+  return parts.length ? parts.join('; ') : null;
+};
+
+const draftStatusLabel = (state: string): string => {
+  if (state === 'failed') return 'Não conseguimos processar o bilhete';
+  if (state === 'discarded') return 'Importação descartada';
+  return 'Pendente';
+};
+
+const canonicalStatusLabel = (state: string): string =>
+  state === 'open' ? 'Pendente' : state === 'settled' ? 'Liquidada' : 'Cancelada';
 
 export function buildImportMessage(row: ImportMessageRow): string {
   const labels = parseCaption(row.caption);
@@ -82,61 +91,67 @@ export function buildImportMessage(row: ImportMessageRow): string {
   const extraction = parsed.success ? parsed.data : null;
   if (row.canonical) {
     // R8 — pós-importação: os dados vêm integralmente das tabelas
-    // financeiras canônicas (aposta, casa, tipster, origem, seleções e datas); legenda e
-    // leitura visual não são fonte prioritária.
+    // financeiras canônicas (aposta, casa, tipster, origem, seleções e datas);
+    // legenda e leitura visual não são fonte prioritária.
     const canonical = row.canonical;
-    const stateLabel =
-      canonical.state === 'open'
-        ? 'Aposta registrada'
-        : canonical.state === 'settled'
-          ? 'Aposta liquidada'
-          : 'Aposta cancelada';
-    const stake = canonical.stake;
-    const odds = canonical.odds;
+    const statusLabel = canonicalStatusLabel(canonical.state);
+    const datePending = canonical.selections.every(
+      (item) => item.eventAt === null || item.dateStatus !== 'confirmed',
+    );
+    const firstDate = canonical.selections.find((item) => item.eventAt !== null)?.eventAt ?? null;
     return renderImportMessage({
-      status: row.state,
-      statusLabel: stateLabel,
+      id: row.id,
+      statusLabel,
+      success: canonical.state === 'open',
+      bonus: canonical.origin,
+      sport: joinValues(canonical.selections.map((item) => item.sport)),
+      event: joinValues(canonical.selections.map((item) => item.event)),
+      country: null,
+      selection: joinValues(canonical.selections.map((item) => item.selection)),
+      market: joinValues(canonical.selections.map((item) => item.market)),
+      stake: canonical.stake,
+      odds: canonical.odds,
+      potentialReturn: potentialReturnFor(
+        canonical.origin,
+        canonical.stake,
+        canonical.odds,
+        canonical.freebetAmount ?? null,
+      ),
       kind: canonical.selections.length > 1 ? 'multiple' : 'simple',
-      origin: canonical.origin,
+      sentAt: formatInstant(row.telegram_received_at),
+      eventAt: datePending || firstDate === null ? null : formatInstant(firstDate),
       bookmaker: canonical.bookmaker,
       tipster: canonical.tipster,
-      stake,
-      odds,
-      potentialReturn: stake && odds ? grossReturn(stake, odds) : null,
-      placedAt: canonical.placedAt ? formatInstant(canonical.placedAt) : null,
-      eventAt: null,
-      provisionalAt: null,
-      sport: null,
-      selections: canonical.selections.map((item) => ({
-        event: item.event,
-        market: item.market,
-        selection: item.selection,
-        eventAt: item.eventAt ? formatInstant(item.eventAt) : null,
-      })),
     });
   }
-  const origin = row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null;
+  const origin: BetOrigin =
+    row.bet_origin === 'freebet' ? 'freebet' : row.bet_origin === 'hibrida' ? 'hibrida' : 'real';
+  const declaredOrigin = row.bet_origin !== null;
   const stake = extraction?.stake ?? null;
   const odds = extraction?.odds ?? null;
   const settled = row.event_date_status === 'confirmed' && row.event_at !== null;
   return renderImportMessage({
-    status: row.state,
-    statusLabel: STATUS_LABELS[row.state] ?? 'Bilhete atualizado',
-    kind: (extraction?.selections.length ?? 1) > 1 ? 'multiple' : 'simple',
-    origin,
-    bookmaker: row.override_bookmaker ?? labels.bookmaker ?? extraction?.bookmaker ?? null,
-    tipster: labels.tipster,
+    id: row.id,
+    statusLabel: draftStatusLabel(row.state),
+    success: row.state === 'review',
+    bonus: declaredOrigin ? origin : null,
+    sport: extraction?.selections.find((item) => item.sport !== null)?.sport ?? null,
+    event: joinValues(extraction?.selections.map((item) => item.event) ?? []),
+    country: null,
+    selection: joinValues(extraction?.selections.map((item) => item.selection) ?? []),
+    market: joinValues(extraction?.selections.map((item) => item.market) ?? []),
     stake,
     odds,
-    potentialReturn: stake && odds ? grossReturn(stake, odds) : null,
-    placedAt: extraction?.placedAtText ?? null,
+    // Sem declaração de origem o cálculo assume dinheiro real (caso base);
+    // "🎁 Bônus: pendente" comunica que a modalidade ainda não foi declarada.
+    potentialReturn:
+      stake && odds
+        ? potentialReturnFor(origin, stake, odds, row.draft_freebet_amount ?? null)
+        : null,
+    kind: (extraction?.selections.length ?? 1) > 1 ? 'multiple' : 'simple',
+    sentAt: formatInstant(row.telegram_received_at),
     eventAt: settled ? formatInstant(row.event_at) : null,
-    provisionalAt: settled ? null : formatInstant(row.telegram_received_at),
-    sport: extraction?.selections.find((item) => item.sport !== null)?.sport ?? null,
-    selections: (extraction?.selections ?? []).map((item) => ({
-      event: item.event,
-      market: item.market,
-      selection: item.selection,
-    })),
+    bookmaker: row.override_bookmaker ?? labels.bookmaker ?? extraction?.bookmaker ?? null,
+    tipster: labels.tipster,
   });
 }

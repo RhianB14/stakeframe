@@ -174,10 +174,10 @@ export const importDetailSchema = z
       bookmaker: z.string().nullable(),
       requiresReview: z.boolean(),
     }),
-    // Origem financeira declarada pelo usuário (real|freebet) e o crédito
+    // Origem financeira declarada pelo usuário (real|freebet|hibrida) e o crédito
     // escolhido explicitamente; null significa que ainda não foi informada e
     // nenhuma aposta financeira é criada (fail-closed).
-    betOrigin: z.enum(['real', 'freebet']).nullable(),
+    betOrigin: z.enum(['real', 'freebet', 'hibrida']).nullable(),
     freebetId: z.uuid().nullable(),
     // Data/hora real do evento: o rascunho nasce pendente e exibe
     // telegramReceivedAt como valor provisório editável.
@@ -204,6 +204,8 @@ export const importDetailSchema = z
     // catálogo ativo da organização para a escolha explícita.
     bookmakerOverrideId: z.uuid().nullable(),
     bookmakers: z.array(z.object({ id: z.uuid(), name: z.string() })),
+    // STK-G0-20 B5 — tipsters ATIVOS da organização (nunca misturados às casas).
+    tipsters: z.array(z.object({ id: z.uuid(), name: z.string() })),
     // Aposta vinculada (quando a importação já foi registrada): alimenta a
     // seção "Alterar Status" com o estado canônico e os valores da liquidação.
     bet: z
@@ -217,7 +219,13 @@ export const importDetailSchema = z
         // alimentam as seções pós-importação do Mini App.
         bookmakerId: z.uuid(),
         bookmakerName: z.string().nullable(),
+        // STK-G0-20 B5 — tipster canônico da aposta (seção "Alterar Tipster").
+        tipsterId: z.uuid().nullable(),
+        tipsterName: z.string().nullable(),
         freebetId: z.uuid().nullable(),
+        // Valor do crédito atual; permite distinguir freebet pura de híbrida
+        // mesmo quando um registro legado não trouxe betOrigin.
+        freebetAmount: z.string().nullable().optional(),
         selections: z.array(
           z.object({
             id: z.uuid(),
@@ -246,7 +254,7 @@ export type ImportDetail = z.infer<typeof importDetailSchema>;
 export const draftUpdateSchema = z
   .strictObject({
     version: z.number().int().positive(),
-    betOrigin: z.enum(['real', 'freebet']).nullable().optional(),
+    betOrigin: z.enum(['real', 'freebet', 'hibrida']).nullable().optional(),
     freebetId: z.uuid().nullable().optional(),
     eventAt: instant.nullable().optional(),
     // STK-G0-19-R7: casa declarada pelo usuário (seção "Alterar Casa"); null
@@ -255,7 +263,7 @@ export const draftUpdateSchema = z
   })
   .refine(
     (value) => {
-      if (value.betOrigin === 'freebet')
+      if (value.betOrigin === 'freebet' || value.betOrigin === 'hibrida')
         return value.freebetId !== undefined && value.freebetId !== null;
       if (value.betOrigin === 'real' || value.betOrigin === null)
         return value.freebetId === undefined || value.freebetId === null;
@@ -279,12 +287,38 @@ export type DraftUpdateResult = z.infer<typeof draftUpdateResultSchema>;
 
 // STK-G0-19-R7 — transições REAIS de status disponíveis para a aposta de uma
 // importação pendente no Mini App (seção "Alterar Status").
-export const IMPORT_STATUS_ACTIONS = ['win', 'loss'] as const;
+// STK-G0-20 — teclado de status (Ganha, Perdida, Meio-Ganha, Meio-Perdida,
+// Reembolsada) + 'pending' (no-op informativo: mantém pendente).
+export const IMPORT_STATUS_ACTIONS = [
+  'win',
+  'loss',
+  'void',
+  'half_win',
+  'half_loss',
+  'pending',
+] as const;
+// STK-G0-20 B4/B5 — cashout exige o valor de retorno informado pelo usuário
+// (nunca derivado); a modalidade parcial encerra apenas parte do valor aberto.
+export const IMPORT_CASHOUT_ACTIONS = ['cashout', 'partial_cashout'] as const;
+const moneyAmount = z.string().regex(/^\d{1,12}(\.\d{1,2})?$/);
 export const importStatusSchema = z
   .strictObject({
     version: z.number().int().positive(),
-    action: z.enum(IMPORT_STATUS_ACTIONS),
+    action: z.enum([...IMPORT_STATUS_ACTIONS, ...IMPORT_CASHOUT_ACTIONS]),
+    /** Obrigatório em cashout/partial_cashout: quanto foi efetivamente recebido. */
+    returnAmount: moneyAmount.optional(),
+    /** Obrigatório em partial_cashout: quanto do valor aberto foi encerrado. */
+    closedPrincipal: moneyAmount.optional(),
   })
+  .refine(
+    (value) =>
+      value.action === 'cashout'
+        ? value.returnAmount !== undefined && value.closedPrincipal === undefined
+        : value.action === 'partial_cashout'
+          ? value.returnAmount !== undefined && value.closedPrincipal !== undefined
+          : value.returnAmount === undefined && value.closedPrincipal === undefined,
+    { message: 'CASHOUT_VALUES_INVALID' },
+  )
   .meta({ id: 'ImportStatusUpdate' });
 export type ImportStatusUpdate = z.infer<typeof importStatusSchema>;
 export const importStatusResultSchema = z
@@ -316,7 +350,7 @@ export const importBookmakerResultSchema = z
 export const importOriginActionSchema = z
   .strictObject({
     version: z.number().int().positive(),
-    kind: z.enum(['real', 'freebet']),
+    kind: z.enum(['real', 'freebet', 'hibrida']),
     freebetId: z.uuid().nullable().optional(),
   })
   .meta({ id: 'ImportOriginAction' });
@@ -324,10 +358,26 @@ export const importOriginResultSchema = z
   .object({
     version: z.number().int().positive(),
     betState: z.string().nullable(),
-    kind: z.enum(['real', 'freebet']),
+    kind: z.enum(['real', 'freebet', 'hibrida']),
     freebetCleared: z.boolean(),
   })
   .meta({ id: 'ImportOriginResult' });
+// STK-G0-20 B3 — troca de tipster canônica da aposta aberta (seleção do
+// Telegram/Mini App/Web com versão otimista e recibo idempotente).
+export const importTipsterActionSchema = z
+  .strictObject({
+    version: z.number().int().positive(),
+    tipsterId: z.uuid(),
+  })
+  .meta({ id: 'ImportTipsterAction' });
+export const importTipsterResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betState: z.string().nullable(),
+    tipsterId: z.uuid(),
+    tipsterName: z.string().nullable(),
+  })
+  .meta({ id: 'ImportTipsterResult' });
 export const importEventActionSchema = z
   .strictObject({
     version: z.number().int().positive(),

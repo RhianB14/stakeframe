@@ -7,6 +7,7 @@ import {
   readTelegramConfig,
   telegramDeleteConfirmButtons,
   telegramResultButtons,
+  telegramStatusButtons,
   type TelegramConfig,
 } from '../../apps/worker/src/telegram.js';
 import { buildImportMessage, grossReturn } from '../../apps/worker/src/telegram-message.js';
@@ -209,14 +210,14 @@ describe('import message rendering (R5)', () => {
     telegram_received_at: new Date('2026-09-17T13:00:00Z'),
     ...over,
   });
-  it('shows the provisional received instant while the event date is pending', () => {
+  it('shows the Telegram instant and a pending event date separately', () => {
     const text = buildImportMessage(row());
-    expect(text).toContain('Origem financeira: confirmar');
-    expect(text).toContain('Retorno potencial: R$ 53,55');
-    expect(text).toContain('data provisória');
-    expect(text).not.toContain('confirmado');
+    expect(text).toContain('🎁 Bônus: pendente');
+    expect(text).toContain('💵 Retorno Potencial: R$ 53,55');
+    expect(text).toContain('📅 Enviado em: 17/09/2026, 10:00');
+    expect(text).toContain('🎮 Evento em: pendente');
   });
-  it('shows the confirmed event date and the declared origin after confirmation', () => {
+  it('shows the confirmed event date and the declared bonus after confirmation', () => {
     const text = buildImportMessage(
       row({
         bet_origin: 'real',
@@ -224,18 +225,26 @@ describe('import message rendering (R5)', () => {
         event_date_status: 'confirmed',
       }),
     );
-    expect(text).toContain('Origem financeira: Dinheiro real');
-    expect(text).toContain('(confirmado)');
-    expect(text).not.toContain('data provisória');
+    expect(text).toContain('🎁 Bônus: Não');
+    expect(text).toContain('🎮 Evento em: 20/09/2026, 15:30');
+    expect(text).toContain('📅 Enviado em: 17/09/2026, 10:00');
   });
-  it('never leaks internal identifiers into the message', () => {
+  it('shows the processing id and never leaks chat or credentials into the message', () => {
     const text = buildImportMessage(row({ bet_origin: 'freebet' }));
-    for (const secret of [row().id, 'chat', '900', 'TOKEN']) expect(text).not.toContain(secret);
+    // G0-20: o UUID do processamento é exibido deliberadamente ("🆔 ID").
+    expect(text).toContain(`🆔 ID: ${row().id}`);
+    expect(text).toContain('🎁 Bônus: Freebet');
+    for (const secret of ['chat', '900', 'TOKEN', 'Bearer']) expect(text).not.toContain(secret);
+  });
+  it('calculates the hybrid draft return using the selected freebet amount', () => {
+    const text = buildImportMessage(row({ bet_origin: 'hibrida', draft_freebet_amount: '40.00' }));
+    expect(text).toContain('🎁 Bônus: Híbrida');
+    expect(text).toContain('💵 Retorno Potencial: R$ 97,55');
   });
 });
 
 describe('telegram buttons and callbacks (R6/R7)', () => {
-  it('builds real per-record Mini App URLs for every action without duplicating links', () => {
+  it('builds the final message keyboard with only its own keyboard per action', () => {
     const first = telegramResultButtons(
       'https://app.stakeframe.test',
       '10000000-0000-4000-8000-000000000001',
@@ -246,35 +255,116 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     );
     const urlOf = (button: unknown) => (button as { web_app?: { url?: string } }).web_app?.url;
     const id = '10000000-0000-4000-8000-000000000001';
-    // R7: Editar, Alterar Status e Alterar Casa abrem o Mini App na seção certa.
+    // G0-20 (B4): Editar abre SOMENTE o Mini App preenchido (sem seção).
+    expect(first[0]![0]).toMatchObject({ text: '✏️ Editar' });
     expect(urlOf(first[0]![0])).toBe(`https://app.stakeframe.test#miniapp?import=${id}`);
-    expect(urlOf(first[1]![0])).toBe(
-      `https://app.stakeframe.test#miniapp?import=${id}&section=status`,
-    );
-    expect(urlOf(first[1]![1])).toBe(
-      `https://app.stakeframe.test#miniapp?import=${id}&section=bookmaker`,
-    );
     expect(urlOf(second[0]![0])).not.toBe(urlOf(first[0]![0]));
-    // R7: NÃO existe mais callback de status/casa que apenas mostre toast —
-    // as duas primeiras linhas são web_app (as seções reais do Mini App).
-    for (const row of [first[0]!, first[1]!]) {
-      for (const button of row) expect(button).not.toHaveProperty('callback_data');
-    }
+    // Alterar Status abre SOMENTE o teclado inline (nunca o Mini App).
+    expect(first[1]![0]).toMatchObject({ text: '📚 Alterar Status' });
+    expect(first[1]![0]).not.toHaveProperty('web_app');
+    expect((first[1]![0] as { callback_data?: string }).callback_data).toBe('sf:v1:status');
+    // Alterar Casa / Alterar Tipster abrem os teclados inline dos cadastros.
+    expect(first[2]![0]).toMatchObject({
+      text: '🏠 Alterar Casa',
+      callback_data: 'sf:v1:bookmaker',
+    });
+    expect(first[2]![1]).toMatchObject({
+      text: '🗣️ Alterar Tipster',
+      callback_data: 'sf:v1:tipster',
+    });
+    // Cashout não abre o Mini App: somente Editar tem web_app. O valor é
+    // informado pela seção Cashout acessada dentro do Mini App.
+    expect(first[3]![0]).toMatchObject({ text: '💸 Cashout' });
+    expect(first[3]![0]).not.toHaveProperty('web_app');
+    expect((first[3]![0] as { callback_data?: string }).callback_data).toBe('sf:v1:cashout');
     // Excluir continua callback com confirmação em dois toques.
-    expect(first[2]![0]).toMatchObject({ callback_data: 'sf:v1:delete' });
+    expect(first[4]![0]).toMatchObject({ text: '🗑️ Excluir', callback_data: 'sf:v1:delete' });
     const confirm = telegramDeleteConfirmButtons();
     expect(confirm[0]![0]).toMatchObject({ callback_data: 'sf:v1:delete:confirm' });
     expect(confirm[1]![0]).toMatchObject({ callback_data: 'sf:v1:delete:cancel' });
   });
+  it('offers exactly the seven status options on their own keyboard', () => {
+    const keyboard = telegramStatusButtons();
+    const flat = keyboard.flat();
+    expect(flat.map((button) => button.text)).toEqual([
+      '✅ Ganha',
+      '❌ Perdida',
+      '⏳ Pendente',
+      '🌗 Meio-Ganha',
+      '🌗 Meio-Perdida',
+      '💱 Reembolsada',
+      '◀️ Voltar para o bilhete',
+    ]);
+    expect(flat.map((button) => (button as { callback_data?: string }).callback_data)).toEqual([
+      'sf:v1:status:win',
+      'sf:v1:status:loss',
+      'sf:v1:status:pending',
+      'sf:v1:status:half_win',
+      'sf:v1:status:half_loss',
+      'sf:v1:status:void',
+      'sf:v1:back',
+    ]);
+  });
   it('parses callback data strictly and refuses unknown or foreign callbacks', () => {
-    // R7: status/casa deixaram de existir como callbacks (viraram web_app com
-    // seção real); somente a exclusão permanece como callback.
-    expect(parseTelegramCallbackData('sf:v1:status')).toBeNull();
-    expect(parseTelegramCallbackData('sf:v1:bookmaker')).toBeNull();
-    expect(parseTelegramCallbackData('sf:v1:delete:confirm')).toBe('delete_confirm');
-    expect(parseTelegramCallbackData('sf:v1:delete:cancel')).toBe('delete_cancel');
+    // G0-20 (B4): Alterar Status abre o teclado inline; a seleção carrega
+    // SOMENTE a transição (revalidada no servidor).
+    expect(parseTelegramCallbackData('sf:v1:status')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:win')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: 'win',
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:half_win')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: 'half_win',
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:pending')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: 'pending',
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:cashout')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:status:foo')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:cashout')).toEqual({
+      action: 'cashout',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:bookmaker')).toEqual({
+      action: 'bookmaker',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:tipster')).toEqual({
+      action: 'tipster',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:back')).toEqual({ action: 'back', catalogId: null });
+    expect(parseTelegramCallbackData('sf:v1:delete:confirm')).toEqual({
+      action: 'delete_confirm',
+      catalogId: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:delete:cancel')).toEqual({
+      action: 'delete_cancel',
+      catalogId: null,
+    });
     expect(parseTelegramCallbackData('sf:v1:edit')).toBeNull();
     expect(parseTelegramCallbackData('sf:v1:drop')).toBeNull();
+    const catalog = '11111111-2222-4333-8444-555555555555';
+    expect(parseTelegramCallbackData(`sf:v1:bookmaker:${catalog}`)).toEqual({
+      action: 'bookmaker',
+      catalogId: catalog,
+    });
+    expect(parseTelegramCallbackData(`sf:v1:tipster:${catalog}`)).toEqual({
+      action: 'tipster',
+      catalogId: catalog,
+    });
+    expect(parseTelegramCallbackData('sf:v1:bookmaker:not-a-uuid')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:back:x')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:delete:confirm:x')).toBeNull();
     const callback = (over: Record<string, unknown> = {}) => ({
       update_id: 50,
       callback_query: {
@@ -287,6 +377,7 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     });
     expect(authorizedCallback(callback(), config)).toMatchObject({
       action: 'delete',
+      catalogId: null,
       messageId: 77,
       callbackId: 'cb-1',
     });
