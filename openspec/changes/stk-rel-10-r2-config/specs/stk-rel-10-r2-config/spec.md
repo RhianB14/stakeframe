@@ -52,3 +52,9 @@ com `OCR_REQUIRES_INTEGRATIONS`.
 As mensagens de falha de configuração (runtime e gate de deploy) DEVEM (MUST)
 conter apenas códigos estáveis, nunca valores de segredo, tokens ou URLs com
 credenciais; testes DEVEM (MUST) cobrir a ausência de eco.
+
+#### Scenario: falha de configuração com material sintético
+
+- **WHEN** um loader de configuração recusa por valor ausente, ambíguo ou inválido
+- **THEN** a mensagem contém apenas o código estável (por exemplo, `TELEGRAM_CONFIGURATION_INVALID`)
+- **AND** nenhum valor de segredo, token ou URL com credenciais aparece na mensagem
