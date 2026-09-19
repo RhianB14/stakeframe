@@ -55,6 +55,7 @@ type InboxRow = ImportMessageRow & {
   bet_freebet_amount: string | null;
   bet_bookmaker: string | null;
   bet_tipster: string | null;
+  draft_freebet_amount: string | null;
 };
 
 export function createTelegramOutboxService(
@@ -83,11 +84,12 @@ export function createTelegramOutboxService(
     const row = (
       await db.query(
         `select i.id,i.state,i.version,i.caption,i.extraction,i.bet_origin,i.event_at,i.event_date_status,i.telegram_received_at,i.telegram_chat_id,i.telegram_source_message_id,i.telegram_processing_message_id,i.telegram_result_message_id,i.telegram_synced_version,i.telegram_deleted_at,
-                c.name as override_bookmaker,
+                c.name as override_bookmaker,draftf.amount as draft_freebet_amount,
                 b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,f.amount as bet_freebet_amount,
                 bc.name as bet_bookmaker,t.name as bet_tipster
          from integration.inbox i
-         left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
+          left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
+          left join finance.freebet draftf on draftf.id=i.freebet_id and draftf.organization_id=i.organization_id
          left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
          left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id
          left join finance.catalog bc on bc.id=b.bookmaker_id and bc.organization_id=b.organization_id

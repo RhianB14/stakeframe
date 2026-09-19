@@ -458,16 +458,10 @@ export function BetForm({
   const [stake, setStake] = useState(bet?.stake ?? review?.extraction?.stake ?? '');
   const [odds, setOdds] = useState(bet?.odds ?? review?.extraction?.odds ?? '');
   const [placedAt, setPlaced] = useState(() => (review ? '' : localNow()));
-  const [freebetId, setFreebet] = useState(
-    bet?.freebetId ??
-      (review
-        ? review.betOrigin === 'real'
-          ? ''
-          : review.betOrigin === 'freebet' && review.freebetId
-            ? review.freebetId
-            : 'unconfirmed'
-        : ''),
+  const [reviewOrigin, setReviewOrigin] = useState<'real' | 'freebet' | 'hibrida' | 'unconfirmed'>(
+    () => (review ? (review.betOrigin ?? 'unconfirmed') : 'real'),
   );
+  const [freebetId, setFreebet] = useState(bet?.freebetId ?? review?.freebetId ?? '');
   const [reference, setReference] = useState(bet?.reference ?? review?.extraction?.reference ?? '');
   const [duplicateReason, setDuplicateReason] = useState('');
   const [selections, setSelections] = useState<SelectionForm[]>(() =>
@@ -538,8 +532,19 @@ export function BetForm({
             : 'Registrar aposta'
       }
       onSubmit={() => {
-        if (review && freebetId === 'unconfirmed')
-          throw new Error('Confirme se a aposta usa dinheiro real ou freebet.');
+        const confirmedReviewOrigin =
+          reviewOrigin === 'real' || reviewOrigin === 'freebet' || reviewOrigin === 'hibrida'
+            ? reviewOrigin
+            : null;
+        if (review && !confirmedReviewOrigin)
+          throw new Error('Confirme se a aposta usa dinheiro real, freebet ou híbrida.');
+        if (review && confirmedReviewOrigin !== 'real' && !freebetId)
+          throw new Error('Escolha o crédito freebet usado nesta aposta.');
+        const effectiveOrigin = review
+          ? (confirmedReviewOrigin ?? 'real')
+          : freebetId
+            ? 'freebet'
+            : 'real';
         return bet
           ? {
               type: 'bet.update',
@@ -557,14 +562,14 @@ export function BetForm({
                 decision: {
                   kind: 'create',
                   duplicateReason,
-                  betOrigin: freebetId && freebetId !== 'unconfirmed' ? 'freebet' : 'real',
+                  betOrigin: effectiveOrigin,
                   bet: {
                     bookmakerId,
                     tipsterId: tipsterId || null,
                     stake: decimalInput(stake),
                     odds: odds.replace(',', '.'),
                     placedAt: localInstant(placedAt),
-                    freebetId: freebetId || null,
+                    freebetId: effectiveOrigin === 'real' ? null : freebetId || null,
                     reference,
                     selections: built(),
                     allowMissingUnit,
@@ -593,7 +598,8 @@ export function BetForm({
             value={bookmakerId}
             onChange={(event) => {
               setBookmaker(event.target.value);
-              setFreebet(review ? 'unconfirmed' : '');
+              setFreebet('');
+              if (review) setReviewOrigin('unconfirmed');
             }}
           >
             <option value="">Selecione</option>
@@ -616,34 +622,67 @@ export function BetForm({
         </Field>
         {!bet ? (
           <>
-            <Field label="Origem da aposta">
-              <select
-                value={freebetId}
-                onChange={(event) => {
-                  setFreebet(event.target.value);
-                  const credit = workspace.freebets.find((item) => item.id === event.target.value);
-                  if (credit) setStake(credit.amount);
-                }}
-              >
-                {review ? (
-                  <option value="unconfirmed" disabled>
-                    Confirme dinheiro real ou freebet
-                  </option>
-                ) : null}
-                <option value="">Dinheiro real</option>
-                {workspace.freebets
-                  .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
-                  .map((item) => (
-                    <option value={item.id} key={item.id}>
-                      Freebet {formatBRL(item.amount)} · até {item.expiresOn}
+            {review ? (
+              <>
+                <Field label="Origem da aposta">
+                  <select
+                    value={reviewOrigin}
+                    onChange={(event) => {
+                      const value = event.target.value as typeof reviewOrigin;
+                      setReviewOrigin(value);
+                      if (value === 'real') setFreebet('');
+                    }}
+                  >
+                    <option value="unconfirmed" disabled>
+                      Confirme a modalidade
                     </option>
-                  ))}
-              </select>
-            </Field>
+                    <option value="real">Dinheiro real</option>
+                    <option value="freebet">Freebet</option>
+                    <option value="hibrida">Híbrida (real + freebet)</option>
+                  </select>
+                </Field>
+                {reviewOrigin === 'freebet' || reviewOrigin === 'hibrida' ? (
+                  <Field label="Crédito de freebet">
+                    <select value={freebetId} onChange={(event) => setFreebet(event.target.value)}>
+                      <option value="">Selecione o crédito</option>
+                      {workspace.freebets
+                        .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                        .map((item) => (
+                          <option value={item.id} key={item.id}>
+                            {`${formatBRL(item.amount)} · até ${item.expiresOn}`}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                ) : null}
+              </>
+            ) : (
+              <Field label="Origem da aposta">
+                <select
+                  value={freebetId}
+                  onChange={(event) => {
+                    setFreebet(event.target.value);
+                    const credit = workspace.freebets.find(
+                      (item) => item.id === event.target.value,
+                    );
+                    if (credit) setStake(credit.amount);
+                  }}
+                >
+                  <option value="">Dinheiro real</option>
+                  {workspace.freebets
+                    .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                    .map((item) => (
+                      <option value={item.id} key={item.id}>
+                        Freebet {formatBRL(item.amount)} · até {item.expiresOn}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+            )}
             <Field label="Valor apostado (R$)">
               <input
                 required
-                disabled={!!freebetId && freebetId !== 'unconfirmed'}
+                disabled={!!freebetId && (!review || reviewOrigin === 'freebet')}
                 inputMode="decimal"
                 value={stake}
                 onChange={(event) => setStake(event.target.value)}

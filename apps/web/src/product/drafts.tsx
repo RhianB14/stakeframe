@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatBRL, type ImportDetail } from '@stakeframe/shared';
+import { deriveBetOrigin, formatBRL, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { localInstant } from './api.js';
@@ -224,9 +224,14 @@ function ImportedControls({
   onSaved: () => void;
 }) {
   const bet = detail.bet!;
-  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(
-    bet.freebetId ? 'freebet' : 'real',
-  );
+  const currentOrigin =
+    detail.betOrigin ??
+    (bet.freebetId
+      ? bet.freebetAmount
+        ? deriveBetOrigin(bet.stake, bet.freebetAmount)
+        : 'freebet'
+      : 'real');
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(currentOrigin);
   const [credit, setCredit] = useState('');
   const [credits, setCredits] = useState<
     { id: string; amount: string; expiresOn: string; stakeReturned: boolean }[] | null

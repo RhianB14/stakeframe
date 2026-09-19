@@ -178,9 +178,14 @@ export function createTelegramCallbackHandler(
       );
       return;
     }
-    // STK-G0-19-R7: status e casa são ações REAIS no Mini App (botões web_app
-    // com seções dedicadas) — não existem mais callbacks que apenas respondem
-    // texto. O único callback sobrevivente é a exclusão em dois toques.
+    if (query.action === 'cashout') {
+      await client.answerCallbackQuery(query.callbackId, {
+        text: 'Abra Editar para informar o valor do cashout.',
+      });
+      return;
+    }
+    // A exclusão continua sendo confirmada em dois toques. Cashout é callback
+    // informativo porque somente Editar pode abrir o Mini App.
     if (query.action === 'delete') {
       await client.answerCallbackQuery(query.callbackId, {
         text: 'Confirme a exclusão desta importação.',

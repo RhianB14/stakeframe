@@ -566,12 +566,14 @@ export async function applyFinanceCommand(
     );
     // R5: liquidação total (saiu de pendente) → limpeza do Telegram.
     if (remaining === 0n) await enqueueCleanupForBet(client, command.id);
-    // A full unused promotional stake voided without real payout can be used again.
+    // A full void releases the promotional credit again. For a pure freebet the
+    // return is zero; for a hybrid it is the real principal, so checking only
+    // amount === 0 would leave the credit permanently consumed.
     if (
       before.freebet_id &&
       command.outcome === 'void' &&
-      amount === 0n &&
-      principal === cents(before.stake)
+      principal === cents(before.stake) &&
+      amount === (pureFreebet ? 0n : principal)
     )
       await client.query(
         'update finance.freebet set used_by=null where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and used_by=$2',

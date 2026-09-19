@@ -22,7 +22,8 @@ export const telegramSyncStateSchema = z.enum(['none', 'pending', 'synced', 'fai
 // transição escolhida (revalidados no servidor contra o catálogo ativo da
 // organização). A importação continua resolvida por chat + id da mensagem de
 // resultado — nunca por payload. A exclusão segue em dois toques e 'back'
-// restaura o teclado principal.
+// restaura o teclado principal. Cashout é callback-only: somente Editar abre
+// o Mini App; a entrada do valor fica na seção Cashout acessada por Editar.
 export const TELEGRAM_CALLBACK_ACTIONS = [
   'delete',
   'delete_confirm',
@@ -30,6 +31,7 @@ export const TELEGRAM_CALLBACK_ACTIONS = [
   'bookmaker',
   'tipster',
   'status',
+  'cashout',
   'back',
 ] as const;
 export type TelegramCallbackAction = (typeof TELEGRAM_CALLBACK_ACTIONS)[number];
@@ -55,9 +57,10 @@ export function parseTelegramCallbackData(value: string): TelegramCallbackPayloa
   const status = CALLBACK_STATUS.exec(value);
   if (status)
     return { action: 'status', catalogId: null, statusAction: status[1] as TelegramStatusAction };
-  const match = /^sf:v1:(delete|delete:confirm|delete:cancel|bookmaker|tipster|status|back)$/.exec(
-    value,
-  );
+  const match =
+    /^sf:v1:(delete|delete:confirm|delete:cancel|bookmaker|tipster|status|cashout|back)$/.exec(
+      value,
+    );
   if (!match || match[1] === undefined) return null;
   const action = match[1].replace('delete:', 'delete_') as TelegramCallbackAction;
   return action === 'status'

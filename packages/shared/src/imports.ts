@@ -174,10 +174,10 @@ export const importDetailSchema = z
       bookmaker: z.string().nullable(),
       requiresReview: z.boolean(),
     }),
-    // Origem financeira declarada pelo usuário (real|freebet) e o crédito
+    // Origem financeira declarada pelo usuário (real|freebet|hibrida) e o crédito
     // escolhido explicitamente; null significa que ainda não foi informada e
     // nenhuma aposta financeira é criada (fail-closed).
-    betOrigin: z.enum(['real', 'freebet']).nullable(),
+    betOrigin: z.enum(['real', 'freebet', 'hibrida']).nullable(),
     freebetId: z.uuid().nullable(),
     // Data/hora real do evento: o rascunho nasce pendente e exibe
     // telegramReceivedAt como valor provisório editável.
@@ -223,6 +223,9 @@ export const importDetailSchema = z
         tipsterId: z.uuid().nullable(),
         tipsterName: z.string().nullable(),
         freebetId: z.uuid().nullable(),
+        // Valor do crédito atual; permite distinguir freebet pura de híbrida
+        // mesmo quando um registro legado não trouxe betOrigin.
+        freebetAmount: z.string().nullable().optional(),
         selections: z.array(
           z.object({
             id: z.uuid(),

@@ -236,6 +236,11 @@ describe('import message rendering (R5)', () => {
     expect(text).toContain('🎁 Bônus: Freebet');
     for (const secret of ['chat', '900', 'TOKEN', 'Bearer']) expect(text).not.toContain(secret);
   });
+  it('calculates the hybrid draft return using the selected freebet amount', () => {
+    const text = buildImportMessage(row({ bet_origin: 'hibrida', draft_freebet_amount: '40.00' }));
+    expect(text).toContain('🎁 Bônus: Híbrida');
+    expect(text).toContain('💵 Retorno Potencial: R$ 97,55');
+  });
 });
 
 describe('telegram buttons and callbacks (R6/R7)', () => {
@@ -267,11 +272,11 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
       text: '🗣️ Alterar Tipster',
       callback_data: 'sf:v1:tipster',
     });
-    // Cashout abre a seção própria do Mini App (valor informado pelo usuário).
+    // Cashout não abre o Mini App: somente Editar tem web_app. O valor é
+    // informado pela seção Cashout acessada dentro do Mini App.
     expect(first[3]![0]).toMatchObject({ text: '💸 Cashout' });
-    expect(urlOf(first[3]![0])).toBe(
-      `https://app.stakeframe.test#miniapp?import=${id}&section=cashout`,
-    );
+    expect(first[3]![0]).not.toHaveProperty('web_app');
+    expect((first[3]![0] as { callback_data?: string }).callback_data).toBe('sf:v1:cashout');
     // Excluir continua callback com confirmação em dois toques.
     expect(first[4]![0]).toMatchObject({ text: '🗑️ Excluir', callback_data: 'sf:v1:delete' });
     const confirm = telegramDeleteConfirmButtons();
@@ -325,6 +330,10 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     });
     expect(parseTelegramCallbackData('sf:v1:status:cashout')).toBeNull();
     expect(parseTelegramCallbackData('sf:v1:status:foo')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:cashout')).toEqual({
+      action: 'cashout',
+      catalogId: null,
+    });
     expect(parseTelegramCallbackData('sf:v1:bookmaker')).toEqual({
       action: 'bookmaker',
       catalogId: null,

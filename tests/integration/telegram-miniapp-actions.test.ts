@@ -602,6 +602,20 @@ describe('Mini App hybrid modality (G0-20 B2b)', () => {
     expect(bet.freebet_id).toBe(creditId);
   });
 
+  it('exposes the hybrid origin and credit amount in the Web/Mini App detail', async () => {
+    const { importId, creditId } = await importedHybrid();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      betOrigin: 'hibrida',
+      bet: { freebetId: creditId, freebetAmount: '40.00' },
+    });
+  });
+
   it('settles a hybrid win as real x odd + freebet x (odd - 1)', async () => {
     const { importId, betId, version } = await importedHybrid();
     const response = await settle(importId, version, 'win');
@@ -614,13 +628,20 @@ describe('Mini App hybrid modality (G0-20 B2b)', () => {
   });
 
   it('void returns only the real principal for a hybrid bet', async () => {
-    const { importId, betId, version } = await importedHybrid();
+    const { importId, betId, version, creditId } = await importedHybrid();
     const response = await settle(importId, version, 'void');
     expect(response.statusCode).toBe(200);
     expect(await lastSettlement(betId)).toMatchObject({
       outcome: 'void',
       return_amount: '60.00',
     });
+    const credit = (
+      await database.pool.query<{ used_by: string | null }>(
+        'select used_by from finance.freebet where id=$1',
+        [creditId],
+      )
+    ).rows[0]!;
+    expect(credit.used_by).toBeNull();
   });
 
   it('refuses a hybrid declaration whose credit equals the stake (freebet is a pure modality)', async () => {

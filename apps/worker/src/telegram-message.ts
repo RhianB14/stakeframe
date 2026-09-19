@@ -63,6 +63,8 @@ export type ImportMessageRow = {
   override_bookmaker?: string | null;
   /** Presente quando a importação já tem aposta registrada. */
   canonical?: CanonicalBetData | null;
+  /** Valor do crédito escolhido no rascunho, quando já declarado. */
+  draft_freebet_amount?: string | null;
 };
 
 const joinValues = (values: (string | null | undefined)[]): string | null => {
@@ -142,7 +144,10 @@ export function buildImportMessage(row: ImportMessageRow): string {
     odds,
     // Sem declaração de origem o cálculo assume dinheiro real (caso base);
     // "🎁 Bônus: pendente" comunica que a modalidade ainda não foi declarada.
-    potentialReturn: stake && odds ? potentialReturnFor(origin, stake, odds, null) : null,
+    potentialReturn:
+      stake && odds
+        ? potentialReturnFor(origin, stake, odds, row.draft_freebet_amount ?? null)
+        : null,
     kind: (extraction?.selections.length ?? 1) > 1 ? 'multiple' : 'simple',
     sentAt: formatInstant(row.telegram_received_at),
     eventAt: settled ? formatInstant(row.event_at) : null,

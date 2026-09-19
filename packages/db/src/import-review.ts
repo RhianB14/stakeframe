@@ -388,8 +388,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 tipster_id: string | null;
                 tipster_name: string | null;
                 freebet_id: string | null;
+                freebet_amount: string | null;
               }>(
-                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
+                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,f.amount as freebet_amount,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
                 [row.imported_bet_id],
               )
             ).rows[0] ?? null)
@@ -421,7 +422,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           extraction,
           labels,
           betOrigin:
-            draftRow.bet_origin === 'real' || draftRow.bet_origin === 'freebet'
+            draftRow.bet_origin === 'real' ||
+            draftRow.bet_origin === 'freebet' ||
+            draftRow.bet_origin === 'hibrida'
               ? draftRow.bet_origin
               : null,
           freebetId: draftRow.freebet_id,
@@ -455,6 +458,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 tipsterId: bet.tipster_id,
                 tipsterName: bet.tipster_name,
                 freebetId: bet.freebet_id,
+                freebetAmount: bet.freebet_amount,
                 selections: betSelections.map((item) => ({
                   id: item.id,
                   event: item.event,
