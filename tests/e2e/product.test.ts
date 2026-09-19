@@ -977,7 +977,9 @@ test('confirms origin and event date on the canonical draft before importing (R5
   // Salvar atualiza o registro e fecha o diálogo; reabre para o fluxo de freebet.
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: /Analista · Bet365/ }).click();
-  await page.getByLabel('Freebet').check();
+  // G0-20 B2b: o seletor de origem ganhou a opção Híbrida (contém 'freebet'
+  // no texto) — o locator precisa ser exato para não casar dois labels.
+  await page.getByLabel('Freebet', { exact: true }).check();
   await page.getByLabel('Crédito de freebet').selectOption('10000000-0000-4000-8000-000000000009');
   await page.getByRole('button', { name: 'Salvar origem e data' }).click();
   await expect.poll(() => patches.length).toBe(2);
