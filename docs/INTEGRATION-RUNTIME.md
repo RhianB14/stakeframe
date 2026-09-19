@@ -91,12 +91,21 @@ respostas tardias só podem concluir a tentativa que as originou.
 
 `AI_ENABLED=true` exige as variáveis OpenRouter de `.env.example` e segredo
 válido. `TELEGRAM_ENABLED=true` exige `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_OWNER_USER_ID` e `TELEGRAM_OWNER_CHAT_ID`; os IDs devem corresponder
-à mesma conversa privada. Em produção todos os segredos usam o sufixo `_FILE`
-com caminho absoluto, seguindo `readSecret`. Não ativar ambos sobre credenciais
-fictícias: a validação falha e o worker não inicia.
+`TELEGRAM_OWNER_USER_ID`, `TELEGRAM_OWNER_CHAT_ID` e `TELEGRAM_MINIAPP_URL`
+(URL HTTPS pública, informação não secreta; o `compose.integrations.yml` a
+injeta por interpolação obrigatória e o `deployment-check --integrations` a
+valida, recusando ausência, HTTP ou credenciais embutidas); os IDs devem
+corresponder à mesma conversa privada. Em produção todos os segredos usam o
+sufixo `_FILE` com caminho absoluto, seguindo `readSecret`. Não ativar ambos
+sobre credenciais fictícias: a validação falha e o worker não inicia.
 
 Os Composes padrão mantêm integrações desativadas e worker sem saída externa.
+Os overlays privados `compose.ocr.yml` e `compose.automatic-import.yml` ativam,
+respectivamente, Azure primário com Google fallback e a importação automática.
+O `deployment-check` aceita os conjuntos autorizados por flag
+(`--integrations`, `--tavily`, `--automatic`, `--operations`, `--ocr`) e recusa
+qualquer desvio verificado — OCR sem as integrações, OCR com provedor ausente
+ou Mini App URL ausente/insegura.
 
 > **Estado do consumidor Telegram (divergente):** a produção passou a usar
 > `compose.integrations.yml` junto aos composes de produção e operações em
