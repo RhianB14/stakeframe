@@ -1658,6 +1658,21 @@
               "required": ["id", "name"]
             }
           },
+          "tipsters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": { "type": "string" }
+              },
+              "required": ["id", "name"]
+            }
+          },
           "bet": {
             "nullable": true,
             "type": "object",
@@ -1677,6 +1692,13 @@
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               "bookmakerName": { "nullable": true, "type": "string" },
+              "tipsterId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "tipsterName": { "nullable": true, "type": "string" },
               "freebetId": {
                 "nullable": true,
                 "type": "string",
@@ -1719,6 +1741,8 @@
               "remaining",
               "bookmakerId",
               "bookmakerName",
+              "tipsterId",
+              "tipsterName",
               "freebetId",
               "selections"
             ]
@@ -1791,6 +1815,7 @@
           "matches",
           "bookmakerOverrideId",
           "bookmakers",
+          "tipsters",
           "bet",
           "automaticPolicy",
           "duplicates",
@@ -1827,8 +1852,19 @@
           },
           "action": {
             "type": "string",
-            "enum": ["win", "loss", "void", "half_win", "half_loss", "pending"]
-          }
+            "enum": [
+              "win",
+              "loss",
+              "void",
+              "half_win",
+              "half_loss",
+              "pending",
+              "cashout",
+              "partial_cashout"
+            ]
+          },
+          "returnAmount": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+          "closedPrincipal": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" }
         },
         "required": ["version", "action"],
         "additionalProperties": false
@@ -5128,6 +5164,22 @@
               "additionalProperties": false
             }
           },
+          "tipsters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": { "type": "string" }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          },
           "bet": {
             "nullable": true,
             "type": "object",
@@ -5147,6 +5199,13 @@
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               "bookmakerName": { "nullable": true, "type": "string" },
+              "tipsterId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "tipsterName": { "nullable": true, "type": "string" },
               "freebetId": {
                 "nullable": true,
                 "type": "string",
@@ -5190,6 +5249,8 @@
               "remaining",
               "bookmakerId",
               "bookmakerName",
+              "tipsterId",
+              "tipsterName",
               "freebetId",
               "selections"
             ],
@@ -5264,6 +5325,7 @@
           "matches",
           "bookmakerOverrideId",
           "bookmakers",
+          "tipsters",
           "bet",
           "automaticPolicy",
           "duplicates",
@@ -5302,8 +5364,19 @@
           },
           "action": {
             "type": "string",
-            "enum": ["win", "loss", "void", "half_win", "half_loss", "pending"]
-          }
+            "enum": [
+              "win",
+              "loss",
+              "void",
+              "half_win",
+              "half_loss",
+              "pending",
+              "cashout",
+              "partial_cashout"
+            ]
+          },
+          "returnAmount": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+          "closedPrincipal": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" }
         },
         "required": ["version", "action"],
         "additionalProperties": false
@@ -9211,6 +9284,108 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ImportBookmakerResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/tipster": {
+      "post": {
+        "operationId": "updateImportTipster",
+        "summary": "Trocar o tipster do rascunho ou da aposta importada",
+        "tags": ["Importações"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImportTipsterActionInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImportTipsterResult" }
               }
             }
           },

@@ -694,3 +694,217 @@ describe('Mini App hybrid modality (G0-20 B2b)', () => {
     expect(row.freebet_id).toBeNull();
   });
 });
+
+// STK-G0-20 B5 — seção do Tipster: SOMENTE cadastros ATIVOS da organização,
+// separados das casas; a seleção grava no registro canônico e sincroniza o
+// Telegram pela outbox.
+describe('Mini App tipster section (G0-20 B5)', () => {
+  const createTipster = async (tipsterName: string, active = true) => {
+    const created = await run({
+      type: 'catalog.create',
+      kind: 'tipster',
+      name: tipsterName,
+      aliases: [],
+    } as CommandInput);
+    if (!active)
+      await run({
+        type: 'catalog.update',
+        id: created.id,
+        name: tipsterName,
+        aliases: [],
+        active: false,
+      } as CommandInput);
+    return created.id;
+  };
+
+  it('loads the active tipsters separately from the active houses', async () => {
+    const { importId } = await importedWithTelegram();
+    const active = await createTipster('TipsterAtivo');
+    await createTipster('TipsterInativo', false);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: tg,
+    });
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as {
+      tipsters: { id: string; name: string }[];
+      bookmakers: { id: string; name: string }[];
+    };
+    expect(detail.tipsters.map((item) => item.name)).toContain('TipsterAtivo');
+    expect(detail.tipsters.map((item) => item.name)).not.toContain('TipsterInativo');
+    // Casas e tipsters nunca se misturam nas duas listas.
+    expect(detail.bookmakers.map((item) => item.name)).not.toContain('TipsterAtivo');
+    expect(detail.tipsters.map((item) => item.id)).toContain(active);
+  });
+
+  it('selects a tipster and syncs the web view and the telegram message', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    const tipster = await createTipster('TipsterAtivo');
+    const before = (await outbox(importId)).length;
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, tipsterId: tipster },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ tipsterId: tipster, tipsterName: 'TipsterAtivo' });
+    const bet = (
+      await database.pool.query<{ tipster_id: string | null }>(
+        'select tipster_id from finance.bet where id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    expect(bet.tipster_id).toBe(tipster);
+    // Web lê o mesmo registro canônico com o nome resolvido.
+    const viaWeb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(
+      (viaWeb.json() as { bet: { tipsterId: string; tipsterName: string } | null }).bet,
+    ).toMatchObject({ tipsterId: tipster, tipsterName: 'TipsterAtivo' });
+    // Telegram espelhado pela outbox (edição da resposta final).
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops.length).toBeGreaterThan(before);
+    expect(ops).toContain('edit_result_message');
+  });
+
+  it('refuses inactive or foreign tipsters with sanitized errors', async () => {
+    const { importId, version } = await importedWithTelegram();
+    const inactive = await createTipster('TipsterInativo', false);
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, tipsterId: inactive },
+    });
+    expect(refused.statusCode).toBe(409);
+    const foreign = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, tipsterId: '10000000-0000-4000-8000-00000000dead' },
+    });
+    expect(foreign.statusCode).toBe(409);
+  });
+});
+
+// STK-G0-20 B4/B5 — cashout: o valor recebido é INFORMADO pelo usuário (nunca
+// derivado); o total encerra todo o valor aberto e o parcial, apenas a parte
+// declarada — tudo revalidado pelo comando financeiro canônico.
+describe('Mini App cashout section (G0-20 B4/B5)', () => {
+  const settle = async (importId: string, payload: Record<string, unknown>, version: number) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, ...payload },
+    });
+
+  it('registers a total cashout with the informed return and cleans the telegram', async () => {
+    const { importId, version } = await importedWithTelegram();
+    const response = await settle(importId, { action: 'cashout', returnAmount: '150.00' }, version);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'settled' });
+    const settlement = (
+      await database.pool.query<{ outcome: string; return_amount: string }>(
+        'select outcome,return_amount from finance.settlement order by settled_at desc limit 1',
+      )
+    ).rows[0]!;
+    expect(settlement.outcome).toBe('cashout');
+    expect(settlement.return_amount).toBe('150.00');
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    for (const operation of [
+      'delete_source_message',
+      'delete_result_message',
+      'delete_processing_message',
+    ])
+      expect(ops).toContain(operation);
+  });
+
+  it('registers a partial cashout closing only the informed part', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    const response = await settle(
+      importId,
+      { action: 'partial_cashout', returnAmount: '80.00', closedPrincipal: '50.00' },
+      version,
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'open' });
+    const bet = (
+      await database.pool.query<{ state: string; remaining: string }>(
+        'select state,remaining from finance.bet where id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    expect(bet.state).toBe('open');
+    expect(bet.remaining).toBe('50.00');
+    // Parcial não encerra a aposta: nada de limpeza do chat.
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops).not.toContain('delete_result_message');
+    const settlement = (
+      await database.pool.query<{ outcome: string; closed_principal: string }>(
+        'select outcome,closed_principal from finance.settlement order by settled_at desc limit 1',
+      )
+    ).rows[0]!;
+    expect(settlement.outcome).toBe('partial_cashout');
+    expect(settlement.closed_principal).toBe('50.00');
+  });
+
+  it('refuses a cashout without the informed values or closing everything', async () => {
+    const { importId, version } = await importedWithTelegram();
+    // Sem valor informado: o contrato recusa antes de qualquer efeito.
+    expect((await settle(importId, { action: 'cashout' }, version)).statusCode).toBe(400);
+    expect(
+      (await settle(importId, { action: 'partial_cashout', returnAmount: '80.00' }, version))
+        .statusCode,
+    ).toBe(400);
+    // Parcial encerrando o valor aberto inteiro: conflito do comando canônico.
+    expect(
+      (
+        await settle(
+          importId,
+          { action: 'partial_cashout', returnAmount: '80.00', closedPrincipal: '100.00' },
+          version,
+        )
+      ).statusCode,
+    ).toBe(409);
+    const settlements = (
+      await database.pool.query<{ count: string }>('select count(*) from finance.settlement')
+    ).rows[0]!.count;
+    expect(Number(settlements)).toBe(0);
+  });
+
+  it('replays the same cashout idempotently without duplicating effects', async () => {
+    const { importId, betId, version } = await importedWithTelegram();
+    expect(
+      (await settle(importId, { action: 'cashout', returnAmount: '150.00' }, version)).statusCode,
+    ).toBe(200);
+    const after = (await outbox(importId)).length;
+    const replay = await settle(importId, { action: 'cashout', returnAmount: '150.00' }, version);
+    expect(replay.statusCode).toBe(200);
+    expect((await outbox(importId)).length).toBe(after);
+    const settlements = (
+      await database.pool.query<{ count: string }>(
+        'select count(*) from finance.settlement where bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!.count;
+    expect(Number(settlements)).toBe(1);
+  });
+});

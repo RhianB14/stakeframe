@@ -204,6 +204,8 @@ export const importDetailSchema = z
     // catálogo ativo da organização para a escolha explícita.
     bookmakerOverrideId: z.uuid().nullable(),
     bookmakers: z.array(z.object({ id: z.uuid(), name: z.string() })),
+    // STK-G0-20 B5 — tipsters ATIVOS da organização (nunca misturados às casas).
+    tipsters: z.array(z.object({ id: z.uuid(), name: z.string() })),
     // Aposta vinculada (quando a importação já foi registrada): alimenta a
     // seção "Alterar Status" com o estado canônico e os valores da liquidação.
     bet: z
@@ -217,6 +219,9 @@ export const importDetailSchema = z
         // alimentam as seções pós-importação do Mini App.
         bookmakerId: z.uuid(),
         bookmakerName: z.string().nullable(),
+        // STK-G0-20 B5 — tipster canônico da aposta (seção "Alterar Tipster").
+        tipsterId: z.uuid().nullable(),
+        tipsterName: z.string().nullable(),
         freebetId: z.uuid().nullable(),
         selections: z.array(
           z.object({
@@ -289,11 +294,28 @@ export const IMPORT_STATUS_ACTIONS = [
   'half_loss',
   'pending',
 ] as const;
+// STK-G0-20 B4/B5 — cashout exige o valor de retorno informado pelo usuário
+// (nunca derivado); a modalidade parcial encerra apenas parte do valor aberto.
+export const IMPORT_CASHOUT_ACTIONS = ['cashout', 'partial_cashout'] as const;
+const moneyAmount = z.string().regex(/^\d{1,12}(\.\d{1,2})?$/);
 export const importStatusSchema = z
   .strictObject({
     version: z.number().int().positive(),
-    action: z.enum(IMPORT_STATUS_ACTIONS),
+    action: z.enum([...IMPORT_STATUS_ACTIONS, ...IMPORT_CASHOUT_ACTIONS]),
+    /** Obrigatório em cashout/partial_cashout: quanto foi efetivamente recebido. */
+    returnAmount: moneyAmount.optional(),
+    /** Obrigatório em partial_cashout: quanto do valor aberto foi encerrado. */
+    closedPrincipal: moneyAmount.optional(),
   })
+  .refine(
+    (value) =>
+      value.action === 'cashout'
+        ? value.returnAmount !== undefined && value.closedPrincipal === undefined
+        : value.action === 'partial_cashout'
+          ? value.returnAmount !== undefined && value.closedPrincipal !== undefined
+          : value.returnAmount === undefined && value.closedPrincipal === undefined,
+    { message: 'CASHOUT_VALUES_INVALID' },
+  )
   .meta({ id: 'ImportStatusUpdate' });
 export type ImportStatusUpdate = z.infer<typeof importStatusSchema>;
 export const importStatusResultSchema = z

@@ -7,32 +7,45 @@ import {
   parseTelegramCallbackData,
 } from '@stakeframe/shared';
 import { IntegrationError, readBounded, readJson } from './http.js';
-// Botões da resposta final (R6): 'Editar' abre o Mini App pelo botão web_app
-// com a URL HTTPS configurada e o UUID opaco do registro canônico; os demais
-// usam callback_data sem NENHUM identificador — a importação é resolvida no
-// servidor por chat + id da mensagem de resultado.
-// STK-G0-19-R7 — todos os botões executam AÇÕES REAIS: Editar, Alterar Status e
-// Alterar Casa abrem o Mini App autenticado por importação, cada um na sua
-// seção (`section=status|bookmaker`); Excluir é o único callback (confirmação
-// em dois toques). Nenhum botão responde apenas texto sem oferecer a ação.
+// Botões da resposta final (R6/G0-20 B4): '✏️ Editar' e '💸 Cashout' abrem o
+// Mini App pelo botão web_app com a URL HTTPS configurada e o UUID opaco do
+// registro canônico; os demais usam callback_data sem NENHUM identificador —
+// a importação é resolvida no servidor por chat + id da mensagem de resultado.
+// Cada botão abre SOMENTE o teclado/seção da sua ação: Alterar Status NUNCA
+// abre o Mini App (teclado inline próprio), Casa/Tipster abrem os teclados
+// dos cadastros ATIVOS da organização e Excluir segue em dois toques.
 export function telegramResultButtons(miniAppUrl: string, importId: string) {
   const base = miniAppUrl.replace(/#.*$/, '').replace(/\/+$/, '');
-  const miniApp = (section?: 'status' | 'bookmaker') =>
+  const miniApp = (section?: 'status' | 'bookmaker' | 'tipster' | 'cashout') =>
     `${base}#miniapp?import=${importId}${section ? `&section=${section}` : ''}`;
   return [
-    [{ text: 'Editar', web_app: { url: miniApp() } }],
+    [{ text: '✏️ Editar', web_app: { url: miniApp() } }],
+    [{ text: '📚 Alterar Status', callback_data: 'sf:v1:status' }],
     [
-      { text: 'Alterar Status', web_app: { url: miniApp('status') } },
-      { text: 'Alterar Casa', web_app: { url: miniApp('bookmaker') } },
+      { text: '🏠 Alterar Casa', callback_data: 'sf:v1:bookmaker' },
+      { text: '🗣️ Alterar Tipster', callback_data: 'sf:v1:tipster' },
     ],
-    // STK-G0-20 B3 — cada botão abre SOMENTE o teclado inline do respectivo
-    // cadastro (casas/tipsters ATIVOS da organização); a seleção atualiza a
-    // aposta e o Telegram é espelhado pela outbox.
+    [{ text: '💸 Cashout', web_app: { url: miniApp('cashout') } }],
+    [{ text: '🗑️ Excluir', callback_data: 'sf:v1:delete' }],
+  ];
+}
+
+// STK-G0-20 B4 — teclado de status: exatamente as sete opções do produto; a
+// transição carrega SOMENTE a ação (revalidada no servidor) e '◀️ Voltar para
+// o bilhete' restaura o teclado principal da mensagem final.
+export function telegramStatusButtons() {
+  return [
     [
-      { text: '🏠 Casa de aposta', callback_data: 'sf:v1:bookmaker' },
-      { text: '🗣️ Tipster', callback_data: 'sf:v1:tipster' },
+      { text: '✅ Ganha', callback_data: 'sf:v1:status:win' },
+      { text: '❌ Perdida', callback_data: 'sf:v1:status:loss' },
     ],
-    [{ text: 'Excluir', callback_data: 'sf:v1:delete' }],
+    [{ text: '⏳ Pendente', callback_data: 'sf:v1:status:pending' }],
+    [
+      { text: '🌗 Meio-Ganha', callback_data: 'sf:v1:status:half_win' },
+      { text: '🌗 Meio-Perdida', callback_data: 'sf:v1:status:half_loss' },
+    ],
+    [{ text: '💱 Reembolsada', callback_data: 'sf:v1:status:void' }],
+    [{ text: '◀️ Voltar para o bilhete', callback_data: 'sf:v1:back' }],
   ];
 }
 
@@ -193,6 +206,7 @@ export function authorizedCallback(update: unknown, config: TelegramConfig) {
     callbackId: query.id,
     action: action.action,
     catalogId: action.catalogId,
+    statusAction: action.statusAction ?? null,
     messageId,
   };
 }

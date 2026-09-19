@@ -7,6 +7,7 @@ import {
   readTelegramConfig,
   telegramDeleteConfirmButtons,
   telegramResultButtons,
+  telegramStatusButtons,
   type TelegramConfig,
 } from '../../apps/worker/src/telegram.js';
 import { buildImportMessage, grossReturn } from '../../apps/worker/src/telegram-message.js';
@@ -238,7 +239,7 @@ describe('import message rendering (R5)', () => {
 });
 
 describe('telegram buttons and callbacks (R6/R7)', () => {
-  it('builds real per-record Mini App URLs for every action without duplicating links', () => {
+  it('builds the final message keyboard with only its own keyboard per action', () => {
     const first = telegramResultButtons(
       'https://app.stakeframe.test',
       '10000000-0000-4000-8000-000000000001',
@@ -249,39 +250,81 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     );
     const urlOf = (button: unknown) => (button as { web_app?: { url?: string } }).web_app?.url;
     const id = '10000000-0000-4000-8000-000000000001';
-    // R7: Editar, Alterar Status e Alterar Casa abrem o Mini App na seção certa.
+    // G0-20 (B4): Editar abre SOMENTE o Mini App preenchido (sem seção).
+    expect(first[0]![0]).toMatchObject({ text: '✏️ Editar' });
     expect(urlOf(first[0]![0])).toBe(`https://app.stakeframe.test#miniapp?import=${id}`);
-    expect(urlOf(first[1]![0])).toBe(
-      `https://app.stakeframe.test#miniapp?import=${id}&section=status`,
-    );
-    expect(urlOf(first[1]![1])).toBe(
-      `https://app.stakeframe.test#miniapp?import=${id}&section=bookmaker`,
-    );
     expect(urlOf(second[0]![0])).not.toBe(urlOf(first[0]![0]));
-    // R7: NÃO existe mais callback de status/casa que apenas mostre toast —
-    // as duas primeiras linhas são web_app (as seções reais do Mini App).
-    for (const row of [first[0]!, first[1]!]) {
-      for (const button of row) expect(button).not.toHaveProperty('callback_data');
-    }
-    // G0-20 (B3): Casa de aposta e Tipster abrem teclados inline próprios.
+    // Alterar Status abre SOMENTE o teclado inline (nunca o Mini App).
+    expect(first[1]![0]).toMatchObject({ text: '📚 Alterar Status' });
+    expect(first[1]![0]).not.toHaveProperty('web_app');
+    expect((first[1]![0] as { callback_data?: string }).callback_data).toBe('sf:v1:status');
+    // Alterar Casa / Alterar Tipster abrem os teclados inline dos cadastros.
     expect(first[2]![0]).toMatchObject({
+      text: '🏠 Alterar Casa',
       callback_data: 'sf:v1:bookmaker',
-      text: '🏠 Casa de aposta',
     });
     expect(first[2]![1]).toMatchObject({
+      text: '🗣️ Alterar Tipster',
       callback_data: 'sf:v1:tipster',
-      text: '🗣️ Tipster',
     });
+    // Cashout abre a seção própria do Mini App (valor informado pelo usuário).
+    expect(first[3]![0]).toMatchObject({ text: '💸 Cashout' });
+    expect(urlOf(first[3]![0])).toBe(
+      `https://app.stakeframe.test#miniapp?import=${id}&section=cashout`,
+    );
     // Excluir continua callback com confirmação em dois toques.
-    expect(first[3]![0]).toMatchObject({ callback_data: 'sf:v1:delete' });
+    expect(first[4]![0]).toMatchObject({ text: '🗑️ Excluir', callback_data: 'sf:v1:delete' });
     const confirm = telegramDeleteConfirmButtons();
     expect(confirm[0]![0]).toMatchObject({ callback_data: 'sf:v1:delete:confirm' });
     expect(confirm[1]![0]).toMatchObject({ callback_data: 'sf:v1:delete:cancel' });
   });
+  it('offers exactly the seven status options on their own keyboard', () => {
+    const keyboard = telegramStatusButtons();
+    const flat = keyboard.flat();
+    expect(flat.map((button) => button.text)).toEqual([
+      '✅ Ganha',
+      '❌ Perdida',
+      '⏳ Pendente',
+      '🌗 Meio-Ganha',
+      '🌗 Meio-Perdida',
+      '💱 Reembolsada',
+      '◀️ Voltar para o bilhete',
+    ]);
+    expect(flat.map((button) => (button as { callback_data?: string }).callback_data)).toEqual([
+      'sf:v1:status:win',
+      'sf:v1:status:loss',
+      'sf:v1:status:pending',
+      'sf:v1:status:half_win',
+      'sf:v1:status:half_loss',
+      'sf:v1:status:void',
+      'sf:v1:back',
+    ]);
+  });
   it('parses callback data strictly and refuses unknown or foreign callbacks', () => {
-    // G0-20 (B3): Casa de aposta e Tipster são callbacks que abrem teclados
-    // inline próprios; a exclusão continua em dois toques.
-    expect(parseTelegramCallbackData('sf:v1:status')).toBeNull();
+    // G0-20 (B4): Alterar Status abre o teclado inline; a seleção carrega
+    // SOMENTE a transição (revalidada no servidor).
+    expect(parseTelegramCallbackData('sf:v1:status')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: null,
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:win')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: 'win',
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:half_win')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: 'half_win',
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:pending')).toEqual({
+      action: 'status',
+      catalogId: null,
+      statusAction: 'pending',
+    });
+    expect(parseTelegramCallbackData('sf:v1:status:cashout')).toBeNull();
+    expect(parseTelegramCallbackData('sf:v1:status:foo')).toBeNull();
     expect(parseTelegramCallbackData('sf:v1:bookmaker')).toEqual({
       action: 'bookmaker',
       catalogId: null,

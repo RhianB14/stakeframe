@@ -106,10 +106,11 @@ mensagem do Telegram.
 
 ### Requirement: Casa e tipster ativos por organização
 
-Após o processamento, DEVEM (MUST) existir dois botões: `🏠 Casa de aposta` e
-`🗣️ Tipster`. As opções DEVEM (MUST) vir somente dos cadastros ATIVOS da
-organização do usuário (registrados na Web); a seleção DEVE (MUST) atualizar a
-aposta, a Web e a mensagem correspondente do Telegram.
+Na mensagem final DEVEM (MUST) existir os botões `🏠 Alterar Casa` e
+`🗣️ Alterar Tipster`. As opções DEVEM (MUST) vir somente dos cadastros ATIVOS
+da organização do usuário (registrados na Web), separadas por tipo — casas e
+tipsters nunca se misturam; a seleção DEVE (MUST) atualizar a aposta, a Web, o
+MiniApp e a mensagem correspondente do Telegram.
 
 #### Scenario: somente cadastros ativos
 
@@ -132,11 +133,14 @@ aposta, a Web e a mensagem correspondente do Telegram.
   dados da aposta.
 - `📚 Alterar Status` DEVE (MUST) abrir somente o teclado inline de status,
   sem abrir o MiniApp.
-- `🏠 Alterar Casa` DEVE (MUST) abrir apenas as casas ativas cadastradas na Web.
-- `🗑️ Excluir` DEVE (MUST) excluir a aposta da Web e remover a foto e as
-  mensagens relacionadas do Telegram, com confirmação adequada.
-- `💸 Cashout` DEVE (MUST) preservar o comportamento existente; se quebrado,
-  corrigir e cobrir com teste.
+- `🏠 Alterar Casa` e `🗣️ Alterar Tipster` DEVEM (MUST) abrir apenas os
+  cadastros ativos do respectivo tipo, cadastrados na Web.
+- `🗑️ Excluir` DEVE (MUST) excluir a aposta da Web (cancelamento canônico,
+  quando registrada) e remover a foto e as mensagens relacionadas do Telegram,
+  com confirmação adequada e repetição idempotente.
+- `💸 Cashout` DEVE (MUST) preservar o comportamento financeiro existente
+  (total/parcial pelo comando canônico); o valor recebido é INFORMADO pelo
+  usuário na seção própria do MiniApp e nunca derivado.
 
 #### Scenario: Alterar Status abre somente o teclado
 
@@ -159,7 +163,14 @@ aposta na Web, apagar a foto do Telegram, apagar a mensagem de processamento
 #### Scenario: transições disponíveis
 
 - **WHEN** o teclado de status é aberto
-- **THEN** as sete opções (com Voltar) estão disponíveis
+- **THEN** as sete opções (com Voltar) estão disponíveis; o cashout NÃO faz
+  parte do teclado (valor informado na seção própria do MiniApp)
+
+#### Scenario: cashout total e parcial
+
+- **WHEN** o usuário informa o valor recebido no MiniApp
+- **THEN** o cashout total encerra todo o valor aberto e o parcial apenas a
+  parte declarada, ambos pelo comando canônico com versão otimista
 
 #### Scenario: sair de Pendente limpa o Telegram
 
@@ -189,3 +200,10 @@ sobrescreve uma edição nova (versão otimista + idempotência).
 
 - **WHEN** duas edições concorrem com a mesma versão
 - **THEN** a primeira vence, a segunda é recusada por versão e nenhum efeito duplica
+
+#### Scenario: seções do MiniApp sincronizam as três superfícies
+
+- **WHEN** o usuário altera casa, tipster, status ou cashout pelo MiniApp
+- **THEN** a aposta (banco), a Web e a mensagem do Telegram refletem a mudança
+  na mesma transação canônica (outbox), e a limpeza do chat sai ao deixar de
+  pendente

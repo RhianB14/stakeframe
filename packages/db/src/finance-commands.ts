@@ -77,9 +77,11 @@ export async function applyFinanceCommand(
         bet_origin: string | null;
         freebet_id: string | null;
         telegram_chat_id: string | null;
+        telegram_source_message_id: string | null;
+        telegram_processing_message_id: string | null;
         telegram_result_message_id: string | null;
       }>(
-        'select id,state,version,attachment_id,extraction,bet_origin,freebet_id,telegram_chat_id,telegram_result_message_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+        'select id,state,version,attachment_id,extraction,bet_origin,freebet_id,telegram_chat_id,telegram_source_message_id,telegram_processing_message_id,telegram_result_message_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
         [command.importId],
       )
     ).rows[0];
@@ -96,9 +98,18 @@ export async function applyFinanceCommand(
         "update integration.inbox set state='discarded',version=version+1,telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
         [row.id],
       );
-      // R6: a resposta final do Telegram reflete o descarte (mesma transação).
-      if (row.telegram_chat_id && row.telegram_result_message_id)
-        await enqueueOutbox(client, row.id, 'edit_result_message', discarded.rows[0]!.version);
+      // STK-G0-20 B4 — a exclusão REMOVE a foto e as mensagens relacionadas do
+      // Telegram (nunca deixa mensagens órfãs): a limpeza completa sai na
+      // mesma transação e o executor é idempotente para mensagem ausente.
+      if (row.telegram_chat_id) {
+        const version = discarded.rows[0]!.version;
+        if (row.telegram_source_message_id)
+          await enqueueOutbox(client, row.id, 'delete_source_message', version);
+        if (row.telegram_result_message_id)
+          await enqueueOutbox(client, row.id, 'delete_result_message', version);
+        if (row.telegram_processing_message_id)
+          await enqueueOutbox(client, row.id, 'delete_processing_message', version);
+      }
       return { id: row.id, before: row };
     }
     const attachment = (

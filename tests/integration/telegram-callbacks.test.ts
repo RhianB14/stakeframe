@@ -59,12 +59,18 @@ let fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>;
 
 const handler = () =>
   createTelegramCallbackHandler(database, createTelegramClient(config, fetchImpl), config);
-const callback = (action: string, messageId: number, catalogId: string | null = null) =>
+const callback = (
+  action: string,
+  messageId: number,
+  catalogId: string | null = null,
+  statusAction: string | null = null,
+) =>
   ({
     updateId: 90,
-    callbackId: `cb-${action}${catalogId ? `:${catalogId}` : ''}`,
+    callbackId: `cb-${action}${catalogId ? `:${catalogId}` : ''}${statusAction ? `:${statusAction}` : ''}`,
     action,
     catalogId,
+    statusAction,
     messageId,
   }) as never;
 
@@ -93,6 +99,28 @@ const editRows = async (id: string) =>
       [id],
     )
   ).rows[0]!.count;
+
+const outboxOps = async (id: string) =>
+  (
+    await database.pool.query<{ operation: string; count: string }>(
+      'select operation,count(*)::text as count from integration.telegram_outbox where inbox_id=$1 group by operation order by operation',
+      [id],
+    )
+  ).rows;
+const deleteRows = async (id: string) =>
+  (
+    await database.pool.query<{ count: string }>(
+      "select count(*) from integration.telegram_outbox where inbox_id=$1 and operation like 'delete_%'",
+      [id],
+    )
+  ).rows[0]!.count;
+const betStateOf = async (id: string) =>
+  (
+    await database.pool.query<{ state: string }>(
+      'select b.state from finance.bet b join integration.inbox i on i.imported_bet_id=b.id where i.id=$1',
+      [id],
+    )
+  ).rows[0]!;
 
 beforeEach(async () => {
   name = `stk_telegram_cb_${randomUUID().replaceAll('-', '')}`;
@@ -165,19 +193,24 @@ describe('telegram result buttons callbacks', () => {
     expect((await inboxState(id)).state).toBe('review');
   });
 
-  it('discards on confirmation and stays idempotent for repeated events', async () => {
+  it('discards on confirmation, removes the telegram messages and stays idempotent', async () => {
     const id = await boundInbox();
     await handler()(callback('delete_confirm', 7777));
     const afterFirst = await inboxState(id);
     expect(afterFirst.state).toBe('discarded');
     expect(String(calls[0]!.body.text)).toBe('Importação descartada.');
-    // O descarte reflete no Telegram como edição canônica da resposta final.
-    expect(Number(await editRows(id))).toBe(1);
+    // G0-20 (B4): a exclusão REMOVE a foto e as mensagens relacionadas do
+    // chat (limpeza), nunca deixa mensagens órfãs.
+    const ops = (await outboxOps(id)).map((row) => row.operation);
+    expect(ops).toContain('delete_source_message');
+    expect(ops).toContain('delete_result_message');
+    expect(Number(await editRows(id))).toBe(0);
     await handler()(callback('delete_confirm', 7777));
     expect(String(calls[1]!.body.text)).toBe('Importação descartada.');
     const afterReplay = await inboxState(id);
     expect(afterReplay.state).toBe('discarded');
     expect(afterReplay.version).toBe(afterFirst.version);
+    expect(Number(await deleteRows(id))).toBe(2);
   });
 
   it('refuses callbacks for unknown messages without touching any record', async () => {
@@ -406,5 +439,135 @@ describe('Casa de aposta e Tipster (G0-20 B3)', () => {
     const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
     const first = keyboardOf(edit)[0]![0] as { web_app?: { url?: string } };
     expect(first.web_app?.url).toContain(`#miniapp?import=${id}`);
+  });
+});
+
+// STK-G0-20 B4 — botões e status da mensagem final: `📚 Alterar Status` abre
+// SOMENTE o teclado inline (nunca o Mini App); a transição liquida pelo
+// comando canônico (versão otimista) e a limpeza do Telegram sai na MESMA
+// transação; `🗑️ Excluir` remove a aposta registrada da Web (cancelamento
+// canônico) e as mensagens do chat, com confirmação e idempotência.
+describe('Status e exclusão da mensagem final (G0-20 B4)', () => {
+  const keyboardOf = (call: { body: Record<string, unknown> }) =>
+    (
+      call.body.reply_markup as {
+        inline_keyboard: Array<Array<{ text: string; callback_data?: string }>>;
+      }
+    ).inline_keyboard;
+  async function importedInboxB4(): Promise<string> {
+    const id = await boundInbox();
+    const house = (await finance.workspace(tenantContext)).catalog.find(
+      (c) => c.name === 'Bet365',
+    )!;
+    await imports.updateDraft(tenantContext, id, { version: 1, betOrigin: 'real' }, 'web');
+    await finance.command(tenantContext, randomUUID(), {
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 2,
+      decision: {
+        kind: 'create',
+        bet: {
+          bookmakerId: house.id,
+          tipsterId: null,
+          stake: '100.00',
+          odds: '2.00',
+          placedAt: new Date().toISOString(),
+          freebetId: null,
+          reference: 'fixture-ticket',
+          allowMissingUnit: false,
+          selections: [
+            {
+              event: 'A x B',
+              sport: 'Futebol',
+              market: 'Resultado',
+              selection: 'A',
+              odds: null,
+              eventDate: null,
+              eventAt: null,
+              dateStatus: 'pending',
+            },
+          ],
+        },
+        duplicateReason: '',
+      },
+      expectedVersion: (await finance.workspace(tenantContext)).version,
+    } as never);
+    return id;
+  }
+  const settlementsOf = async (id: string) =>
+    Number(
+      (
+        await database.pool.query<{ count: string }>(
+          'select count(*) from finance.settlement s join integration.inbox i on i.imported_bet_id=s.bet_id where i.id=$1',
+          [id],
+        )
+      ).rows[0]!.count,
+    );
+
+  it('opens only the status keyboard without opening the mini app', async () => {
+    const id = await boundInbox();
+    calls.length = 0;
+    await handler()(callback('status', 7777));
+    expect(String(calls[0]!.body.text)).toBe('Escolha o novo status.');
+    const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
+    const buttons = keyboardOf(edit).flat();
+    expect(buttons.map((button) => button.text)).toEqual([
+      '✅ Ganha',
+      '❌ Perdida',
+      '⏳ Pendente',
+      '🌗 Meio-Ganha',
+      '🌗 Meio-Perdida',
+      '💱 Reembolsada',
+      '◀️ Voltar para o bilhete',
+    ]);
+    expect(buttons.some((button) => 'web_app' in button)).toBe(false);
+    expect((await inboxState(id)).state).toBe('review');
+  });
+
+  it('settles a pending bet from the status keyboard and cleans the telegram', async () => {
+    const id = await importedInboxB4();
+    calls.length = 0;
+    await handler()(callback('status', 7777, null, 'win'));
+    expect(String(calls[0]!.body.text)).toBe('Liquidação registrada.');
+    expect((await betStateOf(id)).state).toBe('settled');
+    const ops = (await outboxOps(id)).map((row) => row.operation);
+    expect(ops).toContain('delete_source_message');
+    expect(ops).toContain('delete_result_message');
+    // Repetição do MESMO evento: mesmo resultado, nenhum efeito duplicado.
+    calls.length = 0;
+    await handler()(callback('status', 7777, null, 'win'));
+    expect(String(calls[0]!.body.text)).toBe('Liquidação registrada.');
+    expect(await settlementsOf(id)).toBe(1);
+  });
+
+  it('keeps pending informative and refuses a conflicting status after settlement', async () => {
+    const id = await importedInboxB4();
+    calls.length = 0;
+    await handler()(callback('status', 7777, null, 'pending'));
+    expect(String(calls[0]!.body.text)).toBe('A aposta permanece pendente.');
+    expect((await betStateOf(id)).state).toBe('open');
+    await handler()(callback('status', 7777, null, 'win'));
+    calls.length = 0;
+    await handler()(callback('status', 7777, null, 'loss'));
+    expect(String(calls[0]!.body.text)).toContain('Não foi possível');
+    expect((await betStateOf(id)).state).toBe('settled');
+    expect(await settlementsOf(id)).toBe(1);
+  });
+
+  it('deletes an imported bet from the web and removes its telegram messages', async () => {
+    const id = await importedInboxB4();
+    calls.length = 0;
+    await handler()(callback('delete_confirm', 7777));
+    expect(String(calls[0]!.body.text)).toBe('Aposta excluída.');
+    expect((await betStateOf(id)).state).toBe('cancelled');
+    const ops = (await outboxOps(id)).map((row) => row.operation);
+    expect(ops).toContain('delete_source_message');
+    expect(ops).toContain('delete_result_message');
+    // Repetição: mesmo resultado, nenhum efeito novo.
+    calls.length = 0;
+    await handler()(callback('delete_confirm', 7777));
+    expect(String(calls[0]!.body.text)).toBe('Aposta excluída.');
+    expect((await betStateOf(id)).state).toBe('cancelled');
+    expect(Number(await deleteRows(id))).toBe(2);
   });
 });

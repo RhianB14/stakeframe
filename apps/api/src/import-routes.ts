@@ -16,6 +16,8 @@ import {
   importStatusResultSchema,
   importBookmakerActionSchema,
   importBookmakerResultSchema,
+  importTipsterActionSchema,
+  importTipsterResultSchema,
   importOriginActionSchema,
   importOriginResultSchema,
   importEventActionSchema,
@@ -256,6 +258,33 @@ export function registerImportRoutes(
           contexts.get(request)!,
           params.parse(request.params).id,
           importBookmakerActionSchema.parse(request.body),
+          actorOf(request),
+          idempotencyKeyOf(request),
+        ),
+      ),
+  );
+  // STK-G0-20 B5 — troca de tipster canônica (rascunho ou aposta importada):
+  // a seleção vem do cadastro ATIVO da organização, revalidado no servidor.
+  app.post(
+    '/api/v1/imports/:id/tipster',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'updateImportTipster',
+        summary: 'Trocar o tipster do rascunho ou da aposta importada',
+        params,
+        headers: commandHeadersSchema,
+        body: importTipsterActionSchema,
+        response: { 200: importTipsterResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.applyTipster(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importTipsterActionSchema.parse(request.body),
           actorOf(request),
           idempotencyKeyOf(request),
         ),

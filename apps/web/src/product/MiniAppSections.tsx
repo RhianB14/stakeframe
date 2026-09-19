@@ -10,19 +10,39 @@ import { Button } from '../components/ui/button.js';
 const stateLabel = (state: string) =>
   state === 'open' ? 'Pendente' : state === 'settled' ? 'Liquidada' : 'Cancelada';
 
+// STK-G0-20 B4/B5 — as seis transições do produto (o cashout tem seção
+// própria: valor recebido informado pelo usuário, nunca derivado).
+const STATUS_ACTIONS = [
+  { value: 'win', label: 'Ganhou (retorno bruto calculado pelo servidor)' },
+  { value: 'loss', label: 'Perdeu (retorno zero)' },
+  { value: 'half_win', label: 'Meio-Ganha (metade ganha, metade devolvida)' },
+  { value: 'half_loss', label: 'Meio-Perdida (metade perdida, metade devolvida)' },
+  { value: 'void', label: 'Reembolsada (anulada — devolve o valor apostado)' },
+  { value: 'pending', label: 'Manter pendente (sem liquidação)' },
+] as const;
+const STATUS_LABEL: Record<string, string> = {
+  win: '“Ganhou”',
+  loss: '“Perdeu”',
+  half_win: '“Meio-Ganha”',
+  half_loss: '“Meio-Perdida”',
+  void: '“Reembolsada”',
+  pending: '“Manter pendente”',
+};
+type StatusAction = (typeof STATUS_ACTIONS)[number]['value'];
+
 export function StatusSection({
   detail,
   sender,
   onSaved,
 }: {
   detail: ImportDetail;
-  sender: (body: { version: number; action: 'win' | 'loss' }) => Promise<{
+  sender: (body: { version: number; action: StatusAction }) => Promise<{
     version: number;
     betState: string;
   }>;
   onSaved: () => void;
 }) {
-  const [action, setAction] = useState<'win' | 'loss' | null>(null);
+  const [action, setAction] = useState<StatusAction | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,30 +94,20 @@ export function StatusSection({
       </p>
       <fieldset>
         <legend>Nova transição *</legend>
-        <label>
-          <input
-            type="radio"
-            name="status-action"
-            checked={action === 'win'}
-            onChange={() => {
-              setAction('win');
-              setConfirming(false);
-            }}
-          />{' '}
-          Ganhou (retorno bruto calculado pelo servidor)
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="status-action"
-            checked={action === 'loss'}
-            onChange={() => {
-              setAction('loss');
-              setConfirming(false);
-            }}
-          />{' '}
-          Perdeu (retorno zero)
-        </label>
+        {STATUS_ACTIONS.map((option) => (
+          <label key={option.value}>
+            <input
+              type="radio"
+              name="status-action"
+              checked={action === option.value}
+              onChange={() => {
+                setAction(option.value);
+                setConfirming(false);
+              }}
+            />{' '}
+            {option.label}
+          </label>
+        ))}
       </fieldset>
       {action && !confirming && !saved ? (
         <Button onClick={() => setConfirming(true)}>Continuar</Button>
@@ -105,8 +115,9 @@ export function StatusSection({
       {action && confirming ? (
         <div>
           <p className="notice warning" role="alert">
-            Confirmar {action === 'win' ? '“Ganhou”' : '“Perdeu”'}? A liquidação é financeira e a
-            mensagem do Telegram será sincronizada.
+            {action === 'pending'
+              ? 'Manter a aposta pendente (sem liquidação)? Nenhum efeito financeiro é aplicado.'
+              : `Confirmar ${STATUS_LABEL[action] ?? 'a transição'}? A liquidação é financeira e a mensagem do Telegram será sincronizada.`}
           </p>
           <Button onClick={() => void save()} disabled={busy}>
             {busy ? 'Liquidando…' : 'Confirmar liquidação'}
@@ -123,8 +134,9 @@ export function StatusSection({
       ) : null}
       {saved ? (
         <p className="notice" role="status">
-          Liquidação registrada. A mensagem do Telegram foi sincronizada e entrou na limpeza do
-          chat.
+          {action === 'pending'
+            ? 'A aposta permanece pendente — nenhuma liquidação foi registrada.'
+            : 'Liquidação registrada. A mensagem do Telegram foi sincronizada e entrou na limpeza do chat.'}
         </p>
       ) : null}
     </div>
@@ -312,6 +324,258 @@ export function BookmakerSection({
       >
         {busy ? 'Salvando…' : 'Salvar casa'}
       </Button>
+    </div>
+  );
+}
+
+// STK-G0-20 B5 — seção do Tipster: SOMENTE os cadastros ATIVOS da organização
+// (nunca misturados às casas); a seleção grava no registro canônico com versão
+// otimista e o Telegram é sincronizado pela outbox.
+export function TipsterSection({
+  detail,
+  sender,
+  onSaved,
+}: {
+  detail: ImportDetail;
+  sender: (body: { version: number; tipsterId: string }) => Promise<{
+    version: number;
+    betState: string | null;
+    tipsterId: string;
+    tipsterName: string | null;
+  }>;
+  onSaved: () => void;
+}) {
+  const imported = detail.bet !== null;
+  const [choice, setChoice] = useState(imported ? (detail.bet?.tipsterId ?? '') : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const current = imported ? (detail.bet?.tipsterName ?? 'sem tipster') : 'sem tipster';
+  const save = async () => {
+    if (!choice) {
+      setError('Escolha o tipster.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      const result = await sender({ version: detail.item.version, tipsterId: choice });
+      setSaved(
+        `Tipster salvo${result.tipsterName ? `: ${result.tipsterName}` : ''}. A mensagem do Telegram será sincronizada.`,
+      );
+      onSaved();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Não foi possível salvar o tipster.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="draft-controls">
+      <h3>Tipster da aposta</h3>
+      <p role="status">
+        Tipster atual: <strong>{current}</strong>
+        {imported ? ' (aposta registrada)' : ''}
+      </p>
+      <label>
+        Novo tipster
+        <select value={choice} onChange={(event) => setChoice(event.target.value)}>
+          <option value="">Selecione o tipster</option>
+          {detail.tipsters.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {detail.tipsters.length === 0 ? (
+        <p className="notice" role="status">
+          Nenhum tipster ativo cadastrado — cadastre na Web para escolher aqui.
+        </p>
+      ) : null}
+      {error ? (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <p className="notice" role="status">
+          {saved}
+        </p>
+      ) : null}
+      <Button onClick={() => void save()} disabled={busy || !choice}>
+        {busy ? 'Salvando…' : 'Salvar tipster'}
+      </Button>
+    </div>
+  );
+}
+
+// STK-G0-20 B4/B5 — seção do Cashout: o valor recebido é INFORMADO pelo
+// usuário (nunca derivado); o total encerra todo o valor aberto e o parcial,
+// apenas a parte declarada. O servidor revalida tudo pelo comando canônico.
+export function CashoutSection({
+  detail,
+  sender,
+  onSaved,
+}: {
+  detail: ImportDetail;
+  sender: (body: {
+    version: number;
+    action: 'cashout' | 'partial_cashout';
+    returnAmount: string;
+    closedPrincipal?: string;
+  }) => Promise<{ version: number; betState: string }>;
+  onSaved: () => void;
+}) {
+  const bet = detail.bet;
+  const [mode, setMode] = useState<'cashout' | 'partial_cashout'>('cashout');
+  const [returnAmount, setReturnAmount] = useState('');
+  const [closedPrincipal, setClosedPrincipal] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const MONEY = /^\d{1,12}(\.\d{1,2})?$/;
+  if (!bet)
+    return (
+      <div className="draft-controls">
+        <h3>Cashout</h3>
+        <p className="notice" role="status">
+          Esta importação ainda não foi registrada como aposta. Confirme a origem e a data em
+          “Editar”; o cashout acontece aqui quando a aposta estiver pendente.
+        </p>
+      </div>
+    );
+  if (bet.state !== 'open')
+    return (
+      <div className="draft-controls">
+        <h3>Cashout</h3>
+        <p className="notice" role="status">
+          Estado atual: <strong>{stateLabel(bet.state)}</strong> — o cashout só se aplica a aposta
+          pendente.
+        </p>
+      </div>
+    );
+  const validate = (): string | null => {
+    if (!MONEY.test(returnAmount)) return 'Informe o valor recebido (ex.: 150.00).';
+    if (mode === 'partial_cashout') {
+      if (!MONEY.test(closedPrincipal))
+        return 'Informe quanto do valor aberto foi encerrado (ex.: 50.00).';
+    }
+    return null;
+  };
+  const save = async () => {
+    const invalid = validate();
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await sender({
+        version: detail.item.version,
+        action: mode,
+        returnAmount,
+        ...(mode === 'partial_cashout' ? { closedPrincipal } : {}),
+      });
+      setSaved(true);
+      setConfirming(false);
+      onSaved();
+    } catch (failure) {
+      setError(
+        failure instanceof Error ? failure.message : 'Não foi possível registrar o cashout.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="draft-controls">
+      <h3>Cashout</h3>
+      <p role="status">
+        Em aberto {formatBRL(bet.remaining)} · Stake {formatBRL(bet.stake)} · Odd {bet.odds}
+      </p>
+      <fieldset>
+        <legend>Tipo de cashout *</legend>
+        <label>
+          <input
+            type="radio"
+            name="cashout-mode"
+            checked={mode === 'cashout'}
+            onChange={() => {
+              setMode('cashout');
+              setConfirming(false);
+            }}
+          />{' '}
+          Cashout total (encerra todo o valor aberto)
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="cashout-mode"
+            checked={mode === 'partial_cashout'}
+            onChange={() => {
+              setMode('partial_cashout');
+              setConfirming(false);
+            }}
+          />{' '}
+          Cashout parcial (encerra parte do valor aberto)
+        </label>
+      </fieldset>
+      <label>
+        Valor recebido (R$) *
+        <input
+          inputMode="decimal"
+          value={returnAmount}
+          onChange={(event) => {
+            setReturnAmount(event.target.value);
+            setConfirming(false);
+          }}
+        />
+      </label>
+      {mode === 'partial_cashout' ? (
+        <label>
+          Valor encerrado (R$) *
+          <input
+            inputMode="decimal"
+            value={closedPrincipal}
+            onChange={(event) => {
+              setClosedPrincipal(event.target.value);
+              setConfirming(false);
+            }}
+          />
+        </label>
+      ) : null}
+      {!confirming ? (
+        <Button onClick={() => setConfirming(true)} disabled={busy}>
+          Continuar
+        </Button>
+      ) : (
+        <div>
+          <p className="notice warning" role="alert">
+            Confirmar o cashout? A operação é financeira, encerra o valor declarado e sincroniza a
+            mensagem do Telegram.
+          </p>
+          <Button onClick={() => void save()} disabled={busy}>
+            {busy ? 'Registrando…' : 'Confirmar cashout'}
+          </Button>{' '}
+          <Button onClick={() => setConfirming(false)} disabled={busy}>
+            Voltar
+          </Button>
+        </div>
+      )}
+      {error ? (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <p className="notice" role="status">
+          Cashout registrado. A mensagem do Telegram foi sincronizada e entrou na limpeza do chat.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -363,9 +363,16 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 )
               ).rows
             : [];
+        // STK-G0-20 B5 — cada lista carrega SOMENTE o próprio tipo de cadastro
+        // ATIVO da organização (casas e tipsters nunca se misturam).
         const bookmakers = (
           await client.query<{ id: string; name: string }>(
-            'select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active order by name asc,id asc limit 200',
+            "select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active and kind='bookmaker' order by name asc,id asc limit 200",
+          )
+        ).rows;
+        const tipsters = (
+          await client.query<{ id: string; name: string }>(
+            "select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and active and kind='tipster' order by name asc,id asc limit 200",
           )
         ).rows;
         const bet = row.imported_bet_id
@@ -378,9 +385,11 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 remaining: string;
                 bookmaker_id: string;
                 bookmaker_name: string;
+                tipster_id: string | null;
+                tipster_name: string | null;
                 freebet_id: string | null;
               }>(
-                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,c.name as bookmaker_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
+                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
                 [row.imported_bet_id],
               )
             ).rows[0] ?? null)
@@ -430,6 +439,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           })),
           bookmakerOverrideId: draftRow.bookmaker_override_id,
           bookmakers,
+          tipsters,
           bet: bet
             ? {
                 id: bet.id,
@@ -442,6 +452,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 remaining: bet.remaining,
                 bookmakerId: bet.bookmaker_id,
                 bookmakerName: bet.bookmaker_name,
+                tipsterId: bet.tipster_id,
+                tipsterName: bet.tipster_name,
                 freebetId: bet.freebet_id,
                 selections: betSelections.map((item) => ({
                   id: item.id,
@@ -487,7 +499,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
     async setStatus(
       context: OrganizationContext,
       id: string,
-      input: { version: number; action: SettleAction | 'pending' },
+      input: {
+        version: number;
+        action: SettleAction | 'pending' | 'cashout' | 'partial_cashout';
+        /** STK-G0-20 B4/B5 — cashout: valor recebido informado pelo usuário. */
+        returnAmount?: string | undefined;
+        /** STK-G0-20 B4/B5 — cashout parcial: quanto do valor aberto foi encerrado. */
+        closedPrincipal?: string | undefined;
+      },
       actor: string,
     ) {
       return tenant.withOrganizationTransaction(context, async (client) => {
@@ -537,25 +556,40 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (input.action === 'pending') return { version: row.version, betState: bet.state };
         // STK-G0-20 — valor derivado calculado NO SERVIDOR conforme a
         // modalidade financeira (real, freebet ou híbrida derivada do crédito)
-        // e a transição escolhida no teclado de status / Mini App.
+        // e a transição escolhida no teclado de status / Mini App. O CASHOUT é
+        // a única transição com valor INFORMADO pelo usuário (nunca derivado);
+        // o total encerra todo o valor aberto e o parcial, apenas a parte
+        // declarada — validados pelo comando financeiro canônico.
+        const isCashout = input.action === 'cashout' || input.action === 'partial_cashout';
         const origin = deriveBetOrigin(bet.stake, bet.freebet_amount);
-        const returnAmount = settleReturnFor(
-          input.action,
-          origin,
-          bet.remaining,
-          bet.odds,
-          bet.freebet_amount,
-        );
+        let closedPrincipal: string;
+        let returnAmount: string | null;
+        if (isCashout) {
+          if (!input.returnAmount) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          closedPrincipal =
+            input.action === 'cashout' ? bet.remaining : (input.closedPrincipal ?? '');
+          if (!closedPrincipal) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          returnAmount = input.returnAmount;
+        } else {
+          closedPrincipal = bet.remaining;
+          returnAmount = settleReturnFor(
+            input.action as SettleAction,
+            origin,
+            bet.remaining,
+            bet.odds,
+            bet.freebet_amount,
+          );
+        }
         if (returnAmount === null) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
         const command = financeCommandSchema.parse({
           type: 'bet.settle',
           id: bet.id,
           outcome: input.action,
-          closedPrincipal: bet.remaining,
+          closedPrincipal,
           returnAmount,
           settledAt: now.toISOString(),
-          reason: 'Liquidação pelo Mini App',
+          reason: isCashout ? 'Cashout pelo Mini App' : 'Liquidação pelo Mini App',
           expectedVersion: settings.version,
         });
         const key = deterministicKey(`import-status:${id}:${input.action}`);

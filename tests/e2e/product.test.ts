@@ -356,6 +356,7 @@ function importFixture(): ImportDetail {
     telegramReceivedAt: '2026-09-01T18:00:02Z',
     bookmakerOverrideId: null,
     bookmakers: [],
+    tipsters: [],
     bet: null,
     automaticPolicy: 'disabled',
     credits: [],
@@ -1037,6 +1038,8 @@ test('opens the status section from the Telegram button and liquidates for real 
     remaining: '25.50',
     bookmakerId: house,
     bookmakerName: 'Bet365',
+    tipsterId: null,
+    tipsterName: null,
     freebetId: null,
     selections: [
       {
@@ -1176,6 +1179,8 @@ test('freebet house change loads credits for the DESTINATION house and saves ato
     remaining: '100.00',
     bookmakerId: house,
     bookmakerName: 'Bet365',
+    tipsterId: null,
+    tipsterName: null,
     freebetId: bet365Credit,
     selections: [
       {

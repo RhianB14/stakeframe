@@ -4,6 +4,7 @@ import {
   commandResultSchema,
   importStatusResultSchema,
   importBookmakerResultSchema,
+  importTipsterResultSchema,
   importOriginResultSchema,
   importEventResultSchema,
   importCreditsResultSchema,
@@ -185,6 +186,26 @@ export function applyImportEvent(
     });
   return sendWithIdempotentRetry(send);
 }
+// STK-G0-20 B5 — troca de tipster canônica pelo Mini App/Web (cadastro ATIVO
+// revalidado no servidor, com recibo idempotente).
+export function applyImportTipster(
+  id: string,
+  body: { version: number; tipsterId: string },
+  initData?: string,
+) {
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/tipster`, importTipsterResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
+}
 // R9 — créditos freebet válidos PARA A CASA DE DESTINO (filtro integral no
 // servidor); o crédito já consumido nunca aparece.
 export function getImportCredits(id: string, bookmakerId: string, initData?: string) {
@@ -194,11 +215,26 @@ export function getImportCredits(id: string, bookmakerId: string, initData?: str
     { headers: { ...(initData ? { 'x-telegram-init-data': initData } : {}) } },
   );
 }
-// STK-G0-19-R7 — liquidação real pelo Mini App (seção "Alterar Status"):
-// vitória/derrota de aposta pendente pelo comando canônico no servidor.
+// STK-G0-19-R7 / STK-G0-20 B4/B5 — liquidação real pelo Mini App (seção
+// "Alterar Status"): TODAS as transições do produto (Ganha, Perdida, Meio-
+// Ganha, Meio-Perdida, Reembolsada, Pendente) mais o cashout (total/parcial,
+// com o valor recebido informado pelo usuário) pelo comando canônico.
 export function setImportStatus(
   id: string,
-  body: { version: number; action: 'win' | 'loss' },
+  body: {
+    version: number;
+    action:
+      | 'win'
+      | 'loss'
+      | 'void'
+      | 'half_win'
+      | 'half_loss'
+      | 'pending'
+      | 'cashout'
+      | 'partial_cashout';
+    returnAmount?: string;
+    closedPrincipal?: string;
+  },
   initData?: string,
 ) {
   return request(`/api/v1/imports/${id}/status`, importStatusResultSchema, {
