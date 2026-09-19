@@ -17,7 +17,7 @@
     {
       "target": "api",
       "repository": "ghcr.io/rhianb14/stakeframe-api",
-      "digest": "sha256:da2f4d874a0431616b92b690a65221c09036066edd1d7724f7c3386edd83285"
+      "digest": "sha256:da2f4d874a0431616b92b690a65221c09036066edd1d7724f7c3386edd83285e"
     },
     {
       "target": "worker",
