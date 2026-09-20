@@ -109,8 +109,7 @@ async function applyDraftUpdate(
               alias.kind === 'bookmaker' && normalizeAlias(alias.label) === normalizeAlias(label),
           )?.catalog_id ?? null)
         : null;
-    const effectiveBookmakerId =
-      nextBookmakerOverride ?? matchBookmaker(labels.bookmaker);
+    const effectiveBookmakerId = nextBookmakerOverride ?? matchBookmaker(labels.bookmaker);
     const stake = extraction?.stake ?? null;
     // R7: troca de casa NUNCA preserva crédito incompatível em silêncio —
     // casa divergente, consumido ou expirado ⇒ crédito removido e a
