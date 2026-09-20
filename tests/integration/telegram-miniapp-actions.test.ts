@@ -75,7 +75,6 @@ const upload = async (caption = 'Tipster\nBet365') =>
 const houseId = async (house = 'Bet365') =>
   (await finance.workspace(tenantContext)).catalog.find((c) => c.name === house)!.id;
 const draftExtraction = {
-  bookmaker: 'Bet365',
   reference: 'FICTICIO',
   placedAtText: '17/09/2026 10:00',
   currency: 'BRL',

@@ -179,7 +179,6 @@ describe('draft update contract (R5)', () => {
 
 describe('import message rendering (R5)', () => {
   const extraction = {
-    bookmaker: 'Bet365',
     reference: null,
     placedAtText: '17/09/2026 10:00',
     currency: 'BRL',

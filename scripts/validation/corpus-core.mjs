@@ -31,7 +31,6 @@ export const normalizeEvent = (value) => {
 // Glifos ordinais º/° são equivalentes somente em mercados; o restante do
 // texto (nomes, valores, datas, acentos) continua exato.
 export const normalizeMarket = (value) => normalizeName(value).replace(/[\u00b0\u00ba]/g, '\u00ba');
-const normalizeBookmaker = (value) => normalizeName(value).toLocaleLowerCase('pt-BR');
 const normalize = (value, field) => {
   if (typeof value !== 'string') return value;
   if (['stake', 'odds', 'potentialReturn'].includes(field))
@@ -100,8 +99,9 @@ export function evaluateCorpus(value) {
             expected === null ? 'invented' : observed === null ? 'omitted' : 'mismatches',
           );
       };
+      // STK-G0-22: o bookmaker não é campo da resposta neutra — a casa vem do
+      // usuário fora do modelo e não é avaliada aqui (nem no gabarito).
       for (const field of [
-        'bookmaker',
         'reference',
         'placedAtText',
         'currency',
@@ -110,21 +110,7 @@ export function evaluateCorpus(value) {
         'potentialReturn',
         'freebet',
       ]) {
-        if (field === 'bookmaker' && context === 'user-informed' && isPositive) {
-          // A casa positiva vem do contexto: null (marca ausente na tela) é
-          // aceitável; a evidência visual só pesa como conflito quando aponta
-          // para outra casa.
-          const observed = actual.data.bookmaker;
-          if (observed === null) contextDiagnostics.bookmakerAbsent += 1;
-          else if (
-            normalizeBookmaker(observed) === normalizeBookmaker(item.expected.bookmaker ?? '')
-          )
-            contextDiagnostics.bookmakerConfirmed += 1;
-          else {
-            contextDiagnostics.bookmakerConflicts += 1;
-            record('bookmaker', 'mismatches');
-          }
-        } else compare(field, item.expected[field], actual.data[field]);
+        compare(field, item.expected[field], actual.data[field]);
       }
       compare('selections.length', item.expected.selections.length, actual.data.selections.length);
       for (let i = 0; i < item.expected.selections.length; i++) {

@@ -345,12 +345,11 @@ export async function runReplay(options) {
       const result = await extractTicketForEvidence({
         apiKey,
         image: item.bytes,
-        layouts: [layout],
         // Qualification measures exactly the selected model; the evidence
         // path validates the selector against the approved chain.
         model,
-        // Not approved yet: the evidence-only path skips the policy digest,
-        // which requires the approval fields validated by layoutDigest.
+        // STK-G0-22: o modelo não classifica layout nem casa; a resolução
+        // determinística pertence ao servidor (F2).
         ...(fetchImpl ? { fetchImpl } : {}),
         ...(ocr ? { ocr } : {}),
       });

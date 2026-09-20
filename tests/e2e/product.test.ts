@@ -324,7 +324,6 @@ function importFixture(): ImportDetail {
       imageAvailable: true,
     },
     extraction: {
-      bookmaker: 'Superbet',
       reference: 'BILHETE-FICTICIO',
       placedAtText: 'ontem, 15h',
       currency: null,

@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import {
   parseAutomaticPlacedAt,
-  validatedLayoutsSchema,
   OPENROUTER_MODEL,
   type ValidatedLayout,
 } from '../../packages/shared/src/index.js';
@@ -14,7 +13,6 @@ import {
   extractTicket,
   TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
-import { layoutDigest } from '../../packages/db/src/automatic-policy.js';
 const layout: ValidatedLayout = {
   id: 'synthetic-layout',
   bookmaker: 'bet365',
@@ -137,9 +135,8 @@ describe('automatic import policy boundaries', () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
-  it('binds recognition to the approved description and keeps unknown model-selected layouts unapproved', async () => {
+  it('rejects any house or layout field from the neutral extraction response (STK-G0-22)', async () => {
     const extraction = {
-      bookmaker: 'Fictional',
       reference: 'fictional-1',
       placedAtText: null,
       currency: 'BRL',
@@ -160,7 +157,11 @@ describe('automatic import policy boundaries', () => {
       warnings: [],
     };
     const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
-    for (const selected of [layout.id, 'unapproved', null]) {
+    for (const extra of [
+      { bookmaker: 'Fictional' },
+      { bookmakerId: 'fictional' },
+      { layoutId: 'fictional' },
+    ]) {
       const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
         Response.json({
           id: 'fictional-completion',
@@ -168,28 +169,33 @@ describe('automatic import policy boundaries', () => {
           choices: [
             {
               finish_reason: 'stop',
-              message: { content: JSON.stringify({ layoutId: selected, extraction }) },
+              message: { content: JSON.stringify({ ...extraction, ...extra }) },
             },
           ],
         }),
       );
-      const result = await extractTicket({
-        apiKey: 'fictional-key',
-        image,
-        layouts: validatedLayoutsSchema.parse([layout]),
-        fetchImpl,
-      });
-      expect(result.layoutId).toBe(selected === layout.id ? selected : null);
-      expect(result.policyDigest).toBe(selected === layout.id ? layoutDigest(layout) : null);
-      expect(result.requiresReview).toBe(true);
-      const request = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
-      expect(request.messages[0].content).toContain(layout.description);
-      expect(request.response_format.json_schema.schema.required).toEqual([
-        'layoutId',
-        'extraction',
-      ]);
+      await expect(
+        extractTicket({ apiKey: `sk-or-v1-${'a'.repeat(64)}`, image, fetchImpl }),
+      ).rejects.toThrow('AI_EXTRACTION_INVALID');
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     }
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'fictional-completion',
+        model: OPENROUTER_MODEL,
+        choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(extraction) } }],
+      }),
+    );
+    const result = await extractTicket({ apiKey: `sk-or-v1-${'a'.repeat(64)}`, image, fetchImpl });
+    expect(result.layoutId).toBeNull();
+    expect(result.policyDigest).toBeNull();
+    expect(result.requiresReview).toBe(true);
+    const request = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
+    expect(request.messages[0].content).toContain('bookmakerContext=user-informed');
+    expect(request.messages[0].content).not.toContain('Informe layoutId');
+    expect(request.response_format.json_schema.schema.required).not.toContain('layoutId');
+    expect(request.response_format.json_schema.schema.required).not.toContain('bookmaker');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
   it('keeps potential return out of the OCR agreement while the other fields stay essential', async () => {
     const completionFor = (potentialReturn: string | null) =>
@@ -201,28 +207,24 @@ describe('automatic import policy boundaries', () => {
             finish_reason: 'stop',
             message: {
               content: JSON.stringify({
-                layoutId: layout.id,
-                extraction: {
-                  bookmaker: 'Fictional',
-                  reference: 'fictional-1',
-                  placedAtText: null,
-                  currency: 'BRL',
-                  stake: '10.00',
-                  odds: '2.00',
-                  potentialReturn,
-                  freebet: false,
-                  selections: [
-                    {
-                      event: 'A x B',
-                      sport: null,
-                      market: 'Result',
-                      selection: 'A',
-                      odds: null,
-                      eventDateText: null,
-                    },
-                  ],
-                  warnings: [],
-                },
+                reference: 'fictional-1',
+                placedAtText: null,
+                currency: 'BRL',
+                stake: '10.00',
+                odds: '2.00',
+                potentialReturn,
+                freebet: false,
+                selections: [
+                  {
+                    event: 'A x B',
+                    sport: null,
+                    market: 'Result',
+                    selection: 'A',
+                    odds: null,
+                    eventDateText: null,
+                  },
+                ],
+                warnings: [],
               }),
             },
           },
@@ -244,19 +246,13 @@ describe('automatic import policy boundaries', () => {
       averageQualityScore: 1,
     });
     const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
-    const run = async (
-      potentialReturn: string | null,
-      ocrLine: string,
-      labels: string[] = ['Retorno Total'],
-    ) => {
-      const layouts = validatedLayoutsSchema.parse([{ ...layout, potentialReturnLabels: labels }]);
+    const run = async (potentialReturn: string | null, ocrLine: string) => {
       const fetchImpl = vi
         .fn<typeof fetch>()
         .mockImplementation(async () => completionFor(potentialReturn));
       const result = await extractTicket({
         apiKey: 'fictional-key',
         image,
-        layouts,
         ocr: ocrWith(ocrLine),
         fetchImpl,
       });
@@ -264,14 +260,8 @@ describe('automatic import policy boundaries', () => {
     };
     // Bet365: rotulo autorizado com valor consistente.
     expect((await run('20.00', 'Retorno Total 20,00')).result.ocrConsistent).toBe(true);
-    // Superbet: Premio e Ganho Potencial sao os rotulos autorizados.
-    expect(
-      (await run('26.50', 'PREMIO 26,50 R$', ['Prêmio', 'Ganho Potencial'])).result.ocrConsistent,
-    ).toBe(true);
-    expect(
-      (await run('0.53', 'Ganho Potencial 0,53 R$', ['Prêmio', 'Ganho Potencial'])).result
-        .ocrConsistent,
-    ).toBe(true);
+    expect((await run('26.50', 'PREMIO 26,50 R$')).result.ocrConsistent).toBe(true);
+    expect((await run('0.53', 'Ganho Potencial 0,53 R$')).result.ocrConsistent).toBe(true);
     // R6: o retorno é diagnóstico de fidelidade — rótulo visível com omissão do
     // modelo, valor divergente do OCR ou rótulo não autorizado NÃO reprovam a
     // concordância (stake, odds, referência e seleções seguem essenciais).
@@ -279,10 +269,10 @@ describe('automatic import policy boundaries', () => {
     expect((await run('21.00', 'Retorno Total 20,00')).result.ocrConsistent).toBe(true);
     expect((await run('20.00', 'Retorno Liquido 20,00')).result.ocrConsistent).toBe(true);
     expect((await run('26.50', 'Retorno Obtido 26,50')).result.ocrConsistent).toBe(true);
-    // Os rotulos autorizados viajam no contexto dos layouts.
+    // STK-G0-22: o contexto é neutro — rótulos de layout não viajam mais ao modelo.
     const { fetchImpl } = await run('20.00', 'Retorno Total 20,00');
     const sent = JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body));
-    expect(sent.messages[0].content).toContain('"potentialReturnLabels":["Retorno Total"]');
+    expect(sent.messages[0].content).not.toContain('potentialReturnLabels');
   });
   it('keeps the event date out of the extraction order', () => {
     expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('[Data do evento]');

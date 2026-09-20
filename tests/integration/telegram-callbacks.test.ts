@@ -29,7 +29,6 @@ const config: TelegramConfig = {
   miniAppUrl: 'https://app.stakeframe.test',
 };
 const extraction = {
-  bookmaker: 'Bet365',
   reference: 'FICTICIO',
   placedAtText: '17/09/2026 10:00',
   currency: 'BRL',

@@ -31,7 +31,12 @@ export const corpusEvaluationInputSchema = z.strictObject({
       z.strictObject({
         imageSha256: z.string().regex(/^[a-f0-9]{64}$/),
         expectedLayoutId: z.string().nullable(),
-        expected: ticketExtractionSchema,
+        // STK-G0-22: o gabarito pode preservar a casa anotada (evidência
+        // histórica dos corpora antigos); a avaliação NÃO compara o bookmaker
+        // da resposta — a IA não o lê. A resposta neutra segue o contrato.
+        expected: ticketExtractionSchema.extend({
+          bookmaker: z.string().trim().min(1).max(500).nullable().optional(),
+        }),
         actual: z.strictObject({
           imageSha256: z.string().regex(/^[a-f0-9]{64}$/),
           model: z.string().max(200),

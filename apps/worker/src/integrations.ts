@@ -160,7 +160,6 @@ export async function startIntegrations(
             image: claim.image,
             fetchImpl,
             signal: controller.signal,
-            layouts,
             ...(ocr ? { ocr: ocr.result } : {}),
           });
           const completed = await automatic.complete(context, inboxId, claim.attempt, result);

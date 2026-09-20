@@ -57,7 +57,10 @@ const decimal = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,4})?$/);
 
 // Extraction is evidence for review, never authority to create a financial entry.
 export const ticketExtractionSchema = z.strictObject({
-  bookmaker: text.nullable(),
+  // STK-G0-22: a extração da IA é neutra — não existe campo de casa. O
+  // bookmaker é declarado exclusivamente pelo usuário (legenda/Telegram,
+  // MiniApp ou Web) e resolvido no servidor; qualquer indicação de casa
+  // retornada pelo modelo é rejeitada pelo strictObject.
   reference: text.nullable(),
   placedAtText: text.nullable(),
   currency: z.enum(['BRL']).nullable(),
@@ -152,11 +155,10 @@ export const validatedLayoutsSchema = z
   .max(5)
   .refine((layouts) => new Set(layouts.map((layout) => layout.id)).size === layouts.length);
 export type ValidatedLayout = z.infer<typeof validatedLayoutSchema>;
-export const layoutExtractionSchema = z.strictObject({
-  layoutId: z.string().nullable(),
-  extraction: ticketExtractionSchema,
-});
-export const layoutExtractionJsonSchema = z.toJSONSchema(layoutExtractionSchema);
+// STK-G0-22: o wrapper { layoutId, extraction } foi removido — o modelo não
+// escolhe layout nem casa; a resposta neutra é validada diretamente por
+// ticketExtractionSchema (strictObject rejeita campos extras). A resolução
+// determinística da casa/layout pertence ao servidor (F2).
 export const duplicateSchema = z.object({
   betId: z.uuid(),
   reference: z.string(),

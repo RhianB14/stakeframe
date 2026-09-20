@@ -83,16 +83,10 @@ async function candidate(
   const tipsterId = match('tipster', labels.tipster);
   const bookmakerId = match('bookmaker', labels.bookmaker);
   if (!tipsterId || !bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };
-  // A casa informada no contexto é a fonte de verdade. A leitura visual só
-  // pesa como conflito quando aponta para OUTRA casa cadastrada; texto visual
-  // não resolvido permanece em revisão (fail-closed) e marca ausente (null)
-  // não invalida o bilhete. O contexto nunca é copiado para a extração.
-  const visualBookmakerId = match('bookmaker', extraction.bookmaker);
+  // STK-G0-22: a extração é neutra — não existe leitura visual de casa. A
+  // casa declarada pelo usuário (legenda, botão, MiniApp ou Web) é a única
+  // fonte; o gate por layout permanece até a F2 (resolução determinística).
   if (bookmakerId !== layout.bookmakerId) return { reason: 'BOOKMAKER_CONFLICT' };
-  if (extraction.bookmaker !== null && visualBookmakerId === null)
-    return { reason: 'BOOKMAKER_CONFLICT' };
-  if (visualBookmakerId !== null && visualBookmakerId !== bookmakerId)
-    return { reason: 'BOOKMAKER_CONFLICT' };
   // Data da aposta: somente o texto visual do comprovante (a data do jogo é
   // outro campo — eventAt, declarado pelo usuário e inicialmente pendente). O
   // horário de upload/Telegram nunca é usado como horário da aposta.

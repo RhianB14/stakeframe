@@ -340,7 +340,7 @@ describe('private import review', () => {
     });
     expect((await finance.workspace(tenantContext)).exposure).toBe('200.00');
   });
-  it('resolves caption aliases and exposes conflicting extraction without guessing dates', async () => {
+  it('resolves caption aliases and never derives a house conflict from the extraction (STK-G0-22)', async () => {
     const { id } = await upload(randomUUID(), 'Analista\nBet 365');
     await run({ type: 'catalog.create', kind: 'tipster', name: 'Analista', aliases: ['A'] });
     const workspace = await finance.workspace(tenantContext);
@@ -378,8 +378,11 @@ describe('private import review', () => {
       [id, JSON.stringify({ extraction: candidate, requiresReview: true })],
     );
     const result = importDetailSchema.parse(await imports.detail(tenantContext, id));
-    expect(result.extraction).toEqual(candidate);
-    expect(result.matches.conflict).toBe(true);
+    // STK-G0-22: resposta com campo de casa é inválida (contrato neutro) — nada
+    // é retido como extração; a legenda é a única fonte de casa.
+    expect(result.extraction).toBeNull();
+    expect(result.matches.conflict).toBe(false);
+    expect(result.matches.extractedBookmakerId).toBeNull();
     expect(result.matches.captionBookmakerId).toBe(house.id);
     expect(result.matches.tipsterId).not.toBeNull();
     expect(result.automatic).toBe(false);

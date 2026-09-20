@@ -5,7 +5,6 @@ import { OPENROUTER_MODEL } from '../../packages/shared/dist/index.js';
 // never contain real tickets, images, hashes or personal data.
 export function syntheticExtraction() {
   return {
-    bookmaker: 'Fictional',
     reference: 'fixture',
     placedAtText: null,
     currency: 'BRL',
