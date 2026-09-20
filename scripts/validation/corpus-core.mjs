@@ -31,12 +31,17 @@ export const normalizeEvent = (value) => {
 // Glifos ordinais º/° são equivalentes somente em mercados; o restante do
 // texto (nomes, valores, datas, acentos) continua exato.
 export const normalizeMarket = (value) => normalizeName(value).replace(/[\u00b0\u00ba]/g, '\u00ba');
+// STK-G0-22-F5: no separador textual de data/hora, hífen, meia-risca e
+// travessão são equivalentes; em qualquer outro campo os hífens permanecem
+// significativos (nomes, mercados, referências).
+const normalizePlacedAt = (value) => normalizeName(value).replace(/\s+[-–—]\s+/g, ' — ');
 const normalize = (value, field) => {
   if (typeof value !== 'string') return value;
   if (['stake', 'odds', 'potentialReturn'].includes(field))
     return value.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
   if (field === 'event') return normalizeEvent(value);
   if (field === 'market') return normalizeMarket(value);
+  if (field === 'placedAtText') return normalizePlacedAt(value);
   return normalizeName(value);
 };
 export function evaluateCorpus(value) {

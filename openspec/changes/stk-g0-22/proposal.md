@@ -100,6 +100,33 @@ aposta específica. A troca de casa pós-importação altera `finance.bet` e a
 exposição por journals compensatórios; uma edição antiga nunca sobrescreve a
 mais nova. Não há migração, ativação ou chamada externa nesta PR.
 
+## Fatia F5 — finalização da extração neutra (esta PR)
+
+Correções determinísticas sobre as leituras reais da RUN-015 (Bet365 e
+Superbet), sem novas chamadas pagas e sem tocar nos artefatos privados
+originais:
+
+- **Retorno potencial por evidência explícita**: o prompt passa a reconhecer os
+  rótulos fixos "Retorno Total", "Prêmio" e "Ganho Potencial" (a dependência
+  dos "rótulos autorizados do layout" saiu com a F1) e recupera o valor somente
+  quando ele está visível; nunca calcula nem deriva de stake × odd; ausente →
+  `null`, com aviso conservador quando o recorte corta o bloco. R1: quando o
+  modelo deixa o retorno nulo e o OCR tem o rótulo + valor na mesma linha, o
+  fluxo transcreve o valor deterministicamente e remove o aviso falso de
+  recorte (avisos de outra natureza ficam).
+- **Referências ambíguas**: segunda leitura focada (mesma imagem/OCR, schema
+  mínimo) quando o OCR e o modelo divergem apenas nos pares confundíveis
+  U/J, I/1, O/0; divergência ou falha → `reference=null` + aviso (revisão).
+- **Separadores de data**: na avaliação, hífen/meia-risca/travessão são
+  equivalentes **somente** no separador textual de data/hora; hífens reais em
+  nomes, mercados e referências continuam significativos.
+- **Auditoria RUN-015**: o ground truth do bilhete `898C-7R4JIY` continha erro
+  (`UIY`); registrado em draft privado versionado com hash, sem sobrescrever os
+  artefatos originais. Projeção local (não é rodada paga): Bet365 25/25;
+  Superbet 19/25 → 21/25 (restantes dependem de nova leitura).
+- **A policy final continua dependendo da casa informada pelo usuário** — a IA
+  não classifica bookmaker nem layout.
+
 ## Impacto
 
 Migração nenhuma; contrato OpenAPI ajustado; change OpenSpec `stk-g0-22`.

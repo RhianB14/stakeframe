@@ -143,6 +143,36 @@ test('treats ordinal glyphs as equivalent in markets only', () => {
   assert.equal(evaluateCorpus(selection).essentialFieldErrors, 1);
 });
 
+test('treats hyphen, en dash and em dash as equivalent only in the date/time separator (STK-G0-22-F5)', () => {
+  const hyphen = fixture();
+  hyphen.cases[0].expected.placedAtText = '7 DE SET. DE 2026 - 15:46';
+  hyphen.cases[0].actual.extraction.placedAtText = '7 DE SET. DE 2026 — 15:46';
+  assert.equal(evaluateCorpus(hyphen).essentialFieldErrors, 0);
+  const enDash = fixture();
+  enDash.cases[0].expected.placedAtText = '7 DE SET. DE 2026 – 15:46';
+  enDash.cases[0].actual.extraction.placedAtText = '7 DE SET. DE 2026 — 15:46';
+  assert.equal(evaluateCorpus(enDash).essentialFieldErrors, 0);
+  const differentDay = fixture();
+  differentDay.cases[0].expected.placedAtText = '7 DE SET. DE 2026 — 15:46';
+  differentDay.cases[0].actual.extraction.placedAtText = '8 DE SET. DE 2026 — 15:46';
+  assert.equal(evaluateCorpus(differentDay).essentialFieldErrors, 1);
+});
+
+test('never normalizes real hyphens inside references, names or markets (STK-G0-22-F5)', () => {
+  const reference = fixture();
+  reference.cases[0].expected.reference = '898C-7R4JIY';
+  reference.cases[0].actual.extraction.reference = '898C—7R4JIY';
+  assert.equal(evaluateCorpus(reference).essentialFieldErrors, 1);
+  const event = fixture();
+  event.cases[0].expected.selections[0].event = 'Jean-Luc Picard x Outro';
+  event.cases[0].actual.extraction.selections[0].event = 'Jean—Luc Picard x Outro';
+  assert.equal(evaluateCorpus(event).essentialFieldErrors, 1);
+  const market = fixture();
+  market.cases[0].expected.selections[0].market = 'Under-Over 2.5';
+  market.cases[0].actual.extraction.selections[0].market = 'Under—Over 2.5';
+  assert.equal(evaluateCorpus(market).essentialFieldErrors, 1);
+});
+
 test('never evaluates a visual bookmaker from the neutral response (STK-G0-22)', () => {
   const value = fixture();
   value.bookmakerContext = 'user-informed';
