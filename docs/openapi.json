@@ -1654,6 +1654,26 @@
           "sportOverride": { "nullable": true, "type": "string" },
           "tournamentOverride": { "nullable": true, "type": "string" },
           "countryOverride": { "nullable": true, "type": "string" },
+          "ticketKindOverride": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["simple", "multiple", "betbuild"]
+          },
+          "stakeOverride": { "nullable": true, "type": "string" },
+          "oddsOverride": { "nullable": true, "type": "string" },
+          "selectionOverrides": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event": { "nullable": true, "type": "string" },
+                "market": { "nullable": true, "type": "string" },
+                "selection": { "nullable": true, "type": "string" }
+              },
+              "required": ["event", "market", "selection"],
+              "additionalProperties": false
+            }
+          },
           "bookmakers": {
             "type": "array",
             "items": {
@@ -1833,6 +1853,10 @@
           "sportOverride",
           "tournamentOverride",
           "countryOverride",
+          "ticketKindOverride",
+          "stakeOverride",
+          "oddsOverride",
+          "selectionOverrides",
           "bookmakers",
           "tipsters",
           "bet",
@@ -5178,6 +5202,26 @@
           "sportOverride": { "nullable": true, "type": "string" },
           "tournamentOverride": { "nullable": true, "type": "string" },
           "countryOverride": { "nullable": true, "type": "string" },
+          "ticketKindOverride": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["simple", "multiple", "betbuild"]
+          },
+          "stakeOverride": { "nullable": true, "type": "string" },
+          "oddsOverride": { "nullable": true, "type": "string" },
+          "selectionOverrides": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event": { "nullable": true, "type": "string" },
+                "market": { "nullable": true, "type": "string" },
+                "selection": { "nullable": true, "type": "string" }
+              },
+              "required": ["event", "market", "selection"],
+              "additionalProperties": false
+            }
+          },
           "bookmakers": {
             "type": "array",
             "items": {
@@ -5362,6 +5406,10 @@
           "sportOverride",
           "tournamentOverride",
           "countryOverride",
+          "ticketKindOverride",
+          "stakeOverride",
+          "oddsOverride",
+          "selectionOverrides",
           "bookmakers",
           "tipsters",
           "bet",
@@ -9032,7 +9080,36 @@
                   },
                   "sport": { "nullable": true, "type": "string", "maxLength": 120 },
                   "tournament": { "nullable": true, "type": "string", "maxLength": 200 },
-                  "country": { "nullable": true, "type": "string", "maxLength": 120 }
+                  "country": { "nullable": true, "type": "string", "maxLength": 120 },
+                  "ticketKind": {
+                    "nullable": true,
+                    "type": "string",
+                    "enum": ["simple", "multiple", "betbuild"]
+                  },
+                  "stake": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{1,12}(\\.\\d{1,4})?$"
+                  },
+                  "odds": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{1,12}(\\.\\d{1,4})?$"
+                  },
+                  "selections": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "event": { "nullable": true, "type": "string", "maxLength": 240 },
+                        "market": { "nullable": true, "type": "string", "maxLength": 240 },
+                        "selection": { "nullable": true, "type": "string", "maxLength": 240 }
+                      },
+                      "required": ["event", "market", "selection"],
+                      "additionalProperties": false
+                    }
+                  }
                 },
                 "required": ["version"],
                 "additionalProperties": false

@@ -51,6 +51,32 @@ export const OPENROUTER_MODELS = [
 ] as const;
 export const OPENROUTER_MODEL = OPENROUTER_MODELS[0];
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export const ticketKindSchema = z.enum(['simple', 'multiple', 'betbuild']);
+export type TicketKind = z.infer<typeof ticketKindSchema>;
+
+/**
+ * Classifica a composição da aposta sem depender da IA:
+ * - uma seleção = simples;
+ * - várias seleções no mesmo evento = BetBuild;
+ * - várias seleções em eventos diferentes (ou sem evento confiável) = múltipla.
+ *
+ * Um evento ausente nunca é considerado igual a outro evento: isso evita
+ * transformar uma extração incompleta em BetBuild automaticamente.
+ */
+export function classifyTicketKind(selections: { event: string | null }[]): TicketKind {
+  if (selections.length <= 1) return 'simple';
+  const events = selections.map((selection) => {
+    if (!selection.event?.trim()) return null;
+    return selection.event
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+  });
+  return events.every((event) => event !== null && event === events[0]) ? 'betbuild' : 'multiple';
+}
 const text = z.string().min(1).max(500);
 const instant = z.iso.datetime({ offset: true });
 const decimal = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,4})?$/);
@@ -215,6 +241,18 @@ export const importDetailSchema = z
     sportOverride: z.string().nullable(),
     tournamentOverride: z.string().nullable(),
     countryOverride: z.string().nullable(),
+    // Campos editáveis do comprovante antes da criação da aposta financeira.
+    // Permanecem separados da evidência OCR para preservar a auditoria.
+    ticketKindOverride: ticketKindSchema.nullable(),
+    stakeOverride: z.string().nullable(),
+    oddsOverride: z.string().nullable(),
+    selectionOverrides: z.array(
+      z.strictObject({
+        event: z.string().nullable(),
+        market: z.string().nullable(),
+        selection: z.string().nullable(),
+      }),
+    ),
     bookmakers: z.array(z.object({ id: z.uuid(), name: z.string() })),
     // STK-G0-20 B5 — tipsters ATIVOS da organização (nunca misturados às casas).
     tipsters: z.array(z.object({ id: z.uuid(), name: z.string() })),
@@ -276,6 +314,29 @@ export const draftUpdateSchema = z
     sport: z.string().trim().max(120).nullable().optional(),
     tournament: z.string().trim().max(200).nullable().optional(),
     country: z.string().trim().max(120).nullable().optional(),
+    ticketKind: ticketKindSchema.nullable().optional(),
+    stake: z
+      .string()
+      .trim()
+      .regex(/^\d{1,12}(\.\d{1,4})?$/)
+      .nullable()
+      .optional(),
+    odds: z
+      .string()
+      .trim()
+      .regex(/^\d{1,12}(\.\d{1,4})?$/)
+      .nullable()
+      .optional(),
+    selections: z
+      .array(
+        z.strictObject({
+          event: z.string().trim().max(240).nullable(),
+          market: z.string().trim().max(240).nullable(),
+          selection: z.string().trim().max(240).nullable(),
+        }),
+      )
+      .max(50)
+      .optional(),
   })
   .refine(
     (value) => {

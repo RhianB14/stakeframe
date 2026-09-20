@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
-import { FinanceError, type ImportService } from '@stakeframe/db';
+import { FinanceError, readSecret, type ImportService } from '@stakeframe/db';
 import type { OrganizationContext } from '@stakeframe/db';
 import {
   apiErrorSchema,
@@ -68,8 +68,16 @@ export function registerImportRoutes(
   const authorizeDraft = async (request: FastifyRequest, reply: FastifyReply) => {
     const initData = request.headers['x-telegram-init-data'];
     if (typeof initData === 'string' && initData.length > 0) {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
-      const expectedTelegramId = process.env.TELEGRAM_OWNER_USER_ID?.trim() ?? null;
+      let botToken: string | undefined;
+      let expectedTelegramId: string | undefined;
+      try {
+        // Production keeps these values in Docker secrets. Local/CI tests may
+        // still provide plain environment variables through readSecret.
+        botToken = readSecret(process.env, 'TELEGRAM_BOT_TOKEN')?.trim();
+        expectedTelegramId = readSecret(process.env, 'TELEGRAM_OWNER_USER_ID')?.trim();
+      } catch {
+        return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      }
       if (!botToken || !expectedTelegramId)
         return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
       const validated = validateTelegramInitData(initData, botToken);

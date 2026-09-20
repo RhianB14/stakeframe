@@ -525,6 +525,17 @@ describe('Status e exclusão da mensagem final (G0-20 B4)', () => {
     expect((await inboxState(id)).state).toBe('review');
   });
 
+  it('explains that a review draft must be registered before settlement', async () => {
+    const id = await boundInbox();
+    calls.length = 0;
+    await handler()(callback('status', 7777, null, 'win'));
+    expect(String(calls[0]!.body.text)).toBe(
+      'Finalize Casa e origem em Editar antes de alterar o status.',
+    );
+    expect((await inboxState(id)).state).toBe('review');
+    expect(await settlementsOf(id)).toBe(0);
+  });
+
   it('settles a pending bet from the status keyboard and cleans the telegram', async () => {
     const id = await importedInboxB4();
     calls.length = 0;

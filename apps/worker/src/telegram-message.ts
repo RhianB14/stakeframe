@@ -4,8 +4,11 @@ import {
   parseCaption,
   potentialReturnFor,
   renderImportMessage,
+  classifyTicketKind,
+  ticketKindLabel,
   ticketExtractionSchema,
   type BetOrigin,
+  type TicketKind,
 } from '@stakeframe/shared';
 
 // Compat: os cálculos vivem no shared (fonte única) e permanecem exportados
@@ -66,6 +69,10 @@ export type ImportMessageRow = {
   override_sport?: string | null;
   override_tournament?: string | null;
   override_country?: string | null;
+  override_kind?: TicketKind | null;
+  override_stake?: string | null;
+  override_odds?: string | null;
+  override_selections?: unknown;
   /** Presente quando a importação já tem aposta registrada. */
   canonical?: CanonicalBetData | null;
   /** Valor do crédito escolhido no rascunho, quando já declarado. */
@@ -75,7 +82,34 @@ export type ImportMessageRow = {
 const distinctValues = (values: (string | null | undefined)[]): string | null => {
   const parts = values.filter((value): value is string => !!value && value.trim().length > 0);
   const unique = [...new Set(parts.map((value) => value.trim()))];
-  return unique.length ? unique.join('; ') : null;
+  return unique.length ? unique.join(' / ') : null;
+};
+
+const selectionText = (
+  selections: { market: string | null; selection: string | null }[],
+  kind: ReturnType<typeof classifyTicketKind>,
+) => {
+  if (kind === 'simple') return selections[0]?.selection ?? null;
+  const values = selections
+    .map(({ selection, market }) => [selection, market].filter(Boolean).join(' ').trim())
+    .filter(Boolean);
+  return values.length ? values.join(' + ') : null;
+};
+
+const readSelectionOverrides = (value: unknown) => {
+  if (!Array.isArray(value)) return null;
+  const selections = value.filter(
+    (item): item is { event: string | null; market: string | null; selection: string | null } =>
+      !!item &&
+      typeof item === 'object' &&
+      !Array.isArray(item) &&
+      ['event', 'market', 'selection'].every(
+        (key) =>
+          (item as Record<string, unknown>)[key] === null ||
+          typeof (item as Record<string, unknown>)[key] === 'string',
+      ),
+  );
+  return selections.length === value.length ? selections : null;
 };
 
 const draftStatusLabel = (state: string): string => {
@@ -105,6 +139,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
       (item) => item.eventAt === null || item.dateStatus !== 'confirmed',
     );
     const firstDate = canonical.selections.find((item) => item.eventAt !== null)?.eventAt ?? null;
+    const kind = classifyTicketKind(canonical.selections);
     return renderImportMessage({
       id: row.id,
       statusLabel,
@@ -114,8 +149,8 @@ export function buildImportMessage(row: ImportMessageRow): string {
       tournament: null,
       event: distinctValues(canonical.selections.map((item) => item.event)),
       country: null,
-      selection: distinctValues(canonical.selections.map((item) => item.selection)),
-      market: distinctValues(canonical.selections.map((item) => item.market)),
+      selection: selectionText(canonical.selections, kind),
+      market: kind === 'simple' ? (canonical.selections[0]?.market ?? null) : ticketKindLabel[kind],
       stake: canonical.stake,
       odds: canonical.odds,
       potentialReturn: potentialReturnFor(
@@ -124,7 +159,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
         canonical.odds,
         canonical.freebetAmount ?? null,
       ),
-      kind: canonical.selections.length > 1 ? 'multiple' : 'simple',
+      kind,
       sentAt: formatInstant(row.telegram_received_at),
       eventAt: datePending || firstDate === null ? null : formatInstant(firstDate),
       bookmaker: canonical.bookmaker,
@@ -134,9 +169,12 @@ export function buildImportMessage(row: ImportMessageRow): string {
   const origin: BetOrigin =
     row.bet_origin === 'freebet' ? 'freebet' : row.bet_origin === 'hibrida' ? 'hibrida' : 'real';
   const declaredOrigin = row.bet_origin !== null;
-  const stake = extraction?.stake ?? null;
-  const odds = extraction?.odds ?? null;
+  const stake = row.override_stake ?? extraction?.stake ?? null;
+  const odds = row.override_odds ?? extraction?.odds ?? null;
   const settled = row.event_date_status === 'confirmed' && row.event_at !== null;
+  const selections =
+    readSelectionOverrides(row.override_selections) ?? extraction?.selections ?? [];
+  const kind = row.override_kind ?? classifyTicketKind(selections);
   return renderImportMessage({
     id: row.id,
     statusLabel: draftStatusLabel(row.state),
@@ -147,10 +185,10 @@ export function buildImportMessage(row: ImportMessageRow): string {
       extraction?.selections.find((item) => item.sport !== null)?.sport ??
       null,
     tournament: row.override_tournament ?? null,
-    event: distinctValues(extraction?.selections.map((item) => item.event) ?? []),
+    event: distinctValues(selections.map((item) => item.event)),
     country: row.override_country ?? null,
-    selection: distinctValues(extraction?.selections.map((item) => item.selection) ?? []),
-    market: distinctValues(extraction?.selections.map((item) => item.market) ?? []),
+    selection: selectionText(selections, kind),
+    market: kind === 'simple' ? (selections[0]?.market ?? null) : ticketKindLabel[kind],
     stake,
     odds,
     // Sem declaração de origem o cálculo assume dinheiro real (caso base);
@@ -159,7 +197,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
       stake && odds
         ? potentialReturnFor(origin, stake, odds, row.draft_freebet_amount ?? null)
         : null,
-    kind: (extraction?.selections.length ?? 1) > 1 ? 'multiple' : 'simple',
+    kind,
     sentAt: formatInstant(row.telegram_received_at),
     eventAt: settled ? formatInstant(row.event_at) : null,
     bookmaker: row.override_bookmaker ?? labels.bookmaker ?? null,

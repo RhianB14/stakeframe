@@ -263,9 +263,51 @@ describe('import message rendering (R5)', () => {
     expect(text).toContain('🏆 Torneio: Copa do Mundo');
     expect(text).toContain('🌎 País: Brasil');
     expect(text).toContain('🗣️ Tipster: teste');
-    expect(text).toContain('🎰 Aposta: A; Menos de 1.5');
-    expect(text).not.toContain('🎰 Aposta: A; A;');
-    expect(text).toContain('🎯 Mercado: Resultado; Próximo gol; Total de gols');
+    expect(text).toContain('🎰 Aposta: A Resultado + A Próximo gol + Menos de 1.5 Total de gols');
+    expect(text).not.toContain(';');
+    expect(text).toContain('🎯 Mercado: BetBuild');
+    expect(text).toContain('📝 Tipo: BetBuild');
+  });
+  it('labels a multiple ticket and keeps the simple market unchanged', () => {
+    const multiple = buildImportMessage(
+      row({
+        extraction: {
+          ...extraction,
+          selections: [
+            extraction.selections[0],
+            { ...extraction.selections[0], event: 'C x D', market: 'Vencedor', selection: 'D' },
+          ],
+        },
+      }),
+    );
+    expect(multiple).toContain('🎰 Aposta: A Resultado + D Vencedor');
+    expect(multiple).toContain('🎯 Mercado: Múltipla');
+    expect(multiple).toContain('📝 Tipo: Múltipla');
+    const simple = buildImportMessage(row());
+    expect(simple).toContain('🎰 Aposta: A');
+    expect(simple).toContain('🎯 Mercado: Resultado');
+    expect(simple).toContain('📝 Tipo: Simples');
+  });
+  it('uses edited events when the Telegram message is synchronized', () => {
+    const text = buildImportMessage(
+      row({
+        override_kind: 'multiple',
+        override_selections: [
+          { event: 'Flamengo x Bragantino', market: 'Resultado', selection: 'Flamengo' },
+          { event: 'Flamengo x Bragantino', market: 'Ambas marcam', selection: 'Não' },
+        ],
+        extraction: {
+          ...extraction,
+          selections: [
+            { ...extraction.selections[0], event: 'Evento extraído incorreto' },
+            { ...extraction.selections[0], event: 'Outro evento incorreto', selection: 'Não' },
+          ],
+        },
+      }),
+    );
+    expect(text).toContain('⚔️ Evento: Flamengo x Bragantino');
+    expect(text).not.toContain('Evento extraído incorreto');
+    expect(text).not.toContain('Outro evento incorreto');
   });
 });
 

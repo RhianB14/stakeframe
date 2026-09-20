@@ -11,6 +11,7 @@ import {
   cents,
   money,
   saoPauloDate,
+  type TicketKind,
   type FinanceCommand,
 } from '@stakeframe/shared';
 
@@ -101,6 +102,14 @@ export function patchImportDraft(
     freebetId?: string | null;
     eventAt?: string | null;
     bookmakerId?: string | null;
+    tipsterId?: string | null;
+    sport?: string | null;
+    tournament?: string | null;
+    country?: string | null;
+    ticketKind?: TicketKind | null;
+    stake?: string | null;
+    odds?: string | null;
+    selections?: { event: string | null; market: string | null; selection: string | null }[];
   },
   initData?: string,
 ) {

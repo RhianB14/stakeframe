@@ -207,6 +207,59 @@ describe('telegram sync canonical draft', () => {
     expect(JSON.stringify(audit)).not.toContain('902');
   });
 
+  it('persists the editable ticket shape without changing the OCR evidence', async () => {
+    const id = await upload();
+    const before = (
+      await database.pool.query<{ extraction: unknown }>(
+        'select extraction from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.extraction;
+    const saved = await imports.updateDraft(
+      tenantContext,
+      id,
+      {
+        version: 1,
+        ticketKind: 'betbuild',
+        stake: '25.00',
+        odds: '14.70',
+        sport: 'Tênis',
+        tournament: 'Copa Davis',
+        country: 'Mundo',
+        selections: [
+          {
+            event: 'Jiri Lehecka x Ben Shelton',
+            market: 'Resultado Final',
+            selection: 'Jiri Lehecka',
+          },
+          {
+            event: 'Jiri Lehecka x Ben Shelton',
+            market: 'Game 7 - Vencedor',
+            selection: 'Jiri Lehecka',
+          },
+        ],
+      },
+      'web',
+    );
+    const row = (
+      await database.pool.query<{
+        metadata: { userOverrides?: Record<string, unknown> };
+        extraction: unknown;
+      }>('select metadata,extraction from integration.inbox where id=$1', [id])
+    ).rows[0]!;
+    expect(row.metadata.userOverrides).toMatchObject({
+      ticketKind: 'betbuild',
+      stake: '25.00',
+      odds: '14.70',
+      sport: 'Tênis',
+      tournament: 'Copa Davis',
+      country: 'Mundo',
+    });
+    expect(row.metadata.userOverrides?.selections).toHaveLength(2);
+    expect(row.extraction).toEqual(before);
+    expect(saved.version).toBe(2);
+  });
+
   it('clears the event date back to pending and rejects stale versions', async () => {
     const id = await upload();
     const first = await imports.updateDraft(

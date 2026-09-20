@@ -4,6 +4,8 @@ import {
   parseCaption,
   telegramOperationSchema,
   ticketExtractionSchema,
+  ticketKindSchema,
+  type TicketKind,
   type TelegramOperation,
 } from '@stakeframe/shared';
 import { automaticPolicyNotice } from './layout-policy.js';
@@ -31,6 +33,10 @@ type DraftOverrides = {
   sport?: string;
   tournament?: string;
   country?: string;
+  ticketKind?: TicketKind;
+  stake?: string;
+  odds?: string;
+  selections?: { event: string | null; market: string | null; selection: string | null }[];
 };
 
 function readDraftOverrides(value: unknown): DraftOverrides {
@@ -43,6 +49,26 @@ function readDraftOverrides(value: unknown): DraftOverrides {
   if (typeof source.sport === 'string') result.sport = source.sport;
   if (typeof source.tournament === 'string') result.tournament = source.tournament;
   if (typeof source.country === 'string') result.country = source.country;
+  const kind = ticketKindSchema.safeParse(source.ticketKind);
+  if (kind.success) result.ticketKind = kind.data;
+  if (typeof source.stake === 'string' && /^\d{1,12}(\.\d{1,4})?$/.test(source.stake))
+    result.stake = source.stake;
+  if (typeof source.odds === 'string' && /^\d{1,12}(\.\d{1,4})?$/.test(source.odds))
+    result.odds = source.odds;
+  if (Array.isArray(source.selections)) {
+    const selections = source.selections.filter(
+      (item): item is { event: string | null; market: string | null; selection: string | null } =>
+        !!item &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        ['event', 'market', 'selection'].every(
+          (key) =>
+            (item as Record<string, unknown>)[key] === null ||
+            typeof (item as Record<string, unknown>)[key] === 'string',
+        ),
+    );
+    if (selections.length === source.selections.length) result.selections = selections;
+  }
   return result;
 }
 
@@ -60,6 +86,11 @@ type DraftPatch = {
   sport?: string | null | undefined;
   tournament?: string | null | undefined;
   country?: string | null | undefined;
+  ticketKind?: TicketKind | null | undefined;
+  stake?: string | null | undefined;
+  odds?: string | null | undefined;
+  selections?:
+    { event: string | null; market: string | null; selection: string | null }[] | undefined;
 };
 
 async function applyDraftUpdate(
@@ -138,6 +169,19 @@ async function applyDraftUpdate(
       if (value === null || value.trim() === '') delete nextOverrides[key];
       else nextOverrides[key] = value.trim();
     }
+    if (patch.ticketKind !== undefined) {
+      if (patch.ticketKind === null) delete nextOverrides.ticketKind;
+      else nextOverrides.ticketKind = patch.ticketKind;
+    }
+    for (const [key, value] of [
+      ['stake', patch.stake],
+      ['odds', patch.odds],
+    ] as const) {
+      if (value === undefined) continue;
+      if (value === null || value.trim() === '') delete nextOverrides[key];
+      else nextOverrides[key] = value.trim();
+    }
+    if (patch.selections !== undefined) nextOverrides.selections = patch.selections;
     const nextMetadata = {
       ...(row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
         ? row.metadata
@@ -165,7 +209,7 @@ async function applyDraftUpdate(
           )?.catalog_id ?? null)
         : null;
     const effectiveBookmakerId = nextBookmakerOverride ?? matchBookmaker(labels.bookmaker);
-    const stake = extraction?.stake ?? null;
+    const stake = nextOverrides.stake ?? extraction?.stake ?? null;
     // R7: troca de casa NUNCA preserva crédito incompatível em silêncio —
     // casa divergente, consumido ou expirado ⇒ crédito removido e a
     // origem volta a "não informada" (nova escolha explícita obrigatória).
@@ -235,6 +279,10 @@ async function applyDraftUpdate(
             sport: nextOverrides.sport ?? null,
             tournament: nextOverrides.tournament ?? null,
             country: nextOverrides.country ?? null,
+            ticketKind: nextOverrides.ticketKind ?? null,
+            stake: nextOverrides.stake ?? null,
+            odds: nextOverrides.odds ?? null,
+            selectionCount: nextOverrides.selections?.length ?? null,
           },
           freebetCleared,
         }),

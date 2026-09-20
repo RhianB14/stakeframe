@@ -450,13 +450,20 @@ export function BetForm({
 }) {
   const [bookmakerId, setBookmaker] = useState(
     bet?.bookmakerId ??
+      review?.bookmakerOverrideId ??
       (review?.matches.conflict
         ? ''
         : (review?.matches.captionBookmakerId ?? review?.matches.extractedBookmakerId ?? '')),
   );
-  const [tipsterId, setTipster] = useState(bet?.tipsterId ?? review?.matches.tipsterId ?? '');
-  const [stake, setStake] = useState(bet?.stake ?? review?.extraction?.stake ?? '');
-  const [odds, setOdds] = useState(bet?.odds ?? review?.extraction?.odds ?? '');
+  const [tipsterId, setTipster] = useState(
+    bet?.tipsterId ?? review?.tipsterOverrideId ?? review?.matches.tipsterId ?? '',
+  );
+  const [stake, setStake] = useState(
+    bet?.stake ?? review?.stakeOverride ?? review?.extraction?.stake ?? '',
+  );
+  const [odds, setOdds] = useState(
+    bet?.odds ?? review?.oddsOverride ?? review?.extraction?.odds ?? '',
+  );
   const [placedAt, setPlaced] = useState(() => (review ? '' : localNow()));
   const [reviewOrigin, setReviewOrigin] = useState<'real' | 'freebet' | 'hibrida' | 'unconfirmed'>(
     () => (review ? (review.betOrigin ?? 'unconfirmed') : 'real'),
@@ -464,35 +471,42 @@ export function BetForm({
   const [freebetId, setFreebet] = useState(bet?.freebetId ?? review?.freebetId ?? '');
   const [reference, setReference] = useState(bet?.reference ?? review?.extraction?.reference ?? '');
   const [duplicateReason, setDuplicateReason] = useState('');
-  const [selections, setSelections] = useState<SelectionForm[]>(() =>
-    bet
-      ? bet.selections.map((value) => ({
-          ...value,
-          key: crypto.randomUUID(),
-          time: value.eventAt
-            ? new Intl.DateTimeFormat('en-GB', {
-                timeZone: 'America/Sao_Paulo',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hourCycle: 'h23',
-              }).format(new Date(value.eventAt))
-            : '',
-        }))
-      : review?.extraction
-        ? review.extraction.selections.map((value) => ({
-            ...newSelection(),
-            event: value.event ?? '',
-            sport: value.sport,
-            market: value.market ?? '',
-            selection: value.selection ?? '',
-            odds: value.odds,
-            dateStatus: 'pending',
-          }))
-        : review
-          ? [{ ...newSelection(), sport: null, dateStatus: 'pending' }]
-          : [newSelection()],
-  );
+  const reviewSelections = review?.selectionOverrides.length
+    ? review.selectionOverrides
+    : (review?.extraction?.selections ?? []).map(({ event, market, selection }) => ({
+        event,
+        market,
+        selection,
+      }));
+  const [selections, setSelections] = useState<SelectionForm[]>(() => {
+    if (bet) {
+      return bet.selections.map((value) => ({
+        ...value,
+        key: crypto.randomUUID(),
+        time: value.eventAt
+          ? new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'America/Sao_Paulo',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hourCycle: 'h23',
+            }).format(new Date(value.eventAt))
+          : '',
+      }));
+    }
+    if (!review) return [newSelection()];
+    if (!reviewSelections.length)
+      return [{ ...newSelection(), sport: review.sportOverride ?? null, dateStatus: 'pending' }];
+    return reviewSelections.map((value) => ({
+      ...newSelection(),
+      event: value.event ?? '',
+      sport: review.sportOverride ?? null,
+      market: value.market ?? '',
+      selection: value.selection ?? '',
+      odds: null,
+      dateStatus: 'pending',
+    }));
+  });
   const [allowMissingUnit, setMissing] = useState(false);
   const [reason, setReason] = useState('');
   const houses = workspace.catalog.filter(

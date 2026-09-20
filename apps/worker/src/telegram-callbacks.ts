@@ -149,6 +149,17 @@ export function createTelegramCallbackHandler(
         );
         return;
       }
+      // Um rascunho ainda não possui finance.bet. Recusar de forma explícita
+      // evita a mensagem genérica e, principalmente, impede uma liquidação
+      // sem casa/origem/registro financeiro. Depois de salvar esses campos no
+      // Mini App e a aposta ser registrada, o mesmo teclado usa setStatus
+      // canônico normalmente.
+      if (!row.imported_bet_id) {
+        await client.answerCallbackQuery(query.callbackId, {
+          text: 'Finalize Casa e origem em Editar antes de alterar o status.',
+        });
+        return;
+      }
       try {
         await imports.setStatus(
           context,
