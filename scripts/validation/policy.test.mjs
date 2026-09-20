@@ -57,6 +57,7 @@ function writePolicy(entries) {
     overrides.corpusSha256 = first.corpusSha256;
   if (first.evaluationSha256 !== first.__evaluationSha256)
     overrides.evaluationSha256 = first.evaluationSha256;
+  if (first.bookmakers) overrides.bookmakers = first.bookmakers;
   if (JSON.stringify(first.coverage) !== JSON.stringify(first.__report.coverage))
     overrides.coverage = first.coverage;
   if (first.sampleCount !== first.__report.sampleCount) overrides.sampleCount = first.sampleCount;
@@ -248,4 +249,102 @@ test('covers two houses with two corpus directories in one policy file', async (
   assert.equal(result.unusedCorpora, 0);
   rmSync(first.directory, { recursive: true, force: true });
   rmSync(second.directory, { recursive: true, force: true });
+});
+
+test('approves an explicit policy with a pending house and keeps it fail-closed', async () => {
+  const evidence = writeEvidenceDirectory(syntheticCorpus());
+  const policy = writePolicy([
+    buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
+      bookmakers: {
+        approved: ['bet365'],
+        pending: [
+          { bookmaker: 'superbet', reason: 'homologacao real incompleta: 7 erros essenciais' },
+        ],
+      },
+    }),
+  ]);
+  const result = await verifyApprovalPolicy(policy, [evidence.directory], NOW);
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.verified.map((entry) => entry.bookmaker),
+    ['bet365'],
+  );
+  assert.deepEqual(result.pending, ['superbet']);
+  rmSync(evidence.directory, { recursive: true, force: true });
+});
+
+test('refuses a corpus from a house the policy did not declare', async () => {
+  const evidence = writeEvidenceDirectory(
+    syntheticCorpus({ id: 'superbet-fixture', bookmaker: 'superbet' }),
+  );
+  const policy = writePolicy([
+    buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
+      bookmakers: { approved: ['bet365'], pending: [] },
+    }),
+  ]);
+  const result = await verifyApprovalPolicy(policy, [evidence.directory], NOW);
+  assert.equal(result.ok, false);
+  assert.ok(result.failures.includes('POLICY_BOOKMAKER_UNDECLARED superbet'));
+  rmSync(evidence.directory, { recursive: true, force: true });
+});
+
+test('refuses an approval without saved evidence for a declared house', async () => {
+  const evidence = writeEvidenceDirectory(syntheticCorpus());
+  const policy = writePolicy([
+    buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
+      bookmakers: { approved: ['bet365', 'superbet'], pending: [] },
+    }),
+  ]);
+  const result = await verifyApprovalPolicy(policy, [evidence.directory], NOW);
+  assert.equal(result.ok, false);
+  assert.ok(result.failures.includes('POLICY_APPROVED_EVIDENCE_MISSING superbet'));
+  rmSync(evidence.directory, { recursive: true, force: true });
+});
+
+test('refuses an approval backed only by a local projection without saved evaluation', async () => {
+  const corpus = syntheticCorpus();
+  corpus.bookmakerContext = 'user-informed';
+  const directory = mkdtempSync(join(tmpdir(), 'stk-policy-projection-'));
+  const corpusFile = join(directory, 'corpus.json');
+  writeFileSync(corpusFile, JSON.stringify(corpus, null, 2) + '\n');
+  chmodSync(corpusFile, 0o600);
+  const report = evaluateCorpus(corpus);
+  const policy = writePolicy([buildPolicyEntry(corpus, report, 'a'.repeat(64))]);
+  const result = await verifyApprovalPolicy(policy, [directory], NOW);
+  assert.equal(result.ok, false);
+  assert.ok(result.failures.includes('CORPUS_DIRECTORY_INVALID'));
+  rmSync(directory, { recursive: true, force: true });
+});
+
+test('refuses a legacy global v2 policy that cannot represent a pending house', async () => {
+  const evidence = writeEvidenceDirectory(syntheticCorpus());
+  const legacy = buildGlobalPolicy([
+    { report: evidence.report, evaluationSha256: evidence.evaluationSha256 },
+  ]);
+  delete legacy.bookmakers;
+  legacy.schemaVersion = 2;
+  legacy.bookmakerScope = 'all-active';
+  const file = writePolicy([legacy]);
+  const result = await verifyApprovalPolicy(file, [evidence.directory], NOW);
+  assert.equal(result.ok, false);
+  assert.ok(result.failures.includes('POLICY_FILE_INVALID'));
+  rmSync(evidence.directory, { recursive: true, force: true });
+});
+
+test('refuses pending and approved for the same house and an empty pending reason', async () => {
+  const evidence = writeEvidenceDirectory(syntheticCorpus());
+  for (const bookmakers of [
+    { approved: ['bet365'], pending: [{ bookmaker: 'bet365', reason: 'duplicado' }] },
+    { approved: ['bet365'], pending: [{ bookmaker: 'superbet', reason: '   ' }] },
+  ]) {
+    const policy = writePolicy([
+      buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
+        bookmakers,
+      }),
+    ]);
+    const result = await verifyApprovalPolicy(policy, [evidence.directory], NOW);
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.includes('POLICY_FILE_INVALID'));
+  }
+  rmSync(evidence.directory, { recursive: true, force: true });
 });

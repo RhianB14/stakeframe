@@ -111,17 +111,23 @@ ou Mini App URL ausente/insegura.
 
 Quando a importação automática for autorizada em uma janela própria, o worker
 deve receber `AUTOMATIC_IMPORT_POLICIES_FILE` apontando para um arquivo privado
-absoluto. O arquivo segue `automaticPolicyV2Schema`: uma única policy global
-para todas as casas ativas, com `requiresUserBookmaker=true`, classificação de
-casa pela IA desabilitada, modelo/formato aprovados, evidência agregada e
-validade explícita. A casa e o tipster são resolvidos pela declaração do usuário
+absoluto. O arquivo segue `automaticPolicyV3Schema`: uma policy com casas
+explícitas (`bookmakers.approved` e `bookmakers.pending`), com
+`requiresUserBookmaker=true`, classificação de casa pela IA desabilitada,
+modelo/formato aprovados, evidência agregada das casas aprovadas e validade
+explícita. A casa e o tipster são resolvidos pela declaração do usuário
 e pelo catálogo ativo da organização; Telegram, MiniApp e Web compartilham o
 mesmo registro canônico e a outbox edita somente a mensagem correspondente.
+Casa pendente — ou fora da lista aprovada — permanece em revisão manual
+(`BOOKMAKER_NOT_APPROVED`); nenhuma policy habilita uma casa sem homologação
+completa. O procedimento operacional completo está em
+[AUTOMATIC-IMPORT-POLICY.md](AUTOMATIC-IMPORT-POLICY.md).
 
-O loader recusa policy v1, listas por casa/layout, arquivo não absoluto, symlink,
-permissões POSIX abertas, JSON inválido ou policy expirada. Ausência ou recusa
-mantém o fluxo em revisão (`LAYOUT_NOT_VALIDATED`); nenhum `null` autoriza a
-automação. F3+F4 apenas implementam e testam esse caminho: instalação do arquivo,
+O loader recusa policy v1/v2 (a v2 global não representa casa pendente), listas
+por casa/layout, arquivo não absoluto, symlink, permissões POSIX abertas, JSON
+inválido ou policy expirada. Ausência ou recusa mantém o fluxo em revisão
+(`LAYOUT_NOT_VALIDATED`); nenhum `null` autoriza a automação. A F6 apenas
+prepara e valida a policy offline: instalação do arquivo,
 `AUTOMATIC_IMPORT_ENABLED=true`, deploy e chamadas externas permanecem fora
 desta tarefa.
 

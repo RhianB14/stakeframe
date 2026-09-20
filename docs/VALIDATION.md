@@ -114,32 +114,36 @@ motivos agregados, fidelidade do retorno potencial e qualidade de transcrição
 ficam reportados à parte. Não ativa política nem escreve nada financeiro.
 
 `pnpm validation:policy <arquivo-de-políticas-absoluto> <diretório-corpus>...`
-verifica uma policy global v2 contra todas as evidências salvas: recalcula a
-avaliação, confere hashes agregados, cobertura, contagens, modelo, contexto
-`user-informed`, formatos de `placedAt` e validade. A policy não enumera casas
-nem layouts; a identidade da casa continua vindo do usuário e do catálogo ativo
-da organização em runtime. A verificação não escreve nada e não imprime
-conteúdo dos bilhetes.
+verifica uma policy explícita v3 contra as evidências salvas das casas
+aprovadas: recalcula a avaliação, confere hashes agregados, cobertura,
+contagens, modelo, contexto `user-informed`, formatos de `placedAt`, validade e
+a declaração de casas (`bookmakers.approved`/`pending`). Cada diretório de
+evidência precisa pertencer a uma casa aprovada — casa não declarada ou
+aprovada sem evidência salva é recusada. A identidade da casa continua vindo do
+usuário e do catálogo ativo da organização em runtime. A verificação não
+escreve nada e não imprime conteúdo dos bilhetes.
 
-Para levar a policy global à aprovação, exigir zero divergências essenciais na
-amostra agregada, pelo menos 20 imagens distintas, cinco exemplos negativos,
+Para levar uma casa à lista de aprovadas, exigir zero divergências essenciais na
+evidência dela, pelo menos 20 imagens distintas, cinco exemplos negativos,
 três múltiplas e três casos com ausências explícitas. As ausências dos exemplos
 negativos não substituem essa cobertura. Policies que permitem freebet exigem
 ao menos três exemplos promocionais. Amostras repetidas não contam como
 cobertura. Esses mínimos são critérios de ensaio, não estimativa estatística
-da precisão futura; os corpus podem cobrir Bet365, Superbet, Novibet e demais
-casas ativas, mas a policy não fixa nenhuma delas.
+da precisão futura. Uma casa sem homologação completa — ou com apenas projeção
+local e rodadas parciais — entra como `pending` com motivo explícito e
+permanece em revisão manual no runtime.
 
 Depois de conferir o relatório e autorizar a policy, o proprietário prepara um
-JSON privado único conforme `automaticPolicyV2Schema`: `schemaVersion: 2`,
+JSON privado único conforme `automaticPolicyV3Schema`: `schemaVersion: 3`,
 `requiresUserBookmaker: true`, `aiBookmakerClassification: "disabled"`,
-`bookmakerScope: "all-active"`, `model`, `placedAtFormats`, `allowFreebet`,
-`potentialReturnLabels`, hashes agregados de corpus/avaliação, `coverage`,
-`sampleCount`, `essentialFieldErrors: 0`, `approvedBy: "owner"`, `approvedAt`
-com offset e `expiresAt`. O worker rejeita policy legada, lista de layouts ou
-casas, arquivo ausente, symlink, permissões POSIX abertas, corrupção e janela
-inválida. Esse arquivo é configuração operacional confiável, não uma saída que
-a IA possa escrever.
+`bookmakerScope: "explicit"`, `bookmakers.approved` e `bookmakers.pending`
+(cada pendente com `reason`), `model`, `placedAtFormats`, `allowFreebet`,
+`potentialReturnLabels`, hashes agregados de corpus/avaliação das aprovadas,
+`coverage`, `sampleCount`, `essentialFieldErrors: 0`, `approvedBy: "owner"`,
+`approvedAt` com offset e `expiresAt`. O worker rejeita policy legada (v1/v2),
+lista de layouts ou casas fora do contrato, arquivo ausente, symlink,
+permissões POSIX abertas, corrupção e janela inválida. Esse arquivo é
+configuração operacional confiável, não uma saída que a IA possa escrever.
 
 Montar esse arquivo no worker, definir `AUTOMATIC_IMPORT_POLICIES_FILE` com
 seu caminho absoluto e `AUTOMATIC_IMPORT_ENABLED=true`, mantendo IA habilitada.

@@ -105,11 +105,19 @@ export function buildGlobalPolicy(evidence, overrides = {}) {
       (key) => [key, reports.reduce((total, report) => total + report.coverage[key], 0)],
     ),
   );
+  const bookmakers = {
+    approved: [...new Set(reports.map((report) => report.bookmaker))],
+    pending: [],
+    ...(overrides.bookmakers ?? {}),
+  };
+  const rest = { ...overrides };
+  delete rest.bookmakers;
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     requiresUserBookmaker: true,
     aiBookmakerClassification: 'disabled',
-    bookmakerScope: 'all-active',
+    bookmakerScope: 'explicit',
+    bookmakers,
     model: reports[0].model,
     placedAtFormats: [...new Set(reports.map((report) => report.layout.placedAtFormat))],
     allowFreebet: reports.every((report) => report.layout.allowFreebet ?? false),
@@ -128,6 +136,6 @@ export function buildGlobalPolicy(evidence, overrides = {}) {
     approvedBy: 'owner',
     approvedAt: '2026-09-01T00:00:00.000Z',
     expiresAt: '2027-01-01T00:00:00.000Z',
-    ...overrides,
+    ...rest,
   };
 }

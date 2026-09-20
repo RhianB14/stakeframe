@@ -45,6 +45,8 @@ const automaticReasons: Record<AutomaticReason, string> = {
   CAPTION_UNRESOLVED: 'A legenda precisa identificar um tipster e uma casa cadastrados.',
   BOOKMAKER_UNRESOLVED: 'Escolha uma casa de aposta cadastrada antes do registro automático.',
   BOOKMAKER_REFUSED: 'A casa informada não está disponível no catálogo ativo desta organização.',
+  BOOKMAKER_NOT_APPROVED:
+    'A casa informada ainda não foi homologada para importação automática. Confira os dados antes de registrar.',
   ORIGIN_UNRESOLVED:
     'A origem financeira ainda não foi confirmada — informe dinheiro real ou freebet.',
   BOOKMAKER_CONFLICT: 'A casa identificada no bilhete diverge da legenda ou do layout aprovado.',

@@ -39,21 +39,25 @@ da primeira janela estão em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
 5. Registrar autorização explícita do Codex com commit, digests, ambiente,
    migrações previstas, evidência de backup e estratégia de reversão.
 
-## Policy global da importação automática
+## Policy explícita da importação automática
 
 A importação automática não é habilitada pela publicação de uma release ou pelo
 deploy de uma imagem. Quando houver autorização própria para ativá-la, preparar
-antes um arquivo privado conforme `automaticPolicyV2Schema` em caminho absoluto,
-com permissão 0600, contendo uma única policy global para todas as casas ativas.
+antes um arquivo privado conforme `automaticPolicyV3Schema` em caminho absoluto,
+com permissão 0600, nomeando explicitamente as casas aprovadas e as pendentes.
 Ela deve declarar que a casa vem do usuário (`requiresUserBookmaker`), que a IA
 não classifica bookmaker, o modelo e formatos aprovados, hashes/cobertura do
-corpus e janela de validade. O deployment-check deve validar o arquivo e o
-overlay antes de qualquer ativação; policy ausente, legada, inválida ou expirada
-mantém todas as importações em revisão.
+corpus aprovado e janela de validade. Uma casa pendente — ou qualquer casa fora
+da lista de aprovadas — permanece em revisão manual mesmo com a automação
+ligada. O deployment-check deve validar o arquivo e o overlay antes de qualquer
+ativação; policy ausente, legada (v1/v2), inválida ou expirada mantém todas as
+importações em revisão. O procedimento completo (validação offline, ativação,
+rollback, expiração e renovação) está em
+[AUTOMATIC-IMPORT-POLICY.md](AUTOMATIC-IMPORT-POLICY.md).
 
 O fluxo de policy não publica dados privados, não inclui segredos no repositório
 e não substitui os gates de backup, migração, rollback e observação. A policy
-real e a ativação são tarefas separadas e não fazem parte desta PR.
+real e a ativação são tarefas separadas, executadas apenas em janela autorizada.
 
 ## Operação executada no piloto ARM64
 

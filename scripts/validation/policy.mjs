@@ -3,7 +3,7 @@ import { readFile, lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { evaluateCorpus, KNOWN_BOOKMAKERS } from './corpus-core.mjs';
-import { automaticPolicyV2Schema } from '../../packages/shared/dist/index.js';
+import { automaticPolicyV3Schema } from '../../packages/shared/dist/index.js';
 
 // This checker only reads saved evidence (corpus.json plus evaluation.json) and
 // a proposed policy file. It performs no extractions, writes nothing, activates
@@ -71,10 +71,12 @@ function savedEvaluationMatches(saved, report) {
   return COVERAGE_KEYS.every((key) => saved.coverage?.[key] === report.coverage[key]);
 }
 
-// Verifies one global v2 approval policy against all saved corpus evidence.
-// Bookmaker identity is deliberately absent from the policy contract: it is
-// supplied by the user and resolved against the active tenant catalog at
-// runtime. Corpus evidence still proves the neutral extractor across houses.
+// Verifies one explicit v3 approval policy against the saved corpus evidence
+// of its approved houses. Bookmaker identity is deliberately absent from the
+// extractor contract: it is supplied by the user and resolved against the
+// active tenant catalog at runtime. The policy names the houses that carry
+// homologated evidence (approved) and the ones explicitly held back (pending);
+// a pending house contributes no evidence and stays fail-closed in review.
 export async function verifyApprovalPolicy(policyPath, corpusDirs, now = new Date()) {
   const failures = [];
   const verified = [];
@@ -111,12 +113,31 @@ export async function verifyApprovalPolicy(policyPath, corpusDirs, now = new Dat
   try {
     const resolved = await resolveOutsideWorkspace(workspace, policyPath, false);
     const bytes = await readPrivateFile(resolved, MAX_POLICY_BYTES);
-    policy = automaticPolicyV2Schema.parse(JSON.parse(bytes.toString('utf8')));
+    policy = automaticPolicyV3Schema.parse(JSON.parse(bytes.toString('utf8')));
   } catch {
-    return { ok: false, failures: [...failures, 'POLICY_FILE_INVALID'], verified: [] };
+    return {
+      ok: false,
+      failures: [...failures, 'POLICY_FILE_INVALID'],
+      verified: [],
+      pending: [],
+    };
   }
   const codes = [];
   if (!reports.length) codes.push('POLICY_NO_CORPUS');
+  const approvedBookmakers = policy.bookmakers.approved;
+  const undeclared = [
+    ...new Set(
+      reports
+        .map(({ report }) => report.bookmaker)
+        .filter((bookmaker) => !approvedBookmakers.includes(bookmaker)),
+    ),
+  ].sort();
+  if (undeclared.length) codes.push(`POLICY_BOOKMAKER_UNDECLARED ${undeclared.join(',')}`);
+  const missingEvidence = approvedBookmakers
+    .filter((bookmaker) => !reports.some(({ report }) => report.bookmaker === bookmaker))
+    .sort();
+  if (missingEvidence.length)
+    codes.push(`POLICY_APPROVED_EVIDENCE_MISSING ${missingEvidence.join(',')}`);
   const models = new Set(reports.map(({ report }) => report.model));
   if (models.size !== 1 || !models.has(policy.model)) codes.push('POLICY_MODEL_MISMATCH');
   if (
@@ -177,7 +198,13 @@ export async function verifyApprovalPolicy(policyPath, corpusDirs, now = new Dat
     }
   }
   failures.push(...codes);
-  return { ok: failures.length === 0, failures, verified, unusedCorpora: 0 };
+  return {
+    ok: failures.length === 0,
+    failures,
+    verified,
+    pending: policy.bookmakers.pending.map((entry) => entry.bookmaker),
+    unusedCorpora: 0,
+  };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

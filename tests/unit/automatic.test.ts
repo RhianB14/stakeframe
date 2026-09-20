@@ -4,15 +4,17 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { parseAutomaticPlacedAt, OPENROUTER_MODEL } from '../../packages/shared/src/index.js';
 import { readAutomaticPolicy } from '../../apps/worker/src/automatic-config.js';
+import { automaticBookmakerSlug } from '../../packages/db/src/automatic-policy.js';
 import {
   extractTicket,
   TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
 const policy = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   requiresUserBookmaker: true,
   aiBookmakerClassification: 'disabled',
-  bookmakerScope: 'all-active',
+  bookmakerScope: 'explicit',
+  bookmakers: { approved: ['bet365'], pending: [] },
   model: OPENROUTER_MODEL,
   placedAtFormats: ['iso-offset'],
   allowFreebet: false,
@@ -33,6 +35,15 @@ const policy = {
   approvedAt: '2020-01-01T00:00:00Z',
   expiresAt: '2999-01-01T00:00:00Z',
 };
+// STK-G0-22-F6: a declaração global legada (v2, todas as casas ativas) é
+// estruturalmente válida no seu próprio contrato e ainda assim recusada pelo
+// loader — nenhuma aprovação sem casas explícitas autoriza a automação.
+const legacyV2Policy = {
+  ...policy,
+  schemaVersion: 2,
+  bookmakerScope: 'all-active',
+};
+delete (legacyV2Policy as Record<string, unknown>).bookmakers;
 describe('automatic import policy boundaries', () => {
   it('requires an explicit offset or an approved exact São Paulo grammar', () => {
     expect(parseAutomaticPlacedAt('2026-09-07T10:30:00-03:00', 'iso-offset')).toBe(
@@ -111,10 +122,21 @@ describe('automatic import policy boundaries', () => {
         { ...policy, approvedAt: '9999-01-01T00:00:00Z' },
         { ...policy, expiresAt: '1999-01-01T00:00:00Z' },
         { ...policy, coverage: { ...policy.coverage, negative: 4 } },
-        { ...policy, bookmakerScope: 'selected' },
+        { ...policy, bookmakerScope: 'all-active' },
         { ...policy, evaluationSha256: 'invalid' },
         { ...policy, placedAtFormats: ['iso-offset', 'iso-offset'] },
         { ...policy, model: 'unknown' },
+        { ...policy, bookmakers: { approved: [], pending: [] } },
+        { ...policy, bookmakers: { approved: ['bet365', 'bet365'], pending: [] } },
+        {
+          ...policy,
+          bookmakers: { approved: ['bet365'], pending: [{ bookmaker: 'bet365', reason: 'x' }] },
+        },
+        {
+          ...policy,
+          bookmakers: { approved: ['bet365'], pending: [{ bookmaker: 'superbet', reason: '' }] },
+        },
+        legacyV2Policy,
       ]) {
         writeFileSync(file, JSON.stringify(value));
         expect(readAutomaticPolicy(env)).toEqual({ state: 'invalid', policy: null });
@@ -132,6 +154,13 @@ describe('automatic import policy boundaries', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+  it('maps the catalog name to the policy slug and fails closed on unknown names (STK-G0-22-F6)', () => {
+    expect(automaticBookmakerSlug('Bet365')).toBe('bet365');
+    expect(automaticBookmakerSlug(' Superbet ')).toBe('superbet');
+    expect(automaticBookmakerSlug('Novibet')).toBe('novibet');
+    for (const value of [null, undefined, '', '   ', 7])
+      expect(automaticBookmakerSlug(value as string | null)).toBeNull();
   });
   it('rejects any house or layout field from the neutral extraction response (STK-G0-22)', async () => {
     const extraction = {
