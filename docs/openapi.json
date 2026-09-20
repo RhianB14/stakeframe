@@ -1468,7 +1468,6 @@
             "nullable": true,
             "type": "object",
             "properties": {
-              "bookmaker": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
               "reference": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
               "placedAtText": {
                 "nullable": true,
@@ -1548,7 +1547,6 @@
               }
             },
             "required": [
-              "bookmaker",
               "reference",
               "placedAtText",
               "currency",
@@ -4975,7 +4973,6 @@
             "nullable": true,
             "type": "object",
             "properties": {
-              "bookmaker": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
               "reference": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 500 },
               "placedAtText": {
                 "nullable": true,
@@ -5055,7 +5052,6 @@
               }
             },
             "required": [
-              "bookmaker",
               "reference",
               "placedAtText",
               "currency",

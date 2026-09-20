@@ -123,7 +123,6 @@ async function input(
   const claim = await createInboxStore(database).claim(tenantContext, id);
   expect(claim).not.toBeNull();
   const extraction: TicketExtraction = {
-    bookmaker: 'Bet365',
     reference: `fixture-${randomUUID()}`,
     placedAtText: new Date(Date.now() - 1000).toISOString(),
     currency: 'BRL',
@@ -164,7 +163,7 @@ async function complete(value: Awaited<ReturnType<typeof input>>, layouts = [lay
   );
 }
 describe('automatic import financial boundary', () => {
-  it('consumes the persistent queue and records one automatic bet through the worker', async () => {
+  it('consumes the persistent queue and keeps the item in review until the server-side house resolution lands (STK-G0-22-F1)', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'stk-auto-worker-test-'));
     const file = join(directory, 'policies.json');
     writeFileSync(file, JSON.stringify([layout]));
@@ -180,7 +179,6 @@ describe('automatic import financial boundary', () => {
       });
       await database.pool.query("update integration.inbox set bet_origin='real' where id=$1", [id]);
       const extraction = {
-        bookmaker: 'Bet365',
         reference: 'worker-fixture',
         placedAtText: new Date(Date.now() - 1000).toISOString(),
         currency: 'BRL',
@@ -207,7 +205,7 @@ describe('automatic import financial boundary', () => {
           choices: [
             {
               finish_reason: 'stop',
-              message: { content: JSON.stringify({ layoutId: layout.id, extraction }) },
+              message: { content: JSON.stringify(extraction) },
             },
           ],
         }),
@@ -227,12 +225,14 @@ describe('automatic import financial boundary', () => {
         },
         fetchImpl,
       );
+      // STK-G0-22-F1: sem classificação da IA, o item segue para revisão até a
+      // resolução determinística da casa no servidor (F2) — fail-closed.
       await expect
         .poll(async () => (await imports.detail(tenantContext, id)).item.state, { timeout: 10000 })
-        .toBe('imported');
-      expect((await imports.detail(tenantContext, id)).automatic).toBe(true);
+        .toBe('review');
+      expect((await imports.detail(tenantContext, id)).automatic).toBe(false);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
+      expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
     } finally {
       await integrations?.stop();
       await boss?.stop({ graceful: true, timeout: 5000 });
@@ -314,14 +314,20 @@ describe('automatic import financial boundary', () => {
     [{ placedAtText: '07/09 10:30' }, 'PLACED_AT_UNCERTAIN'],
     [{ placedAtText: '9999-01-01T00:00:00Z' }, 'PLACED_AT_UNCERTAIN'],
     [{ placedAtText: '2001-01-01T00:00:00Z' }, 'UNIT_REQUIRED'],
-    [{ bookmaker: 'Superbet' }, 'BOOKMAKER_CONFLICT'],
+    // STK-G0-22: resposta com campo de casa é recusada pelo contrato neutro.
+    [{ bookmaker: 'Superbet' }, 'EXTRACTION_UNCERTAIN'],
     [{ freebet: true }, 'FREEBET_CONFLICT'],
   ] as const)('retains evidence with reason %s / %s', async (changes, reason) => {
     const value = await input(changes as Partial<TicketExtraction>);
     expect(await complete(value)).toMatchObject({ state: 'review', reason });
-    expect(
-      (await createImportService(database).detail(tenantContext, value.id)).extraction,
-    ).toEqual(value.result.extraction);
+    const detail = await createImportService(database).detail(tenantContext, value.id);
+    if ('bookmaker' in (changes as object)) {
+      // STK-G0-22: resposta com campo de casa é inválida (contrato neutro) —
+      // nenhuma extração é retida.
+      expect(detail.extraction).toBeNull();
+    } else {
+      expect(detail.extraction).toEqual(value.result.extraction);
+    }
     expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
@@ -437,29 +443,25 @@ describe('automatic import financial boundary', () => {
       0,
     );
   });
-  it('accepts a missing visual mark and never copies the informed house into the extraction', async () => {
-    const hidden = await input({ bookmaker: null });
-    expect(await complete(hidden)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
-    const detail = await createImportService(database).detail(tenantContext, hidden.id);
-    expect(detail.extraction?.bookmaker).toBeNull();
+  it('keeps the extraction neutral — no house field — and imports from the user caption (STK-G0-22)', async () => {
+    const item = await input();
+    expect(await complete(item)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
+    const detail = await createImportService(database).detail(tenantContext, item.id);
+    expect(detail.extraction).not.toBeNull();
+    expect(detail.extraction).not.toHaveProperty('bookmaker');
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet.bookmakerId).toBe(layout.bookmakerId);
   });
-  it('blocks another known house and keeps unresolved visual text in review', async () => {
-    const matching = await input({ bookmaker: 'Bet365' });
+  it('keeps the caption house bound to the validated layout and sends unresolved houses to review', async () => {
+    const matching = await input({}, 'Fixture\nBet365');
     expect(await complete(matching)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
-    const other = await input({
-      bookmaker: 'Superbet',
-      placedAtText: new Date(Date.now() - 5 * 86400000).toISOString(),
-    });
+    // STK-G0-22: outra casa do catálogo no contexto → conflito com o layout validado.
+    const other = await input({}, 'Fixture\nSuperbet');
     expect(await complete(other)).toMatchObject({ state: 'review', reason: 'BOOKMAKER_CONFLICT' });
-    const unknown = await input({
-      bookmaker: 'Casa Fantasma',
-      placedAtText: new Date(Date.now() - 6 * 86400000).toISOString(),
-    });
+    const unknown = await input({}, 'Fixture\nCasa Fantasma');
     expect(await complete(unknown)).toMatchObject({
       state: 'review',
-      reason: 'BOOKMAKER_CONFLICT',
+      reason: 'CAPTION_UNRESOLVED',
     });
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       1,

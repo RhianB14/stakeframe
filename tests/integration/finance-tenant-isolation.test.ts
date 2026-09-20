@@ -753,7 +753,6 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     const byImage = await imports.detail(contextA, sameImage.id);
     expect(byImage.duplicates.some((item) => item.reasons.includes('image'))).toBe(true);
     const extraction = {
-      bookmaker: null,
       reference: bet.reference,
       placedAtText: null,
       currency: 'BRL',

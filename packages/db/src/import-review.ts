@@ -339,7 +339,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           )
         ).rows[0]!;
         const captionBookmakerId = match('bookmaker', labels.bookmaker);
-        const extractedBookmakerId = match('bookmaker', extraction?.bookmaker ?? null);
+        // STK-G0-22: a extração é neutra — não existe casa lida pela IA; a
+        // declaração do usuário é a única fonte e não há conflito visual.
+        const extractedBookmakerId = null;
         // STK-G0-19-R7: a casa declarada pelo usuário tem precedência; a
         // declaração nunca é filtrada pela política automática (que só governa
         // a automação). Somente créditos compatíveis com o rascunho (casa,
@@ -477,12 +479,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             tipsterId: match('tipster', labels.tipster),
             captionBookmakerId,
             extractedBookmakerId,
-            conflict:
-              !!labels.bookmaker &&
-              !!extraction?.bookmaker &&
-              (captionBookmakerId && extractedBookmakerId
-                ? captionBookmakerId !== extractedBookmakerId
-                : normalized(labels.bookmaker) !== normalized(extraction.bookmaker)),
+            // STK-G0-22: sem leitura de casa pela IA, não existe conflito
+            // visual; a chave permanece por compatibilidade do payload.
+            conflict: false,
           },
           duplicates: duplicates.slice(0, 100),
           duplicateCount: duplicates.length,

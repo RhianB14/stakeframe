@@ -209,7 +209,6 @@ describe('durable extraction inbox', () => {
       "update integration.inbox set state='discarded' where state='pending'",
     );
     const candidate = {
-      bookmaker: null,
       reference: null,
       placedAtText: null,
       currency: null,

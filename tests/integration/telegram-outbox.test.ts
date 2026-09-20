@@ -48,7 +48,6 @@ const run = async (input: CommandInput) =>
     expectedVersion: (await finance.workspace(tenantContext)).version,
   } as FinanceCommand);
 const extraction = {
-  bookmaker: 'Bet365',
   reference: 'FICTICIO',
   placedAtText: '17/09/2026 10:00',
   currency: 'BRL',

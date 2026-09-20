@@ -43,7 +43,6 @@ const upload = async () =>
     })
   ).id;
 const draftExtraction = {
-  bookmaker: 'Bet365',
   reference: 'FICTICIO',
   placedAtText: '17/09/2026 10:00',
   currency: 'BRL',

@@ -24,7 +24,6 @@ import type { OcrResult } from '../../apps/worker/src/ocr.js';
 const image = Buffer.from([255, 216, 255, 224, 0, 2, 255, 217]);
 const validImage = readFileSync(new URL('../fixtures/ai/synthetic-ticket.png', import.meta.url));
 const extraction = {
-  bookmaker: 'Casa de teste',
   reference: null,
   placedAtText: null,
   currency: 'BRL',
@@ -125,9 +124,12 @@ describe('OpenRouter boundary', () => {
     );
     expect(providerSchema).toMatchObject({
       type: 'object',
-      required: expect.arrayContaining(['bookmaker', 'selections', 'warnings']),
+      required: expect.arrayContaining(['reference', 'selections', 'warnings']),
       additionalProperties: false,
     });
+    // STK-G0-22: o schema da resposta é neutro — sem campos de casa ou layout.
+    expect(providerSchema.required).not.toContain('bookmaker');
+    expect(providerSchema.required).not.toContain('layoutId');
   });
   it('sends OCR as auxiliary context while retaining the original image path', async () => {
     const fetchImpl = vi
@@ -178,7 +180,7 @@ describe('OpenRouter boundary', () => {
       'Nunca derive potentialReturn',
       '[Exemplos sintéticos]',
       'Leia cada seleção uma por uma',
-      'bookmaker é independente do contexto',
+      'bookmakerContext=user-informed',
       '[Warnings]',
       'somente com o objeto JSON',
       '[Freebet]',

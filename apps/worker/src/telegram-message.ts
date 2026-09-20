@@ -151,7 +151,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
     kind: (extraction?.selections.length ?? 1) > 1 ? 'multiple' : 'simple',
     sentAt: formatInstant(row.telegram_received_at),
     eventAt: settled ? formatInstant(row.event_at) : null,
-    bookmaker: row.override_bookmaker ?? labels.bookmaker ?? extraction?.bookmaker ?? null,
+    bookmaker: row.override_bookmaker ?? labels.bookmaker ?? null,
     tipster: labels.tipster,
   });
 }

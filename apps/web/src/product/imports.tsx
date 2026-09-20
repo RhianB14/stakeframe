@@ -456,8 +456,7 @@ function ReviewContent({
             <div className="extraction-summary">
               <h3>O que foi lido no comprovante</h3>
               <p>
-                Casa: {extraction.bookmaker ?? 'Não identificada'} · Data escrita:{' '}
-                {extraction.placedAtText ?? 'Não identificada'} · Moeda:{' '}
+                Data escrita: {extraction.placedAtText ?? 'Não identificada'} · Moeda:{' '}
                 {extraction.currency ?? 'Não identificada'}
               </p>
               <p>
