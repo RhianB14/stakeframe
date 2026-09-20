@@ -43,6 +43,8 @@ const automaticReasons: Record<AutomaticReason, string> = {
   EXTRACTION_UNCERTAIN:
     'Há campos essenciais ausentes ou dúvidas na leitura. Confira os dados antes de registrar.',
   CAPTION_UNRESOLVED: 'A legenda precisa identificar um tipster e uma casa cadastrados.',
+  BOOKMAKER_UNRESOLVED: 'Escolha uma casa de aposta cadastrada antes do registro automático.',
+  BOOKMAKER_REFUSED: 'A casa informada não está disponível no catálogo ativo desta organização.',
   ORIGIN_UNRESOLVED:
     'A origem financeira ainda não foi confirmada — informe dinheiro real ou freebet.',
   BOOKMAKER_CONFLICT: 'A casa identificada no bilhete diverge da legenda ou do layout aprovado.',

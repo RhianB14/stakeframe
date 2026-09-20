@@ -28,6 +28,13 @@ type Evidence = {
   policyDigest?: unknown;
   ocrConsistent?: unknown;
 };
+type CatalogAlias = { catalog_id: string; kind: string; label: string };
+type AliasResolution =
+  { state: 'resolved'; catalogId: string } | { state: 'missing' } | { state: 'ambiguous' };
+type BookmakerContext =
+  | { state: 'resolved'; bookmakerId: string; tipsterId: string }
+  | { state: 'review'; reason: 'CAPTION_UNRESOLVED' | 'BOOKMAKER_UNRESOLVED' }
+  | { state: 'refused'; reason: 'BOOKMAKER_REFUSED' };
 const normalized = (value: string) =>
   value
     .normalize('NFD')
@@ -36,11 +43,61 @@ const normalized = (value: string) =>
     .toLocaleLowerCase('pt-BR')
     .replace(/\s+/g, ' ');
 
-async function candidate(
+function resolveAlias(
+  aliases: CatalogAlias[],
+  kind: string,
+  value: string | null,
+): AliasResolution {
+  if (!value) return { state: 'missing' };
+  const ids = new Set(
+    aliases
+      .filter((alias) => alias.kind === kind && normalized(alias.label) === normalized(value))
+      .map((alias) => alias.catalog_id),
+  );
+  if (ids.size === 1) return { state: 'resolved', catalogId: [...ids][0]! };
+  return ids.size === 0 ? { state: 'missing' } : { state: 'ambiguous' };
+}
+
+async function resolveBookmakerContext(
   client: PoolClient,
   caption: string,
+  bookmakerOverrideId: string | null,
+): Promise<BookmakerContext> {
+  const labels = parseCaption(caption);
+  const aliases = (
+    await client.query<CatalogAlias>(
+      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+    )
+  ).rows;
+  const tipster = resolveAlias(aliases, 'tipster', labels.tipster);
+  if (tipster.state !== 'resolved') return { state: 'review', reason: 'CAPTION_UNRESOLVED' };
+
+  // A selected catalog id is authoritative, but it is revalidated in this
+  // transaction so an inactive, wrong-kind, or cross-tenant id cannot select a
+  // layout or reach the financial writer.
+  if (bookmakerOverrideId) {
+    const selected = (
+      await client.query<{ id: string }>(
+        'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind=$2 and active',
+        [bookmakerOverrideId, 'bookmaker'],
+      )
+    ).rows[0];
+    if (!selected) return { state: 'refused', reason: 'BOOKMAKER_REFUSED' };
+    return { state: 'resolved', bookmakerId: selected.id, tipsterId: tipster.catalogId };
+  }
+
+  if (!labels.bookmaker) return { state: 'review', reason: 'BOOKMAKER_UNRESOLVED' };
+  const bookmaker = resolveAlias(aliases, 'bookmaker', labels.bookmaker);
+  if (bookmaker.state !== 'resolved') return { state: 'refused', reason: 'BOOKMAKER_REFUSED' };
+  return { state: 'resolved', bookmakerId: bookmaker.catalogId, tipsterId: tipster.catalogId };
+}
+
+async function candidate(
+  client: PoolClient,
   result: Evidence,
   layout: ValidatedLayout,
+  bookmakerId: string,
+  tipsterId: string,
   origin: { kind: 'real' | 'freebet' | null; freebetId: string | null },
   now: Date,
 ): Promise<{ reason: AutomaticReason; bet?: BetInput }> {
@@ -55,8 +112,6 @@ async function candidate(
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
   if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
-  const labels = parseCaption(caption);
-  if (labels.requiresReview) return { reason: 'CAPTION_UNRESOLVED' };
   // STK-G0-19-R5: a origem financeira é declarada pelo usuário (Mini App/web);
   // sem ela nenhuma aposta financeira é criada (fail-closed). A leitura visual
   // da IA é apenas diagnóstico: um conflito explícito encaminha para revisão e
@@ -65,28 +120,6 @@ async function candidate(
   if (origin.kind === 'real' && extraction.freebet === true) return { reason: 'FREEBET_CONFLICT' };
   if (origin.kind === 'freebet' && extraction.freebet === false)
     return { reason: 'FREEBET_CONFLICT' };
-  const aliases = (
-    await client.query<{ catalog_id: string; kind: string; label: string }>(
-      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
-    )
-  ).rows;
-  const match = (kind: string, value: string | null) => {
-    const ids = new Set(
-      aliases
-        .filter(
-          (alias) => value && alias.kind === kind && normalized(alias.label) === normalized(value),
-        )
-        .map((alias) => alias.catalog_id),
-    );
-    return ids.size === 1 ? [...ids][0] : null;
-  };
-  const tipsterId = match('tipster', labels.tipster);
-  const bookmakerId = match('bookmaker', labels.bookmaker);
-  if (!tipsterId || !bookmakerId) return { reason: 'CAPTION_UNRESOLVED' };
-  // STK-G0-22: a extração é neutra — não existe leitura visual de casa. A
-  // casa declarada pelo usuário (legenda, botão, MiniApp ou Web) é a única
-  // fonte; o gate por layout permanece até a F2 (resolução determinística).
-  if (bookmakerId !== layout.bookmakerId) return { reason: 'BOOKMAKER_CONFLICT' };
   // Data da aposta: somente o texto visual do comprovante (a data do jogo é
   // outro campo — eventAt, declarado pelo usuário e inicialmente pendente). O
   // horário de upload/Telegram nunca é usado como horário da aposta.
@@ -181,30 +214,52 @@ export function createAutomaticImportService(
             version: number;
             bet_origin: string | null;
             freebet_id: string | null;
+            bookmaker_override_id: string | null;
           }>(
-            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version,bet_origin,freebet_id",
+            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version,bet_origin,freebet_id,bookmaker_override_id",
             [id, JSON.stringify(result), attempt],
           )
         ).rows[0];
         if (!row) return { state: 'unchanged' as const };
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
-        const layout = layouts.find(
-          (value) =>
-            value.id === result.layoutId &&
-            value.model === result.model &&
-            layoutDigest(value) === result.policyDigest &&
-            Date.parse(value.approvedAt) <= now.getTime(),
-        );
         let reason: AutomaticReason = 'LAYOUT_NOT_VALIDATED';
         let betId: string | null = null;
-        if (layout) {
+        const modelSelectedLayout =
+          (result.layoutId !== undefined && result.layoutId !== null) ||
+          (result.policyDigest !== undefined && result.policyDigest !== null);
+        const bookmakerContext = modelSelectedLayout
+          ? ({ state: 'refused', reason: 'BOOKMAKER_REFUSED' } as const)
+          : await resolveBookmakerContext(client, row.caption, row.bookmaker_override_id);
+        const layout =
+          bookmakerContext.state === 'resolved'
+            ? layouts.filter(
+                (value) =>
+                  value.bookmakerId === bookmakerContext.bookmakerId &&
+                  value.model === result.model &&
+                  Date.parse(value.approvedAt) <= now.getTime() &&
+                  Date.parse(value.expiresAt) > now.getTime(),
+              ).length === 1
+              ? (layouts.find(
+                  (value) =>
+                    value.bookmakerId === bookmakerContext.bookmakerId &&
+                    value.model === result.model &&
+                    Date.parse(value.approvedAt) <= now.getTime() &&
+                    Date.parse(value.expiresAt) > now.getTime(),
+                ) ?? null)
+              : null
+            : null;
+        if (modelSelectedLayout) reason = 'EXTRACTION_UNCERTAIN';
+        else if (bookmakerContext.state !== 'resolved') reason = bookmakerContext.reason;
+        else if (!layout) reason = 'LAYOUT_NOT_VALIDATED';
+        if (layout && bookmakerContext.state === 'resolved') {
           await client.query('savepoint automatic_finance');
           try {
             const assessed = await candidate(
               client,
-              row.caption,
               result,
               layout,
+              bookmakerContext.bookmakerId,
+              bookmakerContext.tipsterId,
               {
                 kind:
                   row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null,
@@ -259,6 +314,8 @@ export function createAutomaticImportService(
           reason,
           policyId: layout?.id ?? null,
           policyDigest: layout ? layoutDigest(layout) : null,
+          bookmakerOrigin: layout ? ('context' as const) : null,
+          visualLayoutId: null,
         };
         await client.query(
           'update integration.inbox set extraction=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',

@@ -9,7 +9,6 @@ import {
   createImportService,
   createInboxStore,
   createAutomaticImportService,
-  layoutDigest,
   requireDatabaseUrl,
   type Database,
   type FinanceService,
@@ -108,6 +107,7 @@ async function input(
   changes: Partial<TicketExtraction> = {},
   caption = 'Fixture\nBet365',
   origin: { kind: 'real' | 'freebet' | null; freebetId?: string | null } = { kind: 'real' },
+  bookmakerOverrideId?: string | null,
 ) {
   const imports = createImportService(database);
   const { id } = await imports.upload(tenantContext, randomUUID(), {
@@ -120,6 +120,11 @@ async function input(
       'update integration.inbox set bet_origin=$2,freebet_id=$3 where id=$1',
       [id, origin.kind, origin.freebetId ?? null],
     );
+  if (bookmakerOverrideId !== undefined)
+    await database.pool.query('update integration.inbox set bookmaker_override_id=$2 where id=$1', [
+      id,
+      bookmakerOverrideId,
+    ]);
   const claim = await createInboxStore(database).claim(tenantContext, id);
   expect(claim).not.toBeNull();
   const extraction: TicketExtraction = {
@@ -149,8 +154,6 @@ async function input(
     result: {
       extraction,
       model: OPENROUTER_MODEL,
-      layoutId: layout.id,
-      policyDigest: layoutDigest(layout),
     },
   };
 }
@@ -163,7 +166,7 @@ async function complete(value: Awaited<ReturnType<typeof input>>, layouts = [lay
   );
 }
 describe('automatic import financial boundary', () => {
-  it('consumes the persistent queue and keeps the item in review until the server-side house resolution lands (STK-G0-22-F1)', async () => {
+  it('consumes the persistent queue and resolves the house from the user caption (STK-G0-22-F2)', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'stk-auto-worker-test-'));
     const file = join(directory, 'policies.json');
     writeFileSync(file, JSON.stringify([layout]));
@@ -225,35 +228,41 @@ describe('automatic import financial boundary', () => {
         },
         fetchImpl,
       );
-      // STK-G0-22-F1: sem classificação da IA, o item segue para revisão até a
-      // resolução determinística da casa no servidor (F2) — fail-closed.
+      // STK-G0-22-F2: a resposta neutra não carrega layout; o servidor resolve
+      // a casa pela legenda e escolhe a política correspondente.
       await expect
         .poll(async () => (await imports.detail(tenantContext, id)).item.state, { timeout: 10000 })
-        .toBe('review');
-      expect((await imports.detail(tenantContext, id)).automatic).toBe(false);
+        .toBe('imported');
+      expect((await imports.detail(tenantContext, id)).automatic).toBe(true);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
+      expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
     } finally {
       await integrations?.stop();
       await boss?.stop({ graceful: true, timeout: 5000 });
       rmSync(directory, { recursive: true, force: true });
     }
   });
-  it('is disabled without validated policy and binds model, layout and policy digest', async () => {
-    const cases = [
-      { layouts: [] as ValidatedLayout[] },
-      { result: { layoutId: 'unknown-layout' } },
-      { result: { model: 'different-model' } },
-      { result: { policyDigest: 'f'.repeat(64) } },
-    ];
-    for (const change of cases) {
-      const value = await input();
-      Object.assign(value.result, change.result);
-      expect(await complete(value, change.layouts ?? [layout])).toMatchObject({
-        state: 'review',
-        reason: 'LAYOUT_NOT_VALIDATED',
-      });
-    }
+  it('fails closed without a validated house policy or when the model tries to select one', async () => {
+    const withoutPolicy = await input();
+    expect(await complete(withoutPolicy, [])).toMatchObject({
+      state: 'review',
+      reason: 'LAYOUT_NOT_VALIDATED',
+    });
+    const modelSelected = await input();
+    Object.assign(modelSelected.result, {
+      layoutId: 'model-selected-layout',
+      policyDigest: 'f'.repeat(64),
+    });
+    expect(await complete(modelSelected)).toMatchObject({
+      state: 'review',
+      reason: 'EXTRACTION_UNCERTAIN',
+    });
+    const wrongModel = await input();
+    Object.assign(wrongModel.result, { model: 'different-model' });
+    expect(await complete(wrongModel)).toMatchObject({
+      state: 'review',
+      reason: 'LAYOUT_NOT_VALIDATED',
+    });
     expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
   });
   it('commits evidence, bet, unit, ledger and audit once across repeated completions', async () => {
@@ -429,16 +438,16 @@ describe('automatic import financial boundary', () => {
       1,
     );
   });
-  it('keeps imports without a declared origin in review and fails closed on incomplete captions', async () => {
+  it('keeps imports without a declared origin in review and distinguishes unresolved houses', async () => {
     const undeclared = await input({}, 'Fixture\nBet365', { kind: null });
     expect(await complete(undeclared)).toMatchObject({
       state: 'review',
       reason: 'ORIGIN_UNRESOLVED',
     });
     const missingHouse = await input({}, 'Fixture\n');
-    expect(await complete(missingHouse)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    expect(await complete(missingHouse)).toMatchObject({ reason: 'BOOKMAKER_UNRESOLVED' });
     const singleLine = await input({}, 'Fixture');
-    expect(await complete(singleLine)).toMatchObject({ reason: 'CAPTION_UNRESOLVED' });
+    expect(await complete(singleLine)).toMatchObject({ reason: 'BOOKMAKER_UNRESOLVED' });
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       0,
     );
@@ -452,20 +461,79 @@ describe('automatic import financial boundary', () => {
     const { bet } = await finance.bet(tenantContext, detail.item.betId!);
     expect(bet.bookmakerId).toBe(layout.bookmakerId);
   });
-  it('keeps the caption house bound to the validated layout and sends unresolved houses to review', async () => {
+  it('resolves the caption house only from the active organization catalog', async () => {
     const matching = await input({}, 'Fixture\nBet365');
     expect(await complete(matching)).toMatchObject({ state: 'imported', reason: 'IMPORTED' });
-    // STK-G0-22: outra casa do catálogo no contexto → conflito com o layout validado.
-    const other = await input({}, 'Fixture\nSuperbet');
-    expect(await complete(other)).toMatchObject({ state: 'review', reason: 'BOOKMAKER_CONFLICT' });
+    const superbet = (await finance.workspace(tenantContext)).catalog.find(
+      (item) => item.name === 'Superbet',
+    )!;
+    const superbetLayout = {
+      ...layout,
+      id: 'synthetic-superbet',
+      bookmaker: 'superbet',
+      bookmakerId: superbet.id,
+    };
+    const other = await input({}, 'Fixture\nSuperbet', { kind: null });
+    expect(await complete(other, [layout, superbetLayout])).toMatchObject({
+      state: 'review',
+      reason: 'ORIGIN_UNRESOLVED',
+    });
+    expect(
+      (
+        await database.pool.query<{ automatic: { policyId: string } }>(
+          "select extraction->'automatic' as automatic from integration.inbox where id=$1",
+          [other.id],
+        )
+      ).rows[0]?.automatic.policyId,
+    ).toBe(superbetLayout.id);
     const unknown = await input({}, 'Fixture\nCasa Fantasma');
     expect(await complete(unknown)).toMatchObject({
       state: 'review',
-      reason: 'CAPTION_UNRESOLVED',
+      reason: 'BOOKMAKER_REFUSED',
+    });
+    await database.pool.query('update finance.catalog set active=false where id=$1', [superbet.id]);
+    const inactive = await input({}, 'Fixture\nSuperbet');
+    expect(await complete(inactive, [layout, superbetLayout])).toMatchObject({
+      state: 'review',
+      reason: 'BOOKMAKER_REFUSED',
     });
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
       1,
     );
+  });
+  it('uses an explicit MiniApp/Web/Telegram house selection over the caption', async () => {
+    const superbet = (await finance.workspace(tenantContext)).catalog.find(
+      (item) => item.name === 'Superbet',
+    )!;
+    const superbetLayout = {
+      ...layout,
+      id: 'synthetic-superbet',
+      bookmaker: 'superbet',
+      bookmakerId: superbet.id,
+    };
+    const credit = await run({
+      type: 'freebet.create',
+      bookmakerId: superbet.id,
+      amount: '100.00',
+      expiresOn: '9999-01-01',
+      stakeReturned: false,
+      note: 'Explicit bookmaker context fixture',
+    });
+    const selected = await input(
+      { freebet: null, potentialReturn: '100.00' },
+      'Fixture\nCasa Fantasma',
+      { kind: 'freebet', freebetId: credit.id },
+      superbet.id,
+    );
+    expect(await complete(selected, [layout, superbetLayout])).toMatchObject({
+      state: 'imported',
+      reason: 'IMPORTED',
+    });
+    const detail = await createImportService(database).detail(tenantContext, selected.id);
+    const { bet } = await finance.bet(tenantContext, detail.item.betId!);
+    expect(bet.bookmakerId).toBe(superbet.id);
+    expect(detail.matches.captionBookmakerId).toBeNull();
+    expect(detail.bookmakerOverrideId).toBe(superbet.id);
   });
   it('requires the explicit credit for a freebet origin and refuses incompatible credits', async () => {
     // Sem crédito escolhido: fail-closed (a IA não escolhe por ninguém).
@@ -563,7 +631,6 @@ describe('automatic import financial boundary', () => {
     });
     // O digest cobre o layout inteiro: o caminho realmente percorrido é o de
     // um layout APROVADO que não permite freebet.
-    deniedInput.result.policyDigest = layoutDigest(deniedLayout);
     const disallowed = await complete(deniedInput, [deniedLayout]);
     expect(disallowed).toMatchObject({ state: 'review', reason: 'FREEBET_UNRESOLVED' });
     // allowFreebet: true + crédito válido: prossegue, mas os DEMAIS gates
