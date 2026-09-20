@@ -7,8 +7,14 @@ services:
       R2_ATTACHMENTS_BUCKET: ${R2_ATTACHMENTS_BUCKET:?Private attachments bucket required}
       R2_ATTACHMENTS_ACCESS_KEY_ID_FILE: /run/secrets/r2_reader_access_key
       R2_ATTACHMENTS_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_reader_secret_key
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_OWNER_USER_ID_FILE: /run/secrets/telegram_owner_user_id
       THESPORTSDB_ENABLED: 'true'
-    secrets: [r2_reader_access_key, r2_reader_secret_key]
+    secrets:
+      - r2_reader_access_key
+      - r2_reader_secret_key
+      - telegram_bot_token
+      - telegram_owner_user_id
 
   worker:
     environment:

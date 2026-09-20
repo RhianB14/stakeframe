@@ -92,6 +92,10 @@ export function createTelegramOutboxService(
                 i.metadata->'userOverrides'->>'sport' as override_sport,
                 i.metadata->'userOverrides'->>'tournament' as override_tournament,
                 i.metadata->'userOverrides'->>'country' as override_country,
+                i.metadata->'userOverrides'->>'ticketKind' as override_kind,
+                i.metadata->'userOverrides'->>'stake' as override_stake,
+                i.metadata->'userOverrides'->>'odds' as override_odds,
+                i.metadata->'userOverrides'->'selections' as override_selections,
                 draftf.amount as draft_freebet_amount,
                 b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,f.amount as bet_freebet_amount,
                 bc.name as bet_bookmaker,t.name as bet_tipster

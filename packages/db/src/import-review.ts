@@ -195,12 +195,34 @@ function draftOverrides(value: unknown): {
   sport: string | null;
   tournament: string | null;
   country: string | null;
+  ticketKind: import('@stakeframe/shared').TicketKind | null;
+  stake: string | null;
+  odds: string | null;
+  selections: { event: string | null; market: string | null; selection: string | null }[];
 } {
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    return { tipsterId: null, sport: null, tournament: null, country: null };
+    return {
+      tipsterId: null,
+      sport: null,
+      tournament: null,
+      country: null,
+      ticketKind: null,
+      stake: null,
+      odds: null,
+      selections: [],
+    };
   const raw = (value as { userOverrides?: unknown }).userOverrides;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-    return { tipsterId: null, sport: null, tournament: null, country: null };
+    return {
+      tipsterId: null,
+      sport: null,
+      tournament: null,
+      country: null,
+      ticketKind: null,
+      stake: null,
+      odds: null,
+      selections: [],
+    };
   const source = raw as Record<string, unknown>;
   const tipsterId =
     typeof source.tipsterId === 'string' &&
@@ -209,11 +231,35 @@ function draftOverrides(value: unknown): {
     )
       ? source.tipsterId
       : null;
+  const ticketKindValue = source.ticketKind;
+  const ticketKind =
+    ticketKindValue === 'simple' || ticketKindValue === 'multiple' || ticketKindValue === 'betbuild'
+      ? ticketKindValue
+      : null;
+  const selections = Array.isArray(source.selections)
+    ? source.selections.filter(
+        (
+          selection,
+        ): selection is { event: string | null; market: string | null; selection: string | null } =>
+          !!selection &&
+          typeof selection === 'object' &&
+          !Array.isArray(selection) &&
+          ['event', 'market', 'selection'].every(
+            (key) =>
+              (selection as Record<string, unknown>)[key] === null ||
+              typeof (selection as Record<string, unknown>)[key] === 'string',
+          ),
+      )
+    : [];
   return {
     tipsterId,
     sport: typeof source.sport === 'string' ? source.sport : null,
     tournament: typeof source.tournament === 'string' ? source.tournament : null,
     country: typeof source.country === 'string' ? source.country : null,
+    ticketKind,
+    stake: typeof source.stake === 'string' ? source.stake : null,
+    odds: typeof source.odds === 'string' ? source.odds : null,
+    selections,
   };
 }
 export function createImportService(database: Database, storage?: ObjectStorage) {
@@ -311,6 +357,16 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         sport?: string | null | undefined;
         tournament?: string | null | undefined;
         country?: string | null | undefined;
+        ticketKind?: import('@stakeframe/shared').TicketKind | null | undefined;
+        stake?: string | null | undefined;
+        odds?: string | null | undefined;
+        selections?:
+          | {
+              event: string | null;
+              market: string | null;
+              selection: string | null;
+            }[]
+          | undefined;
       },
       actor: string,
     ) {
@@ -382,7 +438,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         // repete a validação completa sob lock antes de gravar.
         const draftBookmakerId =
           draftRow.bookmaker_override_id ?? captionBookmakerId ?? extractedBookmakerId;
-        const draftStake = extraction?.stake ?? null;
+        const draftStake = overrides.stake ?? extraction?.stake ?? null;
         const credits =
           draftBookmakerId && draftStake
             ? (
@@ -480,6 +536,10 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           sportOverride: overrides.sport,
           tournamentOverride: overrides.tournament,
           countryOverride: overrides.country,
+          ticketKindOverride: overrides.ticketKind,
+          stakeOverride: overrides.stake,
+          oddsOverride: overrides.odds,
+          selectionOverrides: overrides.selections,
           bookmakers,
           tipsters,
           bet: bet

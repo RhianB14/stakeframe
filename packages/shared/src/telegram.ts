@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { TicketKind } from './imports.js';
 
 // STK-G0-19-R5 — contrato compartilhado da sincronização Telegram.
 // Operações da outbox idempotente; nunca transportam segredos, tokens ou
@@ -94,7 +95,7 @@ export type ImportMessageInput = {
   stake: string | null;
   odds: string | null;
   potentialReturn: string | null;
-  kind: 'simple' | 'multiple';
+  kind: TicketKind;
   sentAt: string | null;
   eventAt: string | null;
   bookmaker: string | null;
@@ -109,6 +110,12 @@ const BONUS_LABEL = {
   freebet: 'Freebet',
   hibrida: 'Híbrida',
 } as const;
+
+export const ticketKindLabel = {
+  simple: 'Simples',
+  multiple: 'Múltipla',
+  betbuild: 'BetBuild',
+} satisfies Record<TicketKind, string>;
 
 const orPending = (value: string | null) => value ?? 'pendente';
 
@@ -125,14 +132,14 @@ export function renderImportMessage(input: ImportMessageInput): string {
   lines.push(
     `🎾 Esporte: ${orPending(input.sport)}`,
     `🏆 Torneio: ${input.tournament ?? 'Definir Manualmente'}`,
-    `⚔️ Evento: ${orPending(input.event)}`,
     `🌎 País: ${orPending(input.country)}`,
+    `⚔️ Evento: ${orPending(input.event)}`,
     `🎰 Aposta: ${orPending(input.selection)}`,
     `🎯 Mercado: ${orPending(input.market)}`,
     `💰 Valor Apostado: ${input.stake ? `R$ ${displayMoney(input.stake)}` : 'pendente'}`,
     `🎲 Odd: ${input.odds ? displayMoney(input.odds) : 'pendente'}`,
     `💵 Retorno Potencial: ${input.potentialReturn ? `R$ ${displayMoney(input.potentialReturn)}` : 'pendente'}`,
-    `📝 Tipo: ${input.kind === 'multiple' ? 'Múltipla' : 'Simples'}`,
+    `📝 Tipo: ${ticketKindLabel[input.kind]}`,
     `📅 Enviado em: ${orPending(input.sentAt)}`,
     `🎮 Evento em: ${orPending(input.eventAt)}`,
     `🎁 Bônus: ${input.bonus ? BONUS_LABEL[input.bonus] : 'pendente'}`,

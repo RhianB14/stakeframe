@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deriveBetOrigin, formatBRL, type ImportDetail } from '@stakeframe/shared';
+import { deriveBetOrigin, formatBRL, type ImportDetail, type TicketKind } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { localInstant } from './api.js';
@@ -23,7 +23,24 @@ export type DraftBody = {
   sport?: string | null;
   tournament?: string | null;
   country?: string | null;
+  ticketKind?: TicketKind | null;
+  stake?: string | null;
+  odds?: string | null;
+  selections?: { event: string | null; market: string | null; selection: string | null }[];
 };
+
+const SPORT_OPTIONS = [
+  'Futebol',
+  'Tênis',
+  'Basquete',
+  'Vôlei',
+  'MMA',
+  'Boxe',
+  'Fórmula 1',
+  'eSports',
+  'Rugby',
+  'Críquete',
+] as const;
 
 export function DraftControls({
   detail,
@@ -80,6 +97,18 @@ export function DraftControls({
   const [sport, setSport] = useState(detail.sportOverride ?? '');
   const [tournament, setTournament] = useState(detail.tournamentOverride ?? '');
   const [country, setCountry] = useState(detail.countryOverride ?? '');
+  const [ticketKind, setTicketKind] = useState<TicketKind | ''>(detail.ticketKindOverride ?? '');
+  const [stake, setStake] = useState(detail.stakeOverride ?? detail.extraction?.stake ?? '');
+  const [odds, setOdds] = useState(detail.oddsOverride ?? detail.extraction?.odds ?? '');
+  const [selections, setSelections] = useState(() =>
+    detail.selectionOverrides.length
+      ? detail.selectionOverrides.map((item) => ({ ...item }))
+      : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
+          event,
+          market,
+          selection,
+        })),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -100,6 +129,10 @@ export function DraftControls({
         sport: sport.trim() || null,
         tournament: tournament.trim() || null,
         country: country.trim() || null,
+        ticketKind: ticketKind || null,
+        stake: stake.trim() || null,
+        odds: odds.trim() || null,
+        selections,
       });
       setSaved(true);
       setCleared(result.freebetCleared);
@@ -185,7 +218,17 @@ export function DraftControls({
         bilhete não trouxer informação confiável.
       </p>
       <Field label="Esporte">
-        <input value={sport} onChange={(event) => setSport(event.target.value)} />
+        <select value={sport} onChange={(event) => setSport(event.target.value)}>
+          <option value="">Selecione o esporte</option>
+          {sport && !SPORT_OPTIONS.includes(sport as (typeof SPORT_OPTIONS)[number]) ? (
+            <option value={sport}>{sport}</option>
+          ) : null}
+          {SPORT_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </Field>
       <Field label="Torneio">
         <input value={tournament} onChange={(event) => setTournament(event.target.value)} />
@@ -193,6 +236,79 @@ export function DraftControls({
       <Field label="País">
         <input value={country} onChange={(event) => setCountry(event.target.value)} />
       </Field>
+      <Field label="Tipo de aposta">
+        <select
+          value={ticketKind}
+          onChange={(event) => setTicketKind(event.target.value as TicketKind | '')}
+        >
+          <option value="">Detectar automaticamente</option>
+          <option value="simple">Simples</option>
+          <option value="multiple">Múltipla</option>
+          <option value="betbuild">BetBuild</option>
+        </select>
+      </Field>
+      <div className="form-grid">
+        <Field label="Valor apostado">
+          <input
+            inputMode="decimal"
+            value={stake}
+            onChange={(event) => setStake(event.target.value)}
+          />
+        </Field>
+        <Field label="Odd">
+          <input
+            inputMode="decimal"
+            value={odds}
+            onChange={(event) => setOdds(event.target.value)}
+          />
+        </Field>
+      </div>
+      <fieldset>
+        <legend>Partidas, apostas e mercados</legend>
+        {selections.length === 0 ? <p className="notice">Nenhuma seleção extraída.</p> : null}
+        {selections.map((selection, index) => (
+          <div className="draft-selection" key={index}>
+            <Field label={`Evento ${index + 1}`}>
+              <input
+                value={selection.event ?? ''}
+                onChange={(event) =>
+                  setSelections((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, event: event.target.value || null } : item,
+                    ),
+                  )
+                }
+              />
+            </Field>
+            <Field label={`Aposta ${index + 1}`}>
+              <input
+                value={selection.selection ?? ''}
+                onChange={(event) =>
+                  setSelections((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, selection: event.target.value || null }
+                        : item,
+                    ),
+                  )
+                }
+              />
+            </Field>
+            <Field label={`Mercado ${index + 1}`}>
+              <input
+                value={selection.market ?? ''}
+                onChange={(event) =>
+                  setSelections((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, market: event.target.value || null } : item,
+                    ),
+                  )
+                }
+              />
+            </Field>
+          </div>
+        ))}
+      </fieldset>
       {error ? (
         <p className="notice warning" role="alert">
           {error}
