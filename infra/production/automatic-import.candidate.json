@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 3,
+  "requiresUserBookmaker": true,
+  "aiBookmakerClassification": "disabled",
+  "bookmakerScope": "explicit",
+  "bookmakers": {
+    "approved": ["bet365"],
+    "pending": [
+      {
+        "bookmaker": "superbet",
+        "reason": "Homologacao real incompleta: 19/25 com 7 erros essenciais; projecao local (21/25) e rodada direcionada (4/4 + 5/5) nao constituem homologacao completa."
+      }
+    ]
+  },
+  "model": "google/gemini-3.8-flash",
+  "placedAtFormats": ["br-sao-paulo"],
+  "allowFreebet": true,
+  "potentialReturnLabels": ["Retorno Total"],
+  "corpusSha256": "9c0ccd7ecc71ff5330b1400f176d18c65d99ed080110ec3458befffd9ab2783d",
+  "evaluationSha256": "3bb1cfec7bfb60722f247e5e4e9c0c0c1c67d97c4514cf52ad404b9d076d1724",
+  "coverage": {
+    "positive": 20,
+    "negative": 5,
+    "uniqueImages": 25,
+    "multiples": 5,
+    "promotional": 3,
+    "missingFields": 20
+  },
+  "sampleCount": 20,
+  "essentialFieldErrors": 0,
+  "approvedBy": "owner",
+  "approvedAt": "2026-09-20T12:00:00.000Z",
+  "expiresAt": "2026-12-19T12:00:00.000Z"
+}

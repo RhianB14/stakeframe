@@ -179,3 +179,34 @@ sanitizados (sem segredos, tokens ou conteúdo de bilhete privado).
 
 - **WHEN** o bilhete mostra a data do evento
 - **THEN** o campo `eventAt` permanece pendente e fora do contrato de extração
+
+### Requirement: Policy explícita por casa (F6)
+
+A policy da importação automática DEVE (MUST) nomear explicitamente as casas
+aprovadas e as pendentes (`bookmakerScope: explicit`, `bookmakers.approved`,
+`bookmakers.pending` com motivo obrigatório). Somente casas aprovadas, com
+evidência real elegível (cobertura completa, zero erros essenciais, avaliação
+salva e íntegra), podem seguir para o caminho automático; casa pendente — ou
+fora das listas — DEVE (MUST) permanecer em revisão manual
+(`BOOKMAKER_NOT_APPROVED`). A policy global v2 (todas as casas ativas) DEVE
+(MUST) ser recusada por não representar casa pendente. Projeção local ou
+rodada parcial NÃO DEVEM (MUST NOT) ser tratadas como homologação completa. O
+checker DEVE (MUST) recusar: casa não declarada nos diretórios de evidência,
+casa aprovada sem evidência salva, evidência inelegível declarada como
+aprovada, janela expirada e digests divergentes — e NUNCA preencher
+`essentialFieldErrors` artificialmente.
+
+#### Scenario: casa pendente
+
+- **WHEN** a policy lista uma casa como pendente e o usuário informa essa casa
+- **THEN** a importação permanece em revisão manual com motivo sanitizado, sem efeito financeiro
+
+#### Scenario: projeção não é evidência
+
+- **WHEN** uma aprovação cita apenas análise local sem avaliação salva
+- **THEN** o checker recusa a policy (nenhuma ativação por projeção)
+
+#### Scenario: aprovação explícita e validade
+
+- **WHEN** a policy não traz `approvedBy: owner`, está expirada ou com janela invertida
+- **THEN** o loader e o checker recusam (fail-closed; tudo em revisão)

@@ -127,8 +127,25 @@ originais:
 - **A policy final continua dependendo da casa informada pelo usuário** — a IA
   não classifica bookmaker nem layout.
 
+## Fatia F6 — policy explícita por casa (esta rodada)
+
+- **Contrato v3**: `automaticPolicyV3Schema` com `bookmakers.approved` e
+  `bookmakers.pending` (motivo obrigatório); a v2 global é recusada pelo loader
+  e pelo checker — nenhuma aprovação sem casas explícitas autoriza automação.
+- **Runtime**: o layout sintético só é montado para casa aprovada (slug do
+  catálogo ativo); casa pendente ou desconhecida permanece em revisão
+  (`BOOKMAKER_NOT_APPROVED`), fail-closed.
+- **Checker**: recusa casa não declarada, aprovação sem evidência salva,
+  evidência inelegível, janela inválida e digests divergentes; projeção local
+  não substitui homologação salva.
+- **Candidata offline** (`infra/production/automatic-import.candidate.json`):
+  Bet365 aprovada (evidência real 25/25 elegível, validada pelo checker);
+  Superbet pendente (19/25, 7 erros essenciais — projeção e rodada direcionada
+  não contam). Zero chamadas externas; instalação na VPS fora do escopo.
+
 ## Impacto
 
-Migração nenhuma; contrato OpenAPI ajustado; change OpenSpec `stk-g0-22`.
-Sem deploy, migração, tag ou publicação nesta PR. Novo commit invalida revisão
-anterior.
+Migração nenhuma; contrato OpenAPI ajustado; change OpenSpec `stk-g0-22`;
+policy da importação automática evolui de v2 (global) para v3 (casas
+explícitas) — a v2 nunca foi instalada em produção. Sem deploy, migração, tag
+ou publicação nesta PR. Novo commit invalida revisão anterior.

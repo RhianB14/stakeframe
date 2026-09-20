@@ -53,20 +53,22 @@ enriquecimento de eventos acontece por processo posterior (docs/EVENTS.md).
 Período ao vivo, minuto da partida e placar jamais são tratados como
 data/hora do evento.
 
-Nenhuma policy global vem aprovada por padrão: ainda não existe uma amostra
-privada agregada autorizada para o contrato neutro de todas as casas ativas.
-Nessas condições, `automatic=false` e `LAYOUT_NOT_VALIDATED` mantêm a restrição
-verificável. Uma única amostra de IA da fase M0 não habilita lançamento
-automático. O fluxo de habilitação e o avaliador de amostras estão em
-[VALIDATION.md](VALIDATION.md).
+Nenhuma policy vem aprovada por padrão: a policy explícita (v3) nomeia as
+casas homologadas e as pendentes, e ainda não existe amostra privada autorizada
+para todas as casas. Nessas condições, `automatic=false` e
+`LAYOUT_NOT_VALIDATED` mantêm a restrição verificável. Uma única amostra de IA
+da fase M0 não habilita lançamento automático. O fluxo de habilitação e o
+avaliador de amostras estão em [VALIDATION.md](VALIDATION.md).
 
-Com uma policy global v2 privada aprovada e ativação explícita no worker, a IA
-recebe somente o contrato neutro: ela organiza os dados entregues pelo OCR e
+Com uma policy explícita v3 privada aprovada e ativação explícita no worker, a
+IA recebe somente o contrato neutro: ela organiza os dados entregues pelo OCR e
 nunca escolhe casa ou layout. O servidor resolve a casa e o tipster pelos
 aliases/catálogo ativos da organização, aplica o modelo e os formatos aprovados
-pela policy global e registra o digest dessa policy. A casa escolhida pelo
-usuário é a autoridade; qualquer tentativa de a IA fornecer bookmaker/layout
-fica em revisão. O servidor exige moeda BRL, tipo da aposta informado na
+pela policy e registra o digest dessa policy. A casa escolhida pelo usuário é a
+autoridade — e precisa estar entre as aprovadas na policy: casa pendente ou
+fora da lista permanece em revisão (`BOOKMAKER_NOT_APPROVED`); qualquer
+tentativa de a IA fornecer bookmaker/layout fica em revisão. O servidor exige
+moeda BRL, tipo da aposta informado na
 legenda (contexto confiável, com a leitura visual apenas como detecção de
 conflito), referência
 (vazia é aceita quando a casa não a apresenta: nenhuma referência sintética é
@@ -315,6 +317,7 @@ Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
   exato da stake, validade, disponibilidade) e é salva mesmo sem arquivo de
   política; o Mini App informa o estado da política automática
   (`disabled|absent|invalid|approved`). A importação AUTOMÁTICA é estritamente
-  fail-closed: policy global ausente/inválida/expirada ⇒ revisão
-  (`LAYOUT_NOT_VALIDATED`); policy sem `allowFreebet` ou crédito inválido ⇒
+  fail-closed: policy ausente/inválida/expirada ⇒ revisão
+  (`LAYOUT_NOT_VALIDATED`); casa fora das aprovadas ⇒ revisão
+  (`BOOKMAKER_NOT_APPROVED`); policy sem `allowFreebet` ou crédito inválido ⇒
   revisão (`FREEBET_UNRESOLVED`); `null` nunca significa autorização.

@@ -17,7 +17,7 @@ import {
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
   OPENROUTER_MODEL,
-  type AutomaticPolicyV2,
+  type AutomaticPolicyV3,
   type FinanceCommand,
   type TicketExtraction,
   type ValidatedLayout,
@@ -33,7 +33,7 @@ let finance: FinanceService;
 let tenantContext: OrganizationContext;
 let name: string;
 let layout: ValidatedLayout;
-let globalPolicy: AutomaticPolicyV2;
+let globalPolicy: AutomaticPolicyV3;
 type CommandInput = FinanceCommand extends infer C
   ? C extends FinanceCommand
     ? Omit<C, 'expectedVersion'>
@@ -99,10 +99,11 @@ beforeEach(async () => {
     expiresAt: '2999-01-01T00:00:00Z',
   };
   globalPolicy = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     requiresUserBookmaker: true,
     aiBookmakerClassification: 'disabled',
-    bookmakerScope: 'all-active',
+    bookmakerScope: 'explicit',
+    bookmakers: { approved: ['bet365'], pending: [] },
     model: OPENROUTER_MODEL,
     placedAtFormats: ['iso-offset'],
     allowFreebet: true,
@@ -285,6 +286,28 @@ describe('automatic import financial boundary', () => {
       reason: 'LAYOUT_NOT_VALIDATED',
     });
     expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
+  });
+  it('keeps a house outside the approved list in review and never imports it (STK-G0-22-F6)', async () => {
+    const withPolicy = (value: Awaited<ReturnType<typeof input>>) =>
+      createAutomaticImportService(database, globalPolicy).complete(
+        tenantContext,
+        value.id,
+        value.attempt,
+        value.result,
+      );
+    const unapproved = await input({}, 'Fixture\nSuperbet');
+    expect(await withPolicy(unapproved)).toMatchObject({
+      state: 'review',
+      reason: 'BOOKMAKER_NOT_APPROVED',
+    });
+    const detail = await createImportService(database).detail(tenantContext, unapproved.id);
+    expect(detail.automatic).toBe(false);
+    expect(detail.automaticReason).toBe('BOOKMAKER_NOT_APPROVED');
+    expect((await finance.workspace(tenantContext)).exposure).toBe('0.00');
+    // A casa aprovada continua importando com a mesma policy explícita.
+    const approved = await input();
+    expect(await withPolicy(approved)).toMatchObject({ state: 'imported' });
+    expect((await finance.workspace(tenantContext)).exposure).toBe('100.00');
   });
   it('commits evidence, bet, unit, ledger and audit once across repeated completions', async () => {
     const value = await input();

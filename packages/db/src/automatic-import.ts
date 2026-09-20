@@ -10,9 +10,9 @@ import {
   saoPauloDate,
   parseAutomaticPlacedAt,
   automaticPolicyIsCurrent,
-  automaticPolicyV2Schema,
+  automaticPolicyV3Schema,
   type ValidatedLayout,
-  type AutomaticPolicyV2,
+  type AutomaticPolicyV3,
   type AutomaticReason,
   type BetInput,
 } from '@stakeframe/shared';
@@ -21,7 +21,7 @@ import type { Database } from './index.js';
 import { FinanceError, type SettingsRow } from './finance-core.js';
 import { createFinanceService } from './finance-service.js';
 import { executeFinancialCommand } from './finance-transaction.js';
-import { automaticPolicyDigest, layoutDigest } from './automatic-policy.js';
+import { automaticBookmakerSlug, automaticPolicyDigest, layoutDigest } from './automatic-policy.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
 type Evidence = {
@@ -31,11 +31,13 @@ type Evidence = {
   policyDigest?: unknown;
   ocrConsistent?: unknown;
 };
-type CatalogAlias = { catalog_id: string; kind: string; label: string };
+type CatalogAlias = { catalog_id: string; kind: string; label: string; name: string };
 type AliasResolution =
-  { state: 'resolved'; catalogId: string } | { state: 'missing' } | { state: 'ambiguous' };
+  | { state: 'resolved'; catalogId: string; name: string }
+  | { state: 'missing' }
+  | { state: 'ambiguous' };
 type BookmakerContext =
-  | { state: 'resolved'; bookmakerId: string; tipsterId: string }
+  | { state: 'resolved'; bookmakerId: string; bookmakerName: string; tipsterId: string }
   | { state: 'review'; reason: 'CAPTION_UNRESOLVED' | 'BOOKMAKER_UNRESOLVED' }
   | { state: 'refused'; reason: 'BOOKMAKER_REFUSED' };
 const normalized = (value: string) =>
@@ -52,12 +54,11 @@ function resolveAlias(
   value: string | null,
 ): AliasResolution {
   if (!value) return { state: 'missing' };
-  const ids = new Set(
-    aliases
-      .filter((alias) => alias.kind === kind && normalized(alias.label) === normalized(value))
-      .map((alias) => alias.catalog_id),
+  const matches = aliases.filter(
+    (alias) => alias.kind === kind && normalized(alias.label) === normalized(value),
   );
-  if (ids.size === 1) return { state: 'resolved', catalogId: [...ids][0]! };
+  const ids = new Set(matches.map((alias) => alias.catalog_id));
+  if (ids.size === 1) return { state: 'resolved', catalogId: [...ids][0]!, name: matches[0]!.name };
   return ids.size === 0 ? { state: 'missing' } : { state: 'ambiguous' };
 }
 
@@ -69,7 +70,7 @@ async function resolveBookmakerContext(
   const labels = parseCaption(caption);
   const aliases = (
     await client.query<CatalogAlias>(
-      'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+      'select a.catalog_id,a.kind,a.label,c.name from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
     )
   ).rows;
   const tipster = resolveAlias(aliases, 'tipster', labels.tipster);
@@ -80,19 +81,29 @@ async function resolveBookmakerContext(
   // layout or reach the financial writer.
   if (bookmakerOverrideId) {
     const selected = (
-      await client.query<{ id: string }>(
-        'select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind=$2 and active',
+      await client.query<{ id: string; name: string }>(
+        'select id,name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind=$2 and active',
         [bookmakerOverrideId, 'bookmaker'],
       )
     ).rows[0];
     if (!selected) return { state: 'refused', reason: 'BOOKMAKER_REFUSED' };
-    return { state: 'resolved', bookmakerId: selected.id, tipsterId: tipster.catalogId };
+    return {
+      state: 'resolved',
+      bookmakerId: selected.id,
+      bookmakerName: selected.name,
+      tipsterId: tipster.catalogId,
+    };
   }
 
   if (!labels.bookmaker) return { state: 'review', reason: 'BOOKMAKER_UNRESOLVED' };
   const bookmaker = resolveAlias(aliases, 'bookmaker', labels.bookmaker);
   if (bookmaker.state !== 'resolved') return { state: 'refused', reason: 'BOOKMAKER_REFUSED' };
-  return { state: 'resolved', bookmakerId: bookmaker.catalogId, tipsterId: tipster.catalogId };
+  return {
+    state: 'resolved',
+    bookmakerId: bookmaker.catalogId,
+    bookmakerName: bookmaker.name,
+    tipsterId: tipster.catalogId,
+  };
 }
 
 async function candidate(
@@ -199,14 +210,14 @@ async function candidate(
 
 export function createAutomaticImportService(
   database: Database,
-  configuredPolicy: AutomaticPolicyV2 | ValidatedLayout[] | null = [],
+  configuredPolicy: AutomaticPolicyV3 | ValidatedLayout[] | null = [],
 ) {
   const legacyLayouts = Array.isArray(configuredPolicy)
     ? validatedLayoutsSchema.parse(configuredPolicy)
     : [];
   const globalPolicy =
     configuredPolicy && !Array.isArray(configuredPolicy)
-      ? automaticPolicyV2Schema.parse(configuredPolicy)
+      ? automaticPolicyV3Schema.parse(configuredPolicy)
       : null;
   const finance = createFinanceService(database);
   const tenant = createTenantContext(database);
@@ -251,6 +262,15 @@ export function createAutomaticImportService(
           globalPolicy && automaticPolicyIsCurrent(globalPolicy, now.getTime())
             ? globalPolicy
             : null;
+        // STK-G0-22-F6: apenas casas APROVADAS na policy explícita podem
+        // seguir para o caminho automático; casa pendente ou fora da lista
+        // permanece em revisão manual (fail-closed) — nenhuma policy
+        // habilita uma casa sem homologação completa.
+        const approvedBookmaker =
+          bookmakerContext.state === 'resolved' &&
+          (activeGlobalPolicy?.bookmakers.approved as readonly string[] | undefined)?.includes(
+            automaticBookmakerSlug(bookmakerContext.bookmakerName) ?? '',
+          ) === true;
         const legacyLayout =
           bookmakerContext.state === 'resolved'
             ? legacyLayouts.filter(
@@ -270,7 +290,9 @@ export function createAutomaticImportService(
               : null
             : null;
         const layout = activeGlobalPolicy
-          ? bookmakerContext.state === 'resolved' && result.model === activeGlobalPolicy.model
+          ? bookmakerContext.state === 'resolved' &&
+            result.model === activeGlobalPolicy.model &&
+            approvedBookmaker
             ? {
                 model: activeGlobalPolicy.model,
                 allowFreebet: activeGlobalPolicy.allowFreebet,
@@ -286,6 +308,8 @@ export function createAutomaticImportService(
             : null;
         if (modelSelectedLayout) reason = 'EXTRACTION_UNCERTAIN';
         else if (bookmakerContext.state !== 'resolved') reason = bookmakerContext.reason;
+        else if (!layout && activeGlobalPolicy && !approvedBookmaker)
+          reason = 'BOOKMAKER_NOT_APPROVED';
         else if (!layout) reason = 'LAYOUT_NOT_VALIDATED';
         if (layout && bookmakerContext.state === 'resolved') {
           await client.query('savepoint automatic_finance');
