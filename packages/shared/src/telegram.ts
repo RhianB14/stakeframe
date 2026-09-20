@@ -124,7 +124,7 @@ export function renderImportMessage(input: ImportMessageInput): string {
   if (input.statusLabel === 'Pendente') lines.push('🔹 Sem lucro ou prejuízo.');
   lines.push(
     `🎾 Esporte: ${orPending(input.sport)}`,
-    `🏆 Torneio: ${orPending(input.tournament)}`,
+    `🏆 Torneio: ${input.tournament ?? 'Definir Manualmente'}`,
     `⚔️ Evento: ${orPending(input.event)}`,
     `🌎 País: ${orPending(input.country)}`,
     `🎰 Aposta: ${orPending(input.selection)}`,
