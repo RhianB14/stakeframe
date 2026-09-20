@@ -188,7 +188,9 @@ describe('telegram result buttons callbacks', () => {
     const restored = cancelEdit.body.reply_markup as {
       inline_keyboard: Array<Array<{ web_app?: { url?: string } }>>;
     };
-    expect(restored.inline_keyboard[0]![0]!.web_app?.url).toContain(`/miniapp#miniapp?import=${id}`);
+    expect(restored.inline_keyboard[0]![0]!.web_app?.url).toContain(
+      `/miniapp#miniapp?import=${id}`,
+    );
     expect((await inboxState(id)).state).toBe('review');
   });
 
