@@ -210,7 +210,7 @@ export function DraftControls({
         </p>
       ) : null}
       <Button onClick={() => void save()} disabled={busy}>
-        {busy ? 'Salvando…' : 'Salvar dados do bilhete'}
+        {busy ? 'Salvando…' : 'Salvar origem e data'}
       </Button>
     </div>
   );
