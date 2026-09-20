@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -100,6 +100,7 @@ describe('automatic import policy boundaries', () => {
     };
     try {
       writeFileSync(file, JSON.stringify(policy));
+      chmodSync(file, 0o600);
       expect(readAutomaticPolicy(env)).toEqual({ state: 'approved', policy });
       // R7: política ausente/inválida/expirada NUNCA derruba o worker nem
       // habilita a automação — devolve [] e o candidato encaminha à revisão.
