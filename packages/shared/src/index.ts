@@ -6,6 +6,7 @@ export * from './returns.js';
 export * from './decimal.js';
 export * from './finance.js';
 export * from './release.js';
+export * from './automatic-policy.js';
 
 export const systemStatusSchema = z
   .object({

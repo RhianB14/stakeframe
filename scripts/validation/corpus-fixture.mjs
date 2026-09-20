@@ -26,10 +26,15 @@ export function syntheticExtraction() {
   };
 }
 
-export function syntheticCorpus({ id = 'bet365-fixture', bookmaker = 'bet365' } = {}) {
+export function syntheticCorpus({
+  id = 'bet365-fixture',
+  bookmaker = 'bet365',
+  bookmakerContext = 'visual-only',
+} = {}) {
   const extraction = syntheticExtraction();
   return {
     schemaVersion: 1,
+    bookmakerContext,
     layout: {
       id,
       bookmaker,
@@ -64,7 +69,7 @@ export function syntheticCorpus({ id = 'bet365-fixture', bookmaker = 'bet365' } 
 }
 
 export function buildPolicyEntry(corpus, report, evaluationSha256, overrides = {}) {
-  return {
+  const entry = {
     id: corpus.layout.id,
     bookmaker: corpus.layout.bookmaker,
     bookmakerId: corpus.layout.bookmakerId,
@@ -78,6 +83,47 @@ export function buildPolicyEntry(corpus, report, evaluationSha256, overrides = {
     corpusSha256: report.corpusSha256,
     evaluationSha256,
     sampleCount: report.sampleCount,
+    essentialFieldErrors: 0,
+    approvedBy: 'owner',
+    approvedAt: '2026-09-01T00:00:00.000Z',
+    expiresAt: '2027-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+  Object.defineProperties(entry, {
+    __report: { value: report, enumerable: false },
+    __evaluationSha256: { value: evaluationSha256, enumerable: false },
+  });
+  return entry;
+}
+
+export function buildGlobalPolicy(evidence, overrides = {}) {
+  const reports = evidence.map((item) => item.report);
+  const evaluationHashes = evidence.map((item) => item.evaluationSha256).sort();
+  const corpusHashes = reports.map((report) => report.corpusSha256).sort();
+  const coverage = Object.fromEntries(
+    ['positive', 'negative', 'multiples', 'missingFields', 'promotional', 'uniqueImages'].map(
+      (key) => [key, reports.reduce((total, report) => total + report.coverage[key], 0)],
+    ),
+  );
+  return {
+    schemaVersion: 2,
+    requiresUserBookmaker: true,
+    aiBookmakerClassification: 'disabled',
+    bookmakerScope: 'all-active',
+    model: reports[0].model,
+    placedAtFormats: [...new Set(reports.map((report) => report.layout.placedAtFormat))],
+    allowFreebet: reports.every((report) => report.layout.allowFreebet ?? false),
+    potentialReturnLabels: [
+      ...new Set(
+        reports.flatMap((report) => report.layout.potentialReturnLabels ?? ['Retorno Total']),
+      ),
+    ],
+    corpusSha256: createHash('sha256').update(JSON.stringify(corpusHashes)).digest('hex'),
+    evaluationSha256: createHash('sha256').update(JSON.stringify(evaluationHashes)).digest('hex'),
+    coverage,
+    sampleCount: reports.reduce((total, report) => total + report.sampleCount, 0),
+    // An approval declaration claims zero; the checker compares this claim
+    // with the recomputed reports and rejects any non-zero evidence.
     essentialFieldErrors: 0,
     approvedBy: 'owner',
     approvedAt: '2026-09-01T00:00:00.000Z',

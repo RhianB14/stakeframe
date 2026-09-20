@@ -53,17 +53,22 @@ enriquecimento de eventos acontece por processo posterior (docs/EVENTS.md).
 Período ao vivo, minuto da partida e placar jamais são tratados como
 data/hora do evento.
 
-Nenhuma casa vem aprovada por padrão: ainda não existe amostra privada
-representativa aprovada das três casas. Nessas condições, `automatic=false`
-e `LAYOUT_NOT_VALIDATED` mantêm a restrição verificável. Uma única amostra de
-IA da fase M0 não habilita lançamento automático. O fluxo de habilitação e
-o avaliador de amostras estão em [VALIDATION.md](VALIDATION.md).
+Nenhuma policy global vem aprovada por padrão: ainda não existe uma amostra
+privada agregada autorizada para o contrato neutro de todas as casas ativas.
+Nessas condições, `automatic=false` e `LAYOUT_NOT_VALIDATED` mantêm a restrição
+verificável. Uma única amostra de IA da fase M0 não habilita lançamento
+automático. O fluxo de habilitação e o avaliador de amostras estão em
+[VALIDATION.md](VALIDATION.md).
 
-Com uma política privada aprovada e ativação explícita no worker, a identificação
-do layout usa descrição visual, modelo fixo e digest da política. O servidor
-exige casa e tipster resolvidos por aliases ativos, concordância da casa com o
-layout e o bilhete, moeda BRL, tipo da aposta informado na legenda (contexto
-confiável, com a leitura visual apenas como detecção de conflito), referência
+Com uma policy global v2 privada aprovada e ativação explícita no worker, a IA
+recebe somente o contrato neutro: ela organiza os dados entregues pelo OCR e
+nunca escolhe casa ou layout. O servidor resolve a casa e o tipster pelos
+aliases/catálogo ativos da organização, aplica o modelo e os formatos aprovados
+pela policy global e registra o digest dessa policy. A casa escolhida pelo
+usuário é a autoridade; qualquer tentativa de a IA fornecer bookmaker/layout
+fica em revisão. O servidor exige moeda BRL, tipo da aposta informado na
+legenda (contexto confiável, com a leitura visual apenas como detecção de
+conflito), referência
 (vazia é aceita quando a casa não a apresenta: nenhuma referência sintética é
 gravada e a deduplicação por imagem/similaridade segue bloqueando colisões),
 stake/odd e seleções válidas, nenhuma dúvida na extração e instante da aposta
@@ -305,11 +310,11 @@ Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
   freebet associado: crédito de casa diferente, consumido ou expirado é
   removido com aviso sanitizado e a origem volta a "não informada" (nova escolha
   explícita) — nunca preservado em silêncio.
-- **Declaração × política automática** — a declaração real/freebet do usuário é
+- **Declaração × policy automática** — a declaração real/freebet do usuário é
   validada SOMENTE contra o crédito da própria organização (casa efetiva, valor
   exato da stake, validade, disponibilidade) e é salva mesmo sem arquivo de
   política; o Mini App informa o estado da política automática
   (`disabled|absent|invalid|approved`). A importação AUTOMÁTICA é estritamente
-  fail-closed: política ausente/inválida/expirada ⇒ nenhum layout ⇒ revisão
-  (`LAYOUT_NOT_VALIDATED`); layout sem `allowFreebet` ou crédito inválido ⇒
+  fail-closed: policy global ausente/inválida/expirada ⇒ revisão
+  (`LAYOUT_NOT_VALIDATED`); policy sem `allowFreebet` ou crédito inválido ⇒
   revisão (`FREEBET_UNRESOLVED`); `null` nunca significa autorização.

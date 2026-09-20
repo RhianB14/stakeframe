@@ -1,31 +1,38 @@
-import { readFileSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
-import { validatedLayoutsSchema, type ValidatedLayout } from '@stakeframe/shared';
-export function readAutomaticLayouts(env: NodeJS.ProcessEnv): ValidatedLayout[] {
-  // STK-G0-19-R7 — fail-closed PARA REVISÃO: política ausente, inválida,
-  // ilegível ou expirada nunca derruba o worker nem habilita a automação; o
-  // candidato recebe [] e TODA importação segue para revisão com motivo
-  // sanitizado (LAYOUT_NOT_VALIDATED), nunca é autoimportada. `null` jamais
-  // significa autorização.
+import {
+  automaticPolicyIsCurrent,
+  automaticPolicyV2Schema,
+  type AutomaticPolicyV2,
+} from '@stakeframe/shared';
+
+export type AutomaticPolicyRead = {
+  state: 'absent' | 'invalid' | 'approved';
+  policy: AutomaticPolicyV2 | null;
+};
+
+export function readAutomaticPolicy(env: NodeJS.ProcessEnv): AutomaticPolicyRead {
+  // Fail-closed: a policy global ausente, inválida, ilegível ou expirada nunca
+  // derruba o worker nem habilita a automação. O serviço recebe estado não
+  // aprovado e mantém toda importação em revisão; null jamais é autorização.
   if (env.AUTOMATIC_IMPORT_ENABLED === undefined || env.AUTOMATIC_IMPORT_ENABLED !== 'true')
-    return [];
+    return { state: 'absent', policy: null };
   try {
     const file = env.AUTOMATIC_IMPORT_POLICIES_FILE;
-    if (env.AI_ENABLED !== 'true' || !file || !isAbsolute(file)) return [];
-    const stat = statSync(file);
-    if (!stat.isFile() || stat.size > 32768) return [];
+    if (env.AI_ENABLED !== 'true' || !file || !isAbsolute(file))
+      return { state: 'absent', policy: null };
+    const stat = lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32_768)
+      return { state: 'invalid', policy: null };
+    if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0)
+      return { state: 'invalid', policy: null };
     const bytes = readFileSync(file);
-    if (bytes.length > 32768) return [];
-    const layouts = validatedLayoutsSchema.parse(JSON.parse(bytes.toString('utf8')));
-    const now = Date.now();
-    if (
-      !layouts.length ||
-      layouts.some((layout) => Date.parse(layout.approvedAt) > now) ||
-      layouts.some((layout) => Date.parse(layout.expiresAt) <= now)
-    )
-      return [];
-    return layouts;
+    if (bytes.length > 32_768) return { state: 'invalid', policy: null };
+    const parsed = automaticPolicyV2Schema.safeParse(JSON.parse(bytes.toString('utf8')));
+    if (!parsed.success || !automaticPolicyIsCurrent(parsed.data))
+      return { state: 'invalid', policy: null };
+    return { state: 'approved', policy: parsed.data };
   } catch {
-    return [];
+    return { state: 'invalid', policy: null };
   }
 }

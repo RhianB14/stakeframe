@@ -107,6 +107,24 @@ O `deployment-check` aceita os conjuntos autorizados por flag
 qualquer desvio verificado — OCR sem as integrações, OCR com provedor ausente
 ou Mini App URL ausente/insegura.
 
+### Policy global da importação automática
+
+Quando a importação automática for autorizada em uma janela própria, o worker
+deve receber `AUTOMATIC_IMPORT_POLICIES_FILE` apontando para um arquivo privado
+absoluto. O arquivo segue `automaticPolicyV2Schema`: uma única policy global
+para todas as casas ativas, com `requiresUserBookmaker=true`, classificação de
+casa pela IA desabilitada, modelo/formato aprovados, evidência agregada e
+validade explícita. A casa e o tipster são resolvidos pela declaração do usuário
+e pelo catálogo ativo da organização; Telegram, MiniApp e Web compartilham o
+mesmo registro canônico e a outbox edita somente a mensagem correspondente.
+
+O loader recusa policy v1, listas por casa/layout, arquivo não absoluto, symlink,
+permissões POSIX abertas, JSON inválido ou policy expirada. Ausência ou recusa
+mantém o fluxo em revisão (`LAYOUT_NOT_VALIDATED`); nenhum `null` autoriza a
+automação. F3+F4 apenas implementam e testam esse caminho: instalação do arquivo,
+`AUTOMATIC_IMPORT_ENABLED=true`, deploy e chamadas externas permanecem fora
+desta tarefa.
+
 > **Estado do consumidor Telegram (divergente):** a produção passou a usar
 > `compose.integrations.yml` junto aos composes de produção e operações em
 > 07/09/2026, e o consumidor Telegram **esteve ativo, sem autorização

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
@@ -17,6 +17,7 @@ import {
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
   OPENROUTER_MODEL,
+  type AutomaticPolicyV2,
   type FinanceCommand,
   type TicketExtraction,
   type ValidatedLayout,
@@ -32,6 +33,7 @@ let finance: FinanceService;
 let tenantContext: OrganizationContext;
 let name: string;
 let layout: ValidatedLayout;
+let globalPolicy: AutomaticPolicyV2;
 type CommandInput = FinanceCommand extends infer C
   ? C extends FinanceCommand
     ? Omit<C, 'expectedVersion'>
@@ -91,6 +93,24 @@ beforeEach(async () => {
     corpusSha256: '0'.repeat(64),
     evaluationSha256: '1'.repeat(64),
     sampleCount: 20,
+    essentialFieldErrors: 0,
+    approvedBy: 'owner',
+    approvedAt: '2020-01-01T00:00:00Z',
+    expiresAt: '2999-01-01T00:00:00Z',
+  };
+  globalPolicy = {
+    schemaVersion: 2,
+    requiresUserBookmaker: true,
+    aiBookmakerClassification: 'disabled',
+    bookmakerScope: 'all-active',
+    model: OPENROUTER_MODEL,
+    placedAtFormats: ['iso-offset'],
+    allowFreebet: true,
+    potentialReturnLabels: ['Retorno Total'],
+    corpusSha256: layout.corpusSha256,
+    evaluationSha256: layout.evaluationSha256,
+    coverage: layout.coverage,
+    sampleCount: layout.sampleCount,
     essentialFieldErrors: 0,
     approvedBy: 'owner',
     approvedAt: '2020-01-01T00:00:00Z',
@@ -169,7 +189,8 @@ describe('automatic import financial boundary', () => {
   it('consumes the persistent queue and resolves the house from the user caption (STK-G0-22-F2)', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'stk-auto-worker-test-'));
     const file = join(directory, 'policies.json');
-    writeFileSync(file, JSON.stringify([layout]));
+    writeFileSync(file, JSON.stringify(globalPolicy));
+    chmodSync(file, 0o600);
     const url = new URL(source);
     url.pathname = `/${name}`;
     let boss: Awaited<ReturnType<typeof startWorker>> | undefined;

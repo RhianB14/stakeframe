@@ -22,7 +22,7 @@ import {
 import { createTelegramCallbackHandler } from './telegram-callbacks.js';
 import { IntegrationError } from './http.js';
 import { startTelegramOutbox } from './telegram-outbox.js';
-import { readAutomaticLayouts } from './automatic-config.js';
+import { readAutomaticPolicy } from './automatic-config.js';
 import { extractConfiguredOcr, readOcrProvidersConfig } from './ocr-providers.js';
 
 export const EXTRACTION_QUEUE = 'ticket-extraction';
@@ -106,8 +106,11 @@ export async function startIntegrations(
   const ai = readAiConfig(env);
   const ocrProviders = readOcrProvidersConfig(env);
   if (ocrProviders && !ai) throw new IntegrationError('OCR_REQUIRES_AI');
-  const layouts = readAutomaticLayouts(env);
-  const automatic = createAutomaticImportService(database, layouts);
+  const automaticPolicy = readAutomaticPolicy(env);
+  const automatic = createAutomaticImportService(
+    database,
+    automaticPolicy.state === 'approved' ? automaticPolicy.policy : null,
+  );
   const draft = createImportDraftService(database);
   const telegram = readTelegramConfig(env);
   if (!ai && !telegram) return { stop: async () => {}, check: () => {} };

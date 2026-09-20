@@ -9,7 +9,10 @@ import {
   money,
   saoPauloDate,
   parseAutomaticPlacedAt,
+  automaticPolicyIsCurrent,
+  automaticPolicyV2Schema,
   type ValidatedLayout,
+  type AutomaticPolicyV2,
   type AutomaticReason,
   type BetInput,
 } from '@stakeframe/shared';
@@ -18,7 +21,7 @@ import type { Database } from './index.js';
 import { FinanceError, type SettingsRow } from './finance-core.js';
 import { createFinanceService } from './finance-service.js';
 import { executeFinancialCommand } from './finance-transaction.js';
-import { layoutDigest } from './automatic-policy.js';
+import { automaticPolicyDigest, layoutDigest } from './automatic-policy.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 
 type Evidence = {
@@ -95,7 +98,11 @@ async function resolveBookmakerContext(
 async function candidate(
   client: PoolClient,
   result: Evidence,
-  layout: ValidatedLayout,
+  layout: {
+    model: ValidatedLayout['model'];
+    allowFreebet: boolean;
+    placedAtFormats: ValidatedLayout['placedAtFormat'][];
+  },
   bookmakerId: string,
   tipsterId: string,
   origin: { kind: 'real' | 'freebet' | null; freebetId: string | null },
@@ -123,7 +130,11 @@ async function candidate(
   // Data da aposta: somente o texto visual do comprovante (a data do jogo é
   // outro campo — eventAt, declarado pelo usuário e inicialmente pendente). O
   // horário de upload/Telegram nunca é usado como horário da aposta.
-  const placedAt = parseAutomaticPlacedAt(extraction.placedAtText, layout.placedAtFormat);
+  const placedAtCandidates = layout.placedAtFormats
+    .map((format) => parseAutomaticPlacedAt(extraction.placedAtText, format))
+    .filter((value): value is string => value !== null);
+  const uniquePlacedAt = [...new Set(placedAtCandidates)];
+  const placedAt = uniquePlacedAt.length === 1 ? uniquePlacedAt[0]! : null;
   if (extraction.placedAtText !== null && placedAt === null)
     return { reason: 'PLACED_AT_UNCERTAIN' };
   if (placedAt === null) return { reason: 'PLACED_AT_UNCERTAIN' };
@@ -188,9 +199,15 @@ async function candidate(
 
 export function createAutomaticImportService(
   database: Database,
-  configuredLayouts: ValidatedLayout[] = [],
+  configuredPolicy: AutomaticPolicyV2 | ValidatedLayout[] | null = [],
 ) {
-  const layouts = validatedLayoutsSchema.parse(configuredLayouts);
+  const legacyLayouts = Array.isArray(configuredPolicy)
+    ? validatedLayoutsSchema.parse(configuredPolicy)
+    : [];
+  const globalPolicy =
+    configuredPolicy && !Array.isArray(configuredPolicy)
+      ? automaticPolicyV2Schema.parse(configuredPolicy)
+      : null;
   const finance = createFinanceService(database);
   const tenant = createTenantContext(database);
   return {
@@ -200,7 +217,7 @@ export function createAutomaticImportService(
       attempt: number,
       result: Evidence & object,
     ) {
-      if (layouts.length) await finance.ensureCurrentUnit(context);
+      if (legacyLayouts.length || globalPolicy) await finance.ensureCurrentUnit(context);
       return tenant.withOrganizationTransaction(context, async (client) => {
         // All financial writers acquire locks in this order: settings, inbox, attachment.
         const settings = (
@@ -230,16 +247,20 @@ export function createAutomaticImportService(
         const bookmakerContext = modelSelectedLayout
           ? ({ state: 'refused', reason: 'BOOKMAKER_REFUSED' } as const)
           : await resolveBookmakerContext(client, row.caption, row.bookmaker_override_id);
-        const layout =
+        const activeGlobalPolicy =
+          globalPolicy && automaticPolicyIsCurrent(globalPolicy, now.getTime())
+            ? globalPolicy
+            : null;
+        const legacyLayout =
           bookmakerContext.state === 'resolved'
-            ? layouts.filter(
+            ? legacyLayouts.filter(
                 (value) =>
                   value.bookmakerId === bookmakerContext.bookmakerId &&
                   value.model === result.model &&
                   Date.parse(value.approvedAt) <= now.getTime() &&
                   Date.parse(value.expiresAt) > now.getTime(),
               ).length === 1
-              ? (layouts.find(
+              ? (legacyLayouts.find(
                   (value) =>
                     value.bookmakerId === bookmakerContext.bookmakerId &&
                     value.model === result.model &&
@@ -247,6 +268,21 @@ export function createAutomaticImportService(
                     Date.parse(value.expiresAt) > now.getTime(),
                 ) ?? null)
               : null
+            : null;
+        const layout = activeGlobalPolicy
+          ? bookmakerContext.state === 'resolved' && result.model === activeGlobalPolicy.model
+            ? {
+                model: activeGlobalPolicy.model,
+                allowFreebet: activeGlobalPolicy.allowFreebet,
+                placedAtFormats: activeGlobalPolicy.placedAtFormats,
+              }
+            : null
+          : legacyLayout
+            ? {
+                model: legacyLayout.model,
+                allowFreebet: legacyLayout.allowFreebet,
+                placedAtFormats: [legacyLayout.placedAtFormat],
+              }
             : null;
         if (modelSelectedLayout) reason = 'EXTRACTION_UNCERTAIN';
         else if (bookmakerContext.state !== 'resolved') reason = bookmakerContext.reason;
@@ -312,8 +348,12 @@ export function createAutomaticImportService(
         }
         const automatic = {
           reason,
-          policyId: layout?.id ?? null,
-          policyDigest: layout ? layoutDigest(layout) : null,
+          policyId: activeGlobalPolicy ? 'automatic-import-v2' : (legacyLayout?.id ?? null),
+          policyDigest: activeGlobalPolicy
+            ? automaticPolicyDigest(activeGlobalPolicy)
+            : legacyLayout
+              ? layoutDigest(legacyLayout)
+              : null,
           bookmakerOrigin: layout ? ('context' as const) : null,
           visualLayoutId: null,
         };

@@ -1,28 +1,24 @@
-import { randomUUID } from 'node:crypto';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import {
-  parseAutomaticPlacedAt,
-  OPENROUTER_MODEL,
-  type ValidatedLayout,
-} from '../../packages/shared/src/index.js';
-import { readAutomaticLayouts } from '../../apps/worker/src/automatic-config.js';
+import { parseAutomaticPlacedAt, OPENROUTER_MODEL } from '../../packages/shared/src/index.js';
+import { readAutomaticPolicy } from '../../apps/worker/src/automatic-config.js';
 import {
   extractTicket,
   TICKET_EXTRACTION_SYSTEM_PROMPT,
 } from '../../apps/worker/src/openrouter.js';
-const layout: ValidatedLayout = {
-  id: 'synthetic-layout',
-  bookmaker: 'bet365',
-  bookmakerId: randomUUID(),
+const policy = {
+  schemaVersion: 2,
+  requiresUserBookmaker: true,
+  aiBookmakerClassification: 'disabled',
+  bookmakerScope: 'all-active',
   model: OPENROUTER_MODEL,
-  description: 'Fictional deterministic layout, never a production approval.',
-  placedAtFormat: 'iso-offset',
+  placedAtFormats: ['iso-offset'],
   allowFreebet: false,
   potentialReturnLabels: ['Retorno Total'],
-  layoutSha256: '2'.repeat(64),
+  corpusSha256: '0'.repeat(64),
+  evaluationSha256: '1'.repeat(64),
   coverage: {
     positive: 20,
     negative: 5,
@@ -31,8 +27,6 @@ const layout: ValidatedLayout = {
     promotional: 0,
     uniqueImages: 25,
   },
-  corpusSha256: '0'.repeat(64),
-  evaluationSha256: '1'.repeat(64),
   sampleCount: 20,
   essentialFieldErrors: 0,
   approvedBy: 'owner',
@@ -90,13 +84,13 @@ describe('automatic import policy boundaries', () => {
       expect(parseAutomaticPlacedAt(invalid, 'br-textual-sao-paulo')).toBeNull();
   });
   it('defaults off and fail-closes to review on every invalid policy state (R7) — never a crash, never a path leak', () => {
-    expect(readAutomaticLayouts({})).toEqual([]);
+    expect(readAutomaticPolicy({})).toEqual({ state: 'absent', policy: null });
     expect(
-      readAutomaticLayouts({
+      readAutomaticPolicy({
         AUTOMATIC_IMPORT_ENABLED: 'false',
         AUTOMATIC_IMPORT_POLICIES_FILE: 'missing',
       }),
-    ).toEqual([]);
+    ).toEqual({ state: 'absent', policy: null });
     const directory = mkdtempSync(join(tmpdir(), 'stk-policy-test-'));
     const file = join(directory, 'policies.json');
     const env = {
@@ -105,32 +99,36 @@ describe('automatic import policy boundaries', () => {
       AUTOMATIC_IMPORT_POLICIES_FILE: file,
     };
     try {
-      writeFileSync(file, JSON.stringify([layout]));
-      expect(readAutomaticLayouts(env)).toEqual([layout]);
+      writeFileSync(file, JSON.stringify(policy));
+      chmodSync(file, 0o600);
+      expect(readAutomaticPolicy(env)).toEqual({ state: 'approved', policy });
       // R7: política ausente/inválida/expirada NUNCA derruba o worker nem
       // habilita a automação — devolve [] e o candidato encaminha à revisão.
       for (const value of [
         [],
-        [{ ...layout, sampleCount: 1 }],
-        [{ ...layout, essentialFieldErrors: 1 }],
-        [{ ...layout, approvedAt: '9999-01-01T00:00:00Z' }],
-        [{ ...layout, expiresAt: '1999-01-01T00:00:00Z' }],
-        [{ ...layout, coverage: { ...layout.coverage, negative: 4 } }],
-        [{ ...layout, bookmaker: 'House X' }],
-        [{ ...layout, layoutSha256: 'invalid' }],
-        [layout, layout],
-        [{ ...layout, model: 'unknown' }],
+        { ...policy, sampleCount: 1 },
+        { ...policy, essentialFieldErrors: 1 },
+        { ...policy, approvedAt: '9999-01-01T00:00:00Z' },
+        { ...policy, expiresAt: '1999-01-01T00:00:00Z' },
+        { ...policy, coverage: { ...policy.coverage, negative: 4 } },
+        { ...policy, bookmakerScope: 'selected' },
+        { ...policy, evaluationSha256: 'invalid' },
+        { ...policy, placedAtFormats: ['iso-offset', 'iso-offset'] },
+        { ...policy, model: 'unknown' },
       ]) {
         writeFileSync(file, JSON.stringify(value));
-        expect(readAutomaticLayouts(env)).toEqual([]);
+        expect(readAutomaticPolicy(env)).toEqual({ state: 'invalid', policy: null });
       }
       writeFileSync(file, 'private-invalid-content');
-      expect(readAutomaticLayouts(env)).toEqual([]);
-      expect(readAutomaticLayouts({ ...env, AI_ENABLED: 'false' })).toEqual([]);
+      expect(readAutomaticPolicy(env)).toEqual({ state: 'invalid', policy: null });
+      expect(readAutomaticPolicy({ ...env, AI_ENABLED: 'false' })).toEqual({
+        state: 'absent',
+        policy: null,
+      });
       // Arquivo ausente com a automação ligada também é fail-closed para revisão.
       expect(
-        readAutomaticLayouts({ ...env, AUTOMATIC_IMPORT_POLICIES_FILE: file + '.nope' }),
-      ).toEqual([]);
+        readAutomaticPolicy({ ...env, AUTOMATIC_IMPORT_POLICIES_FILE: file + '.nope' }),
+      ).toEqual({ state: 'invalid', policy: null });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

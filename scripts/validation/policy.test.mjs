@@ -5,12 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { evaluateCorpus } from './corpus-core.mjs';
-import { buildPolicyEntry, syntheticCorpus } from './corpus-fixture.mjs';
+import { buildPolicyEntry, buildGlobalPolicy, syntheticCorpus } from './corpus-fixture.mjs';
 import { verifyApprovalPolicy } from './policy.mjs';
 
 const NOW = new Date('2026-09-10T00:00:00.000Z');
 
 function writeEvidenceDirectory(corpus) {
+  corpus.bookmakerContext = 'user-informed';
   const directory = mkdtempSync(join(tmpdir(), 'stk-policy-evidence-'));
   const corpusFile = join(directory, 'corpus.json');
   writeFileSync(corpusFile, JSON.stringify(corpus, null, 2) + '\n');
@@ -32,7 +33,37 @@ function writeEvidenceDirectory(corpus) {
 function writePolicy(entries) {
   const directory = mkdtempSync(join(tmpdir(), 'stk-policy-file-'));
   const file = join(directory, 'policies.json');
-  writeFileSync(file, JSON.stringify(entries));
+  if (entries[0]?.schemaVersion === 2) {
+    writeFileSync(file, JSON.stringify(entries[0]));
+    chmodSync(file, 0o600);
+    return file;
+  }
+  const evidence = entries.map((entry) => ({
+    report: entry.__report,
+    evaluationSha256: entry.__evaluationSha256,
+  }));
+  const first = entries[0];
+  const overrides = {
+    model: first.model,
+    placedAtFormats: [...new Set(entries.map((entry) => entry.placedAtFormat))],
+    allowFreebet: entries.every((entry) => entry.allowFreebet),
+    potentialReturnLabels: [
+      ...new Set(entries.flatMap((entry) => entry.potentialReturnLabels ?? ['Retorno Total'])),
+    ],
+    approvedAt: first.approvedAt,
+    expiresAt: first.expiresAt,
+  };
+  if (first.corpusSha256 !== first.__report.corpusSha256)
+    overrides.corpusSha256 = first.corpusSha256;
+  if (first.evaluationSha256 !== first.__evaluationSha256)
+    overrides.evaluationSha256 = first.evaluationSha256;
+  if (JSON.stringify(first.coverage) !== JSON.stringify(first.__report.coverage))
+    overrides.coverage = first.coverage;
+  if (first.sampleCount !== first.__report.sampleCount) overrides.sampleCount = first.sampleCount;
+  if (first.essentialFieldErrors !== first.__report.essentialFieldErrors)
+    overrides.essentialFieldErrors = first.essentialFieldErrors;
+  const policy = buildGlobalPolicy(evidence, overrides);
+  writeFileSync(file, JSON.stringify(policy));
   chmodSync(file, 0o600);
   return file;
 }
@@ -46,7 +77,6 @@ test('verifies a coherent approval and never prints ticket content', async () =>
   assert.equal(result.ok, true);
   assert.deepEqual(result.failures, []);
   assert.equal(result.verified.length, 1);
-  assert.equal(result.verified[0].id, 'bet365-fixture');
   assert.equal(result.verified[0].bookmaker, 'bet365');
   assert.equal(JSON.stringify(result).includes('Fictional A'), false);
 });
@@ -72,7 +102,6 @@ test('refuses hash divergences between policy, evaluation and corpus', async () 
   for (const [field, code] of [
     ['evaluationSha256', 'POLICY_EVALUATION_HASH_MISMATCH'],
     ['corpusSha256', 'POLICY_CORPUS_HASH_MISMATCH'],
-    ['layoutSha256', 'POLICY_LAYOUT_HASH_MISMATCH'],
   ]) {
     const policy = writePolicy([
       buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
@@ -121,30 +150,31 @@ test('refuses an ineligible evaluation declared as approved', async () => {
   assert.ok(result.failures.some((code) => code.startsWith('POLICY_NOT_ELIGIBLE')));
 });
 
-test('refuses houses and layouts without approved corpus evidence', async () => {
+test('refuses a global policy that does not match the neutral corpus', async () => {
   const evidence = writeEvidenceDirectory(syntheticCorpus());
-  const uncovered = writePolicy([
+  const mismatched = writePolicy([
     buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
-      id: 'superbet-fixture',
-      bookmaker: 'superbet',
+      model: 'qwen/qwen3-vl-32b-instruct',
     }),
   ]);
   assert.ok(
-    (await verifyApprovalPolicy(uncovered, [evidence.directory], NOW)).failures.some((code) =>
-      code.startsWith('POLICY_HOUSE_NOT_COVERED'),
+    (await verifyApprovalPolicy(mismatched, [evidence.directory], NOW)).failures.some((code) =>
+      code.startsWith('POLICY_MODEL_MISMATCH'),
     ),
   );
-  const unknown = writePolicy([
+});
+
+test('refuses a global policy that omits a corpus return label', async () => {
+  const corpus = syntheticCorpus({ bookmakerContext: 'user-informed' });
+  corpus.layout.potentialReturnLabels = ['Prêmio', 'Ganho Potencial'];
+  const evidence = writeEvidenceDirectory(corpus);
+  const policy = writePolicy([
     buildPolicyEntry(evidence.corpus, evidence.report, evidence.evaluationSha256, {
-      id: 'kalshi-fixture',
-      bookmaker: 'kalshi',
+      potentialReturnLabels: ['Prêmio'],
     }),
   ]);
-  assert.ok(
-    (await verifyApprovalPolicy(unknown, [evidence.directory], NOW)).failures.some((code) =>
-      code.startsWith('POLICY_BOOKMAKER_UNKNOWN'),
-    ),
-  );
+  const result = await verifyApprovalPolicy(policy, [evidence.directory], NOW);
+  assert.ok(result.failures.includes('POLICY_RETURN_LABELS_MISMATCH'));
 });
 
 test('refuses expired, future and inverted validity windows', async () => {
