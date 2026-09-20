@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
@@ -190,6 +190,7 @@ describe('automatic import financial boundary', () => {
     const directory = mkdtempSync(join(tmpdir(), 'stk-auto-worker-test-'));
     const file = join(directory, 'policies.json');
     writeFileSync(file, JSON.stringify(globalPolicy));
+    chmodSync(file, 0o600);
     const url = new URL(source);
     url.pathname = `/${name}`;
     let boss: Awaited<ReturnType<typeof startWorker>> | undefined;
