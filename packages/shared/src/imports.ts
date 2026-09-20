@@ -208,6 +208,13 @@ export const importDetailSchema = z
     // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa") e o
     // catálogo ativo da organização para a escolha explícita.
     bookmakerOverrideId: z.uuid().nullable(),
+    // Campos manuais do rascunho: a IA não inventa esporte, torneio ou país;
+    // o usuário pode completar esses valores e o Telegram/Web compartilham a
+    // mesma fonte canônica.
+    tipsterOverrideId: z.uuid().nullable(),
+    sportOverride: z.string().nullable(),
+    tournamentOverride: z.string().nullable(),
+    countryOverride: z.string().nullable(),
     bookmakers: z.array(z.object({ id: z.uuid(), name: z.string() })),
     // STK-G0-20 B5 — tipsters ATIVOS da organização (nunca misturados às casas).
     tipsters: z.array(z.object({ id: z.uuid(), name: z.string() })),
@@ -265,6 +272,10 @@ export const draftUpdateSchema = z
     // STK-G0-19-R7: casa declarada pelo usuário (seção "Alterar Casa"); null
     // limpa a escolha e volta à casa resolvida pela legenda/extração.
     bookmakerId: z.uuid().nullable().optional(),
+    tipsterId: z.uuid().nullable().optional(),
+    sport: z.string().trim().max(120).nullable().optional(),
+    tournament: z.string().trim().max(200).nullable().optional(),
+    country: z.string().trim().max(120).nullable().optional(),
   })
   .refine(
     (value) => {

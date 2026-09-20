@@ -346,11 +346,15 @@ export function TipsterSection({
   onSaved: () => void;
 }) {
   const imported = detail.bet !== null;
-  const [choice, setChoice] = useState(imported ? (detail.bet?.tipsterId ?? '') : '');
+  const [choice, setChoice] = useState(
+    imported ? (detail.bet?.tipsterId ?? '') : (detail.tipsterOverrideId ?? ''),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const current = imported ? (detail.bet?.tipsterName ?? 'sem tipster') : 'sem tipster';
+  const current = imported
+    ? (detail.bet?.tipsterName ?? 'sem tipster')
+    : (detail.tipsters.find((item) => item.id === detail.tipsterOverrideId)?.name ?? 'sem tipster');
   const save = async () => {
     if (!choice) {
       setError('Escolha o tipster.');
@@ -392,6 +396,12 @@ export function TipsterSection({
       {detail.tipsters.length === 0 ? (
         <p className="notice" role="status">
           Nenhum tipster ativo cadastrado — cadastre na Web para escolher aqui.
+        </p>
+      ) : null}
+      {!imported ? (
+        <p className="notice">
+          Em rascunhos, a escolha fica salva na importação e será levada para a aposta quando ela
+          for registrada.
         </p>
       ) : null}
       {error ? (

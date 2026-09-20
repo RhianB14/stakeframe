@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { importDetailSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
@@ -50,6 +51,9 @@ const sectionParam = (): 'status' | 'bookmaker' | 'tipster' | 'cashout' | null =
 };
 
 export function MiniAppPage() {
+  useEffect(() => {
+    window.Telegram?.WebApp?.ready?.();
+  }, []);
   const initData = window.Telegram?.WebApp?.initData ?? '';
   const id = importId() ?? '';
   const detail = useQuery({

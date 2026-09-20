@@ -240,6 +240,31 @@ describe('import message rendering (R5)', () => {
     expect(text).toContain('🎁 Bônus: Híbrida');
     expect(text).toContain('💵 Retorno Potencial: R$ 97,55');
   });
+  it('collapses repeated BetBuild events and shows manual metadata overrides', () => {
+    const text = buildImportMessage(
+      row({
+        override_tipster: 'teste',
+        override_sport: 'Futebol',
+        override_tournament: 'Copa do Mundo',
+        override_country: 'Brasil',
+        extraction: {
+          ...extraction,
+          selections: [
+            extraction.selections[0],
+            { ...extraction.selections[0], market: 'Próximo gol', selection: 'A' },
+            { ...extraction.selections[0], market: 'Total de gols', selection: 'Menos de 1.5' },
+          ],
+        },
+      }),
+    );
+    expect(text.match(/⚔️ Evento:/g)).toHaveLength(1);
+    expect(text).toContain('⚔️ Evento: A x B');
+    expect(text).toContain('🎾 Esporte: Futebol');
+    expect(text).toContain('🏆 Torneio: Copa do Mundo');
+    expect(text).toContain('🌎 País: Brasil');
+    expect(text).toContain('🗣️ Tipster: teste');
+    expect(text).toContain('🎯 Mercado: Resultado; Próximo gol; Total de gols');
+  });
 });
 
 describe('telegram buttons and callbacks (R6/R7)', () => {
@@ -256,7 +281,7 @@ describe('telegram buttons and callbacks (R6/R7)', () => {
     const id = '10000000-0000-4000-8000-000000000001';
     // G0-20 (B4): Editar abre SOMENTE o Mini App preenchido (sem seção).
     expect(first[0]![0]).toMatchObject({ text: '✏️ Editar' });
-    expect(urlOf(first[0]![0])).toBe(`https://app.stakeframe.test#miniapp?import=${id}`);
+    expect(urlOf(first[0]![0])).toBe(`https://app.stakeframe.test/miniapp#miniapp?import=${id}`);
     expect(urlOf(second[0]![0])).not.toBe(urlOf(first[0]![0]));
     // Alterar Status abre SOMENTE o teclado inline (nunca o Mini App).
     expect(first[1]![0]).toMatchObject({ text: '📚 Alterar Status' });

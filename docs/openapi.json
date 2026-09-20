@@ -1645,6 +1645,15 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "tipsterOverrideId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "sportOverride": { "nullable": true, "type": "string" },
+          "tournamentOverride": { "nullable": true, "type": "string" },
+          "countryOverride": { "nullable": true, "type": "string" },
           "bookmakers": {
             "type": "array",
             "items": {
@@ -1820,6 +1829,10 @@
           "credits",
           "matches",
           "bookmakerOverrideId",
+          "tipsterOverrideId",
+          "sportOverride",
+          "tournamentOverride",
+          "countryOverride",
           "bookmakers",
           "tipsters",
           "bet",
@@ -5156,6 +5169,15 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "tipsterOverrideId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "sportOverride": { "nullable": true, "type": "string" },
+          "tournamentOverride": { "nullable": true, "type": "string" },
+          "countryOverride": { "nullable": true, "type": "string" },
           "bookmakers": {
             "type": "array",
             "items": {
@@ -5336,6 +5358,10 @@
           "credits",
           "matches",
           "bookmakerOverrideId",
+          "tipsterOverrideId",
+          "sportOverride",
+          "tournamentOverride",
+          "countryOverride",
           "bookmakers",
           "tipsters",
           "bet",
@@ -8997,7 +9023,16 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                  }
+                  },
+                  "tipsterId": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "sport": { "nullable": true, "type": "string", "maxLength": 120 },
+                  "tournament": { "nullable": true, "type": "string", "maxLength": 200 },
+                  "country": { "nullable": true, "type": "string", "maxLength": 120 }
                 },
                 "required": ["version"],
                 "additionalProperties": false

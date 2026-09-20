@@ -354,6 +354,10 @@ function importFixture(): ImportDetail {
     eventDateStatus: 'pending',
     telegramReceivedAt: '2026-09-01T18:00:02Z',
     bookmakerOverrideId: null,
+    tipsterOverrideId: null,
+    sportOverride: null,
+    tournamentOverride: null,
+    countryOverride: null,
     bookmakers: [],
     tipsters: [],
     bet: null,
@@ -1054,7 +1058,7 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
       WebApp: { initData: 'stub-initdata' },
     };
   });
-  await page.goto(`/#miniapp?import=${importId}`);
+  await page.goto(`/miniapp#miniapp?import=${importId}`);
   await expect(page.getByRole('heading', { name: 'Conferir importação' })).toBeVisible();
   await page.getByLabel('Dinheiro real').check();
   await page.getByRole('button', { name: 'Salvar origem e data' }).click();

@@ -796,6 +796,57 @@ describe('Mini App tipster section (G0-20 B5)', () => {
     expect(ops).toContain('edit_result_message');
   });
 
+  it('selects a tipster on a draft and keeps the choice in the shared detail', async () => {
+    const importId = await upload('');
+    await seedExtraction(importId);
+    const tipster = await createTipster('TipsterDoRascunho');
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/tipster`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version: 1, tipsterId: tipster },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      betState: null,
+      tipsterId: tipster,
+      tipsterName: 'TipsterDoRascunho',
+    });
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({ tipsterOverrideId: tipster });
+    const manual = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: {
+        version: 2,
+        sport: 'Futebol',
+        tournament: 'Copa do Brasil',
+        country: 'Brasil',
+      },
+    });
+    expect(manual.statusCode).toBe(200);
+    const afterManual = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(afterManual.json()).toMatchObject({
+      sportOverride: 'Futebol',
+      tournamentOverride: 'Copa do Brasil',
+      countryOverride: 'Brasil',
+    });
+  });
+
   it('refuses inactive or foreign tipsters with sanitized errors', async () => {
     const { importId, version } = await importedWithTelegram();
     const inactive = await createTipster('TipsterInativo', false);

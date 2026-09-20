@@ -295,7 +295,7 @@ Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
 
 - **Botões da resposta final** — "Editar", "Alterar Status" e "Alterar Casa" são
   botões `web_app` que abrem o Mini App autenticado POR IMPORTAÇÃO na seção
-  correspondente (`#miniapp?import=<uuid>[&section=status|bookmaker]`); a URL
+  correspondente (`/miniapp#miniapp?import=<uuid>[&section=status|bookmaker|tipster]`); a URL
   base vem de `TELEGRAM_MINIAPP_URL` (HTTPS validada). Nenhum botão responde
   apenas texto: o único `callback_query` sobrevivente é a exclusão em dois
   toques.

@@ -85,6 +85,7 @@ export type ImportMessageInput = {
   success: boolean;
   bonus: 'real' | 'freebet' | 'hibrida' | null;
   sport: string | null;
+  tournament: string | null;
   event: string | null;
   country: string | null;
   /** Texto da aposta (seleção escolhida). */
@@ -123,7 +124,7 @@ export function renderImportMessage(input: ImportMessageInput): string {
   if (input.statusLabel === 'Pendente') lines.push('🔹 Sem lucro ou prejuízo.');
   lines.push(
     `🎾 Esporte: ${orPending(input.sport)}`,
-    '🏆 Torneio: Definir Manualmente',
+    `🏆 Torneio: ${orPending(input.tournament)}`,
     `⚔️ Evento: ${orPending(input.event)}`,
     `🌎 País: ${orPending(input.country)}`,
     `🎰 Aposta: ${orPending(input.selection)}`,
