@@ -43,6 +43,41 @@ ativa informada pelo usuário.
 - **WHEN** o worker monta a requisição de extração
 - **THEN** o prompt declara `bookmakerContext=user-informed` e não contém instrução de classificar, identificar ou sugerir a casa
 
+### Requirement: Finalização da extração neutra (F5)
+
+O retorno potencial DEVE (MUST) ser recuperado somente por evidência explícita:
+rótulo visível entre "Retorno Total", "Prêmio" e "Ganho Potencial" com o valor
+monetário associado visível; a IA NÃO DEVE (MUST NOT) calcular, derivar de
+stake × odd ou inventar o valor — ausente ou cortado → `null`, com aviso
+conservador quando o recorte indica o bloco cortado. Referências com caracteres
+confundíveis (U/J, I/1, O/0) DEVEM (MUST) passar por segunda leitura focada;
+divergência ou impossibilidade → `reference=null` + aviso (revisão). Na
+avaliação, hífen, meia-risca e travessão DEVEM (MUST) ser equivalentes somente
+no separador textual de data/hora, preservando hífens reais em nomes, mercados
+e referências. A data do evento permanece fora da extração. A avaliação não
+compara bookmaker visual. A policy final continua dependendo da casa informada
+pelo usuário.
+
+#### Scenario: rótulo explícito com valor visível
+
+- **WHEN** o rótulo autorizado e o valor aparecem legíveis no recorte
+- **THEN** o valor é transcrito para potentialReturn como aparece, sem cálculo
+
+#### Scenario: recorte sem o bloco de retorno
+
+- **WHEN** o recorte inferior corta o bloco de retorno potencial
+- **THEN** potentialReturn permanece null e um aviso conservador é registrado
+
+#### Scenario: referência ambígua
+
+- **WHEN** o OCR e o modelo divergem apenas em caracteres confundíveis (U/J, I/1, O/0)
+- **THEN** uma segunda leitura focada é executada; se ela não confirmar, o valor fica null e o item vai para revisão
+
+#### Scenario: separadores de data na avaliação
+
+- **WHEN** a data/hora usa hífen, meia-risca ou travessão como separador
+- **THEN** os três são equivalentes na avaliação; hífens reais (nomes, mercados, referências) permanecem significativos
+
 ### Requirement: Bookmaker exclusivamente do usuário
 
 A casa DEVE (MUST) vir de escolha explícita do usuário (legenda do Telegram,
