@@ -80,7 +80,9 @@ function expectedSide(item, layout, contextCase) {
     if (expected.currency !== 'BRL') issues.push('currency');
     if (!expected.stake) issues.push('stake');
     if (!expected.odds) issues.push('odds');
-    if (expected.bookmaker !== null && normalized(expected.bookmaker) !== layout.bookmaker)
+    // STK-G0-22: gabarito sem casa não gera issue; corpora antigos com a casa
+    // anotada seguem validáveis quando ela bate com o layout.
+    if (expected.bookmaker != null && normalized(expected.bookmaker) !== layout.bookmaker)
       issues.push('bookmaker');
     if (kind === 'real' && expected.freebet === true) issues.push('freebet_conflict');
     if (kind === 'freebet' && expected.freebet === false) issues.push('freebet_conflict');
@@ -125,14 +127,8 @@ function actualSide(item, layout, contextCase, duplicateImage) {
   // (6) contexto informado
   if (!contextCase) issues.push('CONTEXT_MISSING');
   const kind = contextCase?.kind ?? null;
-  // (7) casa e aliases: a casa do contexto é a fonte da verdade; leitura
-  // visual de OUTRA casa ou texto não resolvido bloqueiam (fail-closed).
-  if (
-    contextCase &&
-    value.bookmaker !== null &&
-    normalized(value.bookmaker) !== contextCase.bookmaker
-  )
-    issues.push('BOOKMAKER_CONFLICT');
+  // (7) casa: a casa do contexto (declaração do usuário) é a única fonte; a
+  // extração neutra não carrega leitura visual de casa (STK-G0-22).
   // (8) tipo real/freebet
   if (contextCase && kind === null) issues.push('CAPTION_UNRESOLVED');
   if (kind === 'real' && value.freebet === true) issues.push('FREEBET_CONFLICT');

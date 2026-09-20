@@ -143,31 +143,24 @@ test('treats ordinal glyphs as equivalent in markets only', () => {
   assert.equal(evaluateCorpus(selection).essentialFieldErrors, 1);
 });
 
-test('accepts a null or matching visual bookmaker with a user-informed house and flags real conflicts', () => {
+test('never evaluates a visual bookmaker from the neutral response (STK-G0-22)', () => {
   const value = fixture();
   value.bookmakerContext = 'user-informed';
   value.cases[0].expected.bookmaker = 'bet365';
-  value.cases[0].actual.extraction.bookmaker = null;
   const report = evaluateCorpus(value);
   assert.equal(report.essentialFieldErrors, 0);
-  assert.equal(report.contextDiagnostics.bookmakerAbsent, 1);
   assert.equal(report.cases[0].correct, true);
-  const confirmed = fixture();
-  confirmed.bookmakerContext = 'user-informed';
-  confirmed.cases[0].expected.bookmaker = 'bet365';
-  confirmed.cases[0].actual.extraction.bookmaker = 'Bet365';
-  const confirmedReport = evaluateCorpus(confirmed);
-  assert.equal(confirmedReport.essentialFieldErrors, 0);
-  assert.equal(confirmedReport.contextDiagnostics.bookmakerConfirmed, 20);
-  const conflict = fixture();
-  conflict.bookmakerContext = 'user-informed';
-  conflict.cases[0].expected.bookmaker = 'bet365';
-  conflict.cases[0].actual.extraction.bookmaker = 'superbet';
-  const conflictReport = evaluateCorpus(conflict);
-  assert.equal(conflictReport.essentialFieldErrors, 1);
-  assert.equal(conflictReport.fieldCounts.bookmaker.mismatches, 1);
-  assert.equal(conflictReport.contextDiagnostics.bookmakerConflicts, 1);
-  assert.equal(conflictReport.eligibleForOwnerReview, false);
+  // A resposta neutra não carrega casa; nenhum diagnóstico visual é emitido.
+  assert.equal(report.contextDiagnostics.bookmakerAbsent, 0);
+  assert.equal(report.contextDiagnostics.bookmakerConfirmed, 0);
+  assert.equal(report.contextDiagnostics.bookmakerConflicts, 0);
+  // Resposta com campo de casa é inválida pelo contrato neutro.
+  const invalid = fixture();
+  invalid.cases[0].actual.extraction.bookmaker = 'superbet';
+  const invalidReport = evaluateCorpus(invalid);
+  assert.equal(invalidReport.essentialFieldErrors, 1);
+  assert.equal(invalidReport.fieldCounts.schema.mismatches, 1);
+  assert.equal(invalidReport.eligibleForOwnerReview, false);
 });
 
 test('separates visual layout diagnostics from the main user-informed path', () => {
@@ -285,7 +278,6 @@ test('rejects OCR evidence outside the sanitized contract', () => {
 // rejeição de layout continuam sendo validados; um falso positivo de layout
 // continua bloqueando a elegibilidade.
 const foreignExtraction = () => ({
-  bookmaker: 'outra-casa-visivel',
   reference: 'FOREIGN-REF-99',
   placedAtText: '01/01/2030 23:59',
   currency: 'BRL',

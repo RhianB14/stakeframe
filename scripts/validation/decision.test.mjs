@@ -22,15 +22,9 @@ const withContext = (value, overrides = () => ({})) => ({
   })),
 });
 
-// A extração sintética usa a casa 'Fictional'; o contexto informa 'bet365'.
-// Marca visual nula é aceitável — copiar contexto para a extração nunca é.
-const detachBookmaker = (value) => {
-  for (const item of value.cases) {
-    item.expected.bookmaker = null;
-    item.actual.extraction.bookmaker = null;
-  }
-  return value;
-};
+// STK-G0-22: a extração é neutra — não existe campo de casa para destacar;
+// a casa vem exclusivamente do contexto (declaração do usuário).
+const detachBookmaker = (value) => value;
 
 const base = () => detachBookmaker(syntheticCorpus());
 
@@ -216,12 +210,13 @@ test('tipo sem declaração no contexto permanece em revisão (duas linhas)', ()
   assert.equal(report.cases[0].actualIssues.includes('CAPTION_UNRESOLVED'), true);
 });
 
-test('casa visual de outra casa conflita com o contexto informado', () => {
+test('resposta com casa é inválida pelo contrato neutro e fica em revisão (STK-G0-22)', () => {
   const value = base();
   value.cases[0].actual.extraction.bookmaker = 'Superbet';
   const report = evaluateDecision(value, { context: withContext(value) });
   assert.equal(report.cases[0].actualClass, 'MANUAL_REVIEW');
-  assert.equal(report.cases[0].actualIssues.includes('BOOKMAKER_CONFLICT'), true);
+  assert.equal(report.cases[0].actualIssues.includes('EXTRACTION_UNCERTAIN'), true);
+  assert.equal(report.gates.unsafeAutoImport, 0);
 });
 
 test('duplicidade offline por imagem repetida ou tupla persistida', () => {
