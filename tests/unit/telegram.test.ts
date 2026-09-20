@@ -263,6 +263,8 @@ describe('import message rendering (R5)', () => {
     expect(text).toContain('🏆 Torneio: Copa do Mundo');
     expect(text).toContain('🌎 País: Brasil');
     expect(text).toContain('🗣️ Tipster: teste');
+    expect(text).toContain('🎰 Aposta: A; Menos de 1.5');
+    expect(text).not.toContain('🎰 Aposta: A; A;');
     expect(text).toContain('🎯 Mercado: Resultado; Próximo gol; Total de gols');
   });
 });

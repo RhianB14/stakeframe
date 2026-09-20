@@ -72,11 +72,6 @@ export type ImportMessageRow = {
   draft_freebet_amount?: string | null;
 };
 
-const joinValues = (values: (string | null | undefined)[]): string | null => {
-  const parts = values.filter((value): value is string => !!value && value.trim().length > 0);
-  return parts.length ? parts.join('; ') : null;
-};
-
 const distinctValues = (values: (string | null | undefined)[]): string | null => {
   const parts = values.filter((value): value is string => !!value && value.trim().length > 0);
   const unique = [...new Set(parts.map((value) => value.trim()))];
@@ -115,12 +110,12 @@ export function buildImportMessage(row: ImportMessageRow): string {
       statusLabel,
       success: canonical.state === 'open',
       bonus: canonical.origin,
-      sport: joinValues(canonical.selections.map((item) => item.sport)),
+      sport: distinctValues(canonical.selections.map((item) => item.sport)),
       tournament: null,
       event: distinctValues(canonical.selections.map((item) => item.event)),
       country: null,
-      selection: joinValues(canonical.selections.map((item) => item.selection)),
-      market: joinValues(canonical.selections.map((item) => item.market)),
+      selection: distinctValues(canonical.selections.map((item) => item.selection)),
+      market: distinctValues(canonical.selections.map((item) => item.market)),
       stake: canonical.stake,
       odds: canonical.odds,
       potentialReturn: potentialReturnFor(
@@ -154,8 +149,8 @@ export function buildImportMessage(row: ImportMessageRow): string {
     tournament: row.override_tournament ?? null,
     event: distinctValues(extraction?.selections.map((item) => item.event) ?? []),
     country: row.override_country ?? null,
-    selection: joinValues(extraction?.selections.map((item) => item.selection) ?? []),
-    market: joinValues(extraction?.selections.map((item) => item.market) ?? []),
+    selection: distinctValues(extraction?.selections.map((item) => item.selection) ?? []),
+    market: distinctValues(extraction?.selections.map((item) => item.market) ?? []),
     stake,
     odds,
     // Sem declaração de origem o cálculo assume dinheiro real (caso base);
