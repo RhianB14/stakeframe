@@ -39,6 +39,22 @@ da primeira janela estão em [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
 5. Registrar autorização explícita do Codex com commit, digests, ambiente,
    migrações previstas, evidência de backup e estratégia de reversão.
 
+## Policy global da importação automática
+
+A importação automática não é habilitada pela publicação de uma release ou pelo
+deploy de uma imagem. Quando houver autorização própria para ativá-la, preparar
+antes um arquivo privado conforme `automaticPolicyV2Schema` em caminho absoluto,
+com permissão 0600, contendo uma única policy global para todas as casas ativas.
+Ela deve declarar que a casa vem do usuário (`requiresUserBookmaker`), que a IA
+não classifica bookmaker, o modelo e formatos aprovados, hashes/cobertura do
+corpus e janela de validade. O deployment-check deve validar o arquivo e o
+overlay antes de qualquer ativação; policy ausente, legada, inválida ou expirada
+mantém todas as importações em revisão.
+
+O fluxo de policy não publica dados privados, não inclui segredos no repositório
+e não substitui os gates de backup, migração, rollback e observação. A policy
+real e a ativação são tarefas separadas e não fazem parte desta PR.
+
 ## Operação executada no piloto ARM64
 
 O piloto usou a configuração privada em `/etc/stakeframe/deployment.env`, os

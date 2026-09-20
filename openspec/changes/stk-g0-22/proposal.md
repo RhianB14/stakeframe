@@ -54,16 +54,14 @@
   `/etc/stakeframe/automatic-import.json` (0600) — instalação e ativação
   somente em janela autorizada própria (`AUTOMATIC_IMPORT_ENABLED=true`).
 
-## Fatia F1 (esta PR) — contrato e prompt neutros
+## Fatia F1 — contrato e prompt neutros
 
 Esta fatia remove APENAS a decisão da IA: o prompt e o contrato de extração
 deixam de expor `bookmaker`, `bookmakerId`, `bookmakerName` e `layoutId`; o
 contexto declara `bookmakerContext=user-informed`; resposta fora do contrato é
 recusada (`AI_EXTRACTION_INVALID`). A resolução determinística da casa no
-motor (casa do usuário → catálogo ativo → policy v2) fica para a F2; nesta
-fatia a resolução final permanece a atual (legenda → `bookmakerId`; gate por
-layout) e, sem `layoutId` fornecido pela IA, o item segue para revisão
-(fail-closed). Nenhuma migração, policy real, ativação ou deploy nesta PR.
+motor (casa do usuário → catálogo ativo → policy v2) foi entregue nas fatias
+seguintes. Nenhuma migração, policy real, ativação ou deploy é feita nesta PR.
 
 ## Fatia F2 (implementação direta após a F1)
 
@@ -72,12 +70,35 @@ legenda são comparados por alias ao catálogo ativo da organização, enquanto 
 seleção explícita de casa gravada por Telegram/MiniApp/Web tem precedência e é
 revalidada sob a transação. Casa ausente produz BOOKMAKER_UNRESOLVED;
 catálogo inexistente, inativo, ambíguo ou fora da organização produz
-BOOKMAKER_REFUSED. O layout é escolhido pelo bookmakerId resolvido e pelo
+BOOKMAKER_REFUSED. O layout não é escolhido pela IA: o contexto do usuário é
+revalidado e a policy global vigente é aplicada ao modelo configurado.
 modelo configurado, com validade e unicidade verificadas; layoutId e
-policyDigest enviados pela IA são ignorados como autoridade e qualquer valor
+policyDigest enviados pela IA são rejeitados como tentativa de autoridade e qualquer valor
 não nulo mantém o item em revisão. Nenhum lançamento financeiro ocorre quando
-um desses gates falha. A policy v2 global, o loader/checker e a ativação
-continuam reservados às fatias F3–F5.
+um desses gates falha. A policy v2 global e o loader/checker são entregues na
+PR agrupada F3+F4; a policy real e a ativação continuam reservadas à F5.
+
+## Fatias F3+F4 (esta PR agrupada)
+
+A política operacional passa a ser um documento global v2, sem lista de casas
+ou layout escolhido pela IA. Ela declara `requiresUserBookmaker: true`,
+`aiBookmakerClassification: 'disabled'`, `bookmakerScope: 'all-active'`, os
+formatos de data de colocação aceitos pelo parser neutro, o modelo aprovado e
+a evidência agregada de corpus. O loader do worker e o estado exibido à Web e
+ao Mini App exigem o schema v2, arquivo regular absoluto, limite de tamanho,
+permissão privada em sistemas POSIX e janela de validade atual; qualquer
+ausência, versão antiga, corrupção ou expiração continua fail-closed.
+
+O motor usa a casa/tipster resolvidos pelo contexto explícito do usuário e
+aplica a política global a qualquer casa ativa da organização. A IA só organiza
+o OCR; ela não recebe nem retorna bookmaker, layout ou rótulos específicos.
+
+Telegram, MiniApp e Web continuam sendo três superfícies do mesmo registro:
+alterações de casa, tipster, origem e data passam por rotas canônicas com
+organização, versão otimista e idempotência; a outbox edita a mensagem da
+aposta específica. A troca de casa pós-importação altera `finance.bet` e a
+exposição por journals compensatórios; uma edição antiga nunca sobrescreve a
+mais nova. Não há migração, ativação ou chamada externa nesta PR.
 
 ## Impacto
 

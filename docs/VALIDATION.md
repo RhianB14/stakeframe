@@ -114,32 +114,32 @@ motivos agregados, fidelidade do retorno potencial e qualidade de transcrição
 ficam reportados à parte. Não ativa política nem escreve nada financeiro.
 
 `pnpm validation:policy <arquivo-de-políticas-absoluto> <diretório-corpus>...`
-verifica uma política proposta contra as evidências salvas: recalcula a
-avaliação, confere hashes, cobertura, contagens e validade, exige que cada
-entrada tenha corpus aprovado correspondente e falha fechado quando qualquer
-campo divergir. A verificação não escreve nada e não imprime conteúdo dos
-bilhetes.
+verifica uma policy global v2 contra todas as evidências salvas: recalcula a
+avaliação, confere hashes agregados, cobertura, contagens, modelo, contexto
+`user-informed`, formatos de `placedAt` e validade. A policy não enumera casas
+nem layouts; a identidade da casa continua vindo do usuário e do catálogo ativo
+da organização em runtime. A verificação não escreve nada e não imprime
+conteúdo dos bilhetes.
 
-Para levar um layout à aprovação, exigir zero divergências na amostra, pelo
-menos 20 imagens distintas do layout, cinco exemplos que não devem ser
-reconhecidos, três múltiplas do layout e três casos do próprio layout com
-ausências explícitas. As ausências dos exemplos negativos não substituem essa
-cobertura. Políticas
-que permitem freebet exigem ao menos três exemplos promocionais. Amostras
-repetidas não contam como cobertura. Esses mínimos são critérios de ensaio,
-não estimativa estatística da precisão futura. Cada layout/casa precisa de
-seu próprio ensaio; validar Bet365, Superbet e Novibet separadamente.
+Para levar a policy global à aprovação, exigir zero divergências essenciais na
+amostra agregada, pelo menos 20 imagens distintas, cinco exemplos negativos,
+três múltiplas e três casos com ausências explícitas. As ausências dos exemplos
+negativos não substituem essa cobertura. Policies que permitem freebet exigem
+ao menos três exemplos promocionais. Amostras repetidas não contam como
+cobertura. Esses mínimos são critérios de ensaio, não estimativa estatística
+da precisão futura; os corpus podem cobrir Bet365, Superbet, Novibet e demais
+casas ativas, mas a policy não fixa nenhuma delas.
 
-Depois de conferir o relatório e autorizar a política, o proprietário prepara
-um JSON privado com uma lista de até cinco layouts. Cada item segue
-`validatedLayoutSchema`: os campos de `layout`, `layoutSha256`, `corpusSha256`
-e `evaluationSha256` apresentados pelo avaliador, `coverage` com as contagens
-da amostra, `sampleCount`, `essentialFieldErrors: 0`, `approvedBy: "owner"`,
-`approvedAt` com offset e `expiresAt` (validade explícita; política expirada é
-recusada).
-O worker valida esses campos, o modelo fixo, `approvedAt` no passado e
-`expiresAt` no futuro; o arquivo é a configuração operacional confiável, não
-uma saída que a IA possa escrever.
+Depois de conferir o relatório e autorizar a policy, o proprietário prepara um
+JSON privado único conforme `automaticPolicyV2Schema`: `schemaVersion: 2`,
+`requiresUserBookmaker: true`, `aiBookmakerClassification: "disabled"`,
+`bookmakerScope: "all-active"`, `model`, `placedAtFormats`, `allowFreebet`,
+`potentialReturnLabels`, hashes agregados de corpus/avaliação, `coverage`,
+`sampleCount`, `essentialFieldErrors: 0`, `approvedBy: "owner"`, `approvedAt`
+com offset e `expiresAt`. O worker rejeita policy legada, lista de layouts ou
+casas, arquivo ausente, symlink, permissões POSIX abertas, corrupção e janela
+inválida. Esse arquivo é configuração operacional confiável, não uma saída que
+a IA possa escrever.
 
 Montar esse arquivo no worker, definir `AUTOMATIC_IMPORT_POLICIES_FILE` com
 seu caminho absoluto e `AUTOMATIC_IMPORT_ENABLED=true`, mantendo IA habilitada.
@@ -181,4 +181,9 @@ financeira é sempre o cálculo server-side `stake × totalOdds`; stake ou odd
 realmente incertas permanecem em revisão pelos seus próprios códigos
 (`EXTRACTION_UNCERTAIN` etc.).
 
-- **R7 — política automática fail-closed para revisão**: `readAutomaticLayouts` nunca derruba o worker nem habilita a automação — política ausente/ilegível/inválida/expirada devolve `[]` e o candidato encaminha TODA importação para revisão com motivo sanitizado (`LAYOUT_NOT_VALIDATED`); `allowFreebet` ausente ou crédito inválido ⇒ `FREEBET_UNRESOLVED`. A declaração do usuário é independente desse eixo.
+- **Policy global v2 — fail-closed para revisão**: `readAutomaticPolicy` nunca
+  derruba o worker nem habilita a automação sozinho. Policy ausente, ilegível,
+  legada, inválida ou expirada mantém toda importação em revisão com motivo
+  sanitizado (`LAYOUT_NOT_VALIDATED`); `allowFreebet` ausente ou crédito
+  inválido ⇒ `FREEBET_UNRESOLVED`. A declaração da casa/tipo pelo usuário é
+  independente da validade da policy.

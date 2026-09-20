@@ -3,7 +3,7 @@ import { readFile, lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { evaluateCorpus, KNOWN_BOOKMAKERS } from './corpus-core.mjs';
-import { validatedLayoutsSchema } from '../../packages/shared/dist/index.js';
+import { automaticPolicyV2Schema } from '../../packages/shared/dist/index.js';
 
 // This checker only reads saved evidence (corpus.json plus evaluation.json) and
 // a proposed policy file. It performs no extractions, writes nothing, activates
@@ -71,9 +71,10 @@ function savedEvaluationMatches(saved, report) {
   return COVERAGE_KEYS.every((key) => saved.coverage?.[key] === report.coverage[key]);
 }
 
-// Verifies a proposed approval policy against saved corpus evidence. Every
-// policy entry must be covered by exactly one corpus directory; hashes,
-// coverage, counts, eligibility and validity must all correspond.
+// Verifies one global v2 approval policy against all saved corpus evidence.
+// Bookmaker identity is deliberately absent from the policy contract: it is
+// supplied by the user and resolved against the active tenant catalog at
+// runtime. Corpus evidence still proves the neutral extractor across houses.
 export async function verifyApprovalPolicy(policyPath, corpusDirs, now = new Date()) {
   const failures = [];
   const verified = [];
@@ -106,67 +107,77 @@ export async function verifyApprovalPolicy(policyPath, corpusDirs, now = new Dat
       failures.push('CORPUS_DIRECTORY_INVALID');
     }
   }
-  let layouts;
+  let policy;
   try {
     const resolved = await resolveOutsideWorkspace(workspace, policyPath, false);
     const bytes = await readPrivateFile(resolved, MAX_POLICY_BYTES);
-    layouts = validatedLayoutsSchema.parse(JSON.parse(bytes.toString('utf8')));
+    policy = automaticPolicyV2Schema.parse(JSON.parse(bytes.toString('utf8')));
   } catch {
     return { ok: false, failures: [...failures, 'POLICY_FILE_INVALID'], verified: [] };
   }
-  for (const layout of layouts) {
-    const codes = [];
-    if (!KNOWN_BOOKMAKERS.includes(layout.bookmaker)) codes.push('POLICY_BOOKMAKER_UNKNOWN');
-    const matches = reports.filter(
-      ({ report }) => report.layoutId === layout.id && report.bookmaker === layout.bookmaker,
-    );
-    if (!matches.length) codes.push('POLICY_HOUSE_NOT_COVERED');
-    else if (matches.length > 1) codes.push('POLICY_HOUSE_AMBIGUOUS');
-    else {
-      const { report, evaluationSha256 } = matches[0];
-      if (
-        report.layout.bookmakerId !== layout.bookmakerId ||
-        report.layout.model !== layout.model ||
-        report.layout.description !== layout.description ||
-        report.layout.placedAtFormat !== layout.placedAtFormat ||
-        report.layout.allowFreebet !== layout.allowFreebet
-      )
-        codes.push('POLICY_LAYOUT_MISMATCH');
-      if (layout.layoutSha256 !== report.layoutSha256) codes.push('POLICY_LAYOUT_HASH_MISMATCH');
-      if (layout.corpusSha256 !== report.corpusSha256) codes.push('POLICY_CORPUS_HASH_MISMATCH');
-      if (layout.evaluationSha256 !== evaluationSha256)
-        codes.push('POLICY_EVALUATION_HASH_MISMATCH');
-      if (layout.sampleCount !== report.sampleCount) codes.push('POLICY_SAMPLE_COUNT_MISMATCH');
-      if (COVERAGE_KEYS.some((key) => layout.coverage[key] !== report.coverage[key]))
-        codes.push('POLICY_COVERAGE_MISMATCH');
-      if (
-        layout.essentialFieldErrors !== 0 ||
+  const codes = [];
+  if (!reports.length) codes.push('POLICY_NO_CORPUS');
+  const models = new Set(reports.map(({ report }) => report.model));
+  if (models.size !== 1 || !models.has(policy.model)) codes.push('POLICY_MODEL_MISMATCH');
+  if (
+    reports.some(
+      ({ report }) =>
+        !KNOWN_BOOKMAKERS.includes(report.bookmaker) ||
+        report.bookmakerContext !== 'user-informed' ||
+        !policy.placedAtFormats.includes(report.layout.placedAtFormat),
+    )
+  )
+    codes.push('POLICY_CORPUS_CONTEXT_OR_FORMAT_INVALID');
+  const expectedReturnLabels = new Set(
+    reports.flatMap(({ report }) => report.layout.potentialReturnLabels ?? []),
+  );
+  if ([...expectedReturnLabels].some((label) => !policy.potentialReturnLabels.includes(label)))
+    codes.push('POLICY_RETURN_LABELS_MISMATCH');
+  const aggregateCoverage = Object.fromEntries(
+    COVERAGE_KEYS.map((key) => [
+      key,
+      reports.reduce((total, { report }) => total + report.coverage[key], 0),
+    ]),
+  );
+  if (JSON.stringify(policy.coverage) !== JSON.stringify(aggregateCoverage))
+    codes.push('POLICY_COVERAGE_MISMATCH');
+  const sampleCount = reports.reduce((total, { report }) => total + report.sampleCount, 0);
+  if (policy.sampleCount !== sampleCount) codes.push('POLICY_SAMPLE_COUNT_MISMATCH');
+  if (
+    reports.some(
+      ({ report }) =>
         report.essentialFieldErrors !== 0 ||
         !report.coveragePassed ||
-        !report.eligibleForOwnerReview
-      )
-        codes.push('POLICY_NOT_ELIGIBLE');
-      const approvedAt = Date.parse(layout.approvedAt);
-      const expiresAt = Date.parse(layout.expiresAt);
-      if (approvedAt > now.getTime()) codes.push('POLICY_APPROVAL_IN_FUTURE');
-      if (expiresAt <= now.getTime()) codes.push('POLICY_EXPIRED');
-      if (expiresAt <= approvedAt) codes.push('POLICY_VALIDITY_INVALID');
-      if (!codes.length)
-        verified.push({
-          id: layout.id,
-          bookmaker: layout.bookmaker,
-          sampleCount: layout.sampleCount,
-          layoutSha256: layout.layoutSha256,
-          corpusSha256: layout.corpusSha256,
-          evaluationSha256: layout.evaluationSha256,
-          expiresAt: layout.expiresAt,
-        });
+        !report.eligibleForOwnerReview,
+    ) ||
+    policy.essentialFieldErrors !== 0
+  )
+    codes.push('POLICY_NOT_ELIGIBLE');
+  const expectedCorpusHash = sha256(
+    JSON.stringify(reports.map(({ report }) => report.corpusSha256).sort()),
+  );
+  const expectedEvaluationHash = sha256(
+    JSON.stringify(reports.map(({ evaluationSha256 }) => evaluationSha256).sort()),
+  );
+  if (policy.corpusSha256 !== expectedCorpusHash) codes.push('POLICY_CORPUS_HASH_MISMATCH');
+  if (policy.evaluationSha256 !== expectedEvaluationHash)
+    codes.push('POLICY_EVALUATION_HASH_MISMATCH');
+  const approvedAt = Date.parse(policy.approvedAt);
+  const expiresAt = Date.parse(policy.expiresAt);
+  if (approvedAt > now.getTime()) codes.push('POLICY_APPROVAL_IN_FUTURE');
+  if (expiresAt <= now.getTime()) codes.push('POLICY_EXPIRED');
+  if (expiresAt <= approvedAt) codes.push('POLICY_VALIDITY_INVALID');
+  if (!codes.length) {
+    for (const { report } of reports) {
+      verified.push({
+        bookmaker: report.bookmaker,
+        sampleCount: report.sampleCount,
+        corpusSha256: report.corpusSha256,
+      });
     }
-    failures.push(...codes.map((code) => `${code} ${layout.id}`));
   }
-  const coveredIds = new Set(layouts.map((layout) => layout.id));
-  const unusedCorpora = reports.filter(({ report }) => !coveredIds.has(report.layoutId)).length;
-  return { ok: failures.length === 0, failures, verified, unusedCorpora };
+  failures.push(...codes);
+  return { ok: failures.length === 0, failures, verified, unusedCorpora: 0 };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

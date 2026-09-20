@@ -29,9 +29,9 @@ O prompt e o contrato de extração NÃO DEVEM (MUST NOT) expor `bookmaker`,
 `bookmakerContext=user-informed` e instruir a não identificação, não inferência
 e não sugestão de casa, sem escolha de layout e sem extração de data/hora do
 evento. Resposta com qualquer um desses campos DEVE (MUST) ser recusada
-(`AI_EXTRACTION_INVALID`). Nesta fatia a resolução determinística da casa no
-motor permanece pendente (F2); sem `layoutId` fornecido pela IA o item segue
-para revisão (fail-closed).
+(`AI_EXTRACTION_INVALID`). A resolução determinística da casa ocorre no motor,
+fora da IA, e uma policy global vigente autoriza o contrato neutro para a casa
+ativa informada pelo usuário.
 
 #### Scenario: resposta com campo de casa ou layout
 
@@ -74,6 +74,47 @@ repositório DEVE (MUST) validar a v2 e recusar divergências.
 
 - **WHEN** a política carregada está expirada
 - **THEN** nenhum item é autoimportado e todos seguem para revisão
+
+#### Scenario: política legada ou com escopo de casas
+
+- **WHEN** o arquivo não é `schemaVersion: 2` ou tenta enumerar uma casa/layout
+  como autoridade da IA
+- **THEN** o loader recusa a política e a importação permanece em revisão
+
+#### Scenario: política global vigente
+
+- **WHEN** a política v2 está vigente e o bookmaker foi informado pelo usuário
+  e validado como casa ativa da organização
+- **THEN** o motor pode organizar a extração neutra para essa casa
+- **AND** o digest registrado é da política global, não de uma classificação do
+  modelo
+
+### Requirement: Sincronização canônica entre superfícies
+
+Telegram, MiniApp e Web DEVEM (MUST) ler e alterar a mesma importação/aposta
+canônica. Casa, tipster, origem e data DEVEM (MUST) ser gravados no servidor
+com organização, versão otimista e idempotência; uma alteração válida DEVE
+emitir uma edição da mensagem Telegram específica pela outbox, e uma operação
+antiga NÃO DEVE sobrescrever uma versão mais nova.
+
+#### Scenario: edição Web para Telegram e leitura MiniApp
+
+- **WHEN** o usuário altera a casa ou tipster na Web
+- **THEN** a leitura do MiniApp retorna o novo valor
+- **AND** a outbox edita somente a mensagem Telegram daquela aposta com o
+  valor novo
+
+#### Scenario: edição Telegram para Web
+
+- **WHEN** o usuário escolhe a casa ou tipster no teclado/MiniApp do Telegram
+- **THEN** a leitura Web retorna o mesmo registro canônico
+- **AND** a casa deve pertencer ao catálogo ativo da organização
+
+#### Scenario: versão antiga
+
+- **WHEN** uma edição atrasada chega depois de uma edição mais nova
+- **THEN** ela é recusada ou reconciliada idempotentemente sem alterar o valor
+  vigente nem gerar journal/outbox duplicado
 
 ### Requirement: Cálculo financeiro no servidor
 

@@ -1,7 +1,12 @@
-import { readFileSync } from 'node:fs';
-import { validatedLayoutsSchema, type ValidatedLayout } from '@stakeframe/shared';
+import { lstatSync, readFileSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
+import {
+  automaticPolicyIsCurrent,
+  automaticPolicyV2Schema,
+  type AutomaticPolicyV2,
+} from '@stakeframe/shared';
 
-// STK-G0-19-R7 — estado EXPLÍCITO da política de importação automática.
+// STK-G0-22 — estado explícito da policy global de importação automática.
 //
 // A declaração do usuário (real/freebet) NUNCA depende deste módulo: aqui só
 // vive a elegibilidade da AUTOMAÇÃO. `null` nunca significa autorização; os
@@ -9,22 +14,27 @@ import { validatedLayoutsSchema, type ValidatedLayout } from '@stakeframe/shared
 // 'approved' como bloqueio (fail-closed → revisão com motivo sanitizado).
 export type AutomaticPolicyState = 'absent' | 'invalid' | 'approved';
 
-export function readAutomaticPolicy(): { state: AutomaticPolicyState; layouts: ValidatedLayout[] } {
+export function readAutomaticPolicy(): {
+  state: AutomaticPolicyState;
+  policy: AutomaticPolicyV2 | null;
+} {
   const path = process.env.AUTOMATIC_IMPORT_POLICIES_FILE;
-  if (!path) return { state: 'absent', layouts: [] };
+  if (!path || !isAbsolute(path)) return { state: 'absent', policy: null };
   try {
-    const parsed = validatedLayoutsSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
-    if (!parsed.success || !parsed.data.length) return { state: 'invalid', layouts: [] };
-    const now = Date.now();
-    if (
-      parsed.data.some(
-        (layout) => Date.parse(layout.approvedAt) > now || Date.parse(layout.expiresAt) <= now,
-      )
-    )
-      return { state: 'invalid', layouts: [] };
-    return { state: 'approved', layouts: parsed.data };
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32_768) {
+      return { state: 'invalid', policy: null };
+    }
+    if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+      return { state: 'invalid', policy: null };
+    }
+    const parsed = automaticPolicyV2Schema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
+    if (!parsed.success || !automaticPolicyIsCurrent(parsed.data)) {
+      return { state: 'invalid', policy: null };
+    }
+    return { state: 'approved', policy: parsed.data };
   } catch {
-    return { state: 'invalid', layouts: [] };
+    return { state: 'invalid', policy: null };
   }
 }
 
