@@ -65,6 +65,20 @@ fatia a resolução final permanece a atual (legenda → `bookmakerId`; gate por
 layout) e, sem `layoutId` fornecido pela IA, o item segue para revisão
 (fail-closed). Nenhuma migração, policy real, ativação ou deploy nesta PR.
 
+## Fatia F2 (implementação direta após a F1)
+
+O motor agora resolve o contexto exclusivamente no servidor: tipster e casa da
+legenda são comparados por alias ao catálogo ativo da organização, enquanto a
+seleção explícita de casa gravada por Telegram/MiniApp/Web tem precedência e é
+revalidada sob a transação. Casa ausente produz BOOKMAKER_UNRESOLVED;
+catálogo inexistente, inativo, ambíguo ou fora da organização produz
+BOOKMAKER_REFUSED. O layout é escolhido pelo bookmakerId resolvido e pelo
+modelo configurado, com validade e unicidade verificadas; layoutId e
+policyDigest enviados pela IA são ignorados como autoridade e qualquer valor
+não nulo mantém o item em revisão. Nenhum lançamento financeiro ocorre quando
+um desses gates falha. A policy v2 global, o loader/checker e a ativação
+continuam reservados às fatias F3–F5.
+
 ## Impacto
 
 Migração nenhuma; contrato OpenAPI ajustado; change OpenSpec `stk-g0-22`.
