@@ -84,6 +84,31 @@ export function ambiguousReferencePair(reference: string | null, ocrText: string
     .some((token) => differOnlyByConfusables(reference, token));
 }
 
+// STK-G0-22-F5-R1: rótulos fixos de retorno reconhecidos como evidência
+// explícita (mesma lista do prompt) e transcrição determinística do valor
+// visível no OCR — nunca calcula, nunca deriva de stake × odd.
+export const POTENTIAL_RETURN_LABELS = ['Retorno Total', 'Prêmio', 'Ganho Potencial'] as const;
+const OCR_MONEY = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/;
+// Transcreve o valor monetário imediatamente associado a um rótulo autorizado
+// na MESMA linha do texto OCR (sem cruzar linhas e sem valor ⇒ null).
+export function potentialReturnFromOcr(ocrText: string): string | null {
+  for (const line of ocrText.split(/\r?\n/)) {
+    for (const label of POTENTIAL_RETURN_LABELS) {
+      const index = line.toLocaleLowerCase('pt-BR').indexOf(label.toLocaleLowerCase('pt-BR'));
+      if (index < 0) continue;
+      const match = line.slice(index + label.length).match(OCR_MONEY);
+      if (!match) continue;
+      const normalized = match[1]!.replace(/\./g, '').replace(',', '.');
+      if (/^\d+(\.\d{1,2})?$/.test(normalized)) return normalized;
+    }
+  }
+  return null;
+}
+// O único aviso que o enriquecimento pode remover: o recorte do bloco de
+// retorno que o OCR prova estar visível (avisos de outra natureza ficam).
+const RETURN_CROP_WARNING =
+  /recorte[^\n]*retorno|bloco\s+de\s+retorno|retorno[^\n]*n[ãa]o\s+vis[íi]vel/i;
+
 // Gemini can reject otherwise valid, constraint-heavy JSON schemas with HTTP 400.
 // Keep the provider schema structural and enforce every omitted constraint locally
 // with the Zod schemas below before any extraction is persisted.
@@ -444,6 +469,21 @@ async function runExtraction(
             ...data.warnings,
             'Referência ambígua entre caracteres confundíveis (U/J, I/1, O/0): segunda leitura divergente; valor mantido nulo para revisão.',
           ],
+        };
+      }
+    }
+    // STK-G0-22-F5-R1: enriquecimento determinístico pelo OCR — só quando o
+    // modelo deixou o retorno nulo E o rótulo autorizado + valor estão
+    // visíveis no OCR; transcreve o valor, nunca calcula (nada de stake × odd).
+    if (data.potentialReturn === null && options.ocr) {
+      const fromOcr = potentialReturnFromOcr(options.ocr.text);
+      if (fromOcr !== null) {
+        data = {
+          ...data,
+          potentialReturn: fromOcr,
+          // O bloco de retorno está visível no OCR: avisos de recorte de
+          // retorno eram falsos e saem para não forçar revisão indevida.
+          warnings: data.warnings.filter((warning) => !RETURN_CROP_WARNING.test(warning)),
         };
       }
     }

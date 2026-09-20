@@ -110,7 +110,10 @@ originais:
   rótulos fixos "Retorno Total", "Prêmio" e "Ganho Potencial" (a dependência
   dos "rótulos autorizados do layout" saiu com a F1) e recupera o valor somente
   quando ele está visível; nunca calcula nem deriva de stake × odd; ausente →
-  `null`, com aviso conservador quando o recorte corta o bloco.
+  `null`, com aviso conservador quando o recorte corta o bloco. R1: quando o
+  modelo deixa o retorno nulo e o OCR tem o rótulo + valor na mesma linha, o
+  fluxo transcreve o valor deterministicamente e remove o aviso falso de
+  recorte (avisos de outra natureza ficam).
 - **Referências ambíguas**: segunda leitura focada (mesma imagem/OCR, schema
   mínimo) quando o OCR e o modelo divergem apenas nos pares confundíveis
   U/J, I/1, O/0; divergência ou falha → `reference=null` + aviso (revisão).

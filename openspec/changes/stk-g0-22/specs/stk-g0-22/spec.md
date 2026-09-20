@@ -49,7 +49,11 @@ O retorno potencial DEVE (MUST) ser recuperado somente por evidência explícita
 rótulo visível entre "Retorno Total", "Prêmio" e "Ganho Potencial" com o valor
 monetário associado visível; a IA NÃO DEVE (MUST NOT) calcular, derivar de
 stake × odd ou inventar o valor — ausente ou cortado → `null`, com aviso
-conservador quando o recorte indica o bloco cortado. Referências com caracteres
+conservador quando o recorte indica o bloco cortado. Quando o modelo deixar o
+retorno nulo e o OCR contiver o rótulo autorizado com o valor na mesma linha,
+o fluxo DEVE (MUST) transcrever esse valor deterministicamente (nunca calcular)
+e remover o aviso falso de recorte, preservando avisos de outra natureza.
+Referências com caracteres
 confundíveis (U/J, I/1, O/0) DEVEM (MUST) passar por segunda leitura focada;
 divergência ou impossibilidade → `reference=null` + aviso (revisão). Na
 avaliação, hífen, meia-risca e travessão DEVEM (MUST) ser equivalentes somente
