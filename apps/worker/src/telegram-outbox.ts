@@ -46,6 +46,10 @@ type InboxRow = ImportMessageRow & {
   // R8 — colunas canônicas do LEFT JOIN (finance.bet/catalog), presentes
   // quando a importação já tem aposta registrada.
   override_bookmaker: string | null;
+  override_tipster: string | null;
+  override_sport: string | null;
+  override_tournament: string | null;
+  override_country: string | null;
   bet_id: string | null;
   bet_state: string | null;
   bet_stake: string | null;
@@ -84,11 +88,16 @@ export function createTelegramOutboxService(
     const row = (
       await db.query(
         `select i.id,i.state,i.version,i.caption,i.extraction,i.bet_origin,i.event_at,i.event_date_status,i.telegram_received_at,i.telegram_chat_id,i.telegram_source_message_id,i.telegram_processing_message_id,i.telegram_result_message_id,i.telegram_synced_version,i.telegram_deleted_at,
-                c.name as override_bookmaker,draftf.amount as draft_freebet_amount,
+                c.name as override_bookmaker,ot.name as override_tipster,
+                i.metadata->'userOverrides'->>'sport' as override_sport,
+                i.metadata->'userOverrides'->>'tournament' as override_tournament,
+                i.metadata->'userOverrides'->>'country' as override_country,
+                draftf.amount as draft_freebet_amount,
                 b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,f.amount as bet_freebet_amount,
                 bc.name as bet_bookmaker,t.name as bet_tipster
          from integration.inbox i
           left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
+          left join finance.catalog ot on ot.organization_id=i.organization_id and ot.kind='tipster' and ot.active and ot.id::text=(i.metadata->'userOverrides'->>'tipsterId')
           left join finance.freebet draftf on draftf.id=i.freebet_id and draftf.organization_id=i.organization_id
          left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
          left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id

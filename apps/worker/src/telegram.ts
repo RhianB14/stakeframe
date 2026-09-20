@@ -17,7 +17,10 @@ import { IntegrationError, readBounded, readJson } from './http.js';
 // Editar para informar o valor, e Excluir segue em dois toques.
 export function telegramResultButtons(miniAppUrl: string, importId: string) {
   const base = miniAppUrl.replace(/#.*$/, '').replace(/\/+$/, '');
-  const miniApp = () => `${base}#miniapp?import=${importId}`;
+  // Caminho dedicado para que o proxy aplique a política de iframe do
+  // Telegram somente ao Mini App; o fragmento continua carregando o UUID
+  // opaco e nunca contém token ou dado privado.
+  const miniApp = () => `${base}/miniapp#miniapp?import=${importId}`;
   return [
     [{ text: '✏️ Editar', web_app: { url: miniApp() } }],
     [{ text: '📚 Alterar Status', callback_data: 'sf:v1:status' }],

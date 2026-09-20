@@ -6,9 +6,9 @@
 :8080 {
     header {
         X-Content-Type-Options nosniff
-        X-Frame-Options DENY
         Referrer-Policy no-referrer
-        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+        -X-Frame-Options
+        -Content-Security-Policy
     }
     handle /api/* {
         reverse_proxy api:3000
@@ -16,7 +16,19 @@
     handle /health/* {
         reverse_proxy api:3000
     }
+    handle /miniapp* {
+        header {
+            Content-Security-Policy "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self' https://telegram.org; base-uri 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org; form-action 'none'"
+        }
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
     handle {
+        header {
+            X-Frame-Options DENY
+            Content-Security-Policy "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self' https://telegram.org; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+        }
         root * /srv
         try_files {path} /index.html
         file_server

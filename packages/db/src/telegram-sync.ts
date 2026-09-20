@@ -26,6 +26,26 @@ const normalizeAlias = (value: string) =>
     .toLocaleLowerCase('pt-BR')
     .replace(/\s+/g, ' ');
 
+type DraftOverrides = {
+  tipsterId?: string;
+  sport?: string;
+  tournament?: string;
+  country?: string;
+};
+
+function readDraftOverrides(value: unknown): DraftOverrides {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = (value as { userOverrides?: unknown }).userOverrides;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const source = raw as Record<string, unknown>;
+  const result: DraftOverrides = {};
+  if (typeof source.tipsterId === 'string') result.tipsterId = source.tipsterId;
+  if (typeof source.sport === 'string') result.sport = source.sport;
+  if (typeof source.tournament === 'string') result.tournament = source.tournament;
+  if (typeof source.country === 'string') result.country = source.country;
+  return result;
+}
+
 // STK-G0-19-R10 — operação interna do rascunho sobre um cliente/transação JÁ
 // existentes (sem abrir transação própria): lock da inbox (FOR UPDATE), versão
 // otimista, revalidação de casa/crédito, auditoria e outbox no MESMO PoolClient.
@@ -36,6 +56,10 @@ type DraftPatch = {
   freebetId?: string | null | undefined;
   eventAt?: string | null | undefined;
   bookmakerId?: string | null | undefined;
+  tipsterId?: string | null | undefined;
+  sport?: string | null | undefined;
+  tournament?: string | null | undefined;
+  country?: string | null | undefined;
 };
 
 async function applyDraftUpdate(
@@ -58,8 +82,9 @@ async function applyDraftUpdate(
         caption: string;
         extraction: unknown;
         bookmaker_override_id: string | null;
+        metadata: unknown;
       }>(
-        'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction,bookmaker_override_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+        'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction,bookmaker_override_id,metadata from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
         [id],
       )
     ).rows[0];
@@ -89,6 +114,36 @@ async function applyDraftUpdate(
         nextBookmakerOverride = house.id;
       }
     }
+    const currentOverrides = readDraftOverrides(row.metadata);
+    const nextOverrides: DraftOverrides = { ...currentOverrides };
+    if (patch.tipsterId !== undefined) {
+      if (patch.tipsterId === null) delete nextOverrides.tipsterId;
+      else {
+        const tipster = (
+          await client.query<{ id: string }>(
+            "select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind='tipster' and active",
+            [patch.tipsterId],
+          )
+        ).rows[0];
+        if (!tipster) throw new FinanceError('NOT_FOUND');
+        nextOverrides.tipsterId = tipster.id;
+      }
+    }
+    for (const [key, value] of [
+      ['sport', patch.sport],
+      ['tournament', patch.tournament],
+      ['country', patch.country],
+    ] as const) {
+      if (value === undefined) continue;
+      if (value === null || value.trim() === '') delete nextOverrides[key];
+      else nextOverrides[key] = value.trim();
+    }
+    const nextMetadata = {
+      ...(row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        ? row.metadata
+        : {}),
+      userOverrides: nextOverrides,
+    };
     // Resolução efetiva do rascunho: escolha declarada > legenda > leitura visual.
     const labels = parseCaption(row.caption);
     const evidence =
@@ -153,7 +208,7 @@ async function applyDraftUpdate(
     }
     const nextEventAt = patch.eventAt === undefined ? row.event_at : patch.eventAt;
     const updated = await client.query<{ version: number }>(
-      "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
+      "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,metadata=$7,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
       [
         id,
         nextOrigin,
@@ -161,6 +216,7 @@ async function applyDraftUpdate(
         nextEventAt,
         nextEventAt ? 'confirmed' : 'pending',
         nextBookmakerOverride,
+        JSON.stringify(nextMetadata),
       ],
     );
     const version = updated.rows[0]!.version;
@@ -174,6 +230,12 @@ async function applyDraftUpdate(
           freebetSelected: !!nextFreebet,
           eventDateStatus: nextEventAt ? 'confirmed' : 'pending',
           bookmakerDeclared: !!nextBookmakerOverride,
+          tipsterDeclared: !!nextOverrides.tipsterId,
+          manualFields: {
+            sport: nextOverrides.sport ?? null,
+            tournament: nextOverrides.tournament ?? null,
+            country: nextOverrides.country ?? null,
+          },
           freebetCleared,
         }),
       ],

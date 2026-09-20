@@ -50,7 +50,8 @@ export function App() {
   const session = owner.data && owner.data !== 'consent-required' ? owner.data : null;
   // STK-G0-19-R5 — o Mini App autentica por initData validado no servidor e
   // não depende da sessão web do proprietário.
-  if (window.location.hash.startsWith('#miniapp')) return <MiniAppPage />;
+  if (window.location.pathname === '/miniapp' || window.location.hash.startsWith('#miniapp'))
+    return <MiniAppPage />;
   if (status.data?.productEnabled && session && !owner.isError) {
     return <ProductApp owner={session.user} release={status.data?.release} />;
   }

@@ -188,7 +188,9 @@ describe('telegram result buttons callbacks', () => {
     const restored = cancelEdit.body.reply_markup as {
       inline_keyboard: Array<Array<{ web_app?: { url?: string } }>>;
     };
-    expect(restored.inline_keyboard[0]![0]!.web_app?.url).toContain(`#miniapp?import=${id}`);
+    expect(restored.inline_keyboard[0]![0]!.web_app?.url).toContain(
+      `/miniapp#miniapp?import=${id}`,
+    );
     expect((await inboxState(id)).state).toBe('review');
   });
 
@@ -437,7 +439,7 @@ describe('Casa de aposta e Tipster (G0-20 B3)', () => {
     await handler()(callback('back', 7777));
     const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
     const first = keyboardOf(edit)[0]![0] as { web_app?: { url?: string } };
-    expect(first.web_app?.url).toContain(`#miniapp?import=${id}`);
+    expect(first.web_app?.url).toContain(`/miniapp#miniapp?import=${id}`);
   });
 });
 

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { importDetailSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
@@ -50,6 +51,29 @@ const sectionParam = (): 'status' | 'bookmaker' | 'tipster' | 'cashout' | null =
 };
 
 export function MiniAppPage() {
+  const [, setTelegramScriptLoaded] = useState(0);
+  useEffect(() => {
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.ready?.();
+      return;
+    }
+    let script = document.querySelector<HTMLScriptElement>(
+      'script[data-stakeframe-telegram-webapp="true"]',
+    );
+    const onLoad = () => {
+      setTelegramScriptLoaded((value) => value + 1);
+      window.Telegram?.WebApp?.ready?.();
+    };
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://telegram.org/js/telegram-web-app.js';
+      script.async = true;
+      script.dataset.stakeframeTelegramWebapp = 'true';
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', onLoad);
+    return () => script?.removeEventListener('load', onLoad);
+  }, []);
   const initData = window.Telegram?.WebApp?.initData ?? '';
   const id = importId() ?? '';
   const detail = useQuery({

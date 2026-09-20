@@ -61,15 +61,21 @@ export type ImportMessageRow = {
   telegram_received_at: Date | null;
   /** Casa declarada no rascunho (seção "Alterar Casa"), quando houver. */
   override_bookmaker?: string | null;
+  /** Cadastros/campos manuais declarados no rascunho. */
+  override_tipster?: string | null;
+  override_sport?: string | null;
+  override_tournament?: string | null;
+  override_country?: string | null;
   /** Presente quando a importação já tem aposta registrada. */
   canonical?: CanonicalBetData | null;
   /** Valor do crédito escolhido no rascunho, quando já declarado. */
   draft_freebet_amount?: string | null;
 };
 
-const joinValues = (values: (string | null | undefined)[]): string | null => {
+const distinctValues = (values: (string | null | undefined)[]): string | null => {
   const parts = values.filter((value): value is string => !!value && value.trim().length > 0);
-  return parts.length ? parts.join('; ') : null;
+  const unique = [...new Set(parts.map((value) => value.trim()))];
+  return unique.length ? unique.join('; ') : null;
 };
 
 const draftStatusLabel = (state: string): string => {
@@ -104,11 +110,12 @@ export function buildImportMessage(row: ImportMessageRow): string {
       statusLabel,
       success: canonical.state === 'open',
       bonus: canonical.origin,
-      sport: joinValues(canonical.selections.map((item) => item.sport)),
-      event: joinValues(canonical.selections.map((item) => item.event)),
+      sport: distinctValues(canonical.selections.map((item) => item.sport)),
+      tournament: null,
+      event: distinctValues(canonical.selections.map((item) => item.event)),
       country: null,
-      selection: joinValues(canonical.selections.map((item) => item.selection)),
-      market: joinValues(canonical.selections.map((item) => item.market)),
+      selection: distinctValues(canonical.selections.map((item) => item.selection)),
+      market: distinctValues(canonical.selections.map((item) => item.market)),
       stake: canonical.stake,
       odds: canonical.odds,
       potentialReturn: potentialReturnFor(
@@ -135,11 +142,15 @@ export function buildImportMessage(row: ImportMessageRow): string {
     statusLabel: draftStatusLabel(row.state),
     success: row.state === 'review',
     bonus: declaredOrigin ? origin : null,
-    sport: extraction?.selections.find((item) => item.sport !== null)?.sport ?? null,
-    event: joinValues(extraction?.selections.map((item) => item.event) ?? []),
-    country: null,
-    selection: joinValues(extraction?.selections.map((item) => item.selection) ?? []),
-    market: joinValues(extraction?.selections.map((item) => item.market) ?? []),
+    sport:
+      row.override_sport ??
+      extraction?.selections.find((item) => item.sport !== null)?.sport ??
+      null,
+    tournament: row.override_tournament ?? null,
+    event: distinctValues(extraction?.selections.map((item) => item.event) ?? []),
+    country: row.override_country ?? null,
+    selection: distinctValues(extraction?.selections.map((item) => item.selection) ?? []),
+    market: distinctValues(extraction?.selections.map((item) => item.market) ?? []),
     stake,
     odds,
     // Sem declaração de origem o cálculo assume dinheiro real (caso base);
@@ -152,6 +163,6 @@ export function buildImportMessage(row: ImportMessageRow): string {
     sentAt: formatInstant(row.telegram_received_at),
     eventAt: settled ? formatInstant(row.event_at) : null,
     bookmaker: row.override_bookmaker ?? labels.bookmaker ?? null,
-    tipster: labels.tipster,
+    tipster: row.override_tipster ?? labels.tipster,
   });
 }

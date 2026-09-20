@@ -19,6 +19,10 @@ export type DraftBody = {
   betOrigin?: 'real' | 'freebet' | 'hibrida' | null;
   freebetId?: string | null;
   eventAt?: string | null;
+  tipsterId?: string | null;
+  sport?: string | null;
+  tournament?: string | null;
+  country?: string | null;
 };
 
 export function DraftControls({
@@ -73,6 +77,9 @@ export function DraftControls({
   const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida' | null>(detail.betOrigin);
   const [credit, setCredit] = useState(detail.freebetId ?? '');
   const [eventDate, setEventDate] = useState('');
+  const [sport, setSport] = useState(detail.sportOverride ?? '');
+  const [tournament, setTournament] = useState(detail.tournamentOverride ?? '');
+  const [country, setCountry] = useState(detail.countryOverride ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -90,6 +97,9 @@ export function DraftControls({
         betOrigin: origin,
         freebetId: origin === 'freebet' || origin === 'hibrida' ? credit || null : null,
         ...(eventDate ? { eventAt: localInstant(eventDate) } : {}),
+        sport: sport.trim() || null,
+        tournament: tournament.trim() || null,
+        country: country.trim() || null,
       });
       setSaved(true);
       setCleared(result.freebetCleared);
@@ -169,6 +179,19 @@ export function DraftControls({
           value={eventDate}
           onChange={(event) => setEventDate(event.target.value)}
         />
+      </Field>
+      <p className="notice">
+        A IA organiza o comprovante, mas não inventa estes campos. Complete-os manualmente quando o
+        bilhete não trouxer informação confiável.
+      </p>
+      <Field label="Esporte">
+        <input value={sport} onChange={(event) => setSport(event.target.value)} />
+      </Field>
+      <Field label="Torneio">
+        <input value={tournament} onChange={(event) => setTournament(event.target.value)} />
+      </Field>
+      <Field label="País">
+        <input value={country} onChange={(event) => setCountry(event.target.value)} />
       </Field>
       {error ? (
         <p className="notice warning" role="alert">

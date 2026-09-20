@@ -163,6 +163,7 @@ type InboxRow = {
   attachment_id: string;
   attachment_state: string;
   extraction: unknown;
+  metadata: unknown;
 };
 const columns = 'i.*,a.state as attachment_state';
 function item(row: InboxRow) {
@@ -187,6 +188,33 @@ function normalized(value: string) {
     .trim()
     .toLocaleLowerCase('pt-BR')
     .replace(/\s+/g, ' ');
+}
+
+function draftOverrides(value: unknown): {
+  tipsterId: string | null;
+  sport: string | null;
+  tournament: string | null;
+  country: string | null;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return { tipsterId: null, sport: null, tournament: null, country: null };
+  const raw = (value as { userOverrides?: unknown }).userOverrides;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    return { tipsterId: null, sport: null, tournament: null, country: null };
+  const source = raw as Record<string, unknown>;
+  const tipsterId =
+    typeof source.tipsterId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      source.tipsterId,
+    )
+      ? source.tipsterId
+      : null;
+  return {
+    tipsterId,
+    sport: typeof source.sport === 'string' ? source.sport : null,
+    tournament: typeof source.tournament === 'string' ? source.tournament : null,
+    country: typeof source.country === 'string' ? source.country : null,
+  };
 }
 export function createImportService(database: Database, storage?: ObjectStorage) {
   const tenant = createTenantContext(database);
@@ -279,6 +307,10 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         betOrigin?: 'real' | 'freebet' | 'hibrida' | null | undefined;
         freebetId?: string | null | undefined;
         eventAt?: string | null | undefined;
+        tipsterId?: string | null | undefined;
+        sport?: string | null | undefined;
+        tournament?: string | null | undefined;
+        country?: string | null | undefined;
       },
       actor: string,
     ) {
@@ -338,6 +370,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             [id],
           )
         ).rows[0]!;
+        const overrides = draftOverrides(row.metadata);
         const captionBookmakerId = match('bookmaker', labels.bookmaker);
         // STK-G0-22: a extração é neutra — não existe casa lida pela IA; a
         // declaração do usuário é a única fonte e não há conflito visual.
@@ -443,6 +476,10 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             stakeReturned: credit.stake_returned,
           })),
           bookmakerOverrideId: draftRow.bookmaker_override_id,
+          tipsterOverrideId: overrides.tipsterId,
+          sportOverride: overrides.sport,
+          tournamentOverride: overrides.tournament,
+          countryOverride: overrides.country,
           bookmakers,
           tipsters,
           bet: bet
@@ -895,6 +932,51 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         version: input.version,
         tipsterId: input.tipsterId,
       });
+      const route = await read(context, async (client) => {
+        const row = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        return row;
+      });
+      if (!route.imported_bet_id) {
+        return tenant.withOrganizationTransaction(context, async (client) => {
+          await client.query(
+            'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+            [idempotencyKey],
+          );
+          const lockedReplay = receiptReplay<TipsterResult>(
+            await readReceiptRow(client, idempotencyKey),
+            'tipster',
+            requestHash,
+            importTipsterResultSchema,
+          );
+          if (lockedReplay) return lockedReplay;
+          const saved = await draft.updateDraftWithin(
+            client,
+            id,
+            { version: input.version, tipsterId: input.tipsterId },
+            actor,
+          );
+          const name = (
+            await client.query<{ name: string }>(
+              "select name from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind='tipster' and active",
+              [input.tipsterId],
+            )
+          ).rows[0];
+          const result: TipsterResult = {
+            version: saved.version,
+            betState: null,
+            tipsterId: input.tipsterId,
+            tipsterName: name?.name ?? null,
+          };
+          await insertReceiptRow(client, idempotencyKey, 'tipster', actor, requestHash, result);
+          return result;
+        });
+      }
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
           await client.query<SettingsRow>(
