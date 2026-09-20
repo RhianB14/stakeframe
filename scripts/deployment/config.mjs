@@ -206,6 +206,17 @@ export function assertDeploymentConfig(
       assert.equal(env.THESPORTSDB_ENABLED, 'true');
       assert.equal(env.TAVILY_ENABLED, tavily ? 'true' : undefined);
     }
+    for (const [name, secret] of Object.entries({
+      TELEGRAM_BOT_TOKEN: 'telegram_bot_token',
+      TELEGRAM_OWNER_USER_ID: 'telegram_owner_user_id',
+    })) {
+      assert.equal(
+        services.api.environment[`${name}_FILE`],
+        `/run/secrets/${secret}`,
+        'TELEGRAM_MINIAPP_AUTH_SECRET_REQUIRED',
+      );
+      expectedSecrets.api.push(secret);
+    }
     assert.equal(services.api.environment.R2_ACCOUNT_ID, worker.R2_ACCOUNT_ID);
     assert.equal(services.api.environment.R2_ATTACHMENTS_BUCKET, worker.R2_ATTACHMENTS_BUCKET);
     assert.equal(worker.AUTOMATIC_IMPORT_ENABLED, automatic ? 'true' : 'false');
