@@ -1,0 +1,534 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  classifyTicketKind,
+  formatBRL,
+  potentialReturnFor,
+  type TicketKind,
+} from '@stakeframe/shared';
+import { Button } from '../components/ui/button.js';
+import { localInstant } from './api.js';
+import type { DraftControlsProps } from './drafts.js';
+import { Field } from './forms.js';
+import { MobilePicker } from './MobilePicker.js';
+import { COUNTRY_OPTIONS, SPORT_PICKER_OPTIONS, type PickerOption } from './miniapp-options.js';
+
+const MONEY = /^\d{1,12}(\.\d{1,2})?$/;
+
+const receivedFormat = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
+
+const inputInstant = (value: string | null) => {
+  if (!value) return { date: '', time: '' };
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  return {
+    date: `${read('year')}-${read('month')}-${read('day')}`,
+    time: `${read('hour')}:${read('minute')}`,
+  };
+};
+
+const formatExpiry = (value: string) =>
+  new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T12:00:00Z`));
+
+export function MiniDraftEditor({ detail, sender, creditsSender, onSaved }: DraftControlsProps) {
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida' | null>(detail.betOrigin);
+  const [credit, setCredit] = useState(detail.freebetId ?? '');
+  const initialEvent = inputInstant(detail.eventAt);
+  const [eventDate, setEventDate] = useState(initialEvent.date);
+  const [eventTime, setEventTime] = useState(initialEvent.time);
+  const extractedSport =
+    detail.extraction?.selections.find((item) => item.sport !== null)?.sport ?? null;
+  const [sport, setSport] = useState(detail.sportOverride ?? extractedSport ?? '');
+  const [tournament, setTournament] = useState(detail.tournamentOverride ?? '');
+  const [country, setCountry] = useState(detail.countryOverride ?? '');
+  const [ticketKind, setTicketKind] = useState<TicketKind>(
+    detail.ticketKindOverride ?? classifyTicketKind(detail.extraction?.selections ?? []),
+  );
+  const [stake, setStake] = useState(detail.stakeOverride ?? detail.extraction?.stake ?? '');
+  const [odds, setOdds] = useState(detail.oddsOverride ?? detail.extraction?.odds ?? '');
+  const [bookmaker, setBookmaker] = useState(
+    detail.bookmakerOverrideId ?? detail.matches.captionBookmakerId ?? '',
+  );
+  const [tipster, setTipster] = useState(
+    detail.tipsterOverrideId ?? detail.matches.tipsterId ?? '',
+  );
+  const [selections, setSelections] = useState(() => {
+    const initial = detail.selectionOverrides.length
+      ? detail.selectionOverrides.map((item) => ({ ...item }))
+      : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
+          event,
+          market,
+          selection,
+        }));
+    return initial.length ? initial : [{ event: null, market: null, selection: null }];
+  });
+  const [credits, setCredits] = useState(detail.credits);
+  const [creditsBusy, setCreditsBusy] = useState(false);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!bookmaker || !creditsSender) {
+      setCredits(bookmaker ? detail.credits.filter((item) => item.bookmakerId === bookmaker) : []);
+      return;
+    }
+    const initialBookmaker = detail.bookmakerOverrideId ?? detail.matches.captionBookmakerId ?? '';
+    if (
+      bookmaker === initialBookmaker &&
+      detail.credits.every((item) => item.bookmakerId === bookmaker)
+    ) {
+      setCredits(detail.credits);
+      return;
+    }
+    let active = true;
+    setCreditsBusy(true);
+    setCreditsError(null);
+    creditsSender(bookmaker)
+      .then((items) => {
+        if (active) setCredits(items.map((item) => ({ ...item, bookmakerId: bookmaker })));
+      })
+      .catch(() => {
+        if (!active) return;
+        setCredits([]);
+        setCreditsError('Não foi possível carregar as apostas grátis desta casa.');
+      })
+      .finally(() => {
+        if (active) setCreditsBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    bookmaker,
+    creditsSender,
+    detail.bookmakerOverrideId,
+    detail.credits,
+    detail.matches.captionBookmakerId,
+  ]);
+
+  const compatibleCredits = useMemo(
+    () =>
+      credits.filter((item) => {
+        if (!MONEY.test(stake)) return true;
+        return origin === 'freebet' ? item.amount === stake : item.amount !== stake;
+      }),
+    [credits, origin, stake],
+  );
+
+  useEffect(() => {
+    if (!credit || origin === 'real') return;
+    if (!compatibleCredits.some((item) => item.id === credit)) setCredit('');
+  }, [compatibleCredits, credit, origin]);
+
+  const creditOptions: PickerOption[] = compatibleCredits.map((item) => ({
+    value: item.id,
+    label: `Aposta grátis ${formatBRL(item.amount)}`,
+    description: `Válida até ${formatExpiry(item.expiresOn)}`,
+    icon: '🎟️',
+  }));
+  const selectedCredit = credits.find((item) => item.id === credit);
+  const potentialReturn =
+    origin && MONEY.test(stake)
+      ? potentialReturnFor(origin, stake, odds, selectedCredit?.amount ?? null)
+      : null;
+
+  const chooseOrigin = (next: 'real' | 'freebet' | 'hibrida') => {
+    setOrigin(next);
+    setError(null);
+    if (next === 'real') setCredit('');
+  };
+
+  const chooseTicketKind = (next: TicketKind) => {
+    setTicketKind(next);
+    setSelections((current) => {
+      const withOne = current.length ? current : [{ event: null, market: null, selection: null }];
+      if (next === 'simple') return [withOne[0]!];
+      if (next === 'betbuild') {
+        const event = withOne[0]!.event;
+        return withOne.map((item) => ({ ...item, event, market: 'BetBuild' }));
+      }
+      return withOne;
+    });
+  };
+
+  const changeSelection = (index: number, key: 'event' | 'market' | 'selection', value: string) =>
+    setSelections((current) =>
+      current.map((item, itemIndex) => {
+        if (key === 'event' && ticketKind === 'betbuild')
+          return { ...item, event: value.trim() ? value : null };
+        return itemIndex === index ? { ...item, [key]: value.trim() ? value : null } : item;
+      }),
+    );
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (!origin) throw new Error('Escolha a origem da aposta.');
+      if (!bookmaker) throw new Error('Escolha a casa de aposta.');
+      if ((eventDate && !eventTime) || (!eventDate && eventTime))
+        throw new Error('Informe a data e a hora do jogo juntas.');
+      if ((origin === 'freebet' || origin === 'hibrida') && !credit)
+        throw new Error('Escolha um crédito de aposta grátis disponível para esta casa.');
+      if (!MONEY.test(stake)) throw new Error('Informe um valor apostado válido.');
+      if (!/^\d{1,12}(\.\d{1,4})?$/.test(odds)) throw new Error('Informe uma odd válida.');
+      if (
+        selections.some(
+          (item) => !item.event?.trim() || !item.selection?.trim() || !item.market?.trim(),
+        )
+      )
+        throw new Error('Preencha evento, aposta e mercado de todas as seleções.');
+
+      const result = await sender({
+        version: detail.item.version,
+        betOrigin: origin,
+        freebetId: origin === 'freebet' || origin === 'hibrida' ? credit : null,
+        ...(eventDate && eventTime ? { eventAt: localInstant(`${eventDate}T${eventTime}`) } : {}),
+        bookmakerId: bookmaker,
+        tipsterId: tipster || null,
+        sport: sport.trim() || null,
+        tournament: tournament.trim() || null,
+        country: country.trim() || null,
+        ticketKind,
+        stake,
+        odds,
+        selections,
+      });
+      await onSaved(result.version);
+    } catch (failure) {
+      setError(
+        failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="draft-controls mini-edit-form">
+      <section className="mini-card mini-card-origin">
+        <header className="mini-card-heading">
+          <div>
+            <h2>Origem da aposta</h2>
+            <p>Informe como o valor foi composto.</p>
+          </div>
+        </header>
+        <div className="mini-segmented" role="radiogroup" aria-label="Origem da aposta">
+          {(
+            [
+              ['real', 'Dinheiro real'],
+              ['freebet', 'Freebet'],
+              ['hibrida', 'Híbrida'],
+            ] as const
+          ).map(([value, label]) => (
+            <label className={origin === value ? 'selected' : ''} key={value}>
+              <input
+                type="radio"
+                name="bet-origin"
+                checked={origin === value}
+                onChange={() => chooseOrigin(value)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        {origin === 'hibrida' ? (
+          <p className="mini-helper">Parte com dinheiro real e parte com aposta grátis.</p>
+        ) : origin === 'freebet' ? (
+          <p className="mini-helper">O valor da aposta grátis não retorna ao apostador.</p>
+        ) : origin === null ? (
+          <p className="mini-helper">Escolha a origem para continuar.</p>
+        ) : null}
+        {origin === 'freebet' || origin === 'hibrida' ? (
+          <div className="mini-reveal">
+            <MobilePicker
+              label="Crédito de aposta grátis"
+              value={credit}
+              placeholder={creditsBusy ? 'Carregando créditos…' : 'Selecione o crédito'}
+              options={creditOptions}
+              disabled={creditsBusy || !bookmaker}
+              onChange={(value) => {
+                setCredit(value);
+                if (origin === 'freebet') {
+                  const chosen = credits.find((item) => item.id === value);
+                  if (chosen) setStake(chosen.amount);
+                }
+              }}
+            />
+            {!bookmaker ? (
+              <p className="mini-helper warning">Escolha primeiro a casa de aposta.</p>
+            ) : creditsError ? (
+              <p className="mini-helper warning" role="alert">
+                {creditsError}
+              </p>
+            ) : !creditsBusy && creditOptions.length === 0 ? (
+              <p className="mini-helper warning" role="status">
+                Nenhuma aposta grátis compatível e disponível para esta casa.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="mini-card">
+        <header className="mini-card-heading">
+          <div>
+            <h2>Dados do jogo</h2>
+            <p>A data de envio do Telegram permanece registrada.</p>
+          </div>
+        </header>
+        {detail.telegramReceivedAt ? (
+          <p className="mini-received-at" role="status">
+            Enviado em {receivedFormat.format(new Date(detail.telegramReceivedAt))}
+          </p>
+        ) : null}
+        <div className="mini-two-columns">
+          <Field label="Data do jogo">
+            <input
+              type="date"
+              value={eventDate}
+              onChange={(event) => setEventDate(event.target.value)}
+            />
+          </Field>
+          <Field label="Hora">
+            <input
+              type="time"
+              value={eventTime}
+              onChange={(event) => setEventTime(event.target.value)}
+            />
+          </Field>
+        </div>
+        <MobilePicker
+          label="Esporte"
+          value={sport}
+          placeholder="Selecione o esporte"
+          options={
+            sport && !SPORT_PICKER_OPTIONS.some((option) => option.value === sport)
+              ? [{ value: sport, label: sport }, ...SPORT_PICKER_OPTIONS]
+              : SPORT_PICKER_OPTIONS
+          }
+          searchable
+          onChange={setSport}
+        />
+        {extractedSport && !detail.sportOverride ? (
+          <p className="mini-helper">Sugestão identificada pela IA; você pode editar.</p>
+        ) : null}
+        <Field label="Torneio">
+          <input value={tournament} onChange={(event) => setTournament(event.target.value)} />
+        </Field>
+        <MobilePicker
+          label="País"
+          value={country}
+          placeholder="Selecione o país ou região"
+          options={
+            country && !COUNTRY_OPTIONS.some((option) => option.value === country)
+              ? [{ value: country, label: country }, ...COUNTRY_OPTIONS]
+              : COUNTRY_OPTIONS
+          }
+          searchable
+          onChange={setCountry}
+        />
+      </section>
+
+      <section className="mini-card">
+        <header className="mini-card-heading">
+          <div>
+            <h2>Detalhes da aposta</h2>
+            <p>Edite o tipo, as partidas, apostas e mercados.</p>
+          </div>
+        </header>
+        <span className="mini-field-label">Tipo de aposta</span>
+        <div className="mini-segmented" role="radiogroup" aria-label="Tipo de aposta">
+          {(
+            [
+              ['simple', 'Simples'],
+              ['multiple', 'Múltipla'],
+              ['betbuild', 'BetBuild'],
+            ] as const
+          ).map(([value, label]) => (
+            <label className={ticketKind === value ? 'selected' : ''} key={value}>
+              <input
+                type="radio"
+                name="ticket-kind"
+                checked={ticketKind === value}
+                onChange={() => chooseTicketKind(value)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <fieldset className="mini-selections">
+          <legend>Partidas, apostas e mercados</legend>
+          {selections.map((selection, index) => (
+            <div className="draft-selection" key={index}>
+              <div className="mini-selection-heading">
+                <strong>
+                  {ticketKind === 'betbuild' ? `Seleção ${index + 1}` : `Aposta ${index + 1}`}
+                </strong>
+                {selections.length > 1 && ticketKind !== 'simple' ? (
+                  <button
+                    type="button"
+                    aria-label={`Remover seleção ${index + 1}`}
+                    onClick={() =>
+                      setSelections((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                  >
+                    Remover
+                  </button>
+                ) : null}
+              </div>
+              <Field label={ticketKind === 'betbuild' ? 'Evento' : `Evento ${index + 1}`}>
+                <input
+                  value={selection.event ?? ''}
+                  onChange={(event) => changeSelection(index, 'event', event.target.value)}
+                />
+              </Field>
+              <Field label={`Aposta ${index + 1}`}>
+                <textarea
+                  rows={2}
+                  value={selection.selection ?? ''}
+                  onChange={(event) => changeSelection(index, 'selection', event.target.value)}
+                />
+              </Field>
+              <Field label={`Mercado ${index + 1}`}>
+                <input
+                  value={selection.market ?? ''}
+                  disabled={ticketKind === 'betbuild'}
+                  onChange={(event) => changeSelection(index, 'market', event.target.value)}
+                />
+              </Field>
+            </div>
+          ))}
+          {ticketKind !== 'simple' ? (
+            <button
+              type="button"
+              className="mini-add-selection"
+              onClick={() =>
+                setSelections((current) => [
+                  ...current,
+                  {
+                    event: ticketKind === 'betbuild' ? (current[0]?.event ?? null) : null,
+                    market: ticketKind === 'betbuild' ? 'BetBuild' : null,
+                    selection: null,
+                  },
+                ])
+              }
+            >
+              ＋ Adicionar seleção
+            </button>
+          ) : null}
+        </fieldset>
+      </section>
+
+      <section className="mini-card">
+        <header className="mini-card-heading">
+          <div>
+            <h2>Origem e identificação</h2>
+            <p>As opções vêm dos cadastros ativos na Web.</p>
+          </div>
+        </header>
+        <div className="mini-two-columns">
+          <Field label="Casa de aposta">
+            <select
+              value={bookmaker}
+              onChange={(event) => {
+                setBookmaker(event.target.value);
+                setCredit('');
+              }}
+            >
+              <option value="">Selecione a casa</option>
+              {detail.bookmakers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Tipster">
+            <select value={tipster} onChange={(event) => setTipster(event.target.value)}>
+              <option value="">Sem tipster</option>
+              {detail.tipsters.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </section>
+
+      <section className="mini-card">
+        <header className="mini-card-heading">
+          <div>
+            <h2>Valores e resultado</h2>
+            <p>O retorno considera corretamente a origem escolhida.</p>
+          </div>
+        </header>
+        <div className="mini-two-columns">
+          <Field
+            label={origin === 'hibrida' ? 'Valor em dinheiro real (R$)' : 'Valor apostado (R$)'}
+          >
+            <input
+              inputMode="decimal"
+              value={stake}
+              onChange={(event) => setStake(event.target.value)}
+            />
+          </Field>
+          <Field label="Odd">
+            <input
+              inputMode="decimal"
+              value={odds}
+              onChange={(event) => setOdds(event.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="mini-return-preview">
+          <span>Retorno potencial</span>
+          <strong>{potentialReturn ? formatBRL(potentialReturn) : 'Pendente'}</strong>
+        </div>
+        <Field label="Status">
+          <select value="pending" disabled>
+            <option value="pending">Pendente</option>
+          </select>
+        </Field>
+      </section>
+
+      <section className="mini-card mini-sync-card" aria-label="Sincronização">
+        <h2>Sincronização automática</h2>
+        <p>
+          <span aria-hidden="true">✓</span> Atualizar mensagem do Telegram
+        </p>
+        <p>
+          <span aria-hidden="true">✓</span> Atualizar dados na Web
+        </p>
+        <small>As duas superfícies usam o mesmo registro.</small>
+      </section>
+
+      {error ? (
+        <p className="notice warning mini-save-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="mini-sticky-action">
+        <Button onClick={() => void save()} disabled={busy}>
+          {busy ? 'Salvando e sincronizando…' : 'Salvar alterações'}
+        </Button>
+      </div>
+    </div>
+  );
+}

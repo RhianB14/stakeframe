@@ -1053,26 +1053,87 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
     if (route.request().method() === 'PATCH') {
       patchHeaders = route.request().headers();
       patches.push(route.request().postDataJSON());
+      detail.item.version = 3;
+      detail.telegramSyncState = 'synced';
+      detail.telegramSyncedVersion = 3;
       return route.fulfill({ json: { version: 3 } });
     }
     return route.fulfill({ json: detail });
   });
   await page.addInitScript(() => {
-    (window as unknown as { Telegram: unknown }).Telegram = {
-      WebApp: { initData: 'stub-initdata' },
+    (window as unknown as { Telegram: unknown; miniAppClosed: boolean }).Telegram = {
+      WebApp: {
+        initData: 'stub-initdata',
+        close: () => {
+          (window as unknown as { miniAppClosed: boolean }).miniAppClosed = true;
+        },
+        HapticFeedback: { notificationOccurred: () => undefined },
+      },
     };
   });
   await page.goto(`/miniapp#miniapp?import=${importId}`);
-  await expect(page.getByRole('heading', { name: 'Conferir importação' })).toBeVisible();
-  await expect(page.getByLabel('Esporte', { exact: true })).toHaveValue('Futebol');
-  await page.getByLabel('Esporte', { exact: true }).selectOption({ label: 'Basquete' });
-  await page.getByLabel('Dinheiro real').check();
-  await page.getByRole('button', { name: 'Salvar origem e data' }).click();
-  await expect(page.getByText('Rascunho atualizado', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Editar aposta' })).toBeVisible();
+  await page.getByRole('button', { name: /Futebol/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Esporte' })
+    .getByRole('option', { name: 'Basquete', exact: true })
+    .click();
+  await expect(page.getByLabel('Simples')).toBeVisible();
+  await expect(page.getByLabel('Múltipla')).toBeVisible();
+  await expect(page.getByLabel('BetBuild')).toBeVisible();
+  await expect(page.getByText('Detectar automaticamente', { exact: true })).toHaveCount(0);
+  await page.getByText('Híbrida', { exact: true }).click();
+  await expect(page.getByRole('button', { name: /Selecione o crédito/ })).toBeVisible();
+  await page.getByText('Dinheiro real', { exact: true }).click();
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean((window as unknown as { miniAppClosed?: boolean }).miniAppClosed),
+      ),
+    )
+    .toBe(true);
   expect(patches).toHaveLength(1);
   expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real', sport: 'Basquete' });
   // O Mini App autentica pelo initData validado no servidor; nada de IDs no payload.
   expect(patchHeaders['x-telegram-init-data']).toBe('stub-initdata');
+});
+
+test('keeps the Mini App open when Telegram cannot confirm the saved version', async ({ page }) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  await importRoutes(page, detail);
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      detail.item.version = 3;
+      detail.telegramSyncState = 'failed';
+      return route.fulfill({ json: { version: 3 } });
+    }
+    return route.fulfill({ json: detail });
+  });
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown; miniAppClosed: boolean }).Telegram = {
+      WebApp: {
+        initData: 'stub-initdata',
+        close: () => {
+          (window as unknown as { miniAppClosed: boolean }).miniAppClosed = true;
+        },
+      },
+    };
+  });
+  await page.goto(`/miniapp#miniapp?import=${importId}`);
+  await page.getByText('Dinheiro real', { exact: true }).click();
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(
+    page.getByText('Os dados foram salvos, mas o Telegram ainda não conseguiu', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      Boolean((window as unknown as { miniAppClosed?: boolean }).miniAppClosed),
+    ),
+  ).toBe(false);
 });
 
 test('opens the status section from the Telegram button and liquidates for real (R7)', async ({

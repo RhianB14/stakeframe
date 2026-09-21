@@ -215,6 +215,10 @@ export const importDetailSchema = z
     eventAt: instant.nullable(),
     eventDateStatus: z.enum(['pending', 'confirmed']),
     telegramReceivedAt: instant.nullable(),
+    // Confirmação do transporte Telegram. O Mini App só anuncia sucesso e se
+    // fecha depois que a versão gravada também foi processada pela outbox.
+    telegramSyncState: z.enum(['none', 'pending', 'synced', 'failed', 'deleted']).optional(),
+    telegramSyncedVersion: z.number().int().nonnegative().nullable().optional(),
     // Créditos de freebet disponíveis (nunca ambíguos: escolha explícita).
     credits: z.array(
       z.object({

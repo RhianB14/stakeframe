@@ -421,8 +421,10 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             event_date_status: string;
             telegram_received_at: Date | null;
             bookmaker_override_id: string | null;
+            telegram_sync_state: string;
+            telegram_synced_version: number | null;
           }>(
-            'select bet_origin,freebet_id,event_at,event_date_status,telegram_received_at,bookmaker_override_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            'select bet_origin,freebet_id,event_at,event_date_status,telegram_received_at,bookmaker_override_id,telegram_sync_state,telegram_synced_version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
             [id],
           )
         ).rows[0]!;
@@ -438,22 +440,20 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         // repete a validação completa sob lock antes de gravar.
         const draftBookmakerId =
           draftRow.bookmaker_override_id ?? captionBookmakerId ?? extractedBookmakerId;
-        const draftStake = overrides.stake ?? extraction?.stake ?? null;
-        const credits =
-          draftBookmakerId && draftStake
-            ? (
-                await client.query<{
-                  id: string;
-                  bookmaker_id: string;
-                  amount: string;
-                  expires_text: string;
-                  stake_returned: boolean;
-                }>(
-                  "select id,bookmaker_id,amount,to_char(expires_on,'YYYY-MM-DD') as expires_text,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date and bookmaker_id=$1 and amount=$2 order by expires_on asc,id asc limit 50",
-                  [draftBookmakerId, draftStake],
-                )
-              ).rows
-            : [];
+        const credits = draftBookmakerId
+          ? (
+              await client.query<{
+                id: string;
+                bookmaker_id: string;
+                amount: string;
+                expires_text: string;
+                stake_returned: boolean;
+              }>(
+                "select id,bookmaker_id,amount,to_char(expires_on,'YYYY-MM-DD') as expires_text,stake_returned from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and used_by is null and expires_on >= (now() at time zone 'America/Sao_Paulo')::date and bookmaker_id=$1 order by expires_on asc,id asc limit 50",
+                [draftBookmakerId],
+              )
+            ).rows
+          : [];
         // STK-G0-20 B5 — cada lista carrega SOMENTE o próprio tipo de cadastro
         // ATIVO da organização (casas e tipsters nunca se misturam).
         const bookmakers = (
@@ -524,6 +524,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           telegramReceivedAt: draftRow.telegram_received_at
             ? draftRow.telegram_received_at.toISOString()
             : null,
+          telegramSyncState:
+            draftRow.telegram_sync_state === 'pending' ||
+            draftRow.telegram_sync_state === 'synced' ||
+            draftRow.telegram_sync_state === 'failed' ||
+            draftRow.telegram_sync_state === 'deleted'
+              ? draftRow.telegram_sync_state
+              : ('none' as const),
+          telegramSyncedVersion: draftRow.telegram_synced_version,
           credits: credits.map((credit) => ({
             id: credit.id,
             bookmakerId: credit.bookmaker_id,
