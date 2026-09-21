@@ -39,10 +39,16 @@ async function dropCurrentDatabase() {
 /**
  * Returns the database to the state before migration 0005: the core schema does not exist and
  * the recorded migrations stop at 0004, so the next migrator run must replay the 0005 chain
- * (0005 and every later core migration, e.g. 0006, 0007, 0008, 0009) for real.
+ * (0005 through 0015) for real. The replay also removes the 0015 columns first, so the
+ * migration runner still sees a contiguous prefix and can replay the complete chain.
  */
 async function reopenCoreMigration() {
   await database.pool.query('DROP SCHEMA "core" CASCADE');
+  await database.pool.query(
+    'ALTER TABLE finance.bet DROP CONSTRAINT IF EXISTS bet_organization_id_ticket_number_idx, DROP CONSTRAINT IF EXISTS bet_ticket_number_positive',
+  );
+  await database.pool.query('ALTER TABLE finance.bet DROP COLUMN IF EXISTS ticket_number');
+  await database.pool.query('ALTER TABLE finance.settings DROP COLUMN IF EXISTS next_ticket_number');
   await database.pool.query(
     `DELETE FROM drizzle.__drizzle_migrations
      WHERE created_at > (SELECT created_at FROM drizzle.__drizzle_migrations ORDER BY created_at ASC OFFSET 4 LIMIT 1)`,
@@ -252,10 +258,10 @@ describe('core tenant registry backfill with more than one pre-existing user', (
       await count("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'core'"),
     ).toBe(0);
     // reopenCoreMigration removed the markers of 0005 and every later…
-    // (0006, 0007, 0008, 0009, 0010, 0011, 0012, 0013, 0014); the failed 0005
-    // replay must not add a… marker back.
+    // (0006, 0007, 0008, 0009, 0010, 0011, 0012, 0013, 0014, 0015); the failed
+    // 0005 replay must not add a marker back.
     expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(
-      recordedBefore - 10,
+      recordedBefore - 11,
     );
     expect(await count('SELECT count(*) FROM auth."user"')).toBe(2);
   });
