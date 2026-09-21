@@ -1050,6 +1050,18 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   let patchHeaders: Record<string, string> = {};
   const patches: unknown[] = [];
   await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'POST') {
+      detail.item.version = 4;
+      detail.telegramSyncState = 'synced';
+      detail.telegramSyncedVersion = 4;
+      return route.fulfill({
+        json: {
+          version: 4,
+          betId: '10000000-0000-4000-8000-000000000099',
+          betState: 'open',
+        },
+      });
+    }
     if (route.request().method() === 'PATCH') {
       patchHeaders = route.request().headers();
       patches.push(route.request().postDataJSON());
@@ -1085,7 +1097,7 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   await page.getByText('Híbrida', { exact: true }).click();
   await expect(page.getByRole('button', { name: /Selecione o crédito/ })).toBeVisible();
   await page.getByText('Dinheiro real', { exact: true }).click();
-  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await page.getByRole('button', { name: 'Salvar e confirmar aposta' }).click();
   await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toBeVisible();
   await expect
     .poll(() =>
@@ -1105,6 +1117,15 @@ test('keeps the Mini App open when Telegram cannot confirm the saved version', a
   const detail = importFixture();
   await importRoutes(page, detail);
   await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        json: {
+          version: 3,
+          betId: '10000000-0000-4000-8000-000000000099',
+          betState: 'open',
+        },
+      });
+    }
     if (route.request().method() === 'PATCH') {
       detail.item.version = 3;
       detail.telegramSyncState = 'failed';
@@ -1124,7 +1145,7 @@ test('keeps the Mini App open when Telegram cannot confirm the saved version', a
   });
   await page.goto(`/miniapp#miniapp?import=${importId}`);
   await page.getByText('Dinheiro real', { exact: true }).click();
-  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await page.getByRole('button', { name: 'Salvar e confirmar aposta' }).click();
   await expect(
     page.getByText('Os dados foram salvos, mas o Telegram ainda não conseguiu', { exact: false }),
   ).toBeVisible();
