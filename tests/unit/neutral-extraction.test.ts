@@ -49,6 +49,15 @@ describe('neutral extraction contract (STK-G0-22-F1)', () => {
     expect(parsed.success && parsed.data).not.toHaveProperty('bookmaker');
     expect(ticketExtractionJsonSchema).toBeDefined();
   });
+  it('accepts an evidence-based sport that remains editable later', () => {
+    const parsed = ticketExtractionSchema.safeParse({
+      ...neutral,
+      selections: [{ ...neutral.selections[0], sport: 'Futebol' }],
+    });
+    expect(parsed.success).toBe(true);
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('[Esporte] Identifique o esporte');
+    expect(TICKET_EXTRACTION_SYSTEM_PROMPT).toContain('editável pelo usuário no Mini App/Web');
+  });
   it('rejects truncated and incomplete responses (fail-closed)', () => {
     expect(ticketExtractionSchema.safeParse('{"reference":').success).toBe(false);
     const missing: Record<string, unknown> = { ...neutral };

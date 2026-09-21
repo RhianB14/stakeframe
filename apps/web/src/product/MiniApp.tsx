@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { importDetailSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import {
+  ApiFailure,
   request,
   patchImportDraft,
   setImportStatus,
@@ -19,6 +20,7 @@ import {
   StatusSection,
   TipsterSection,
 } from './MiniAppSections.js';
+import { readTelegramInitData } from './miniapp-auth.js';
 
 // STK-G0-19-R5 — Mini App do Telegram: a mesma fonte canônica, autenticada pelo
 // initData validado no servidor (x-telegram-init-data). Nenhum identificador
@@ -51,18 +53,20 @@ const sectionParam = (): 'status' | 'bookmaker' | 'tipster' | 'cashout' | null =
 };
 
 export function MiniAppPage() {
-  const [, setTelegramScriptLoaded] = useState(0);
+  const [initData, setInitData] = useState(() => readTelegramInitData());
   useEffect(() => {
+    const syncInitData = () => setInitData(readTelegramInitData());
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.ready?.();
+      syncInitData();
       return;
     }
     let script = document.querySelector<HTMLScriptElement>(
       'script[data-stakeframe-telegram-webapp="true"]',
     );
     const onLoad = () => {
-      setTelegramScriptLoaded((value) => value + 1);
       window.Telegram?.WebApp?.ready?.();
+      syncInitData();
     };
     if (!script) {
       script = document.createElement('script');
@@ -72,14 +76,18 @@ export function MiniAppPage() {
       document.head.appendChild(script);
     }
     script.addEventListener('load', onLoad);
+    // Start immediately from tgWebAppData when available; the SDK remains a
+    // progressive enhancement instead of blocking the first authenticated GET.
+    syncInitData();
     return () => script?.removeEventListener('load', onLoad);
   }, []);
-  const initData = window.Telegram?.WebApp?.initData ?? '';
   const id = importId() ?? '';
   const detail = useQuery({
     queryKey: ['miniapp', id],
     enabled: Boolean(initData && id),
-    retry: false,
+    retry: (_failureCount, failure) => failure instanceof ApiFailure && failure.status === 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: () =>
       request(`/api/v1/imports/${id}`, importDetailSchema, {
         headers: { 'x-telegram-init-data': initData },

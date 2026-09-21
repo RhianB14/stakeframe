@@ -125,8 +125,8 @@ export function renderImportMessage(input: ImportMessageInput): string {
   lines.push(
     `🎾 Esporte: ${orPending(input.sport)}`,
     `🏆 Torneio: ${input.tournament ?? 'Definir Manualmente'}`,
-    `⚔️ Evento: ${orPending(input.event)}`,
     `🌎 País: ${orPending(input.country)}`,
+    `⚔️ Evento: ${orPending(input.event)}`,
     `🎰 Aposta: ${orPending(input.selection)}`,
     `🎯 Mercado: ${orPending(input.market)}`,
     `💰 Valor Apostado: ${input.stake ? `R$ ${displayMoney(input.stake)}` : 'pendente'}`,

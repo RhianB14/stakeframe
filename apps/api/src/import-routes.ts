@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
-import { FinanceError, type ImportService } from '@stakeframe/db';
+import { FinanceError, readSecret, type ImportService } from '@stakeframe/db';
 import type { OrganizationContext } from '@stakeframe/db';
 import {
   apiErrorSchema,
@@ -68,8 +68,18 @@ export function registerImportRoutes(
   const authorizeDraft = async (request: FastifyRequest, reply: FastifyReply) => {
     const initData = request.headers['x-telegram-init-data'];
     if (typeof initData === 'string' && initData.length > 0) {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
-      const expectedTelegramId = process.env.TELEGRAM_OWNER_USER_ID?.trim() ?? null;
+      // Production mounts Telegram credentials as *_FILE secrets. Reading the
+      // raw environment here made the Mini App return 401/503 in production
+      // even though the worker could authenticate the same Telegram account.
+      // Keep the route on the shared secret contract and never expose values.
+      let botToken: string | undefined;
+      let expectedTelegramId: string | undefined;
+      try {
+        botToken = readSecret(process.env, 'TELEGRAM_BOT_TOKEN')?.trim();
+        expectedTelegramId = readSecret(process.env, 'TELEGRAM_OWNER_USER_ID')?.trim();
+      } catch {
+        return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+      }
       if (!botToken || !expectedTelegramId)
         return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
       const validated = validateTelegramInitData(initData, botToken);
