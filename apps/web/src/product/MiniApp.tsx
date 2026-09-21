@@ -194,7 +194,7 @@ export function MiniAppPage() {
               getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
             }
             confirmSender={(body) => confirmImport(id, body, initData)}
-            onConfirmed={onDraftSaved}
+            onConfirmed={onSaved}
             onSaved={onDraftSaved}
           />
           {detail.data.bet ? (

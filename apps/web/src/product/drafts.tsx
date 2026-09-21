@@ -94,9 +94,6 @@ export function DraftControls({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [savedVersion, setSavedVersion] = useState<number | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const provisional = detail.eventDateStatus === 'pending';
   const [automaticHold, setAutomaticHold] = useState(false);
   const [cleared, setCleared] = useState(false);
@@ -116,35 +113,20 @@ export function DraftControls({
         country: country.trim() || null,
       });
       setSaved(true);
-      setSavedVersion(result.version);
-      setConfirmed(false);
       setCleared(result.freebetCleared);
       setAutomaticHold(result.automaticPolicy !== 'approved');
-      onSaved();
+      if (confirmSender) {
+        await confirmSender({ version: result.version });
+        onConfirmed?.();
+      } else {
+        onSaved();
+      }
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
       );
     } finally {
       setBusy(false);
-    }
-  };
-  const confirm = async () => {
-    if (!confirmSender || !saved) return;
-    setConfirming(true);
-    setError(null);
-    try {
-      await confirmSender({ version: savedVersion ?? detail.item.version });
-      setConfirmed(true);
-      onConfirmed?.();
-    } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Não foi possível confirmar a aposta. Confira os dados e tente novamente.',
-      );
-    } finally {
-      setConfirming(false);
     }
   };
   return (
@@ -287,18 +269,19 @@ export function DraftControls({
         </p>
       ) : null}
       <Button onClick={() => void save()} disabled={busy}>
-        {busy ? 'Salvando…' : 'Salvar origem e data'}
+        {busy
+          ? confirmSender
+            ? 'Salvando e confirmando…'
+            : 'Salvando…'
+          : confirmSender
+            ? 'Salvar e confirmar aposta'
+            : 'Salvar origem e data'}
       </Button>
       {confirmSender ? (
-        <>
-          <p className="notice">
-            Depois de salvar e conferir todos os campos, confirme a aposta aqui. Esta ação registra
-            o lançamento financeiro e libera a alteração de status; não é necessário abrir a Web.
-          </p>
-          <Button onClick={() => void confirm()} disabled={busy || confirming || !saved}>
-            {confirming ? 'Confirmando…' : confirmed ? 'Aposta confirmada' : 'Confirmar aposta'}
-          </Button>
-        </>
+        <p className="notice">
+          Esta ação salva os dados, registra a aposta e fecha o Mini App automaticamente. Se houver
+          erro, a tela permanecerá aberta para correção.
+        </p>
       ) : null}
     </div>
   );
