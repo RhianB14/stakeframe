@@ -301,6 +301,22 @@ export const draftUpdateResultSchema = z
   .meta({ id: 'DraftUpdateResult' });
 export type DraftUpdateResult = z.infer<typeof draftUpdateResultSchema>;
 
+// STK-G0-22 — confirmação explícita no Mini App. O cliente envia somente a
+// versão otimista; valores financeiros, casa, origem e seleções são
+// reconstruídos e revalidados pelo servidor a partir do rascunho canônico.
+export const importConfirmSchema = z
+  .strictObject({ version: z.number().int().positive() })
+  .meta({ id: 'ImportConfirm' });
+export const importConfirmResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betId: z.uuid(),
+    betState: z.string(),
+  })
+  .meta({ id: 'ImportConfirmResult' });
+export type ImportConfirm = z.infer<typeof importConfirmSchema>;
+export type ImportConfirmResult = z.infer<typeof importConfirmResultSchema>;
+
 // STK-G0-19-R7 — transições REAIS de status disponíveis para a aposta de uma
 // importação pendente no Mini App (seção "Alterar Status").
 // STK-G0-20 — teclado de status (Ganha, Perdida, Meio-Ganha, Meio-Perdida,

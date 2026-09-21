@@ -8,6 +8,7 @@ import {
   importOriginResultSchema,
   importEventResultSchema,
   importCreditsResultSchema,
+  importConfirmResultSchema,
   cents,
   money,
   saoPauloDate,
@@ -214,6 +215,22 @@ export function getImportCredits(id: string, bookmakerId: string, initData?: str
     importCreditsResultSchema,
     { headers: { ...(initData ? { 'x-telegram-init-data': initData } : {}) } },
   );
+}
+// STK-G0-22 — confirmação financeira explícita pelo Mini App. A chave é
+// reutilizada apenas em retry de transporte para não duplicar o lançamento.
+export function confirmImport(id: string, body: { version: number }, initData?: string) {
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/confirm`, importConfirmResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
 }
 // STK-G0-19-R7 / STK-G0-20 B4/B5 — liquidação real pelo Mini App (seção
 // "Alterar Status"): TODAS as transições do produto (Ganha, Perdida, Meio-

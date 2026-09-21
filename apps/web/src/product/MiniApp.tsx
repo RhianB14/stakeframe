@@ -6,6 +6,7 @@ import {
   ApiFailure,
   request,
   patchImportDraft,
+  confirmImport,
   setImportStatus,
   applyImportBookmaker,
   applyImportTipster,
@@ -134,6 +135,12 @@ export function MiniAppPage() {
     void detail.refetch();
     window.setTimeout(() => window.Telegram?.WebApp?.close?.(), 1_200);
   };
+  // A draft save must remain on-screen so the owner can perform the explicit
+  // financial confirmation in the same Mini App. Other actions keep the
+  // existing close-after-feedback behavior.
+  const onDraftSaved = () => {
+    void detail.refetch();
+  };
   const section = sectionParam();
   return (
     <div className="miniapp-page">
@@ -186,7 +193,9 @@ export function MiniAppPage() {
             creditsSender={(bookmakerId) =>
               getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
             }
-            onSaved={onSaved}
+            confirmSender={(body) => confirmImport(id, body, initData)}
+            onConfirmed={onDraftSaved}
+            onSaved={onDraftSaved}
           />
           {detail.data.bet ? (
             <StatusSection

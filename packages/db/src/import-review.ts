@@ -6,6 +6,9 @@ import {
   ticketExtractionSchema,
   automaticDecisionSchema,
   financeCommandSchema,
+  betInputSchema,
+  parseAutomaticPlacedAt,
+  saoPauloDate,
   type SettleAction,
   importBookmakerResultSchema,
   importOriginResultSchema,
@@ -315,6 +318,166 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       actor: string,
     ) {
       return draft.updateDraft(context, id, patch, actor);
+    },
+    /**
+     * STK-G0-22 — confirmação explícita no Mini App. O cliente envia somente
+     * a versão otimista; o servidor recompõe e revalida o BetInput a partir do
+     * rascunho canônico, sem abrir uma escrita financeira arbitrária.
+     */
+    async confirmFromMiniApp(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number },
+      actor: string,
+      idempotencyKey: string,
+    ) {
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        const row = (
+          await client.query<{
+            id: string;
+            state: string;
+            version: number;
+            imported_bet_id: string | null;
+            extraction: unknown;
+            bet_origin: string | null;
+            freebet_id: string | null;
+            caption: string;
+            metadata: unknown;
+            bookmaker_override_id: string | null;
+            event_at: Date | null;
+          }>(
+            'select id,state,version,imported_bet_id,extraction,bet_origin,freebet_id,caption,metadata,bookmaker_override_id,event_at from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        // Repetições depois de uma resposta perdida são sucesso idempotente;
+        // não reabrem nem duplicam a aposta.
+        if (row.imported_bet_id) {
+          const bet = (
+            await client.query<{ state: string }>(
+              'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+              [row.imported_bet_id],
+            )
+          ).rows[0];
+          if (!bet) throw new FinanceError('NOT_FOUND');
+          return { version: row.version, betId: row.imported_bet_id, betState: bet.state };
+        }
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        if (!['pending', 'review', 'failed'].includes(row.state))
+          throw new FinanceError('STATE_CONFLICT');
+        if (!settings.initialized) throw new FinanceError('NOT_INITIALIZED');
+
+        const evidence =
+          row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+            ? (row.extraction as { extraction: unknown }).extraction
+            : row.extraction;
+        const extraction = ticketExtractionSchema.safeParse(evidence);
+        if (!extraction.success || !extraction.data.stake || !extraction.data.odds)
+          throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+        const placedAtCandidates = (['iso-offset', 'br-sao-paulo', 'br-textual-sao-paulo'] as const)
+          .map((format) => parseAutomaticPlacedAt(extraction.data.placedAtText, format))
+          .filter((value): value is string => value !== null);
+        const uniquePlacedAt = [...new Set(placedAtCandidates)];
+        if (uniquePlacedAt.length !== 1 || Date.parse(uniquePlacedAt[0]!) > Date.now())
+          throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+
+        const labels = parseCaption(row.caption);
+        const overrides = draftOverrides(row.metadata);
+        const aliases = (
+          await client.query<{ catalog_id: string; kind: string; label: string }>(
+            'select a.catalog_id,a.kind,a.label from finance.catalog_alias a join finance.catalog c on c.id=a.catalog_id and c.organization_id=a.organization_id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid and c.active',
+          )
+        ).rows;
+        const aliasId = (kind: string, label: string | null) =>
+          label
+            ? (aliases.find(
+                (alias) => alias.kind === kind && normalized(alias.label) === normalized(label),
+              )?.catalog_id ?? null)
+            : null;
+        const bookmakerId = row.bookmaker_override_id ?? aliasId('bookmaker', labels.bookmaker);
+        if (!bookmakerId) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+        const bookmaker = (
+          await client.query<{ id: string }>(
+            "select id from finance.catalog where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and kind='bookmaker' and active",
+            [bookmakerId],
+          )
+        ).rows[0];
+        if (!bookmaker) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+
+        const origin =
+          row.bet_origin === 'real' || row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+            ? row.bet_origin
+            : null;
+        if (!origin) throw new FinanceError('ORIGIN_REQUIRED');
+        const freebetId = origin === 'real' ? null : row.freebet_id;
+        if (origin !== 'real' && !freebetId) throw new FinanceError('FREEBET_UNRESOLVED');
+        const selections = extraction.data.selections.map((selection) => {
+          if (!selection.event || !selection.market || !selection.selection)
+            throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          return {
+            event: selection.event,
+            sport: overrides.sport ?? selection.sport,
+            market: selection.market,
+            selection: selection.selection,
+            odds: selection.odds,
+            eventDate: row.event_at ? saoPauloDate(row.event_at) : null,
+            eventAt: row.event_at ? row.event_at.toISOString() : null,
+            dateStatus: row.event_at ? ('confirmed' as const) : ('pending' as const),
+          };
+        });
+        const bet = betInputSchema.safeParse({
+          bookmakerId,
+          tipsterId: overrides.tipsterId ?? aliasId('tipster', labels.tipster),
+          stake: extraction.data.stake,
+          odds: extraction.data.odds,
+          placedAt: uniquePlacedAt[0],
+          freebetId,
+          reference: extraction.data.reference ?? '',
+          selections,
+          allowMissingUnit: false,
+        });
+        if (!bet.success) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+        const command = financeCommandSchema.parse({
+          type: 'import.confirm',
+          expectedVersion: settings.version,
+          importId: id,
+          expectedInboxVersion: input.version,
+          decision: {
+            kind: 'create',
+            bet: bet.data,
+            betOrigin: origin,
+            // O clique explícito é a justificativa auditável se o detector
+            // encontrar uma possível duplicata.
+            duplicateReason: 'Confirmação explícita pelo proprietário no Mini App',
+          },
+        });
+        const result = await executeFinancialCommand(
+          client,
+          actor,
+          deterministicKey(`import-confirm:${id}:${idempotencyKey}`),
+          command,
+          settings,
+        );
+        const imported = (
+          await client.query<{ version: number; imported_bet_id: string | null }>(
+            'select version,imported_bet_id from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!imported?.imported_bet_id) throw new FinanceError('STATE_CONFLICT');
+        return {
+          version: imported.version,
+          betId: imported.imported_bet_id || result.id,
+          betState: 'open',
+        };
+      });
     },
     attachTelegram(
       context: OrganizationContext,

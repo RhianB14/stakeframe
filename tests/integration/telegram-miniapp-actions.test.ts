@@ -209,6 +209,61 @@ afterAll(async () => {
 });
 
 describe('Mini App status section (R7)', () => {
+  it('confirms the draft in the Mini App and exposes status without the Web', async () => {
+    const importId = await upload();
+    await seedExtraction(importId);
+    const saved = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: 1, betOrigin: 'real' },
+    });
+    expect(saved.statusCode).toBe(200);
+    const version = (saved.json() as { version: number }).version;
+    const key = randomUUID();
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': key },
+      payload: { version },
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const result = confirmed.json() as { betId: string; betState: string; version: number };
+    expect(result).toMatchObject({ betState: 'open' });
+    expect(result.betId).toMatch(/^[0-9a-f-]{36}$/);
+
+    const replay = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': key },
+      payload: { version },
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({ betId: result.betId, betState: 'open' });
+    const count = (
+      await database.pool.query<{ count: string }>('select count(*) from finance.bet where id=$1', [
+        result.betId,
+      ])
+    ).rows[0]!.count;
+    expect(count).toBe('1');
+  });
+
+  it('keeps the financial write closed until the origin is chosen', async () => {
+    const importId = await upload();
+    await seedExtraction(importId);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
+      payload: { version: 1 },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: 'ORIGIN_REQUIRED' } });
+    const count = (await database.pool.query<{ count: string }>('select count(*) from finance.bet'))
+      .rows[0]!.count;
+    expect(count).toBe('0');
+  });
+
   it('loads the canonical bet and the active houses with a valid signed initData', async () => {
     const { importId } = await importedWithTelegram();
     const response = await app.inject({
