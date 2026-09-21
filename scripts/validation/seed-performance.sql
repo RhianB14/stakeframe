@@ -7,9 +7,9 @@ insert into finance.journal(id,kind,effective_at,actor,reason)
 select stake_journal_id,'bet_stake',now(),'synthetic-performance','Fictional volume fixture'
 from performance_seed;
 
-insert into finance.bet(id,bookmaker_id,stake,odds,placed_at,reference,state,remaining,
+insert into finance.bet(id,ticket_number,bookmaker_id,stake,odds,placed_at,reference,state,remaining,
   unit_month,unit_amount,stake_journal_id)
-select p.bet_id,c.id,10,1.5,now(),'synthetic-'||n,
+select p.bet_id,n,c.id,10,1.5,now(),'synthetic-'||n,
   case when n%2=0 then 'settled' else 'open' end,case when n%2=0 then 0 else 10 end,
   u.month,u.amount,p.stake_journal_id
 from performance_seed p cross join finance.catalog c cross join finance.monthly_unit u
