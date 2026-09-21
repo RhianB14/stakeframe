@@ -1008,7 +1008,7 @@ test('confirms origin and event date on the canonical draft before importing (R5
   ];
   await importRoutes(page, detail);
   const patches: unknown[] = [];
-  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+  await page.route(`**/api/v1/imports/${importId}**`, (route) => {
     if (route.request().method() === 'PATCH') {
       patches.push(route.request().postDataJSON());
       return route.fulfill({ json: { version: 3 } });
@@ -1049,7 +1049,7 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   await importRoutes(page, detail);
   let patchHeaders: Record<string, string> = {};
   const patches: unknown[] = [];
-  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+  await page.route(`**/api/v1/imports/${importId}**`, (route) => {
     if (route.request().method() === 'POST') {
       detail.item.version = 4;
       detail.telegramSyncState = 'synced';
