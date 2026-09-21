@@ -1,43 +1,43 @@
 {
   "version": 1,
   "authorization": "Rhian authorized publication and deployment of the Telegram/MiniApp fixes after candidate verification on 2026-09-21",
-  "sourceSha": "9e3eadff7a364a391d74b11909cf20c6e7c96dd4",
-  "sourceCiRunId": 35551733908,
-  "candidateRunId": 35552211291,
+  "sourceSha": "1ba2b6b4209ab9e28944a4f37f62eb1e30ebeeb1",
+  "sourceCiRunId": 35552900063,
+  "candidateRunId": 35554092983,
   "architecture": "arm64",
   "visibility": "public",
   "artifact": {
-    "id": 10619050857,
-    "name": "candidate-9e3eadff7a364a391d74b11909cf20c6e7c96dd4-arm64",
-    "bytes": 554069094,
-    "sha256": "c3a22fe5cac8ee2dde341e8e8ad57e11441e8856b0dd01c6f41a2347f81f4fb1",
-    "expiresAt": "2026-09-22T01:52:19Z"
+    "id": 10619737154,
+    "name": "candidate-1ba2b6b4209ab9e28944a4f37f62eb1e30ebeeb1-arm64",
+    "bytes": 554070118,
+    "sha256": "bc1d19b32e97ac6efe919ee8a75e663cf1bf7c5e1ba40ec6897bb6619d72c519",
+    "expiresAt": "2026-09-22T02:26:17Z"
   },
   "images": [
     {
       "target": "api",
       "repository": "ghcr.io/rhianb14/stakeframe-api",
-      "digest": "sha256:8d1a8fe89af8d2e710762f0512cb09347263b62bd51119479f0ed315b7cf6aa6"
+      "digest": "sha256:8cfe742a5515330ddf3d9e981f6ea54b5ad506ad1836a8638c068beecc2386a1"
     },
     {
       "target": "worker",
       "repository": "ghcr.io/rhianb14/stakeframe-worker",
-      "digest": "sha256:c384ca63b2815e106f3a8dc4878c24e6d5dcdcdbfc59b07860634bf2c5b49cba"
+      "digest": "sha256:0a03f62325ad90ca92d7e4f96040d6ad1a49050565fa9bae365828afa26eeda7"
     },
     {
       "target": "migrate",
       "repository": "ghcr.io/rhianb14/stakeframe-migrate",
-      "digest": "sha256:4bd7c681c5ef7ace783753ca9e1a9aa3baea3bb59622a440eca73bdb8c45fa75"
+      "digest": "sha256:126f0c8f3f63dfe57739bae3dd1642bce05b28492adea3c62ded9a0230ad7034"
     },
     {
       "target": "web-production",
       "repository": "ghcr.io/rhianb14/stakeframe-web-production",
-      "digest": "sha256:5d0c2a3577a861d65f8e09d2fd801008106926e95eff838504158044790a83aa"
+      "digest": "sha256:54eddee33f6de7444f7c9f52d1e67be71c92ac502d2f56e7d58e677089ad404f"
     },
     {
       "target": "operations",
       "repository": "ghcr.io/rhianb14/stakeframe-operations",
-      "digest": "sha256:d1258be871312e690c400600230e6ecf8cc3ac94facb943cfeedf6947d67010f"
+      "digest": "sha256:e867df3791618937efc3540d33a2c4c1d9adf98952fd9847b57ac50c0c554f98"
     }
   ]
 }
