@@ -7,6 +7,7 @@ import {
   financeCommandSchema,
   cents,
   money,
+  normalizeEventLabel,
   saoPauloDate,
   parseAutomaticPlacedAt,
   automaticPolicyIsCurrent,
@@ -116,7 +117,7 @@ async function candidate(
   },
   bookmakerId: string,
   tipsterId: string,
-  origin: { kind: 'real' | 'freebet' | null; freebetId: string | null },
+  origin: { kind: 'real' | 'freebet' | 'hibrida'; freebetId: string | null },
   now: Date,
 ): Promise<{ reason: AutomaticReason; bet?: BetInput }> {
   const evidence = ticketExtractionSchema.safeParse(result.extraction);
@@ -130,11 +131,10 @@ async function candidate(
   )
     return { reason: 'EXTRACTION_UNCERTAIN' };
   if (result.ocrConsistent === false) return { reason: 'EXTRACTION_UNCERTAIN' };
-  // STK-G0-19-R5: a origem financeira é declarada pelo usuário (Mini App/web);
-  // sem ela nenhuma aposta financeira é criada (fail-closed). A leitura visual
-  // da IA é apenas diagnóstico: um conflito explícito encaminha para revisão e
-  // nunca altera automaticamente a escolha do usuário.
-  if (origin.kind === null) return { reason: 'ORIGIN_UNRESOLVED' };
+  // A origem promocional é declarada pelo usuário (Mini App/web); sem ela o
+  // produto assume dinheiro real. A leitura visual da IA é apenas diagnóstico:
+  // um conflito explícito encaminha para revisão e nunca altera a escolha do
+  // usuário.
   if (origin.kind === 'real' && extraction.freebet === true) return { reason: 'FREEBET_CONFLICT' };
   if (origin.kind === 'freebet' && extraction.freebet === false)
     return { reason: 'FREEBET_CONFLICT' };
@@ -190,7 +190,7 @@ async function candidate(
     // nulos, dateStatus 'pending'). eventDateText é reservado e depreciado —
     // nunca é convertido em data, nunca autoriza nem bloqueia a importação.
     selections: extraction.selections.map((selection) => ({
-      event: selection.event,
+      event: normalizeEventLabel(selection.event),
       sport: selection.sport,
       market: selection.market,
       selection: selection.selection,
@@ -322,7 +322,9 @@ export function createAutomaticImportService(
               bookmakerContext.tipsterId,
               {
                 kind:
-                  row.bet_origin === 'real' || row.bet_origin === 'freebet' ? row.bet_origin : null,
+                  row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+                    ? row.bet_origin
+                    : 'real',
                 freebetId: row.freebet_id,
               },
               now,
@@ -334,7 +336,17 @@ export function createAutomaticImportService(
                 expectedVersion: settings.version,
                 importId: id,
                 expectedInboxVersion: row.version,
-                decision: { kind: 'create', bet: assessed.bet, duplicateReason: '' },
+                decision: {
+                  kind: 'create',
+                  bet: assessed.bet,
+                  duplicateReason: '',
+                  // Ausência de origem significa dinheiro real; somente
+                  // freebet/híbrida precisam de declaração e crédito explícitos.
+                  betOrigin:
+                    row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+                      ? row.bet_origin
+                      : 'real',
+                },
               });
               const applied = await executeFinancialCommand(
                 client,

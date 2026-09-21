@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   deriveBetOrigin,
+  normalizeEventLabel,
   parseCaption,
   parseAutomaticPlacedAt,
   betInputSchema,
@@ -643,11 +644,11 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!['pending', 'review', 'failed'].includes(row.state))
           throw new FinanceError('STATE_CONFLICT');
 
+        // O fluxo de importação assume dinheiro real quando o usuário não
+        // selecionou uma origem promocional. Freebet/híbrida continuam
+        // exigindo a escolha explícita do crédito correspondente.
         const origin =
-          row.bet_origin === 'real' || row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
-            ? row.bet_origin
-            : null;
-        if (!origin) throw new FinanceError('ORIGIN_REQUIRED');
+          row.bet_origin === 'freebet' || row.bet_origin === 'hibrida' ? row.bet_origin : 'real';
         if (!row.bookmaker_override_id) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
 
         const evidence =
@@ -684,7 +685,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           reference: extraction.data.reference ?? '',
           allowMissingUnit: false,
           selections: selections.map((selection) => ({
-            event: selection.event,
+            event: normalizeEventLabel(selection.event),
             sport: overrides.sport ?? extraction.data.selections[0]?.sport ?? null,
             market: selection.market,
             selection: selection.selection,

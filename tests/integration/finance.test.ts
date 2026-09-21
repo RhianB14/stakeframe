@@ -296,6 +296,23 @@ describe('financial core with PostgreSQL', () => {
       }),
     ).rejects.toThrow('STATE_CONFLICT');
   });
+  it('allocates tenant ticket numbers from one and normalizes event separators', async () => {
+    const { bookmakerId } = await initialized();
+    const first = await createBet(bookmakerId, {
+      selections: [{ ...selection, event: 'Corinthians - Palmeiras' }],
+    });
+    const second = await createBet(bookmakerId, {
+      selections: [{ ...selection, event: 'Flamengo versus Fluminense' }],
+    });
+    expect((await service.bet(tenantContext, first.id)).bet).toMatchObject({
+      ticketNumber: 1,
+      selections: [{ event: 'Corinthians x Palmeiras' }],
+    });
+    expect((await service.bet(tenantContext, second.id)).bet).toMatchObject({
+      ticketNumber: 2,
+      selections: [{ event: 'Flamengo x Fluminense' }],
+    });
+  });
   it('tracks partial cashout principal independently from payout and reverses without deleting history', async () => {
     const { bookmakerId } = await initialized();
     const bet = await createBet(bookmakerId);

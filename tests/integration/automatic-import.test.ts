@@ -482,18 +482,18 @@ describe('automatic import financial boundary', () => {
       1,
     );
   });
-  it('keeps imports without a declared origin in review and distinguishes unresolved houses', async () => {
+  it('assumes real money when origin is absent and still distinguishes unresolved houses', async () => {
     const undeclared = await input({}, 'Fixture\nBet365', { kind: null });
     expect(await complete(undeclared)).toMatchObject({
-      state: 'review',
-      reason: 'ORIGIN_UNRESOLVED',
+      state: 'imported',
+      reason: 'IMPORTED',
     });
     const missingHouse = await input({}, 'Fixture\n');
     expect(await complete(missingHouse)).toMatchObject({ reason: 'BOOKMAKER_UNRESOLVED' });
     const singleLine = await input({}, 'Fixture');
     expect(await complete(singleLine)).toMatchObject({ reason: 'BOOKMAKER_UNRESOLVED' });
     expect((await database.pool.query('select count(*)::int n from finance.bet')).rows[0].n).toBe(
-      0,
+      1,
     );
   });
   it('keeps the extraction neutral — no house field — and imports from the user caption (STK-G0-22)', async () => {
@@ -517,10 +517,12 @@ describe('automatic import financial boundary', () => {
       bookmaker: 'superbet',
       bookmakerId: superbet.id,
     };
-    const other = await input({}, 'Fixture\nSuperbet', { kind: null });
+    const other = await input({ reference: 'SUPERBET-UNDECLARED-1' }, 'Fixture\nSuperbet', {
+      kind: null,
+    });
     expect(await complete(other, [layout, superbetLayout])).toMatchObject({
       state: 'review',
-      reason: 'ORIGIN_UNRESOLVED',
+      reason: 'DUPLICATE_REVIEW_REQUIRED',
     });
     expect(
       (

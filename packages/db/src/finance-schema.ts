@@ -48,6 +48,7 @@ export const settings = finance.table(
       .unique()
       .references(() => organization.id),
     version: integer('version').notNull().default(1),
+    nextTicketNumber: integer('next_ticket_number').notNull().default(1),
     initialized: boolean('initialized').notNull().default(false),
     unitPercent: numeric('unit_percent', { precision: 6, scale: 2 }).notNull().default('1.00'),
     openedAt: instant('opened_at'),
@@ -220,6 +221,7 @@ export const bet = finance.table(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: organizationId(),
+    ticketNumber: integer('ticket_number').notNull(),
     bookmakerId: uuid('bookmaker_id').notNull(),
     tipsterId: uuid('tipster_id'),
     stake: money('stake').notNull(),
@@ -237,6 +239,7 @@ export const bet = finance.table(
   },
   (t) => [
     unique('bet_organization_id_id_idx').on(t.organizationId, t.id),
+    unique('bet_organization_id_ticket_number_idx').on(t.organizationId, t.ticketNumber),
     index('bet_state_placed_idx').on(t.state, t.placedAt, t.id),
     index('bet_bookmaker_idx').on(t.bookmakerId),
     index('bet_tipster_idx').on(t.tipsterId),
@@ -246,6 +249,7 @@ export const bet = finance.table(
     check('bet_positive_stake', sql`${t.stake}>0 and ${t.odds}>=1`),
     check('bet_remaining_bounds', sql`${t.remaining}>=0 and ${t.remaining}<=${t.stake}`),
     check('bet_state', sql`${t.state} in ('open','settled','cancelled')`),
+    check('bet_ticket_number_positive', sql`${t.ticketNumber}>0`),
     foreignKey({
       name: 'bet_bookmaker_fk',
       columns: [t.organizationId, t.bookmakerId],

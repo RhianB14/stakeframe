@@ -348,19 +348,18 @@ describe('telegram sync canonical draft', () => {
 });
 
 describe('import confirmation under the R5 contract', () => {
-  it('refuses to create a financial bet without a declared origin (fail-closed)', async () => {
+  it('assumes real money when no promotional origin was declared', async () => {
     const id = await upload();
     const bet = await betInput();
-    await expect(
-      run({
-        type: 'import.confirm',
-        importId: id,
-        expectedInboxVersion: 1,
-        decision: { kind: 'create', bet, duplicateReason: '' },
-      }),
-    ).rejects.toThrow('ORIGIN_REQUIRED');
+    const created = await run({
+      type: 'import.confirm',
+      importId: id,
+      expectedInboxVersion: 1,
+      decision: { kind: 'create', bet, duplicateReason: '' },
+    });
+    expect(created.id).toEqual(expect.any(String));
     expect((await database.pool.query('select count(*) from finance.bet')).rows[0]!.count).toBe(
-      '0',
+      '1',
     );
   });
 

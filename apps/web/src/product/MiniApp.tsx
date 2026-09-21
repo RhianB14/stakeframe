@@ -108,37 +108,14 @@ export function MiniAppPage() {
         headers: { 'x-telegram-init-data': initData },
       }),
   });
-  const completeSave = async (version: number) => {
-    setFeedback('syncing');
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const fresh = await request(`/api/v1/imports/${id}`, importDetailSchema, {
-        headers: { 'x-telegram-init-data': initData },
-      });
-      if (
-        fresh.telegramSyncState === 'deleted' ||
-        (fresh.telegramSyncState === 'synced' && (fresh.telegramSyncedVersion ?? 0) >= version)
-      ) {
-        setFeedback('success');
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
-        await wait(1_350);
-        window.Telegram?.WebApp?.close?.();
-        await detail.refetch();
-        return;
-      }
-      if (fresh.telegramSyncState === 'failed') {
-        setFeedback(null);
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('error');
-        throw new Error(
-          'Os dados foram salvos, mas o Telegram ainda não conseguiu atualizar a mensagem. Tente novamente.',
-        );
-      }
-      await wait(400);
-    }
-    setFeedback(null);
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('warning');
-    throw new Error(
-      'Os dados foram salvos, mas a confirmação do Telegram demorou mais que o esperado. A tela foi mantida aberta.',
-    );
+  const completeSave = async (_version: number) => {
+    // PATCH/confirm enfileiram a sincronização do Telegram na mesma
+    // transação. O Mini App não deve bloquear o usuário esperando o worker.
+    setFeedback('success');
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
+    await wait(750);
+    window.Telegram?.WebApp?.close?.();
+    void detail.refetch();
   };
   if (!initData)
     return (
@@ -251,8 +228,8 @@ export function MiniAppPage() {
               <h2>{feedback === 'success' ? 'Alterações salvas' : 'Atualizando Telegram…'}</h2>
               <p>
                 {feedback === 'success'
-                  ? 'A mensagem do Telegram foi atualizada.'
-                  : 'Aguarde a confirmação da mensagem antes de fechar.'}
+                  ? 'A mensagem do Telegram será atualizada automaticamente.'
+                  : 'Salvando os dados…'}
               </p>
               {feedback === 'success' ? <small>Fechando…</small> : null}
             </div>

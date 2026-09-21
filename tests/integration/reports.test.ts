@@ -356,8 +356,9 @@ describe('performance cohorts and portability', () => {
         insert into finance.journal(kind,effective_at,actor,reason)
         select 'bet_stake',now(),'fixture-owner','Export pagination fixture' from generate_series(1,510) returning id
       ), bets as (
-        insert into finance.bet(bookmaker_id,stake,odds,placed_at,reference,remaining,unit_month,unit_amount,stake_journal_id)
-        select b.bookmaker_id,b.stake,b.odds,b.placed_at,'batch-'||j.id,b.stake,b.unit_month,b.unit_amount,j.id
+        insert into finance.bet(ticket_number,bookmaker_id,stake,odds,placed_at,reference,remaining,unit_month,unit_amount,stake_journal_id)
+        select coalesce((select max(ticket_number) from finance.bet),0) + row_number() over (order by j.id)::integer,
+          b.bookmaker_id,b.stake,b.odds,b.placed_at,'batch-'||j.id,b.stake,b.unit_month,b.unit_amount,j.id
         from journals j cross join finance.bet b where b.id=$1 returning stake_journal_id,stake,bookmaker_id
       ) insert into finance.posting(journal_id,account_id,amount)
         select b.stake_journal_id,a.id,case when a.kind='exposure' then b.stake else -b.stake end
