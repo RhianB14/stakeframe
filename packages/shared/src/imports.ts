@@ -234,9 +234,9 @@ export const importDetailSchema = z
     // STK-G0-19-R7 — casa declarada pelo usuário (seção "Alterar Casa") e o
     // catálogo ativo da organização para a escolha explícita.
     bookmakerOverrideId: z.uuid().nullable(),
-    // Campos manuais do rascunho: a IA não inventa esporte, torneio ou país;
-    // o usuário pode completar esses valores e o Telegram/Web compartilham a
-    // mesma fonte canônica.
+    // O esporte pode vir como sugestão baseada na evidência da IA; torneio e
+    // país permanecem manuais. Em todos os casos o usuário pode editar e o
+    // Telegram/Web compartilham a mesma fonte canônica.
     tipsterOverrideId: z.uuid().nullable(),
     sportOverride: z.string().nullable(),
     tournamentOverride: z.string().nullable(),

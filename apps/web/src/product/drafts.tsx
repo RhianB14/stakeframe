@@ -94,7 +94,9 @@ export function DraftControls({
   const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida' | null>(detail.betOrigin);
   const [credit, setCredit] = useState(detail.freebetId ?? '');
   const [eventDate, setEventDate] = useState('');
-  const [sport, setSport] = useState(detail.sportOverride ?? '');
+  const extractedSport =
+    detail.extraction?.selections.find((item) => item.sport !== null)?.sport ?? null;
+  const [sport, setSport] = useState(detail.sportOverride ?? extractedSport ?? '');
   const [tournament, setTournament] = useState(detail.tournamentOverride ?? '');
   const [country, setCountry] = useState(detail.countryOverride ?? '');
   const [ticketKind, setTicketKind] = useState<TicketKind | ''>(detail.ticketKindOverride ?? '');
@@ -217,7 +219,14 @@ export function DraftControls({
         A IA organiza o comprovante, mas não inventa estes campos. Complete-os manualmente quando o
         bilhete não trouxer informação confiável.
       </p>
-      <Field label="Esporte">
+      <Field
+        label="Esporte"
+        hint={
+          extractedSport && !detail.sportOverride
+            ? 'Sugestão identificada pela IA; você pode editar.'
+            : undefined
+        }
+      >
         <select value={sport} onChange={(event) => setSport(event.target.value)}>
           <option value="">Selecione o esporte</option>
           {sport && !SPORT_OPTIONS.includes(sport as (typeof SPORT_OPTIONS)[number]) ? (
