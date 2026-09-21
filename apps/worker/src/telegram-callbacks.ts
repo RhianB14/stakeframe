@@ -140,6 +140,22 @@ export function createTelegramCallbackHandler(
     // limpeza do Telegram (foto, processamento e mensagem final) na MESMA
     // transação; repetir o mesmo evento converge sem duplicar efeito.
     if (query.action === 'status') {
+      // A mensagem final também existe enquanto a importação ainda está em
+      // revisão. Nesse estado não há finance.bet para liquidar: oferecer um
+      // teclado que inevitavelmente falha fazia o botão parecer quebrado.
+      // Devolvemos a mensagem ao teclado principal e explicamos o próximo
+      // passo, sem criar uma liquidação fora do registro financeiro.
+      if (!row.imported_bet_id) {
+        await client.answerCallbackQuery(query.callbackId, {
+          text: 'Finalize o cadastro da aposta em Editar antes de alterar o status.',
+        });
+        await client.editMessageReplyMarkup(
+          Number(config.chatId),
+          query.messageId,
+          telegramResultButtons(config.miniAppUrl, row.id),
+        );
+        return;
+      }
       if (!query.statusAction) {
         await client.answerCallbackQuery(query.callbackId, { text: 'Escolha o novo status.' });
         await client.editMessageReplyMarkup(

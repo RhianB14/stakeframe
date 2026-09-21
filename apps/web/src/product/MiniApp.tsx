@@ -28,7 +28,9 @@ import { readTelegramInitData } from './miniapp-auth.js';
 
 declare global {
   interface Window {
-    Telegram?: { WebApp?: { initData?: string; ready?: () => void } };
+    Telegram?: {
+      WebApp?: { initData?: string; ready?: () => void; close?: () => void };
+    };
   }
 }
 
@@ -125,6 +127,13 @@ export function MiniAppPage() {
         <p role="status">Carregando a importação…</p>
       </div>
     );
+  // Telegram only closes the WebApp after the user has had time to see the
+  // success feedback. In a normal browser `close` is absent, so the same
+  // flow remains usable during local development and automated tests.
+  const onSaved = () => {
+    void detail.refetch();
+    window.setTimeout(() => window.Telegram?.WebApp?.close?.(), 1_200);
+  };
   const section = sectionParam();
   return (
     <div className="miniapp-page">
@@ -144,7 +153,7 @@ export function MiniAppPage() {
         <StatusSection
           detail={detail.data}
           sender={(body) => setImportStatus(id, body, initData)}
-          onSaved={() => void detail.refetch()}
+          onSaved={onSaved}
         />
       ) : section === 'bookmaker' ? (
         <BookmakerSection
@@ -153,31 +162,40 @@ export function MiniAppPage() {
           creditsSender={(bookmakerId) =>
             getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
           }
-          onSaved={() => void detail.refetch()}
+          onSaved={onSaved}
         />
       ) : section === 'tipster' ? (
         <TipsterSection
           detail={detail.data}
           sender={(body) => applyImportTipster(id, body, initData)}
-          onSaved={() => void detail.refetch()}
+          onSaved={onSaved}
         />
       ) : section === 'cashout' ? (
         <CashoutSection
           detail={detail.data}
           sender={(body) => setImportStatus(id, body, initData)}
-          onSaved={() => void detail.refetch()}
+          onSaved={onSaved}
         />
       ) : (
-        <DraftControls
-          detail={detail.data}
-          sender={(body) => patchImportDraft(id, body, initData)}
-          originSender={(body) => applyImportOrigin(id, body, initData)}
-          eventSender={(body) => applyImportEvent(id, body, initData)}
-          creditsSender={(bookmakerId) =>
-            getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
-          }
-          onSaved={() => void detail.refetch()}
-        />
+        <>
+          <DraftControls
+            detail={detail.data}
+            sender={(body) => patchImportDraft(id, body, initData)}
+            originSender={(body) => applyImportOrigin(id, body, initData)}
+            eventSender={(body) => applyImportEvent(id, body, initData)}
+            creditsSender={(bookmakerId) =>
+              getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
+            }
+            onSaved={onSaved}
+          />
+          {detail.data.bet ? (
+            <StatusSection
+              detail={detail.data}
+              sender={(body) => setImportStatus(id, body, initData)}
+              onSaved={onSaved}
+            />
+          ) : null}
+        </>
       )}
     </div>
   );

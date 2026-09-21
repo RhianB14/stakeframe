@@ -506,7 +506,7 @@ describe('Status e exclusão da mensagem final (G0-20 B4)', () => {
     );
 
   it('opens only the status keyboard without opening the mini app', async () => {
-    const id = await boundInbox();
+    const id = await importedInboxB4();
     calls.length = 0;
     await handler()(callback('status', 7777));
     expect(String(calls[0]!.body.text)).toBe('Escolha o novo status.');
@@ -522,6 +522,21 @@ describe('Status e exclusão da mensagem final (G0-20 B4)', () => {
       '◀️ Voltar para o bilhete',
     ]);
     expect(buttons.some((button) => 'web_app' in button)).toBe(false);
+    expect((await inboxState(id)).state).toBe('imported');
+  });
+
+  it('does not offer unusable status actions for an unregistered review import', async () => {
+    const id = await boundInbox();
+    calls.length = 0;
+    await handler()(callback('status', 7777));
+    expect(String(calls[0]!.body.text)).toContain('Finalize o cadastro');
+    const edit = calls.find((call) => call.method === 'editMessageReplyMarkup')!;
+    const first = (
+      edit.body.reply_markup as {
+        inline_keyboard: Array<Array<{ web_app?: { url?: string } }>>;
+      }
+    ).inline_keyboard[0]![0]!;
+    expect(first.web_app?.url).toContain(`/miniapp#miniapp?import=${id}`);
     expect((await inboxState(id)).state).toBe('review');
   });
 

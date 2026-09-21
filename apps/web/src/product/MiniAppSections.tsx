@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatBRL, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { Field } from './forms.js';
 
 // STK-G0-19-R7 — seções reais do Mini App abertas pelos botões da mensagem do
 // Telegram ("Alterar Status" e "Alterar Casa"). Toda gravação viaja pelo
@@ -263,8 +264,7 @@ export function BookmakerSection({
         {!imported && detail.bookmakerOverrideId ? ' (escolhida por você)' : ''}
         {imported ? ' (aposta registrada)' : ''}
       </p>
-      <label>
-        Nova casa
+      <Field label="Casa de aposta">
         <select value={choice} onChange={(event) => setChoice(event.target.value)}>
           {!imported ? <option value="">Voltar para a casa da legenda/leitura</option> : null}
           {detail.bookmakers.map((item) => (
@@ -273,10 +273,9 @@ export function BookmakerSection({
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       {needsCredit ? (
-        <label>
-          Crédito de freebet para a nova casa
+        <Field label="Crédito de freebet">
           <select value={credit} onChange={(event) => setCredit(event.target.value)}>
             <option value="">
               {creditsError
@@ -291,7 +290,7 @@ export function BookmakerSection({
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       ) : null}
       {needsCredit && credits !== null && credits.length === 0 && !creditsError ? (
         <p className="notice warning" role="status">
@@ -382,8 +381,7 @@ export function TipsterSection({
         Tipster atual: <strong>{current}</strong>
         {imported ? ' (aposta registrada)' : ''}
       </p>
-      <label>
-        Novo tipster
+      <Field label="Tipster">
         <select value={choice} onChange={(event) => setChoice(event.target.value)}>
           <option value="">Selecione o tipster</option>
           {detail.tipsters.map((item) => (
@@ -392,7 +390,7 @@ export function TipsterSection({
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       {detail.tipsters.length === 0 ? (
         <p className="notice" role="status">
           Nenhum tipster ativo cadastrado — cadastre na Web para escolher aqui.
