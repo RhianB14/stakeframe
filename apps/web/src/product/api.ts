@@ -8,6 +8,7 @@ import {
   importOriginResultSchema,
   importEventResultSchema,
   importCreditsResultSchema,
+  importConfirmResultSchema,
   cents,
   money,
   saoPauloDate,
@@ -121,6 +122,20 @@ export function patchImportDraft(
     },
     body: JSON.stringify(body),
   });
+}
+export function confirmImport(id: string, body: { version: number }, initData?: string) {
+  const key = crypto.randomUUID();
+  const send = () =>
+    request(`/api/v1/imports/${id}/confirm`, importConfirmResultSchema, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        ...(initData ? { 'x-telegram-init-data': initData } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  return sendWithIdempotentRetry(send);
 }
 // STK-G0-19-R8 — ações canônicas por importação (rascunho OU aposta
 // importada): casa, origem e data do evento por seleção.

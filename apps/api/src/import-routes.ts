@@ -24,6 +24,8 @@ import {
   importEventResultSchema,
   importCreditsQuerySchema,
   importCreditsResultSchema,
+  importConfirmSchema,
+  importConfirmResultSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { validateTelegramInitData } from './telegram-init-data.js';
@@ -184,6 +186,31 @@ export function registerImportRoutes(
           actor,
         );
       }),
+  );
+  app.post(
+    '/api/v1/imports/:id/confirm',
+    {
+      onRequest: authorizeDraft,
+      schema: {
+        ...common,
+        operationId: 'confirmImportFromMiniApp',
+        summary: 'Confirmar a importação e registrar a aposta pelo Mini App',
+        params,
+        headers: commandHeadersSchema,
+        body: importConfirmSchema,
+        response: { 200: importConfirmResultSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.confirmDraft(
+          contexts.get(request)!,
+          params.parse(request.params).id,
+          importConfirmSchema.parse(request.body),
+          request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web',
+          commandHeadersSchema.parse(request.headers)['idempotency-key'],
+        ),
+      ),
   );
   app.post(
     '/api/v1/imports/:id/status',

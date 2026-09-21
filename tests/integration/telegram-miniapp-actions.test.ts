@@ -426,6 +426,80 @@ describe('Mini App bookmaker section (R7)', () => {
   });
 });
 
+describe('Mini App draft confirmation (G0-22)', () => {
+  it('saves the canonical draft, confirms one bet, and replays idempotently', async () => {
+    const id = await upload();
+    await seedExtraction(id);
+    const key = randomUUID();
+    const bookmakerId = await houseId();
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: {
+        version: 1,
+        betOrigin: 'real',
+        bookmakerId,
+        tipsterId: null,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+    const version = (patch.json() as { version: number }).version;
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${id}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': key },
+      payload: { version },
+    });
+    expect(confirmed.statusCode).toBe(200);
+    const result = confirmed.json() as { version: number; betId: string; betState: string };
+    expect(result.betState).toBe('open');
+
+    const replay = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${id}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': key },
+      payload: { version },
+    });
+    expect(replay.statusCode).toBe(200);
+    expect((replay.json() as { betId: string }).betId).toBe(result.betId);
+    const count = (
+      await database.pool.query<{ count: string }>('select count(*) from finance.bet where id=$1', [
+        result.betId,
+      ])
+    ).rows[0]!.count;
+    expect(Number(count)).toBe(1);
+  });
+
+  it('keeps the flow fail-closed when the origin is not selected', async () => {
+    const id = await upload();
+    await seedExtraction(id);
+    const bookmakerId = await houseId();
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: 1, bookmakerId, stake: '100.00', odds: '2.00' },
+    });
+    expect(patch.statusCode).toBe(200);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${id}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
+      payload: { version: (patch.json() as { version: number }).version },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: 'ORIGIN_REQUIRED' } });
+  });
+});
+
 describe('Mini App status transitions by financial modality (G0-20)', () => {
   async function importedFreebet() {
     const id = await upload();

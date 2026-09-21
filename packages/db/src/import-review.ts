@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import {
   deriveBetOrigin,
   parseCaption,
+  parseAutomaticPlacedAt,
+  betInputSchema,
+  saoPauloDate,
   settleReturnFor,
   ticketExtractionSchema,
   automaticDecisionSchema,
@@ -595,6 +598,140 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             ? decision.data.reason
             : ('LAYOUT_NOT_VALIDATED' as const),
         };
+      });
+    },
+    /**
+     * Confirmação explícita do rascunho pelo Mini App. A aposta é montada
+     * exclusivamente a partir do estado canônico já salvo no inbox; nenhum
+     * campo financeiro é aceito diretamente nesta chamada.
+     */
+    async confirmDraft(
+      context: OrganizationContext,
+      id: string,
+      input: { version: number },
+      actor: string,
+      idempotencyKey: string,
+    ) {
+      return tenant.withOrganizationTransaction(context, async (client) => {
+        await client.query(
+          'select pg_advisory_xact_lock(hashtextextended(current_setting($$app.organization_id$$, true) || $1, 0))',
+          [idempotencyKey],
+        );
+        const row = (
+          await client.query<{
+            id: string;
+            state: string;
+            version: number;
+            imported_bet_id: string | null;
+            extraction: unknown;
+            metadata: unknown;
+            bet_origin: string | null;
+            freebet_id: string | null;
+            bookmaker_override_id: string | null;
+            event_at: Date | null;
+          }>(
+            'select id,state,version,imported_bet_id,extraction,metadata,bet_origin,freebet_id,bookmaker_override_id,event_at from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new FinanceError('NOT_FOUND');
+        if (row.imported_bet_id) {
+          const bet = await getBetRow(client, row.imported_bet_id);
+          return { version: row.version, betId: bet.id, betState: bet.state };
+        }
+        if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+        if (!['pending', 'review', 'failed'].includes(row.state))
+          throw new FinanceError('STATE_CONFLICT');
+
+        const origin =
+          row.bet_origin === 'real' || row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+            ? row.bet_origin
+            : null;
+        if (!origin) throw new FinanceError('ORIGIN_REQUIRED');
+        if (!row.bookmaker_override_id) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+
+        const evidence =
+          row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+            ? (row.extraction as { extraction: unknown }).extraction
+            : row.extraction;
+        const extraction = ticketExtractionSchema.safeParse(evidence);
+        if (!extraction.success) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+        if (extraction.data.currency !== 'BRL' || extraction.data.warnings.length)
+          throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+
+        const placedAtCandidates = (['iso-offset', 'br-sao-paulo', 'br-textual-sao-paulo'] as const)
+          .map((format) => parseAutomaticPlacedAt(extraction.data.placedAtText, format))
+          .filter((value): value is string => value !== null);
+        const placedAt = [...new Set(placedAtCandidates)];
+        if (placedAt.length !== 1 || Date.parse(placedAt[0]!) > Date.now())
+          throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+
+        const overrides = draftOverrides(row.metadata);
+        const selections = overrides.selections.length
+          ? overrides.selections
+          : extraction.data.selections.map(({ event, market, selection }) => ({
+              event,
+              market,
+              selection,
+            }));
+        const parsedBet = betInputSchema.safeParse({
+          bookmakerId: row.bookmaker_override_id,
+          tipsterId: overrides.tipsterId,
+          stake: overrides.stake ?? extraction.data.stake,
+          odds: overrides.odds ?? extraction.data.odds,
+          placedAt: placedAt[0],
+          freebetId: origin === 'real' ? null : row.freebet_id,
+          reference: extraction.data.reference ?? '',
+          allowMissingUnit: false,
+          selections: selections.map((selection) => ({
+            event: selection.event,
+            sport: overrides.sport ?? extraction.data.selections[0]?.sport ?? null,
+            market: selection.market,
+            selection: selection.selection,
+            odds: null,
+            eventDate: row.event_at ? saoPauloDate(row.event_at) : null,
+            eventAt: row.event_at?.toISOString() ?? null,
+            dateStatus: row.event_at ? 'confirmed' : 'pending',
+          })),
+        });
+        if (!parsedBet.success) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+
+        const settings = (
+          await client.query<SettingsRow>(
+            'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+          )
+        ).rows[0];
+        if (!settings) throw new FinanceError('NOT_FOUND');
+        const command = financeCommandSchema.parse({
+          type: 'import.confirm',
+          importId: id,
+          expectedInboxVersion: row.version,
+          expectedVersion: settings.version,
+          decision: {
+            kind: 'create',
+            bet: parsedBet.data,
+            duplicateReason: '',
+            betOrigin: origin,
+          },
+        });
+        const applied = await executeFinancialCommand(
+          client,
+          actor,
+          deterministicKey(`miniapp-import-confirm:${idempotencyKey}`),
+          command,
+          settings,
+        );
+        const current = (
+          await client.query<{ version: number; state: string }>(
+            'select i.version,b.state from integration.inbox i join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!current) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+        // Mantém a referência ao resultado do comando para evitar que uma
+        // futura alteração de consulta perca a garantia de que houve criação.
+        if (!applied.id) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+        return { version: current.version, betId: applied.id, betState: current.state };
       });
     },
     /**
