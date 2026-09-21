@@ -147,8 +147,10 @@ export async function applyFinanceCommand(
       // Crédito escolhido explicitamente pelo usuário também é declaração de
       // freebet (nunca inferência de IA); dinheiro real exige declaração.
       const inferred = command.decision.bet.freebetId === null ? null : 'freebet';
-      const effective = declared ?? canonical ?? inferred;
-      if (effective === null) throw new FinanceError('ORIGIN_REQUIRED');
+      // The default product modality is real money. A promotional modality
+      // is only selected when the user explicitly declares it (and supplies
+      // its compatible credit below); the AI never chooses it.
+      const effective = declared ?? canonical ?? inferred ?? 'real';
       if (effective === 'real' && command.decision.bet.freebetId !== null)
         throw new FinanceError('STATE_CONFLICT');
       if (
@@ -387,6 +389,12 @@ export async function applyFinanceCommand(
     const unitKnown = !!unit && cents(unit.amount) > 0n;
     if (!unitKnown && !command.allowMissingUnit) throw new FinanceError('UNIT_REQUIRED');
     const id = randomUUID();
+    const ticketNumber = settings.next_ticket_number;
+    if (!Number.isInteger(ticketNumber) || ticketNumber < 1)
+      throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+    await client.query(
+      'update finance.settings set next_ticket_number=next_ticket_number+1 where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+    );
     const stake = cents(command.stake);
     let stakeReturned = false;
     // G0-20 B2b — crédito com valor DIFERENTE da stake = híbrida (parte real
@@ -429,9 +437,10 @@ export async function applyFinanceCommand(
       ],
     });
     await client.query(
-      'insert into finance.bet(id,bookmaker_id,tipster_id,stake,odds,placed_at,freebet_id,promotional_stake_returned,reference,remaining,unit_month,unit_amount,stake_journal_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$4,$10,$11,$12)',
+      'insert into finance.bet(id,ticket_number,bookmaker_id,tipster_id,stake,odds,placed_at,freebet_id,promotional_stake_returned,reference,remaining,unit_month,unit_amount,stake_journal_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$5,$11,$12,$13)',
       [
         id,
+        ticketNumber,
         command.bookmakerId,
         command.tipsterId,
         money(stake),

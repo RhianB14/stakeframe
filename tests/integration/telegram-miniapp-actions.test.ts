@@ -478,7 +478,7 @@ describe('Mini App draft confirmation (G0-22)', () => {
     expect(Number(count)).toBe(1);
   });
 
-  it('keeps the flow fail-closed when the origin is not selected', async () => {
+  it('assumes real money when the origin is not selected', async () => {
     const id = await upload();
     await seedExtraction(id);
     const bookmakerId = await houseId();
@@ -495,8 +495,8 @@ describe('Mini App draft confirmation (G0-22)', () => {
       headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
       payload: { version: (patch.json() as { version: number }).version },
     });
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ error: { code: 'ORIGIN_REQUIRED' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ betState: 'open' });
   });
 });
 

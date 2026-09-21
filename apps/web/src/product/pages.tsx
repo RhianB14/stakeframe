@@ -218,7 +218,7 @@ export function BetsPage({
               <table className="product-table">
                 <thead>
                   <tr>
-                    <th>Bilhete / evento</th>
+                    <th>Nº / bilhete / evento</th>
                     <th>Casa</th>
                     <th>Valor</th>
                     <th>Odd</th>
@@ -233,6 +233,7 @@ export function BetsPage({
                   {query.data.items.map((bet) => (
                     <tr key={bet.id}>
                       <td>
+                        <small className="ticket-number">Bilhete #{bet.ticketNumber}</small>
                         <button
                           className="table-title"
                           onClick={() => open({ kind: 'detail', id: bet.id })}
@@ -320,6 +321,7 @@ export function BetDetails({
     <div className="bet-detail">
       <div className="detail-heading">
         <span className={`status-badge status-${bet.state}`}>{stateLabels[bet.state]}</span>
+        <strong>Bilhete #{bet.ticketNumber}</strong>
         <span>
           {catalogName(workspace, bet.bookmakerId)} · {catalogName(workspace, bet.tipsterId)}
         </span>

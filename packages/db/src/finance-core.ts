@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { cents, money, roundedDivide, saoPauloDate, type SelectionInput } from '@stakeframe/shared';
+import {
+  cents,
+  money,
+  normalizeEventLabel,
+  roundedDivide,
+  saoPauloDate,
+  type SelectionInput,
+} from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 
 export class FinanceError extends Error {
@@ -23,12 +30,14 @@ export class FinanceError extends Error {
 }
 export type SettingsRow = {
   version: number;
+  next_ticket_number: number;
   initialized: boolean;
   unit_percent: string;
   opened_at: Date | null;
 };
 export type BetRow = {
   id: string;
+  ticket_number: number;
   bookmaker_id: string;
   tipster_id: string | null;
   stake: string;
@@ -219,6 +228,7 @@ export async function saveSelections(
     throw new FinanceError('STATE_CONFLICT');
   for (const selection of selections) {
     validateEventDate(selection);
+    selection.event = normalizeEventLabel(selection.event) ?? selection.event;
   }
   await client.query(
     'delete from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 and not(id=any($2::uuid[]))',

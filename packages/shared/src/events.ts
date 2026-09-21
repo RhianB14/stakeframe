@@ -79,3 +79,16 @@ export const eventSearchStatusSchema = z
     ),
   })
   .meta({ id: 'EventSearchStatus' });
+
+/** Canonical event label shared by extraction, persistence and presentation. */
+export function normalizeEventLabel(value: string | null | undefined): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const normalized = value
+    .trim()
+    .replace(/\s+(?:versus|vs\.?|v)\s+/giu, ' x ')
+    .replace(/\s+[–—-]\s+/gu, ' x ')
+    .replace(/\s+x\s+/giu, ' x ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return normalized || null;
+}

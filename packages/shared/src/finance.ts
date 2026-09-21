@@ -272,6 +272,7 @@ export type CatalogItem = z.infer<typeof catalogSchema>;
 export const betSchema = z
   .object({
     id: z.uuid(),
+    ticketNumber: z.number().int().positive(),
     bookmakerId: z.uuid(),
     tipsterId: z.uuid().nullable(),
     stake: moneySchema,

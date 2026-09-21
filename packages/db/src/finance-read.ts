@@ -132,6 +132,7 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
     const total = totals.find((value) => value.bet_id === row.id);
     return betSchema.parse({
       id: row.id,
+      ticketNumber: row.ticket_number,
       bookmakerId: row.bookmaker_id,
       tipsterId: row.tipster_id,
       stake: row.stake,

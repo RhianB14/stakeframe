@@ -7,6 +7,7 @@ import {
   classifyTicketKind,
   ticketKindLabel,
   ticketExtractionSchema,
+  normalizeEventLabel,
   type BetOrigin,
   type TicketKind,
 } from '@stakeframe/shared';
@@ -147,7 +148,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
       bonus: canonical.origin,
       sport: distinctValues(canonical.selections.map((item) => item.sport)),
       tournament: null,
-      event: distinctValues(canonical.selections.map((item) => item.event)),
+      event: distinctValues(canonical.selections.map((item) => normalizeEventLabel(item.event))),
       country: null,
       selection: selectionText(canonical.selections, kind),
       market: kind === 'simple' ? (canonical.selections[0]?.market ?? null) : ticketKindLabel[kind],
@@ -185,7 +186,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
       extraction?.selections.find((item) => item.sport !== null)?.sport ??
       null,
     tournament: row.override_tournament ?? null,
-    event: distinctValues(selections.map((item) => item.event)),
+    event: distinctValues(selections.map((item) => normalizeEventLabel(item.event))),
     country: row.override_country ?? null,
     selection: selectionText(selections, kind),
     market: kind === 'simple' ? (selections[0]?.market ?? null) : ticketKindLabel[kind],

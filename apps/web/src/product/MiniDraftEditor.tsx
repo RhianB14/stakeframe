@@ -49,7 +49,7 @@ export function MiniDraftEditor({
   creditsSender,
   onSaved,
 }: DraftControlsProps) {
-  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida' | null>(detail.betOrigin);
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(detail.betOrigin ?? 'real');
   const [credit, setCredit] = useState(detail.freebetId ?? '');
   const initialEvent = inputInstant(detail.eventAt);
   const [eventDate, setEventDate] = useState(initialEvent.date);

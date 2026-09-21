@@ -87,6 +87,7 @@ function fixture(): Workspace {
 }
 const bet: Bet = {
   id: betId,
+  ticketNumber: 1,
   bookmakerId: house,
   tipsterId: null,
   stake: '100.00',
@@ -1112,7 +1113,7 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   expect(patchHeaders['x-telegram-init-data']).toBe('stub-initdata');
 });
 
-test('keeps the Mini App open when Telegram cannot confirm the saved version', async ({ page }) => {
+test('closes the Mini App after saving without waiting for Telegram sync', async ({ page }) => {
   await enabledProduct(page);
   const detail = importFixture();
   await importRoutes(page, detail);
@@ -1146,15 +1147,14 @@ test('keeps the Mini App open when Telegram cannot confirm the saved version', a
   await page.goto(`/miniapp#miniapp?import=${importId}`);
   await page.getByText('Dinheiro real', { exact: true }).click();
   await page.getByRole('button', { name: 'Salvar e confirmar aposta' }).click();
-  await expect(
-    page.getByText('Os dados foram salvos, mas o Telegram ainda não conseguiu', { exact: false }),
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toHaveCount(0);
-  expect(
-    await page.evaluate(() =>
-      Boolean((window as unknown as { miniAppClosed?: boolean }).miniAppClosed),
-    ),
-  ).toBe(false);
+  await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean((window as unknown as { miniAppClosed?: boolean }).miniAppClosed),
+      ),
+    )
+    .toBe(true);
 });
 
 test('opens the status section from the Telegram button and liquidates for real (R7)', async ({

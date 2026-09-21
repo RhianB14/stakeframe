@@ -14,6 +14,7 @@ import { buildImportMessage, grossReturn } from '../../apps/worker/src/telegram-
 import { validateTelegramInitData } from '../../apps/api/src/telegram-init-data.js';
 import {
   draftUpdateSchema,
+  normalizeEventLabel,
   parseCaption,
   parseTelegramCallbackData,
 } from '../../packages/shared/src/index.js';
@@ -25,6 +26,18 @@ const config: TelegramConfig = {
   miniAppUrl: 'https://app.stakeframe.test',
 };
 const json = (body: unknown, status = 200) => Response.json(body, { status });
+
+describe('canonical event labels', () => {
+  it.each([
+    ['Corinthians - Palmeiras', 'Corinthians x Palmeiras'],
+    ['Corinthians – Palmeiras', 'Corinthians x Palmeiras'],
+    ['Corinthians vs Palmeiras', 'Corinthians x Palmeiras'],
+    ['Corinthians x Palmeiras', 'Corinthians x Palmeiras'],
+    ['Team-A x Team-B', 'Team-A x Team-B'],
+  ])('normalizes %s without damaging names', (input, expected) => {
+    expect(normalizeEventLabel(input)).toBe(expected);
+  });
+});
 
 describe('telegram gross return (R5)', () => {
   it('computes stake × total odds with exact decimal math', () => {
