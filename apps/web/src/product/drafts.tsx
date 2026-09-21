@@ -3,6 +3,7 @@ import { deriveBetOrigin, formatBRL, type ImportDetail, type TicketKind } from '
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { localInstant } from './api.js';
+import { MiniDraftEditor } from './MiniDraftEditor.js';
 
 // STK-G0-19-R5 — controles canônicos de origem e data, compartilhados entre o
 // formulário de revisão web e o Mini App do Telegram. Nenhuma opção de origem
@@ -23,6 +24,7 @@ export type DraftBody = {
   sport?: string | null;
   tournament?: string | null;
   country?: string | null;
+  bookmakerId?: string | null;
   ticketKind?: TicketKind | null;
   stake?: string | null;
   odds?: string | null;
@@ -42,21 +44,14 @@ const SPORT_OPTIONS = [
   'Críquete',
 ] as const;
 
-export function DraftControls({
-  detail,
-  sender,
-  originSender,
-  eventSender,
-  creditsSender,
-  onSaved,
-}: {
+export type DraftControlsProps = {
+  mini?: boolean;
   detail: ImportDetail;
   sender: (body: DraftBody) => Promise<{
     version: number;
     freebetCleared: boolean;
     automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
   }>;
-  /** R8: presente no Mini App — origem canônica (rascunho ou aposta). */
   originSender?: (body: {
     version: number;
     kind: 'real' | 'freebet' | 'hibrida';
@@ -67,18 +62,30 @@ export function DraftControls({
     kind: 'real' | 'freebet' | 'hibrida';
     freebetCleared: boolean;
   }>;
-  /** R8: presente no Mini App — data por seleção (aposta importada). */
   eventSender?: (body: {
     version: number;
     selectionId: string;
     eventAt: string | null;
   }) => Promise<{ version: number; betState: string | null }>;
-  /** R9: presente no Mini App — créditos por casa de destino. */
   creditsSender?: (
     bookmakerId: string,
   ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;
-  onSaved: () => void;
-}) {
+  onSaved: (version: number) => void | Promise<void>;
+};
+
+export function DraftControls(props: DraftControlsProps) {
+  if (props.mini && !props.detail.bet) return <MiniDraftEditor {...props} />;
+  return <LegacyDraftControls {...props} />;
+}
+
+function LegacyDraftControls({
+  detail,
+  sender,
+  originSender,
+  eventSender,
+  creditsSender,
+  onSaved,
+}: DraftControlsProps) {
   // R8 — depois da importação a fonte é a aposta financeira: nada de PATCH
   // de rascunho; origem e datas seguem as rotas canônicas.
   if (detail.bet && originSender && eventSender)
@@ -139,7 +146,7 @@ export function DraftControls({
       setSaved(true);
       setCleared(result.freebetCleared);
       setAutomaticHold(result.automaticPolicy !== 'approved');
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
@@ -369,7 +376,7 @@ function ImportedControls({
   creditsSender?: (
     bookmakerId: string,
   ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;
-  onSaved: () => void;
+  onSaved: (version: number) => void | Promise<void>;
 }) {
   const bet = detail.bet!;
   const currentOrigin =
@@ -439,7 +446,7 @@ function ImportedControls({
     setError(null);
     setSaved(null);
     try {
-      await originSender({
+      const result = await originSender({
         version: detail.item.version,
         kind: origin,
         ...(origin === 'freebet' || origin === 'hibrida'
@@ -449,7 +456,7 @@ function ImportedControls({
       setSaved(
         `Origem salva para ${origin === 'freebet' ? 'Freebet' : origin === 'hibrida' ? 'Híbrida (valor real + freebet)' : 'Dinheiro real'}. A mensagem do Telegram será sincronizada.`,
       );
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Não foi possível salvar a origem.');
     } finally {
@@ -462,13 +469,13 @@ function ImportedControls({
     setError(null);
     setSaved(null);
     try {
-      await eventSender({
+      const result = await eventSender({
         version: detail.item.version,
         selectionId,
         eventAt: value ? localInstant(value) : null,
       });
       setSaved('Data da seleção salva. A mensagem do Telegram será sincronizada.');
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Não foi possível salvar a data.');
     } finally {

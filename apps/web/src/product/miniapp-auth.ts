@@ -1,6 +1,15 @@
 declare global {
   interface Window {
-    Telegram?: { WebApp?: { initData?: string; ready?: () => void } };
+    Telegram?: {
+      WebApp?: {
+        initData?: string;
+        ready?: () => void;
+        close?: () => void;
+        HapticFeedback?: {
+          notificationOccurred?: (type: 'success' | 'warning' | 'error') => void;
+        };
+      };
+    };
   }
 }
 

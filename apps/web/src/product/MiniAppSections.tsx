@@ -40,7 +40,7 @@ export function StatusSection({
     version: number;
     betState: string;
   }>;
-  onSaved: () => void;
+  onSaved: (version: number) => void | Promise<void>;
 }) {
   const [action, setAction] = useState<StatusAction | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -73,10 +73,10 @@ export function StatusSection({
     setBusy(true);
     setError(null);
     try {
-      await sender({ version: detail.item.version, action });
+      const result = await sender({ version: detail.item.version, action });
       setSaved(true);
       setConfirming(false);
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Não foi possível liquidar. Tente novamente.',
@@ -165,7 +165,7 @@ export function BookmakerSection({
   creditsSender: (
     bookmakerId: string,
   ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;
-  onSaved: () => void;
+  onSaved: (version: number) => void | Promise<void>;
 }) {
   const imported = detail.bet !== null;
   const [choice, setChoice] = useState(
@@ -244,7 +244,7 @@ export function BookmakerSection({
           ' A mensagem do Telegram será sincronizada.',
         ].join(''),
       );
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -343,7 +343,7 @@ export function TipsterSection({
     tipsterId: string;
     tipsterName: string | null;
   }>;
-  onSaved: () => void;
+  onSaved: (version: number) => void | Promise<void>;
 }) {
   const imported = detail.bet !== null;
   const [choice, setChoice] = useState(
@@ -368,7 +368,7 @@ export function TipsterSection({
       setSaved(
         `Tipster salvo${result.tipsterName ? `: ${result.tipsterName}` : ''}. A mensagem do Telegram será sincronizada.`,
       );
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Não foi possível salvar o tipster.');
     } finally {
@@ -436,7 +436,7 @@ export function CashoutSection({
     returnAmount: string;
     closedPrincipal?: string;
   }) => Promise<{ version: number; betState: string }>;
-  onSaved: () => void;
+  onSaved: (version: number) => void | Promise<void>;
 }) {
   const bet = detail.bet;
   const [mode, setMode] = useState<'cashout' | 'partial_cashout'>('cashout');
@@ -484,7 +484,7 @@ export function CashoutSection({
     setBusy(true);
     setError(null);
     try {
-      await sender({
+      const result = await sender({
         version: detail.item.version,
         action: mode,
         returnAmount,
@@ -492,7 +492,7 @@ export function CashoutSection({
       });
       setSaved(true);
       setConfirming(false);
-      onSaved();
+      await onSaved(result.version);
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Não foi possível registrar o cashout.',

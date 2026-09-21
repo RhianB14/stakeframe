@@ -21,6 +21,7 @@ import {
   TipsterSection,
 } from './MiniAppSections.js';
 import { readTelegramInitData } from './miniapp-auth.js';
+import './product.css';
 
 // STK-G0-19-R5 — Mini App do Telegram: a mesma fonte canônica, autenticada pelo
 // initData validado no servidor (x-telegram-init-data). Nenhum identificador
@@ -28,9 +29,21 @@ import { readTelegramInitData } from './miniapp-auth.js';
 
 declare global {
   interface Window {
-    Telegram?: { WebApp?: { initData?: string; ready?: () => void } };
+    Telegram?: {
+      WebApp?: {
+        initData?: string;
+        ready?: () => void;
+        close?: () => void;
+        HapticFeedback?: {
+          notificationOccurred?: (type: 'success' | 'error' | 'warning') => void;
+        };
+      };
+    };
   }
 }
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
 // O identificador e a seção chegam pelo link do botão da mensagem
 // (`#miniapp?import=<uuid>&section=status|bookmaker`), dentro do fragmento da
@@ -54,6 +67,7 @@ const sectionParam = (): 'status' | 'bookmaker' | 'tipster' | 'cashout' | null =
 
 export function MiniAppPage() {
   const [initData, setInitData] = useState(() => readTelegramInitData());
+  const [feedback, setFeedback] = useState<'syncing' | 'success' | null>(null);
   useEffect(() => {
     const syncInitData = () => setInitData(readTelegramInitData());
     if (window.Telegram?.WebApp) {
@@ -93,6 +107,38 @@ export function MiniAppPage() {
         headers: { 'x-telegram-init-data': initData },
       }),
   });
+  const completeSave = async (version: number) => {
+    setFeedback('syncing');
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const fresh = await request(`/api/v1/imports/${id}`, importDetailSchema, {
+        headers: { 'x-telegram-init-data': initData },
+      });
+      if (
+        fresh.telegramSyncState === 'deleted' ||
+        (fresh.telegramSyncState === 'synced' && (fresh.telegramSyncedVersion ?? 0) >= version)
+      ) {
+        setFeedback('success');
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
+        await wait(1_350);
+        window.Telegram?.WebApp?.close?.();
+        await detail.refetch();
+        return;
+      }
+      if (fresh.telegramSyncState === 'failed') {
+        setFeedback(null);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('error');
+        throw new Error(
+          'Os dados foram salvos, mas o Telegram ainda não conseguiu atualizar a mensagem. Tente novamente.',
+        );
+      }
+      await wait(400);
+    }
+    setFeedback(null);
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('warning');
+    throw new Error(
+      'Os dados foram salvos, mas a confirmação do Telegram demorou mais que o esperado. A tela foi mantida aberta.',
+    );
+  };
   if (!initData)
     return (
       <div className="product-loading">
@@ -128,23 +174,36 @@ export function MiniAppPage() {
   const section = sectionParam();
   return (
     <div className="miniapp-page">
-      <h1>
-        {section === 'status'
-          ? 'Alterar status'
-          : section === 'bookmaker'
-            ? 'Alterar casa'
-            : section === 'tipster'
-              ? 'Alterar tipster'
-              : section === 'cashout'
-                ? 'Cashout'
-                : 'Conferir importação'}
-      </h1>
-      <p className="caption-evidence">{detail.data.item.caption || 'Sem legenda'}</p>
+      <header className="miniapp-heading">
+        <span>Stakeframe · Mini App do Telegram</span>
+        <h1>
+          {section === 'status'
+            ? 'Alterar status'
+            : section === 'bookmaker'
+              ? 'Alterar casa'
+              : section === 'tipster'
+                ? 'Alterar tipster'
+                : section === 'cashout'
+                  ? 'Cashout'
+                  : 'Editar aposta'}
+        </h1>
+        <p>
+          {section
+            ? 'Confira a operação antes de confirmar.'
+            : 'Confira e ajuste os dados antes de salvar.'}
+        </p>
+      </header>
+      {detail.data.item.caption ? (
+        <details className="mini-caption-evidence">
+          <summary>Legenda original do Telegram</summary>
+          <p>{detail.data.item.caption}</p>
+        </details>
+      ) : null}
       {section === 'status' ? (
         <StatusSection
           detail={detail.data}
           sender={(body) => setImportStatus(id, body, initData)}
-          onSaved={() => void detail.refetch()}
+          onSaved={completeSave}
         />
       ) : section === 'bookmaker' ? (
         <BookmakerSection
@@ -153,22 +212,23 @@ export function MiniAppPage() {
           creditsSender={(bookmakerId) =>
             getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
           }
-          onSaved={() => void detail.refetch()}
+          onSaved={completeSave}
         />
       ) : section === 'tipster' ? (
         <TipsterSection
           detail={detail.data}
           sender={(body) => applyImportTipster(id, body, initData)}
-          onSaved={() => void detail.refetch()}
+          onSaved={completeSave}
         />
       ) : section === 'cashout' ? (
         <CashoutSection
           detail={detail.data}
           sender={(body) => setImportStatus(id, body, initData)}
-          onSaved={() => void detail.refetch()}
+          onSaved={completeSave}
         />
       ) : (
         <DraftControls
+          mini
           detail={detail.data}
           sender={(body) => patchImportDraft(id, body, initData)}
           originSender={(body) => applyImportOrigin(id, body, initData)}
@@ -176,9 +236,27 @@ export function MiniAppPage() {
           creditsSender={(bookmakerId) =>
             getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
           }
-          onSaved={() => void detail.refetch()}
+          onSaved={completeSave}
         />
       )}
+      {feedback ? (
+        <div className="mini-feedback-layer" role="presentation">
+          <div className="mini-feedback" role="alertdialog" aria-live="assertive">
+            <span className="mini-feedback-icon" aria-hidden="true">
+              {feedback === 'success' ? '✓' : <span className="mini-spinner" />}
+            </span>
+            <div>
+              <h2>{feedback === 'success' ? 'Alterações salvas' : 'Atualizando Telegram…'}</h2>
+              <p>
+                {feedback === 'success'
+                  ? 'A mensagem do Telegram foi atualizada.'
+                  : 'Aguarde a confirmação da mensagem antes de fechar.'}
+              </p>
+              {feedback === 'success' ? <small>Fechando…</small> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
