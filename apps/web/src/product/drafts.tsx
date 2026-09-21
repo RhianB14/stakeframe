@@ -157,7 +157,10 @@ export function DraftControls({
             type="radio"
             name="bet-origin"
             checked={origin === 'real'}
-            onChange={() => setOrigin('real')}
+            onChange={() => {
+              setOrigin('real');
+              setSaved(false);
+            }}
           />{' '}
           Dinheiro real
         </label>
@@ -166,7 +169,10 @@ export function DraftControls({
             type="radio"
             name="bet-origin"
             checked={origin === 'freebet'}
-            onChange={() => setOrigin('freebet')}
+            onChange={() => {
+              setOrigin('freebet');
+              setSaved(false);
+            }}
           />{' '}
           Freebet
         </label>
@@ -175,7 +181,10 @@ export function DraftControls({
             type="radio"
             name="bet-origin"
             checked={origin === 'hibrida'}
-            onChange={() => setOrigin('hibrida')}
+            onChange={() => {
+              setOrigin('hibrida');
+              setSaved(false);
+            }}
           />{' '}
           Híbrida (valor real + freebet)
         </label>
@@ -185,7 +194,13 @@ export function DraftControls({
       </fieldset>
       {origin === 'freebet' || origin === 'hibrida' ? (
         <Field label="Crédito de freebet">
-          <select value={credit} onChange={(event) => setCredit(event.target.value)}>
+          <select
+            value={credit}
+            onChange={(event) => {
+              setCredit(event.target.value);
+              setSaved(false);
+            }}
+          >
             <option value="">Selecione o crédito</option>
             {detail.credits.map((item) => (
               <option key={item.id} value={item.id}>
@@ -211,7 +226,10 @@ export function DraftControls({
         <input
           type="datetime-local"
           value={eventDate}
-          onChange={(event) => setEventDate(event.target.value)}
+          onChange={(event) => {
+            setEventDate(event.target.value);
+            setSaved(false);
+          }}
         />
       </Field>
       <p className="notice">
@@ -226,13 +244,31 @@ export function DraftControls({
             : undefined
         }
       >
-        <input value={sport} onChange={(event) => setSport(event.target.value)} />
+        <input
+          value={sport}
+          onChange={(event) => {
+            setSport(event.target.value);
+            setSaved(false);
+          }}
+        />
       </Field>
       <Field label="Torneio">
-        <input value={tournament} onChange={(event) => setTournament(event.target.value)} />
+        <input
+          value={tournament}
+          onChange={(event) => {
+            setTournament(event.target.value);
+            setSaved(false);
+          }}
+        />
       </Field>
       <Field label="País">
-        <input value={country} onChange={(event) => setCountry(event.target.value)} />
+        <input
+          value={country}
+          onChange={(event) => {
+            setCountry(event.target.value);
+            setSaved(false);
+          }}
+        />
       </Field>
       {error ? (
         <p className="notice warning" role="alert">
