@@ -1116,7 +1116,7 @@ test('keeps the Mini App open when Telegram cannot confirm the saved version', a
   await enabledProduct(page);
   const detail = importFixture();
   await importRoutes(page, detail);
-  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+  await page.route(`**/api/v1/imports/${importId}**`, (route) => {
     if (route.request().method() === 'POST') {
       return route.fulfill({
         json: {
