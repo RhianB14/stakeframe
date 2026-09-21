@@ -1064,11 +1064,13 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   });
   await page.goto(`/miniapp#miniapp?import=${importId}`);
   await expect(page.getByRole('heading', { name: 'Conferir importação' })).toBeVisible();
+  await expect(page.getByLabel('Esporte', { exact: true })).toHaveValue('Futebol');
+  await page.getByLabel('Esporte', { exact: true }).selectOption({ label: 'Basquete' });
   await page.getByLabel('Dinheiro real').check();
   await page.getByRole('button', { name: 'Salvar origem e data' }).click();
   await expect(page.getByText('Rascunho atualizado', { exact: false })).toBeVisible();
   expect(patches).toHaveLength(1);
-  expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real' });
+  expect(patches[0]).toMatchObject({ version: 2, betOrigin: 'real', sport: 'Basquete' });
   // O Mini App autentica pelo initData validado no servidor; nada de IDs no payload.
   expect(patchHeaders['x-telegram-init-data']).toBe('stub-initdata');
 });

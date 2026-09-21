@@ -263,6 +263,7 @@ describe('import message rendering (R5)', () => {
     expect(text).toContain('🏆 Torneio: Copa do Mundo');
     expect(text).toContain('🌎 País: Brasil');
     expect(text).toContain('🗣️ Tipster: teste');
+    expect(text.indexOf('🌎 País: Brasil')).toBeLessThan(text.indexOf('⚔️ Evento: A x B'));
     expect(text).toContain('🎰 Aposta: A Resultado + A Próximo gol + Menos de 1.5 Total de gols');
     expect(text).not.toContain(';');
     expect(text).toContain('🎯 Mercado: BetBuild');

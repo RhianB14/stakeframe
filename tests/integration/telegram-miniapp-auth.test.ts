@@ -1,5 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // IMPORTANTE: a rota resolve '@stakeframe/db' pelo exports do pacote (dist).
 // O harness importa o MESMO arquivo dist para que `instanceof FinanceError`
@@ -132,6 +134,43 @@ describe('mini app authentication on the real import routes', () => {
       headers: { 'x-telegram-init-data': initData },
     });
     expect(reread.json()).toMatchObject({ betOrigin: 'real', item: { id } });
+  });
+
+  it('accepts production-style file-backed Telegram credentials', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'stakeframe-miniapp-auth-'));
+    const tokenFile = join(directory, 'telegram_bot_token');
+    const ownerFile = join(directory, 'telegram_owner_user_id');
+    const previous = {
+      token: process.env.TELEGRAM_BOT_TOKEN,
+      owner: process.env.TELEGRAM_OWNER_USER_ID,
+      tokenFile: process.env.TELEGRAM_BOT_TOKEN_FILE,
+      ownerFile: process.env.TELEGRAM_OWNER_USER_ID_FILE,
+    };
+    try {
+      writeFileSync(tokenFile, `${token}\n`, { mode: 0o600 });
+      writeFileSync(ownerFile, `${ownerTelegramId}\n`, { mode: 0o600 });
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      delete process.env.TELEGRAM_OWNER_USER_ID;
+      process.env.TELEGRAM_BOT_TOKEN_FILE = tokenFile;
+      process.env.TELEGRAM_OWNER_USER_ID_FILE = ownerFile;
+      const id = await upload();
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/imports/${id}`,
+        headers: { 'x-telegram-init-data': sign() },
+      });
+      expect(response.statusCode).toBe(200);
+    } finally {
+      if (previous.token === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
+      else process.env.TELEGRAM_BOT_TOKEN = previous.token;
+      if (previous.owner === undefined) delete process.env.TELEGRAM_OWNER_USER_ID;
+      else process.env.TELEGRAM_OWNER_USER_ID = previous.owner;
+      if (previous.tokenFile === undefined) delete process.env.TELEGRAM_BOT_TOKEN_FILE;
+      else process.env.TELEGRAM_BOT_TOKEN_FILE = previous.tokenFile;
+      if (previous.ownerFile === undefined) delete process.env.TELEGRAM_OWNER_USER_ID_FILE;
+      else process.env.TELEGRAM_OWNER_USER_ID_FILE = previous.ownerFile;
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('refuses a read with no session and no initData', async () => {
