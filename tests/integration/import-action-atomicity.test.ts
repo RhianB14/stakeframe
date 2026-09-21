@@ -394,7 +394,9 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
       'alter table finance.bet drop constraint if exists bet_organization_id_ticket_number_idx, drop constraint if exists bet_ticket_number_positive',
     );
     await database.pool.query('alter table finance.bet drop column if exists ticket_number');
-    await database.pool.query('alter table finance.settings drop column if exists next_ticket_number');
+    await database.pool.query(
+      'alter table finance.settings drop column if exists next_ticket_number',
+    );
     await database.pool.query(
       'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 3)',
     );

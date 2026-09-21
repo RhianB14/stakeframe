@@ -48,7 +48,9 @@ async function reopenCoreMigration() {
     'ALTER TABLE finance.bet DROP CONSTRAINT IF EXISTS bet_organization_id_ticket_number_idx, DROP CONSTRAINT IF EXISTS bet_ticket_number_positive',
   );
   await database.pool.query('ALTER TABLE finance.bet DROP COLUMN IF EXISTS ticket_number');
-  await database.pool.query('ALTER TABLE finance.settings DROP COLUMN IF EXISTS next_ticket_number');
+  await database.pool.query(
+    'ALTER TABLE finance.settings DROP COLUMN IF EXISTS next_ticket_number',
+  );
   await database.pool.query(
     `DELETE FROM drizzle.__drizzle_migrations
      WHERE created_at > (SELECT created_at FROM drizzle.__drizzle_migrations ORDER BY created_at ASC OFFSET 4 LIMIT 1)`,
