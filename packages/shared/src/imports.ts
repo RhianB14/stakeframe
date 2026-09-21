@@ -366,6 +366,20 @@ export const draftUpdateResultSchema = z
   .meta({ id: 'DraftUpdateResult' });
 export type DraftUpdateResult = z.infer<typeof draftUpdateResultSchema>;
 
+// Confirmação explícita feita pelo proprietário dentro do Mini App. A edição
+// do rascunho continua sendo uma operação separada; esta rota apenas pede ao
+// servidor que use o rascunho canônico atual para criar a aposta financeira.
+export const importConfirmSchema = z
+  .strictObject({ version: z.number().int().positive() })
+  .meta({ id: 'ImportConfirm' });
+export const importConfirmResultSchema = z
+  .object({
+    version: z.number().int().positive(),
+    betId: z.uuid(),
+    betState: z.string(),
+  })
+  .meta({ id: 'ImportConfirmResult' });
+
 // STK-G0-19-R7 — transições REAIS de status disponíveis para a aposta de uma
 // importação pendente no Mini App (seção "Alterar Status").
 // STK-G0-20 — teclado de status (Ganha, Perdida, Meio-Ganha, Meio-Perdida,

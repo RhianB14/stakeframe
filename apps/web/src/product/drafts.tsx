@@ -52,6 +52,11 @@ export type DraftControlsProps = {
     freebetCleared: boolean;
     automaticPolicy: 'disabled' | 'absent' | 'invalid' | 'approved';
   }>;
+  confirmSender?: (body: { version: number }) => Promise<{
+    version: number;
+    betId: string;
+    betState: string;
+  }>;
   originSender?: (body: {
     version: number;
     kind: 'real' | 'freebet' | 'hibrida';

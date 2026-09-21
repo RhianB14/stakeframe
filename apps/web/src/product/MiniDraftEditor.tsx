@@ -42,7 +42,13 @@ const inputInstant = (value: string | null) => {
 const formatExpiry = (value: string) =>
   new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T12:00:00Z`));
 
-export function MiniDraftEditor({ detail, sender, creditsSender, onSaved }: DraftControlsProps) {
+export function MiniDraftEditor({
+  detail,
+  sender,
+  confirmSender,
+  creditsSender,
+  onSaved,
+}: DraftControlsProps) {
   const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida' | null>(detail.betOrigin);
   const [credit, setCredit] = useState(detail.freebetId ?? '');
   const initialEvent = inputInstant(detail.eventAt);
@@ -207,7 +213,8 @@ export function MiniDraftEditor({ detail, sender, creditsSender, onSaved }: Draf
         odds,
         selections,
       });
-      await onSaved(result.version);
+      const confirmed = confirmSender ? await confirmSender({ version: result.version }) : null;
+      await onSaved(confirmed?.version ?? result.version);
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
@@ -526,7 +533,13 @@ export function MiniDraftEditor({ detail, sender, creditsSender, onSaved }: Draf
       ) : null}
       <div className="mini-sticky-action">
         <Button onClick={() => void save()} disabled={busy}>
-          {busy ? 'Salvando e sincronizando…' : 'Salvar alterações'}
+          {busy
+            ? confirmSender
+              ? 'Salvando e confirmando…'
+              : 'Salvando e sincronizando…'
+            : confirmSender
+              ? 'Salvar e confirmar aposta'
+              : 'Salvar alterações'}
         </Button>
       </div>
     </div>

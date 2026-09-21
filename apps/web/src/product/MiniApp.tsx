@@ -6,6 +6,7 @@ import {
   ApiFailure,
   request,
   patchImportDraft,
+  confirmImport,
   setImportStatus,
   applyImportBookmaker,
   applyImportTipster,
@@ -231,6 +232,7 @@ export function MiniAppPage() {
           mini
           detail={detail.data}
           sender={(body) => patchImportDraft(id, body, initData)}
+          confirmSender={(body) => confirmImport(id, body, initData)}
           originSender={(body) => applyImportOrigin(id, body, initData)}
           eventSender={(body) => applyImportEvent(id, body, initData)}
           creditsSender={(bookmakerId) =>
