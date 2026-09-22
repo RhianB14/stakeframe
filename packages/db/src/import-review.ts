@@ -486,8 +486,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                 tipster_name: string | null;
                 freebet_id: string | null;
                 freebet_amount: string | null;
+                active_outcome: string | null;
               }>(
-                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.completion_state,b.freebet_id,f.amount as freebet_amount,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b left join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
+                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.completion_state,b.freebet_id,f.amount as freebet_amount,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name,(select s.outcome from finance.settlement s left join finance.settlement_reversal r on r.organization_id=s.organization_id and r.settlement_id=s.id where s.organization_id=b.organization_id and s.bet_id=b.id and r.settlement_id is null order by s.settled_at desc,s.id desc limit 1) as active_outcome from finance.bet b left join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
                 [row.imported_bet_id],
               )
             ).rows[0] ?? null)
@@ -564,6 +565,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
                   bet.state === 'open' || bet.state === 'settled'
                     ? bet.state
                     : ('cancelled' as const),
+                activeOutcome: bet.active_outcome,
                 stake: bet.stake,
                 odds: bet.odds,
                 remaining: bet.remaining,

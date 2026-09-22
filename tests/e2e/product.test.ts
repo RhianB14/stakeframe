@@ -458,9 +458,9 @@ test('an automatically created incomplete bet still opens the full Telegram edit
   await expect(page.getByRole('button', { name: 'Salvar e confirmar aposta' })).toBeVisible();
   await expect(page.getByLabel('Casa de aposta', { exact: true })).toHaveValue(house);
   await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toHaveValue('25.50');
-  await expect(page.getByRole('heading', { name: 'Status da aposta' })).toBeVisible();
-  await expect(page.getByLabel(/Ganhou/)).toBeEnabled();
-  await expect(page.getByLabel(/Perdeu/)).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Status da aposta' })).toHaveCount(0);
+  await expect(page.getByLabel('Status', { exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Status', { exact: true }).locator('option')).toHaveCount(6);
 });
 
 test('status remains editable in the full Mini App editor after the bet has been settled', async ({
@@ -474,6 +474,7 @@ test('status remains editable in the full Mini App editor after the bet has been
   detail.bet = {
     id: betId,
     state: 'settled',
+    activeOutcome: 'win',
     completionState: 'complete',
     stake: '100.00',
     odds: '2.00',
@@ -495,6 +496,15 @@ test('status remains editable in the full Mini App editor after the bet has been
     ],
   };
   await importRoutes(page, detail);
+  await page.route(`**/api/v1/imports/${importId}**`, (route) => {
+    if (route.request().method() === 'PATCH')
+      return route.fulfill({
+        json: { version: 5, freebetCleared: false, automaticPolicy: 'disabled' },
+      });
+    if (route.request().method() === 'POST')
+      return route.fulfill({ json: { version: 5, betId, betState: 'settled' } });
+    return route.fulfill({ json: detail });
+  });
   await page.addInitScript(() => {
     (window as unknown as { Telegram: unknown; miniAppClosed: boolean }).Telegram = {
       WebApp: {
@@ -513,11 +523,17 @@ test('status remains editable in the full Mini App editor after the bet has been
   });
   await page.goto(`/miniapp#miniapp?import=${importId}`);
   await expect(page.getByRole('heading', { name: 'Editar aposta' })).toBeVisible();
-  await page.getByLabel(/Perdeu/).check();
-  await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.getByRole('button', { name: 'Confirmar correção do status' }).click();
+  await expect(page.getByLabel('Status', { exact: true })).toHaveValue('win');
+  await page.getByLabel('Status', { exact: true }).selectOption('loss');
+  await page.getByRole('button', { name: 'Salvar e confirmar aposta' }).click();
+  await expect(page.getByRole('alertdialog', { name: 'Confirmar status' })).toBeVisible();
+  expect(statusChanges).toHaveLength(0);
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+  expect(statusChanges).toHaveLength(0);
+  await page.getByRole('button', { name: 'Salvar e confirmar aposta' }).click();
+  await page.getByRole('button', { name: 'Confirmar e salvar' }).click();
   await expect.poll(() => statusChanges.length).toBe(1);
-  expect(statusChanges[0]).toMatchObject({ version: 4, action: 'loss' });
+  expect(statusChanges[0]).toMatchObject({ action: 'loss' });
   await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toBeVisible();
   await expect
     .poll(() =>

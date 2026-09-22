@@ -46,6 +46,7 @@ export function MiniDraftEditor({
   detail,
   sender,
   confirmSender,
+  statusSender,
   creditsSender,
   onSaved,
 }: DraftControlsProps) {
@@ -98,6 +99,17 @@ export function MiniDraftEditor({
   const [creditsError, setCreditsError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  type StatusChoice = 'pending' | 'win' | 'loss' | 'half_win' | 'half_loss' | 'void';
+  const activeOutcome = detail.bet?.activeOutcome;
+  const initialStatus: StatusChoice | '' =
+    detail.bet?.state === 'settled'
+      ? activeOutcome && ['win', 'loss', 'half_win', 'half_loss', 'void'].includes(activeOutcome)
+        ? (activeOutcome as StatusChoice)
+        : ''
+      : 'pending';
+  const [status, setStatus] = useState<StatusChoice | ''>(initialStatus);
+  const [confirmStatus, setConfirmStatus] = useState(false);
+  const statusChanged = status !== initialStatus;
 
   useEffect(() => {
     if (!bookmaker || !creditsSender) {
@@ -202,6 +214,7 @@ export function MiniDraftEditor({
     setError(null);
     try {
       if (!origin) throw new Error('Escolha a origem da aposta.');
+      if (!status) throw new Error('Escolha o status da aposta.');
       if (!bookmaker) throw new Error('Escolha a casa de aposta.');
       if ((eventDate && !eventTime) || (!eventDate && eventTime))
         throw new Error('Informe a data e a hora do jogo juntas.');
@@ -232,8 +245,24 @@ export function MiniDraftEditor({
         selections,
       });
       const confirmed = confirmSender ? await confirmSender({ version: result.version }) : null;
-      await onSaved(confirmed?.version ?? result.version);
+      const version = confirmed?.version ?? result.version;
+      if (statusChanged && statusSender) {
+        let updated: { version: number; betState: string };
+        try {
+          updated = await statusSender({ version, action: status });
+        } catch (failure) {
+          throw new Error(
+            `Os dados foram salvos, mas o status não foi alterado. Reabra o Mini App para conferir o registro. ${failure instanceof Error ? failure.message : ''}`,
+            { cause: failure },
+          );
+        }
+        await onSaved(updated.version);
+      } else {
+        await onSaved(version);
+      }
+      setConfirmStatus(false);
     } catch (failure) {
+      setConfirmStatus(false);
       setError(
         failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
       );
@@ -527,8 +556,24 @@ export function MiniDraftEditor({
           <strong>{potentialReturn ? formatBRL(potentialReturn) : 'Pendente'}</strong>
         </div>
         <Field label="Status">
-          <select value="pending" disabled>
+          <select
+            value={status}
+            disabled={busy || detail.bet?.state === 'cancelled'}
+            onChange={(event) => setStatus(event.target.value as StatusChoice)}
+          >
+            {status === '' ? (
+              <option value="">
+                {activeOutcome === 'cashout' || activeOutcome === 'partial_cashout'
+                  ? 'Cashout — escolha um status'
+                  : 'Liquidada — escolha um status'}
+              </option>
+            ) : null}
             <option value="pending">Pendente</option>
+            <option value="win">Ganha</option>
+            <option value="loss">Perdida</option>
+            <option value="half_win">Meio-Ganha</option>
+            <option value="half_loss">Meio-Perdida</option>
+            <option value="void">Reembolsada</option>
           </select>
         </Field>
       </section>
@@ -549,8 +594,41 @@ export function MiniDraftEditor({
           {error}
         </p>
       ) : null}
+      {confirmStatus ? (
+        <div className="mini-feedback-layer" role="presentation">
+          <div
+            className="mini-feedback"
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Confirmar status"
+          >
+            <h2>Confirmar alteração de status?</h2>
+            <p>
+              {status === 'pending'
+                ? 'Voltar para Pendente estorna o resultado vigente e registra a correção no histórico financeiro.'
+                : detail.bet?.state === 'settled'
+                  ? 'O resultado vigente será estornado antes da nova liquidação financeira.'
+                  : 'Esta ação liquida a aposta e atualiza a mensagem do Telegram.'}
+            </p>
+            <div className="mini-status-confirm-actions">
+              <Button onClick={() => setConfirmStatus(false)} disabled={busy}>
+                Cancelar
+              </Button>
+              <Button onClick={() => void save()} disabled={busy}>
+                {busy ? 'Salvando…' : 'Confirmar e salvar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="mini-sticky-action">
-        <Button onClick={() => void save()} disabled={busy}>
+        <Button
+          onClick={() => {
+            if (statusChanged && statusSender) setConfirmStatus(true);
+            else void save();
+          }}
+          disabled={busy}
+        >
           {busy
             ? confirmSender
               ? 'Salvando e confirmando…'
