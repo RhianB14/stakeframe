@@ -207,7 +207,9 @@ function ProductShell({
               <h1>
                 {onboardingActive
                   ? 'Primeiros passos'
-                  : navigation.find((item) => item.id === page)!.title}
+                  : page === 'imports'
+                    ? 'Recebimentos técnicos'
+                    : navigation.find((item) => item.id === page)!.title}
               </h1>
             </div>
             <span className="live-label">
