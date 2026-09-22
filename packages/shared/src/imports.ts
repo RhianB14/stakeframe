@@ -190,10 +190,13 @@ export type ValidatedLayout = z.infer<typeof validatedLayoutSchema>;
 // determinística da casa/layout pertence ao servidor (F2).
 export const duplicateSchema = z.object({
   betId: z.uuid(),
-  reference: z.string(),
-  bookmakerId: z.uuid(),
-  stake: z.string(),
-  placedAt: z.iso.datetime({ offset: true }),
+  // Automatic import creates an incomplete bet before the user fills the
+  // Mini App. Those records can lack bookmaker/reference while still being a
+  // useful duplicate candidate by image hash.
+  reference: z.string().nullable(),
+  bookmakerId: z.uuid().nullable(),
+  stake: z.string().nullable(),
+  placedAt: z.iso.datetime({ offset: true }).nullable(),
   reasons: z.array(z.enum(['image', 'reference', 'similar'])),
 });
 export const importDetailSchema = z

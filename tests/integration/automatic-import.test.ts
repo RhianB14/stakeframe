@@ -17,6 +17,7 @@ import {
 import { migrateLocalDatabase } from '../../packages/db/src/migrate.js';
 import {
   OPENROUTER_MODEL,
+  importDetailSchema,
   type AutomaticPolicyV3,
   type FinanceCommand,
   type TicketExtraction,
@@ -269,6 +270,20 @@ describe('automatic import financial boundary', () => {
     expect(await complete(withoutPolicy, [])).toMatchObject({
       state: 'imported',
       reason: 'LAYOUT_NOT_VALIDATED',
+    });
+    const withoutBookmaker = await input({}, '');
+    expect(await complete(withoutBookmaker, [])).toMatchObject({
+      state: 'imported',
+      reason: 'CAPTION_UNRESOLVED',
+    });
+    const incompleteDetail = await createImportService(database).detail(
+      tenantContext,
+      withoutBookmaker.id,
+    );
+    // Incomplete automatic bets have no bookmaker/reference yet, but the
+    // detail contract must remain consumable by the Mini App.
+    expect(importDetailSchema.parse(incompleteDetail)).toMatchObject({
+      bet: { completionState: 'incomplete', bookmakerId: null },
     });
     const modelSelected = await input();
     Object.assign(modelSelected.result, {
