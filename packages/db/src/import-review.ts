@@ -23,7 +23,7 @@ import { createInboxStore } from './inbox.js';
 import { createAttachmentStore, type ObjectStorage } from './attachments.js';
 import { FinanceError, getBetRow, type SettingsRow } from './finance-core.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
-import { createImportDraftService } from './telegram-sync.js';
+import { createImportDraftService, enqueueBetSync } from './telegram-sync.js';
 import { executeFinancialCommand } from './finance-transaction.js';
 import { automaticPolicyNotice } from './layout-policy.js';
 
@@ -896,22 +896,78 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           )
         ).rows[0];
         if (!bet) throw new FinanceError('NOT_FOUND');
-        if (bet.completion_state !== 'complete') throw new FinanceError('INCOMPLETE_BET');
-        if (bet.state !== 'open') {
-          // Repetição idempotente: a MESMA liquidação já registrada é sucesso —
-          // nunca um segundo efeito financeiro.
-          const last = (
-            await client.query<{ outcome: string }>(
-              'select outcome from finance.settlement where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by settled_at desc, id desc limit 1',
+        if (bet.state === 'cancelled') throw new FinanceError('STATE_CONFLICT');
+        let activeSettlement: { id: string; outcome: string } | undefined;
+        if (bet.state === 'settled') {
+          activeSettlement = (
+            await client.query<{ id: string; outcome: string }>(
+              'select s.id,s.outcome from finance.settlement s left join finance.settlement_reversal r on r.organization_id=s.organization_id and r.settlement_id=s.id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=$1 and r.settlement_id is null order by s.settled_at desc, s.id desc limit 1',
               [bet.id],
             )
           ).rows[0];
-          if (last?.outcome === input.action) return { version: row.version, betState: bet.state };
-          throw new FinanceError('STATE_CONFLICT');
+          if (!activeSettlement) throw new FinanceError('STATE_CONFLICT');
+          // Repetição idempotente: a mesma liquidação ativa é sucesso, sem
+          // criar outro journal ou alterar novamente o resultado.
+          if (activeSettlement.outcome === input.action)
+            return { version: row.version, betState: bet.state };
+          // Correção de resultado é uma ação explícita no editor autenticado;
+          // o teclado inline legado mantém sua semântica terminal.
+          if (actor === 'telegram:bot') throw new FinanceError('STATE_CONFLICT');
         }
         if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
-        // G0-20: "Pendente" é um no-op informativo (a aposta permanece aberta).
-        if (input.action === 'pending') return { version: row.version, betState: bet.state };
+        // Pendente numa aposta já aberta/incompleta é um no-op informativo.
+        if (input.action === 'pending' && bet.state === 'open')
+          return { version: row.version, betState: bet.state };
+        if (bet.completion_state !== 'complete') throw new FinanceError('INCOMPLETE_BET');
+        let currentSettings = settings;
+        let remaining = bet.remaining;
+        if (activeSettlement) {
+          const reversalAt = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
+          const reversal = financeCommandSchema.parse({
+            type: 'settlement.reverse',
+            id: activeSettlement.id,
+            effectiveAt: reversalAt.toISOString(),
+            reason: 'Correção de status pelo Mini App',
+            expectedVersion: currentSettings.version,
+          });
+          await executeFinancialCommand(
+            client,
+            actor,
+            deterministicKey(`import-status-reverse:${id}:${input.version}:${activeSettlement.id}`),
+            reversal,
+            currentSettings,
+          );
+          const refreshedSettings = (
+            await client.query<SettingsRow>(
+              'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+            )
+          ).rows[0];
+          const reopened = (
+            await client.query<{ remaining: string }>(
+              'select remaining from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+              [bet.id],
+            )
+          ).rows[0];
+          if (!refreshedSettings || !reopened)
+            throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+          currentSettings = refreshedSettings;
+          remaining = reopened.remaining;
+          if (input.action === 'pending') {
+            const synchronized = await enqueueBetSync(client, bet.id);
+            if (!synchronized)
+              await client.query(
+                'update integration.inbox set version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+                [id],
+              );
+            const updated = (
+              await client.query<{ version: number }>(
+                'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+                [id],
+              )
+            ).rows[0]!;
+            return { version: updated.version, betState: 'open' };
+          }
+        }
         // STK-G0-20 — valor derivado calculado NO SERVIDOR conforme a
         // modalidade financeira (real, freebet ou híbrida derivada do crédito)
         // e a transição escolhida no teclado de status / Mini App. O CASHOUT é
@@ -924,16 +980,15 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         let returnAmount: string | null;
         if (isCashout) {
           if (!input.returnAmount) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-          closedPrincipal =
-            input.action === 'cashout' ? bet.remaining : (input.closedPrincipal ?? '');
+          closedPrincipal = input.action === 'cashout' ? remaining : (input.closedPrincipal ?? '');
           if (!closedPrincipal) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
           returnAmount = input.returnAmount;
         } else {
-          closedPrincipal = bet.remaining;
+          closedPrincipal = remaining;
           returnAmount = settleReturnFor(
             input.action as SettleAction,
             origin,
-            bet.remaining,
+            remaining,
             bet.odds,
             bet.freebet_amount,
           );
@@ -948,16 +1003,26 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           returnAmount,
           settledAt: now.toISOString(),
           reason: isCashout ? 'Cashout pelo Mini App' : 'Liquidação pelo Mini App',
-          expectedVersion: settings.version,
+          expectedVersion: currentSettings.version,
         });
-        const key = deterministicKey(`import-status:${id}:${input.action}`);
-        await executeFinancialCommand(client, actor, key, command, settings);
-        const updated = (
+        const key = deterministicKey(`import-status:${id}:${input.version}:${input.action}`);
+        await executeFinancialCommand(client, actor, key, command, currentSettings, {
+          preserveTelegramStatusEntry: actor !== 'telegram:bot',
+        });
+        let updated = (
           await client.query<{ version: number }>(
             'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
             [id],
           )
         ).rows[0]!;
+        if (updated.version === input.version) {
+          updated = (
+            await client.query<{ version: number }>(
+              'update integration.inbox set version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version',
+              [id],
+            )
+          ).rows[0]!;
+        }
         const settledBet = (
           await client.query<{ state: string }>(
             'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',

@@ -205,18 +205,27 @@ export function MiniAppPage() {
           onSaved={completeSave}
         />
       ) : (
-        <DraftControls
-          mini
-          detail={detail.data}
-          sender={(body) => patchImportDraft(id, body, initData)}
-          confirmSender={(body) => confirmImport(id, body, initData)}
-          originSender={(body) => applyImportOrigin(id, body, initData)}
-          eventSender={(body) => applyImportEvent(id, body, initData)}
-          creditsSender={(bookmakerId) =>
-            getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
-          }
-          onSaved={completeSave}
-        />
+        <>
+          <DraftControls
+            mini
+            detail={detail.data}
+            sender={(body) => patchImportDraft(id, body, initData)}
+            confirmSender={(body) => confirmImport(id, body, initData)}
+            originSender={(body) => applyImportOrigin(id, body, initData)}
+            eventSender={(body) => applyImportEvent(id, body, initData)}
+            creditsSender={(bookmakerId) =>
+              getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
+            }
+            onSaved={completeSave}
+          />
+          {detail.data.bet ? (
+            <StatusSection
+              detail={detail.data}
+              sender={(body) => setImportStatus(id, body, initData)}
+              onSaved={completeSave}
+            />
+          ) : null}
+        </>
       )}
       {feedback ? (
         <div className="mini-feedback-layer" role="presentation">

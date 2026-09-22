@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatBRL, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ApiFailure } from './api.js';
 
 // STK-G0-19-R7 — seções reais do Mini App abertas pelos botões da mensagem do
 // Telegram ("Alterar Status" e "Alterar Casa"). Toda gravação viaja pelo
@@ -58,26 +59,9 @@ export function StatusSection({
         </p>
       </div>
     );
-  if (bet.completionState !== 'complete')
-    return (
-      <div className="draft-controls">
-        <h3>Status da aposta</h3>
-        <p className="notice warning" role="status">
-          Complete os campos obrigatórios em “Editar” para liberar a alteração de status. A aposta
-          já foi criada e permanece Pendente.
-        </p>
-      </div>
-    );
-  if (bet.state !== 'open')
-    return (
-      <div className="draft-controls">
-        <h3>Status da aposta</h3>
-        <p className="notice" role="status">
-          Estado atual: <strong>{stateLabel(bet.state)}</strong> — sem transições disponíveis. A
-          mensagem do Telegram reflete este estado.
-        </p>
-      </div>
-    );
+  const wasSettled = bet.state === 'settled';
+  const incomplete = bet.completionState !== 'complete';
+  const cancelled = bet.state === 'cancelled';
   const save = async () => {
     if (!action) return;
     setBusy(true);
@@ -89,7 +73,15 @@ export function StatusSection({
       await onSaved(result.version);
     } catch (failure) {
       setError(
-        failure instanceof Error ? failure.message : 'Não foi possível liquidar. Tente novamente.',
+        failure instanceof ApiFailure && failure.code === 'INCOMPLETE_BET'
+          ? 'Complete e salve os dados financeiros obrigatórios (casa, valor e odd) antes de registrar um resultado.'
+          : failure instanceof ApiFailure && failure.code === 'VERSION_CONFLICT'
+            ? 'Este bilhete foi atualizado em outra tela. Feche e abra o Mini App novamente para carregar a versão atual.'
+            : failure instanceof ApiFailure && failure.code === 'STATE_CONFLICT' && cancelled
+              ? 'Este bilhete foi cancelado e não pode ser reaberto por esta tela.'
+              : failure instanceof Error
+                ? failure.message
+                : 'Não foi possível atualizar o status. Tente novamente.',
       );
     } finally {
       setBusy(false);
@@ -103,6 +95,24 @@ export function StatusSection({
         {formatBRL(bet.stake ?? '0.00')} · Odd {bet.odds ?? 'A definir'} · Em aberto{' '}
         {formatBRL(bet.remaining ?? '0.00')}
       </p>
+      {incomplete ? (
+        <p className="notice warning" role="status">
+          O status fica visível; para registrar Ganha, Perdida ou outro resultado, complete primeiro
+          os dados financeiros obrigatórios. Pendente continua disponível.
+        </p>
+      ) : null}
+      {wasSettled ? (
+        <p className="notice warning" role="status">
+          Você pode corrigir o resultado. O sistema preserva o histórico e registra um estorno
+          contábil antes da nova transição.
+        </p>
+      ) : null}
+      {cancelled ? (
+        <p className="notice warning" role="status">
+          O registro foi cancelado; as opções permanecem visíveis, mas o backend não permite
+          reabri-lo por esta tela.
+        </p>
+      ) : null}
       <fieldset>
         <legend>Nova transição *</legend>
         {STATUS_ACTIONS.map((option) => (
@@ -127,11 +137,19 @@ export function StatusSection({
         <div>
           <p className="notice warning" role="alert">
             {action === 'pending'
-              ? 'Manter a aposta pendente (sem liquidação)? Nenhum efeito financeiro é aplicado.'
-              : `Confirmar ${STATUS_LABEL[action] ?? 'a transição'}? A liquidação é financeira e a mensagem do Telegram será sincronizada.`}
+              ? wasSettled
+                ? 'Voltar para Pendente reverte a liquidação vigente. O estorno ficará registrado no histórico financeiro.'
+                : 'Manter a aposta pendente (sem liquidação)? Nenhum efeito financeiro é aplicado.'
+              : wasSettled
+                ? `Confirmar ${STATUS_LABEL[action] ?? 'a correção'}? O resultado vigente será estornado no histórico antes da nova liquidação.`
+                : `Confirmar ${STATUS_LABEL[action] ?? 'a transição'}? A liquidação é financeira e a mensagem do Telegram será sincronizada.`}
           </p>
           <Button onClick={() => void save()} disabled={busy}>
-            {busy ? 'Liquidando…' : 'Confirmar liquidação'}
+            {busy
+              ? 'Atualizando status…'
+              : wasSettled
+                ? 'Confirmar correção do status'
+                : 'Confirmar liquidação'}
           </Button>{' '}
           <Button onClick={() => setConfirming(false)} disabled={busy}>
             Voltar
@@ -146,8 +164,12 @@ export function StatusSection({
       {saved ? (
         <p className="notice" role="status">
           {action === 'pending'
-            ? 'A aposta permanece pendente — nenhuma liquidação foi registrada.'
-            : 'Liquidação registrada. A mensagem do Telegram foi sincronizada e entrou na limpeza do chat.'}
+            ? wasSettled
+              ? 'A aposta voltou para Pendente. O estorno contábil foi registrado e a mensagem do Telegram foi sincronizada.'
+              : 'A aposta permanece pendente — nenhuma liquidação foi registrada.'
+            : wasSettled
+              ? 'Status corrigido. O resultado anterior foi preservado no histórico com estorno contábil.'
+              : 'Liquidação registrada. A mensagem do Telegram foi sincronizada e entrou na limpeza do chat.'}
         </p>
       ) : null}
     </div>

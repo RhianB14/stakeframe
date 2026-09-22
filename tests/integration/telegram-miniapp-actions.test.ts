@@ -253,26 +253,30 @@ describe('Mini App status section (R7)', () => {
       headers: session,
     });
     expect((viaWeb.json() as { bet: { state: string } | null }).bet?.state).toBe('settled');
-    // Saiu de pendente → limpeza idempotente na outbox (foto, temporária, resultado).
+    // O bilhete mantém a resposta final como reentrada do Mini App; foto e
+    // temporária são removidas e a mensagem final recebe o novo status.
     const ops = (await outbox(importId)).map((item) => item.operation);
     for (const operation of [
       'delete_source_message',
-      'delete_result_message',
       'delete_processing_message',
+      'edit_result_message',
     ])
       expect(ops).toContain(operation);
+    expect(ops).not.toContain('delete_result_message');
   });
 
-  it('replays the same liquidation idempotently and conflicts on a different outcome', async () => {
+  it('replays the same liquidation idempotently and corrects a settled outcome with audited reversals', async () => {
     const { importId, betId, version } = await importedWithTelegram();
-    const send = (action: 'win' | 'loss', withVersion = version) =>
+    const balanceBefore = await finance.workspace(tenantContext);
+    const send = (action: 'win' | 'loss' | 'pending', withVersion = version) =>
       app.inject({
         method: 'POST',
         url: `/api/v1/imports/${importId}/status`,
         headers: { ...tg, 'content-type': 'application/json' },
         payload: { version: withVersion, action },
       });
-    expect((await send('win')).statusCode).toBe(200);
+    const won = await send('win');
+    expect(won.statusCode).toBe(200);
     const cleanupAfterFirst = (await outbox(importId)).length;
     // Repetição (mesmo pedido, versão antiga): mesmo resultado, zero efeito novo.
     const replay = await send('win');
@@ -286,8 +290,44 @@ describe('Mini App status section (R7)', () => {
       )
     ).rows[0]!.count;
     expect(Number(settlements)).toBe(1);
-    // Outcome diferente após liquidação: conflito sanitizado, nada muda.
-    expect((await send('loss')).statusCode).toBe(409);
+    // Corrige resultado pela mesma operação pública: o primeiro lançamento é
+    // estornado no ledger e o novo resultado é lançado na mesma transação.
+    const corrected = await send('loss', (won.json() as { version: number }).version);
+    expect(corrected.statusCode).toBe(200);
+    expect(corrected.json()).toMatchObject({ betState: 'settled' });
+    await expect(
+      database.pool.query(
+        'select outcome from finance.settlement where bet_id=$1 order by settled_at desc, id desc limit 1',
+        [betId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ outcome: 'loss' }] });
+    const pending = await send('pending', (corrected.json() as { version: number }).version);
+    expect(pending.statusCode).toBe(200);
+    expect(pending.json()).toMatchObject({ betState: 'open' });
+    const balanceAfter = await finance.workspace(tenantContext);
+    const financialSnapshot = (value: typeof balanceBefore) => ({
+      bankroll: value.bankroll,
+      available: value.available,
+      exposure: value.exposure,
+      accounts: value.accounts
+        .map(({ id, balance }) => ({ id, balance }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    });
+    expect(financialSnapshot(balanceAfter)).toEqual(financialSnapshot(balanceBefore));
+    const activeSettlements = (
+      await database.pool.query<{ count: string }>(
+        'select count(*) from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id where s.bet_id=$1 and r.settlement_id is null',
+        [betId],
+      )
+    ).rows[0]!.count;
+    expect(Number(activeSettlements)).toBe(0);
+    const reversals = (
+      await database.pool.query<{ count: string }>(
+        'select count(*) from finance.settlement_reversal r join finance.settlement s on s.id=r.settlement_id where s.bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!.count;
+    expect(Number(reversals)).toBe(2);
   });
 });
 
@@ -1013,12 +1053,10 @@ describe('Mini App cashout section (G0-20 B4/B5)', () => {
     expect(settlement.outcome).toBe('cashout');
     expect(settlement.return_amount).toBe('150.00');
     const ops = (await outbox(importId)).map((item) => item.operation);
-    for (const operation of [
-      'delete_source_message',
-      'delete_result_message',
-      'delete_processing_message',
-    ])
+    for (const operation of ['delete_source_message', 'delete_processing_message'])
       expect(ops).toContain(operation);
+    expect(ops).toContain('edit_result_message');
+    expect(ops).not.toContain('delete_result_message');
   });
 
   it('registers a partial cashout closing only the informed part', async () => {

@@ -421,7 +421,7 @@ describe('automatic import financial boundary', () => {
       dateStatus: 'pending',
     });
   });
-  it('creates first, completes the same ticket in the Mini App, and gates status until complete', async () => {
+  it('creates first, shows status controls before completion, and rejects financial settlement until complete', async () => {
     const value = await input({ warnings: ['Campo ausente para completar no Mini App'] });
     expect(await complete(value)).toMatchObject({
       state: 'imported',

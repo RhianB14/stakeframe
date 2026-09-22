@@ -370,6 +370,123 @@ describe('telegram outbox executor', () => {
     expect(row.telegram_sync_state).toBe('deleted');
   });
 
+  it('keeps the result entry available when removing a settled ticket photo', async () => {
+    const id = await boundInbox();
+    await database.pool.query(
+      'update integration.inbox set telegram_result_message_id=222,telegram_processing_message_id=333 where id=$1',
+      [id],
+    );
+    const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+      (entry) => entry.name === 'Bet365',
+    )!.id;
+    const created = await run({
+      type: 'bet.create',
+      bookmakerId,
+      tipsterId: null,
+      stake: '100.00',
+      odds: '2.00',
+      placedAt: new Date().toISOString(),
+      freebetId: null,
+      reference: 'fixture-status-entry',
+      allowMissingUnit: false,
+      selections: [
+        {
+          event: 'A x B',
+          sport: 'Futebol',
+          market: 'Resultado',
+          selection: 'A',
+          odds: null,
+          eventDate: null,
+          eventAt: null,
+          dateStatus: 'pending',
+        },
+      ],
+    });
+    await run({
+      type: 'bet.settle',
+      id: created.id,
+      outcome: 'loss',
+      closedPrincipal: '100.00',
+      returnAmount: '0.00',
+      settledAt: new Date().toISOString(),
+      reason: 'Fixture terminal state',
+    });
+    await database.pool.query(
+      "update integration.inbox set imported_bet_id=$2,state='imported' where id=$1",
+      [id, created.id],
+    );
+    const version = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.version;
+    const tenant = createTenantContext(database);
+    await tenant.withOrganizationTransaction(tenantContext, (client) =>
+      enqueueOutbox(client, id, 'delete_source_message', version),
+    );
+    // Mudança de versão ainda liquidada não invalida a limpeza da foto.
+    await database.pool.query('update integration.inbox set version=version+1 where id=$1', [id]);
+    responses.push(json({ ok: true, result: true }));
+    let progressed = true;
+    while (progressed && fetchImpl.mock.calls.length === 0)
+      progressed = await service().processOnce();
+    const call = fetchImpl.mock.calls[0]!;
+    expect(String(call[0])).toMatch(/\/deleteMessage$/);
+    expect(JSON.parse(String((call[1] as RequestInit).body))).toMatchObject({
+      chat_id: 42,
+      message_id: 900,
+    });
+    const row = (
+      await database.pool.query<{
+        telegram_source_message_id: string | null;
+        telegram_result_message_id: string | null;
+        telegram_deleted_at: Date | null;
+      }>(
+        'select telegram_source_message_id,telegram_result_message_id,telegram_deleted_at from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!;
+    expect(row).toMatchObject({
+      telegram_source_message_id: null,
+      telegram_result_message_id: '222',
+      telegram_deleted_at: null,
+    });
+  });
+
+  it('skips a stale source deletion after a newer Mini App status version', async () => {
+    const id = await boundInbox();
+    await database.pool.query(
+      'update integration.inbox set telegram_processing_message_id=333 where id=$1',
+      [id],
+    );
+    const version = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!.version;
+    const tenant = createTenantContext(database);
+    await tenant.withOrganizationTransaction(tenantContext, (client) =>
+      enqueueOutbox(client, id, 'delete_source_message', version),
+    );
+    await database.pool.query('update integration.inbox set version=version+1 where id=$1', [id]);
+    let progressed = true;
+    while (progressed) progressed = await service().processOnce();
+    const row = (
+      await database.pool.query<{
+        telegram_source_message_id: string | null;
+        telegram_deleted_at: Date | null;
+      }>(
+        'select telegram_source_message_id,telegram_deleted_at from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!;
+    expect(row.telegram_source_message_id).toBe('900');
+    expect(row.telegram_deleted_at).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('keeps the settled status when a cleanup deletion fails permanently', async () => {
     const id = await boundInbox();
     responses.push(json({ ok: true, result: { message_id: 333 } }));

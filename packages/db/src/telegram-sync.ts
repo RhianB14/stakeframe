@@ -352,14 +352,14 @@ export async function enqueueOutbox(
 
 /**
  * Espelha alterações de uma aposta importada na mensagem do Telegram.
- * `cleanup` enfileira as exclusões (foto, resposta e temporária sobrevivente)
- * quando o estado deixa de ser pendente; caso contrário edita a resposta final.
- * Nunca edita mensagem já excluída; a limpeza é idempotente.
+ * `cleanup` remove todas as mensagens após descarte. `preserveStatusEntry`
+ * remove a foto, mantém a resposta final (botões Editar/Status) e a sincroniza.
+ * Sem as opções, edita a resposta final. Nunca edita mensagem já excluída.
  */
 export async function enqueueBetSync(
   client: PoolClient,
   betId: string,
-  options: { cleanup?: boolean } = {},
+  options: { cleanup?: boolean; preserveStatusEntry?: boolean } = {},
 ) {
   const rows = (
     await client.query<{
@@ -386,8 +386,12 @@ export async function enqueueBetSync(
       if (row.result_id) await enqueueOutbox(client, row.id, 'delete_result_message', version);
       if (row.processing_id)
         await enqueueOutbox(client, row.id, 'delete_processing_message', version);
-    } else if (row.result_id && !row.deleted_at) {
-      await enqueueOutbox(client, row.id, 'edit_result_message', version);
+    } else if (!row.deleted_at) {
+      if (options.preserveStatusEntry && row.source_id)
+        await enqueueOutbox(client, row.id, 'delete_source_message', version);
+      if (options.preserveStatusEntry && row.processing_id)
+        await enqueueOutbox(client, row.id, 'delete_processing_message', version);
+      if (row.result_id) await enqueueOutbox(client, row.id, 'edit_result_message', version);
     }
   }
   return rows.length;
