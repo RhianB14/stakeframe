@@ -233,13 +233,23 @@ export function createTelegramOutboxService(
         return;
       }
       case 'delete_source_message': {
+        // Uma correção rápida pode reabrir o bilhete antes do worker processar
+        // a limpeza antiga. Não apague a foto nem marque o registro como
+        // excluído se uma versão mais nova já restaurou o status.
+        if (item.version !== row.version) return;
         if (!row.telegram_source_message_id) return;
         await client.deleteMessage(chatId, Number(row.telegram_source_message_id));
-        await setSync(
-          db,
-          row.id,
-          "telegram_deleted_at=coalesce(telegram_deleted_at,now()),telegram_sync_state='deleted'",
-        );
+        if (row.bet_state === 'settled') {
+          // Após liquidar, mantenha a resposta final com os botões Editar/Status
+          // como ponto de reentrada; apenas a foto original é removida.
+          await setSync(db, row.id, 'telegram_source_message_id=null');
+        } else {
+          await setSync(
+            db,
+            row.id,
+            "telegram_deleted_at=coalesce(telegram_deleted_at,now()),telegram_sync_state='deleted'",
+          );
+        }
         return;
       }
       case 'delete_result_message': {

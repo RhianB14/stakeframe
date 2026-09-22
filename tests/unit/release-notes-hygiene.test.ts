@@ -112,6 +112,28 @@ describe('release notes hygiene — current preparation (STK-REL-11)', () => {
   });
 });
 
+// STK-MINIAPP-STATUS-ALWAYS — beta.7 documents the always-visible editor
+// status, audited correction path, and re-entry-preserving Telegram behavior.
+describe('release notes hygiene — beta.7 status correction', () => {
+  it('documents always-available status and audited correction behavior', () => {
+    const content = readFileSync(`${RELEASES_DIR}/v0.1.0-beta.7.md`, 'utf8');
+    expect(content).toMatch(/Status da aposta.*permanece acessível/s);
+    expect(content).toMatch(/estorno contábil auditável/i);
+    expect(content).toMatch(/mensagem final do Telegram.*mantida como ponto de reentrada/s);
+    expect(content).toMatch(/aposta incompleta.*não aceita transição financeira/is);
+  });
+
+  it('prepares beta.7 without claiming publication or changing production configuration', () => {
+    const content = readFileSync(`${RELEASES_DIR}/v0.1.0-beta.7.md`, 'utf8');
+    expect(tableField(content, 'Tag')).toMatch(/NÃO CRIADA/i);
+    expect(tableField(content, 'Commit-fonte')).toMatch(/reconfirmado no momento da autorização/i);
+    expect(content).toMatch(/nenhuma migração de banco foi adicionada/i);
+    expect(content).toMatch(
+      /nenhuma tag beta\.7, GitHub Release, publicação de imagem, deploy ou migração/i,
+    );
+  });
+});
+
 // STK-REL-12 — a preparação da beta.4 acrescenta garantias escopadas à própria
 // nota: o escopo do Mini App de confirmação (idempotência, sincronização,
 // fechamento automático, status e edição de campos), o registro de zero

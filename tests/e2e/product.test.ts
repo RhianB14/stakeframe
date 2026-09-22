@@ -458,6 +458,74 @@ test('an automatically created incomplete bet still opens the full Telegram edit
   await expect(page.getByRole('button', { name: 'Salvar e confirmar aposta' })).toBeVisible();
   await expect(page.getByLabel('Casa de aposta', { exact: true })).toHaveValue(house);
   await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toHaveValue('25.50');
+  await expect(page.getByRole('heading', { name: 'Status da aposta' })).toBeVisible();
+  await expect(page.getByLabel(/Ganhou/)).toBeEnabled();
+  await expect(page.getByLabel(/Perdeu/)).toBeEnabled();
+});
+
+test('status remains editable in the full Mini App editor after the bet has been settled', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.item.state = 'imported';
+  detail.item.betId = betId;
+  detail.item.version = 4;
+  detail.bet = {
+    id: betId,
+    state: 'settled',
+    completionState: 'complete',
+    stake: '100.00',
+    odds: '2.00',
+    remaining: '0.00',
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    tipsterId: null,
+    tipsterName: null,
+    freebetId: null,
+    selections: [
+      {
+        id: '10000000-0000-4000-8000-00000000000a',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown; miniAppClosed: boolean }).Telegram = {
+      WebApp: {
+        initData: 'stub-initdata',
+        close: () => {
+          (window as unknown as { miniAppClosed: boolean }).miniAppClosed = true;
+        },
+        HapticFeedback: { notificationOccurred: () => undefined },
+      },
+    };
+  });
+  const statusChanges: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}/status`, (route) => {
+    statusChanges.push(route.request().postDataJSON());
+    return route.fulfill({ json: { version: 5, betState: 'settled' } });
+  });
+  await page.goto(`/miniapp#miniapp?import=${importId}`);
+  await expect(page.getByRole('heading', { name: 'Editar aposta' })).toBeVisible();
+  await page.getByLabel(/Perdeu/).check();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Confirmar correção do status' }).click();
+  await expect.poll(() => statusChanges.length).toBe(1);
+  expect(statusChanges[0]).toMatchObject({ version: 4, action: 'loss' });
+  await expect(page.getByRole('heading', { name: 'Alterações salvas' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean((window as unknown as { miniAppClosed?: boolean }).miniAppClosed),
+      ),
+    )
+    .toBe(true);
 });
 
 test('a refused automatic import explains the review reason', async ({ page }) => {
