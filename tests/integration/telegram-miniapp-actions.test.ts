@@ -277,6 +277,16 @@ describe('Mini App status section (R7)', () => {
       });
     const won = await send('win');
     expect(won.statusCode).toBe(200);
+    const readOutcome = async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/imports/${importId}`,
+        headers: session,
+      });
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { bet: { activeOutcome: string | null } }).bet.activeOutcome;
+    };
+    expect(await readOutcome()).toBe('win');
     const cleanupAfterFirst = (await outbox(importId)).length;
     // Repetição (mesmo pedido, versão antiga): mesmo resultado, zero efeito novo.
     const replay = await send('win');
@@ -295,6 +305,7 @@ describe('Mini App status section (R7)', () => {
     const corrected = await send('loss', (won.json() as { version: number }).version);
     expect(corrected.statusCode).toBe(200);
     expect(corrected.json()).toMatchObject({ betState: 'settled' });
+    expect(await readOutcome()).toBe('loss');
     await expect(
       database.pool.query(
         'select outcome from finance.settlement where bet_id=$1 order by settled_at desc, id desc limit 1',
@@ -304,6 +315,7 @@ describe('Mini App status section (R7)', () => {
     const pending = await send('pending', (corrected.json() as { version: number }).version);
     expect(pending.statusCode).toBe(200);
     expect(pending.json()).toMatchObject({ betState: 'open' });
+    expect(await readOutcome()).toBeNull();
     const balanceAfter = await finance.workspace(tenantContext);
     const financialSnapshot = (value: typeof balanceBefore) => ({
       bankroll: value.bankroll,

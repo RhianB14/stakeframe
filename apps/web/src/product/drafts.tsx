@@ -57,6 +57,10 @@ export type DraftControlsProps = {
     betId: string;
     betState: string;
   }>;
+  statusSender?: (body: {
+    version: number;
+    action: 'pending' | 'win' | 'loss' | 'half_win' | 'half_loss' | 'void';
+  }) => Promise<{ version: number; betState: string }>;
   originSender?: (body: {
     version: number;
     kind: 'real' | 'freebet' | 'hibrida';

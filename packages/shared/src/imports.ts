@@ -270,6 +270,12 @@ export const importDetailSchema = z
         id: z.uuid(),
         state: z.enum(['open', 'settled', 'cancelled']),
         completionState: z.enum(['incomplete', 'complete']),
+        // Resultado vigente após estornos; permite que o Mini App mostre o
+        // status real no menu ao reabrir uma aposta já liquidada.
+        activeOutcome: z
+          .enum(['win', 'loss', 'void', 'half_win', 'half_loss', 'cashout', 'partial_cashout'])
+          .nullable()
+          .optional(),
         stake: z.string().nullable(),
         odds: z.string().nullable(),
         remaining: z.string().nullable(),

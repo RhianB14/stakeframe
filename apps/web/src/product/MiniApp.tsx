@@ -211,6 +211,7 @@ export function MiniAppPage() {
             detail={detail.data}
             sender={(body) => patchImportDraft(id, body, initData)}
             confirmSender={(body) => confirmImport(id, body, initData)}
+            statusSender={(body) => setImportStatus(id, body, initData)}
             originSender={(body) => applyImportOrigin(id, body, initData)}
             eventSender={(body) => applyImportEvent(id, body, initData)}
             creditsSender={(bookmakerId) =>
@@ -218,13 +219,6 @@ export function MiniAppPage() {
             }
             onSaved={completeSave}
           />
-          {detail.data.bet ? (
-            <StatusSection
-              detail={detail.data}
-              sender={(body) => setImportStatus(id, body, initData)}
-              onSaved={completeSave}
-            />
-          ) : null}
         </>
       )}
       {feedback ? (

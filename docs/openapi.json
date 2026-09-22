@@ -1861,6 +1861,19 @@
               },
               "state": { "type": "string", "enum": ["open", "settled", "cancelled"] },
               "completionState": { "type": "string", "enum": ["incomplete", "complete"] },
+              "activeOutcome": {
+                "nullable": true,
+                "type": "string",
+                "enum": [
+                  "win",
+                  "loss",
+                  "void",
+                  "half_win",
+                  "half_loss",
+                  "cashout",
+                  "partial_cashout"
+                ]
+              },
               "stake": { "nullable": true, "type": "string" },
               "odds": { "nullable": true, "type": "string" },
               "remaining": { "nullable": true, "type": "string" },
@@ -5594,6 +5607,19 @@
               },
               "state": { "type": "string", "enum": ["open", "settled", "cancelled"] },
               "completionState": { "type": "string", "enum": ["incomplete", "complete"] },
+              "activeOutcome": {
+                "nullable": true,
+                "type": "string",
+                "enum": [
+                  "win",
+                  "loss",
+                  "void",
+                  "half_win",
+                  "half_loss",
+                  "cashout",
+                  "partial_cashout"
+                ]
+              },
               "stake": { "nullable": true, "type": "string" },
               "odds": { "nullable": true, "type": "string" },
               "remaining": { "nullable": true, "type": "string" },
