@@ -133,12 +133,8 @@
           "tableFrom": "account",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -227,12 +223,8 @@
           "tableFrom": "session",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -242,9 +234,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -308,9 +298,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -487,12 +475,8 @@
           "tableFrom": "beta_invitation",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "accepted_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["accepted_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -615,12 +599,8 @@
           "tableFrom": "consent_record",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -629,12 +609,8 @@
           "tableFrom": "consent_record",
           "tableTo": "legal_document",
           "schemaTo": "core",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -849,12 +825,8 @@
           "tableFrom": "membership",
           "tableTo": "organization",
           "schemaTo": "core",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -863,12 +835,8 @@
           "tableFrom": "membership",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -876,10 +844,7 @@
       "compositePrimaryKeys": {
         "membership_organization_id_user_id_pk": {
           "name": "membership_organization_id_user_id_pk",
-          "columns": [
-            "organization_id",
-            "user_id"
-          ]
+          "columns": ["organization_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -965,12 +930,8 @@
           "tableFrom": "onboarding_state",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -979,12 +940,8 @@
           "tableFrom": "onboarding_state",
           "tableTo": "organization",
           "schemaTo": "core",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1194,17 +1151,12 @@
         "attachment_object_key_unique": {
           "name": "attachment_object_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "object_key"
-          ]
+          "columns": ["object_key"]
         },
         "attachment_organization_id_id_idx": {
           "name": "attachment_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -1258,14 +1210,8 @@
           "tableFrom": "extraction_request",
           "tableTo": "inbox",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "organization_id",
-            "inbox_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "inbox_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1337,10 +1283,7 @@
       "compositePrimaryKeys": {
         "import_action_receipt_pk": {
           "name": "import_action_receipt_pk",
-          "columns": [
-            "organization_id",
-            "key"
-          ]
+          "columns": ["organization_id", "key"]
         }
       },
       "uniqueConstraints": {},
@@ -1699,14 +1642,8 @@
           "tableFrom": "inbox",
           "tableTo": "attachment",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "organization_id",
-            "attachment_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "attachment_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1715,14 +1652,8 @@
           "tableFrom": "inbox",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "imported_bet_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "imported_bet_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1731,14 +1662,8 @@
           "tableFrom": "inbox",
           "tableTo": "freebet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "freebet_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "freebet_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1747,14 +1672,8 @@
           "tableFrom": "inbox",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "bookmaker_override_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "bookmaker_override_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1764,10 +1683,7 @@
         "inbox_organization_id_id_idx": {
           "name": "inbox_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -1986,14 +1902,8 @@
           "tableFrom": "telegram_outbox",
           "tableTo": "inbox",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "organization_id",
-            "inbox_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "inbox_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2003,10 +1913,7 @@
         "telegram_outbox_organization_id_id_idx": {
           "name": "telegram_outbox_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -2255,14 +2162,8 @@
           "tableFrom": "bet",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "bookmaker_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "bookmaker_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2271,14 +2172,8 @@
           "tableFrom": "bet",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "tipster_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "tipster_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2287,14 +2182,8 @@
           "tableFrom": "bet",
           "tableTo": "freebet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "freebet_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "freebet_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2303,14 +2192,8 @@
           "tableFrom": "bet",
           "tableTo": "monthly_unit",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "unit_month"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "month"
-          ],
+          "columnsFrom": ["organization_id", "unit_month"],
+          "columnsTo": ["organization_id", "month"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2319,14 +2202,8 @@
           "tableFrom": "bet",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "stake_journal_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "stake_journal_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2336,18 +2213,12 @@
         "bet_organization_id_id_idx": {
           "name": "bet_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         },
         "bet_organization_id_ticket_number_idx": {
           "name": "bet_organization_id_ticket_number_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "ticket_number"
-          ]
+          "columns": ["organization_id", "ticket_number"]
         }
       },
       "policies": {},
@@ -2520,14 +2391,8 @@
           "tableFrom": "selection",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "bet_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "bet_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2537,10 +2402,7 @@
         "selection_organization_id_id_idx": {
           "name": "selection_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -2612,10 +2474,7 @@
         "catalog_organization_id_id_idx": {
           "name": "catalog_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -2686,14 +2545,8 @@
           "tableFrom": "catalog_alias",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "catalog_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "catalog_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2701,11 +2554,7 @@
       "compositePrimaryKeys": {
         "catalog_alias_organization_id_kind_alias_pk": {
           "name": "catalog_alias_organization_id_kind_alias_pk",
-          "columns": [
-            "organization_id",
-            "kind",
-            "alias"
-          ]
+          "columns": ["organization_id", "kind", "alias"]
         }
       },
       "uniqueConstraints": {},
@@ -2761,10 +2610,7 @@
       "compositePrimaryKeys": {
         "command_receipt_organization_id_key_pk": {
           "name": "command_receipt_organization_id_key_pk",
-          "columns": [
-            "organization_id",
-            "key"
-          ]
+          "columns": ["organization_id", "key"]
         }
       },
       "uniqueConstraints": {},
@@ -2860,14 +2706,8 @@
           "tableFrom": "account",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "bookmaker_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "bookmaker_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2877,10 +2717,7 @@
         "account_organization_id_id_idx": {
           "name": "account_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -3095,14 +2932,8 @@
           "tableFrom": "freebet",
           "tableTo": "catalog",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "bookmaker_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "bookmaker_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3112,10 +2943,7 @@
         "freebet_organization_id_id_idx": {
           "name": "freebet_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -3240,14 +3068,8 @@
           "tableFrom": "journal",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "reversal_of"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "reversal_of"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3257,10 +3079,7 @@
         "journal_organization_id_id_idx": {
           "name": "journal_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -3321,10 +3140,7 @@
       "compositePrimaryKeys": {
         "monthly_unit_organization_id_month_pk": {
           "name": "monthly_unit_organization_id_month_pk",
-          "columns": [
-            "organization_id",
-            "month"
-          ]
+          "columns": ["organization_id", "month"]
         }
       },
       "uniqueConstraints": {},
@@ -3394,14 +3210,8 @@
           "tableFrom": "posting",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "journal_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "journal_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3410,14 +3220,8 @@
           "tableFrom": "posting",
           "tableTo": "account",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "account_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "account_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3425,11 +3229,7 @@
       "compositePrimaryKeys": {
         "posting_journal_id_account_id_organization_id_pk": {
           "name": "posting_journal_id_account_id_organization_id_pk",
-          "columns": [
-            "journal_id",
-            "account_id",
-            "organization_id"
-          ]
+          "columns": ["journal_id", "account_id", "organization_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3511,12 +3311,8 @@
           "tableFrom": "settings",
           "tableTo": "organization",
           "schemaTo": "core",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3526,9 +3322,7 @@
         "settings_organization_id_unique": {
           "name": "settings_organization_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id"
-          ]
+          "columns": ["organization_id"]
         }
       },
       "policies": {},
@@ -3652,14 +3446,8 @@
           "tableFrom": "settlement",
           "tableTo": "bet",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "bet_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "bet_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3668,14 +3456,8 @@
           "tableFrom": "settlement",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "journal_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "journal_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3685,10 +3467,7 @@
         "settlement_organization_id_id_idx": {
           "name": "settlement_organization_id_id_idx",
           "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
+          "columns": ["organization_id", "id"]
         }
       },
       "policies": {},
@@ -3751,14 +3530,8 @@
           "tableFrom": "settlement_reversal",
           "tableTo": "settlement",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "settlement_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "settlement_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3767,14 +3540,8 @@
           "tableFrom": "settlement_reversal",
           "tableTo": "journal",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "journal_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "journal_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3990,14 +3757,8 @@
           "tableFrom": "event_search",
           "tableTo": "selection",
           "schemaTo": "finance",
-          "columnsFrom": [
-            "organization_id",
-            "selection_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "selection_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4022,36 +3783,22 @@
     "core.beta_invitation_status": {
       "name": "beta_invitation_status",
       "schema": "core",
-      "values": [
-        "pending",
-        "accepted",
-        "revoked"
-      ]
+      "values": ["pending", "accepted", "revoked"]
     },
     "core.legal_document_status": {
       "name": "legal_document_status",
       "schema": "core",
-      "values": [
-        "current",
-        "superseded"
-      ]
+      "values": ["current", "superseded"]
     },
     "core.legal_document_type": {
       "name": "legal_document_type",
       "schema": "core",
-      "values": [
-        "terms_of_use",
-        "privacy_policy",
-        "minimum_age"
-      ]
+      "values": ["terms_of_use", "privacy_policy", "minimum_age"]
     },
     "core.membership_role": {
       "name": "membership_role",
       "schema": "core",
-      "values": [
-        "owner",
-        "superadmin"
-      ]
+      "values": ["owner", "superadmin"]
     }
   },
   "schemas": {
