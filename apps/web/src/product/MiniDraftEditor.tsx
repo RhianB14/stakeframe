@@ -63,30 +63,30 @@ export function MiniDraftEditor({
     detail.ticketKindOverride ?? classifyTicketKind(detail.extraction?.selections ?? []),
   );
   const [stake, setStake] = useState(
-    detail.stakeOverride ?? detail.extraction?.stake ?? detail.bet?.stake ?? '',
+    detail.stakeOverride ?? detail.bet?.stake ?? detail.extraction?.stake ?? '',
   );
   const [odds, setOdds] = useState(
-    detail.oddsOverride ?? detail.extraction?.odds ?? detail.bet?.odds ?? '',
+    detail.oddsOverride ?? detail.bet?.odds ?? detail.extraction?.odds ?? '',
   );
   const [bookmaker, setBookmaker] = useState(
     detail.bookmakerOverrideId ??
-      detail.matches.captionBookmakerId ??
       detail.bet?.bookmakerId ??
+      detail.matches.captionBookmakerId ??
       '',
   );
   const [tipster, setTipster] = useState(
-    detail.tipsterOverrideId ?? detail.matches.tipsterId ?? detail.bet?.tipsterId ?? '',
+    detail.tipsterOverrideId ?? detail.bet?.tipsterId ?? detail.matches.tipsterId ?? '',
   );
   const [selections, setSelections] = useState(() => {
     const initial = detail.selectionOverrides.length
       ? detail.selectionOverrides.map((item) => ({ ...item }))
-      : detail.extraction?.selections?.length
-        ? detail.extraction.selections.map(({ event, market, selection }) => ({
+      : detail.bet?.selections?.length
+        ? detail.bet.selections.map(({ event, market, selection }) => ({
             event,
             market,
             selection,
           }))
-        : (detail.bet?.selections ?? []).map(({ event, market, selection }) => ({
+        : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
             event,
             market,
             selection,
@@ -106,8 +106,8 @@ export function MiniDraftEditor({
     }
     const initialBookmaker =
       detail.bookmakerOverrideId ??
-      detail.matches.captionBookmakerId ??
       detail.bet?.bookmakerId ??
+      detail.matches.captionBookmakerId ??
       '';
     if (
       bookmaker === initialBookmaker &&
@@ -139,8 +139,8 @@ export function MiniDraftEditor({
     creditsSender,
     detail.bookmakerOverrideId,
     detail.credits,
-    detail.matches.captionBookmakerId,
     detail.bet?.bookmakerId,
+    detail.matches.captionBookmakerId,
   ]);
 
   const compatibleCredits = useMemo(
