@@ -79,7 +79,12 @@ export type DraftControlsProps = {
 };
 
 export function DraftControls(props: DraftControlsProps) {
-  if (props.mini && !props.detail.bet) return <MiniDraftEditor {...props} />;
+  // O fluxo automático cria a aposta financeira imediatamente em estado
+  // incompleto. Isso não muda a tela do Mini App: enquanto a aposta não foi
+  // preenchida, o proprietário ainda precisa do editor completo para ajustar
+  // todos os campos e então promovê-la a completa. O editor legado continua
+  // reservado à tela de revisão Web.
+  if (props.mini) return <MiniDraftEditor {...props} />;
   return <LegacyDraftControls {...props} />;
 }
 

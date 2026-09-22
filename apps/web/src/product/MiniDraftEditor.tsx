@@ -62,22 +62,35 @@ export function MiniDraftEditor({
   const [ticketKind, setTicketKind] = useState<TicketKind>(
     detail.ticketKindOverride ?? classifyTicketKind(detail.extraction?.selections ?? []),
   );
-  const [stake, setStake] = useState(detail.stakeOverride ?? detail.extraction?.stake ?? '');
-  const [odds, setOdds] = useState(detail.oddsOverride ?? detail.extraction?.odds ?? '');
+  const [stake, setStake] = useState(
+    detail.stakeOverride ?? detail.extraction?.stake ?? detail.bet?.stake ?? '',
+  );
+  const [odds, setOdds] = useState(
+    detail.oddsOverride ?? detail.extraction?.odds ?? detail.bet?.odds ?? '',
+  );
   const [bookmaker, setBookmaker] = useState(
-    detail.bookmakerOverrideId ?? detail.matches.captionBookmakerId ?? '',
+    detail.bookmakerOverrideId ??
+      detail.matches.captionBookmakerId ??
+      detail.bet?.bookmakerId ??
+      '',
   );
   const [tipster, setTipster] = useState(
-    detail.tipsterOverrideId ?? detail.matches.tipsterId ?? '',
+    detail.tipsterOverrideId ?? detail.matches.tipsterId ?? detail.bet?.tipsterId ?? '',
   );
   const [selections, setSelections] = useState(() => {
     const initial = detail.selectionOverrides.length
       ? detail.selectionOverrides.map((item) => ({ ...item }))
-      : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
-          event,
-          market,
-          selection,
-        }));
+      : detail.extraction?.selections?.length
+        ? detail.extraction.selections.map(({ event, market, selection }) => ({
+            event,
+            market,
+            selection,
+          }))
+        : (detail.bet?.selections ?? []).map(({ event, market, selection }) => ({
+            event,
+            market,
+            selection,
+          }));
     return initial.length ? initial : [{ event: null, market: null, selection: null }];
   });
   const [credits, setCredits] = useState(detail.credits);
@@ -91,7 +104,11 @@ export function MiniDraftEditor({
       setCredits(bookmaker ? detail.credits.filter((item) => item.bookmakerId === bookmaker) : []);
       return;
     }
-    const initialBookmaker = detail.bookmakerOverrideId ?? detail.matches.captionBookmakerId ?? '';
+    const initialBookmaker =
+      detail.bookmakerOverrideId ??
+      detail.matches.captionBookmakerId ??
+      detail.bet?.bookmakerId ??
+      '';
     if (
       bookmaker === initialBookmaker &&
       detail.credits.every((item) => item.bookmakerId === bookmaker)
@@ -123,6 +140,7 @@ export function MiniDraftEditor({
     detail.bookmakerOverrideId,
     detail.credits,
     detail.matches.captionBookmakerId,
+    detail.bet?.bookmakerId,
   ]);
 
   const compatibleCredits = useMemo(

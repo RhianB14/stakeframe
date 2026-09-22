@@ -411,6 +411,50 @@ test('an automatic import shows its origin and keeps financial creation controls
   await page.screenshot({ path: info.outputPath('automatic-import.png'), fullPage: true });
 });
 
+test('an automatically created incomplete bet still opens the full Telegram editor', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.item.state = 'imported';
+  detail.item.betId = betId;
+  detail.automatic = true;
+  detail.automaticReason = 'EXTRACTION_UNCERTAIN';
+  detail.bookmakers = [{ id: house, name: 'Bet365' }];
+  detail.bet = {
+    id: betId,
+    state: 'open',
+    completionState: 'incomplete',
+    stake: '25.50',
+    odds: '2.10',
+    remaining: null,
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    tipsterId: null,
+    tipsterName: null,
+    freebetId: null,
+    selections: [
+      {
+        id: '10000000-0000-4000-8000-00000000000a',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
+  await importRoutes(page, detail);
+  await page.goto(`/miniapp#miniapp?import=${importId}`);
+
+  await expect(page.getByRole('heading', { name: 'Editar aposta' })).toBeVisible();
+  await expect(page.getByText('Dados do jogo', { exact: true })).toBeVisible();
+  await expect(page.getByText('Origem da aposta registrada', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Salvar e confirmar aposta' })).toBeVisible();
+  await expect(page.getByLabel('Casa de aposta', { exact: true })).toHaveValue(house);
+  await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toHaveValue('25.50');
+});
+
 test('a refused automatic import explains the review reason', async ({ page }) => {
   await enabledProduct(page);
   const detail = importFixture();
