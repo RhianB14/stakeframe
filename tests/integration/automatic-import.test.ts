@@ -484,6 +484,61 @@ describe('automatic import financial boundary', () => {
     );
     expect(settled.betState).toBe('settled');
   });
+  it('returns the fresh version when completing a Telegram-linked ticket and unlocks status after reopen', async () => {
+    const value = await input({ warnings: ['Campo ausente para completar no Mini App'] });
+    expect(await complete(value)).toMatchObject({
+      state: 'imported',
+      reason: 'EXTRACTION_UNCERTAIN',
+    });
+    const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+      (entry) => entry.name === 'Bet365',
+    )!.id;
+    await database.pool.query(
+      "update integration.inbox set telegram_chat_id='4242',telegram_result_message_id=900,telegram_sync_state='pending' where id=$1",
+      [value.id],
+    );
+    const beforeVersion = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [value.id],
+      )
+    ).rows[0]!.version;
+    const updated = await createImportService(database).updateDraft(
+      tenantContext,
+      value.id,
+      {
+        version: beforeVersion,
+        betOrigin: 'real',
+        bookmakerId,
+        tipsterId: null,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+      'fixture-owner',
+    );
+    const confirmed = await createImportService(database).confirmDraft(
+      tenantContext,
+      value.id,
+      { version: updated.version },
+      'fixture-owner',
+      randomUUID(),
+    );
+    expect(confirmed.version).toBeGreaterThan(updated.version);
+    const reopened = await createImportService(database).detail(tenantContext, value.id);
+    expect(reopened.bet).toMatchObject({ completionState: 'complete', state: 'open' });
+    const settled = await createImportService(database).setStatus(
+      tenantContext,
+      value.id,
+      { version: reopened.item.version, action: 'win' },
+      'fixture-owner',
+    );
+    expect(settled.betState).toBe('settled');
+  });
   it('uses the explicitly selected freebet credit and does not debit cash', async () => {
     const credit = await run({
       type: 'freebet.create',

@@ -727,6 +727,20 @@ export function createImportService(database: Database, storage?: ObjectStorage)
               command,
               settings,
             );
+            // `bet.complete` enfileira a sincronização canônica do Telegram.
+            // Quando a importação já possui mensagem, essa sincronização
+            // incrementa a versão da inbox dentro da mesma transação. Nunca
+            // devolva `row.version` capturada antes do comando: o Mini App e
+            // o callback de status precisam continuar usando a versão atual
+            // depois de reabrir o bilhete.
+            const current = (
+              await client.query<{ version: number; state: string }>(
+                'select i.version,b.state from integration.inbox i join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id where i.organization_id=current_setting($$app.organization_id$$, true)::uuid and i.id=$1',
+                [id],
+              )
+            ).rows[0];
+            if (!current) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+            return { version: current.version, betId: bet.id, betState: current.state };
           }
           return { version: row.version, betId: bet.id, betState: bet.state };
         }
