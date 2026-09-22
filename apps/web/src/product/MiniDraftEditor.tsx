@@ -6,7 +6,7 @@ import {
   type TicketKind,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
-import { localInstant } from './api.js';
+import { ApiFailure, localInstant } from './api.js';
 import type { DraftControlsProps } from './drafts.js';
 import { Field } from './forms.js';
 import { MobilePicker } from './MobilePicker.js';
@@ -57,6 +57,12 @@ export function MiniDraftEditor({
   const [eventTime, setEventTime] = useState(initialEvent.time);
   const extractedSport =
     detail.extraction?.selections.find((item) => item.sport !== null)?.sport ?? null;
+  // STK-G0-23 — aposta já registrada: o registro financeiro é a fonte e
+  // prevalece sobre os overrides do rascunho. Sem esta precedência a tela
+  // reabria mostrando a casa/tipster/valor/odd/seleções ANTIGOS depois que o
+  // registro canônico já havia mudado (a mensagem do Telegram mostrava o
+  // valor novo, a tela o velho). Esporte fica com o override porque o
+  // detalhe canônico não expõe o esporte das seleções.
   const [sport, setSport] = useState(detail.sportOverride ?? extractedSport ?? '');
   const [tournament, setTournament] = useState(detail.tournamentOverride ?? '');
   const [country, setCountry] = useState(detail.countryOverride ?? '');
@@ -64,29 +70,29 @@ export function MiniDraftEditor({
     detail.ticketKindOverride ?? classifyTicketKind(detail.extraction?.selections ?? []),
   );
   const [stake, setStake] = useState(
-    detail.stakeOverride ?? detail.bet?.stake ?? detail.extraction?.stake ?? '',
+    detail.bet?.stake ?? detail.stakeOverride ?? detail.extraction?.stake ?? '',
   );
   const [odds, setOdds] = useState(
-    detail.oddsOverride ?? detail.bet?.odds ?? detail.extraction?.odds ?? '',
+    detail.bet?.odds ?? detail.oddsOverride ?? detail.extraction?.odds ?? '',
   );
   const [bookmaker, setBookmaker] = useState(
-    detail.bookmakerOverrideId ??
-      detail.bet?.bookmakerId ??
+    detail.bet?.bookmakerId ??
+      detail.bookmakerOverrideId ??
       detail.matches.captionBookmakerId ??
       '',
   );
   const [tipster, setTipster] = useState(
-    detail.tipsterOverrideId ?? detail.bet?.tipsterId ?? detail.matches.tipsterId ?? '',
+    detail.bet?.tipsterId ?? detail.tipsterOverrideId ?? detail.matches.tipsterId ?? '',
   );
   const [selections, setSelections] = useState(() => {
-    const initial = detail.selectionOverrides.length
-      ? detail.selectionOverrides.map((item) => ({ ...item }))
-      : detail.bet?.selections?.length
-        ? detail.bet.selections.map(({ event, market, selection }) => ({
-            event,
-            market,
-            selection,
-          }))
+    const initial = detail.bet?.selections.length
+      ? detail.bet.selections.map(({ event, market, selection }) => ({
+          event,
+          market,
+          selection,
+        }))
+      : detail.selectionOverrides.length
+        ? detail.selectionOverrides.map((item) => ({ ...item }))
         : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
             event,
             market,
@@ -117,8 +123,8 @@ export function MiniDraftEditor({
       return;
     }
     const initialBookmaker =
-      detail.bookmakerOverrideId ??
       detail.bet?.bookmakerId ??
+      detail.bookmakerOverrideId ??
       detail.matches.captionBookmakerId ??
       '';
     if (
@@ -263,8 +269,20 @@ export function MiniDraftEditor({
       setConfirmStatus(false);
     } catch (failure) {
       setConfirmStatus(false);
+      // STK-G0-23 — depois da confirmação o registro canônico é a fonte da
+      // aposta, e o servidor recusa (409 STATE_CONFLICT) qualquer edição que
+      // não possa ser persistida lá. Sem este mapeamento o Mini App mostraria
+      // uma mensagem genérica para algo muito concreto; o essencial é que a
+      // recusa seja explícita e que NADA seja anunciado como salvo.
+      const canonicalRefusal =
+        failure instanceof ApiFailure && failure.code === 'STATE_CONFLICT'
+          ? 'Esta aposta já foi confirmada: valor, odd, casa, tipster, origem, crédito e seleções passam a pertencer ao registro da aposta e não são mais alteráveis por esta tela. Nada foi salvo — ajuste pelo painel da aposta ou use as seções de casa e tipster.'
+          : null;
       setError(
-        failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
+        canonicalRefusal ??
+          (failure instanceof Error
+            ? failure.message
+            : 'Não foi possível salvar. Tente novamente.'),
       );
     } finally {
       setBusy(false);
