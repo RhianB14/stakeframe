@@ -411,6 +411,55 @@ test('an automatic import shows its origin and keeps financial creation controls
   await page.screenshot({ path: info.outputPath('automatic-import.png'), fullPage: true });
 });
 
+test('an automatically created incomplete bet still opens the full Telegram editor', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const detail = importFixture();
+  detail.item.state = 'imported';
+  detail.item.betId = betId;
+  detail.automatic = true;
+  detail.automaticReason = 'EXTRACTION_UNCERTAIN';
+  detail.bookmakers = [{ id: house, name: 'Bet365' }];
+  detail.bet = {
+    id: betId,
+    state: 'open',
+    completionState: 'incomplete',
+    stake: '25.50',
+    odds: '2.10',
+    remaining: null,
+    bookmakerId: house,
+    bookmakerName: 'Bet365',
+    tipsterId: null,
+    tipsterName: null,
+    freebetId: null,
+    selections: [
+      {
+        id: '10000000-0000-4000-8000-00000000000a',
+        event: 'Aurora × Central',
+        market: 'Gols',
+        selection: 'Mais de 2,5',
+        eventAt: null,
+        dateStatus: 'pending',
+      },
+    ],
+  };
+  await importRoutes(page, detail);
+  await page.addInitScript(() => {
+    (window as unknown as { Telegram: unknown }).Telegram = {
+      WebApp: { initData: 'stub-initdata' },
+    };
+  });
+  await page.goto(`/miniapp#miniapp?import=${importId}`);
+
+  await expect(page.getByRole('heading', { name: 'Editar aposta' })).toBeVisible();
+  await expect(page.getByText('Dados do jogo', { exact: true })).toBeVisible();
+  await expect(page.getByText('Origem da aposta registrada', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Salvar e confirmar aposta' })).toBeVisible();
+  await expect(page.getByLabel('Casa de aposta', { exact: true })).toHaveValue(house);
+  await expect(page.getByLabel('Valor apostado (R$)', { exact: true })).toHaveValue('25.50');
+});
+
 test('a refused automatic import explains the review reason', async ({ page }) => {
   await enabledProduct(page);
   const detail = importFixture();
@@ -1263,7 +1312,7 @@ test('opens the bookmaker section and never keeps an incompatible credit silentl
   await expect(page.getByText('não é compatível', { exact: false })).toBeVisible();
 });
 
-test('opens an existing hybrid bet as hybrid and preserves it when saved unchanged', async ({
+test('opens an existing hybrid bet in the full editor and preserves it when saved unchanged', async ({
   page,
 }) => {
   await enabledProduct(page);
@@ -1309,22 +1358,43 @@ test('opens an existing hybrid bet as hybrid and preserves it when saved unchang
   await importRoutes(page, detail);
   await page.addInitScript(() => {
     (window as unknown as { Telegram: unknown }).Telegram = {
-      WebApp: { initData: 'stub-initdata' },
+      WebApp: {
+        initData: 'stub-initdata',
+        close: () => undefined,
+        HapticFeedback: { notificationOccurred: () => undefined },
+      },
     };
   });
-  const posts: unknown[] = [];
-  await page.route(`**/api/v1/imports/${importId}/origin`, (route) => {
-    posts.push(route.request().postDataJSON());
-    return route.fulfill({ json: { version: 3, betState: 'open', kind: 'hibrida' } });
+  const patches: unknown[] = [];
+  await page.route(`**/api/v1/imports/${importId}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ json: { version: 3 } });
+    }
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        json: { version: 4, betId, betState: 'open' },
+      });
+    }
+    return route.fulfill({ json: detail });
   });
   await page.route(`**/api/v1/imports/${importId}/credits*`, (route) =>
     route.fulfill({ json: { credits: detail.credits } }),
   );
   await page.goto(`/#miniapp?import=${importId}`);
-  await expect(page.getByLabel('Híbrida (valor real + freebet)')).toBeChecked();
-  await page.getByRole('button', { name: 'Salvar origem' }).click();
-  await expect.poll(() => posts.length).toBe(1);
-  expect(posts[0]).toMatchObject({ kind: 'hibrida', freebetId: credit });
+  await expect(page.getByLabel('Híbrida', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Valor em dinheiro real (R$)', { exact: true })).toHaveValue(
+    '60.00',
+  );
+  await expect(page.getByLabel('Odd', { exact: true })).toHaveValue('2.0000');
+  await page.getByRole('button', { name: 'Salvar e confirmar aposta' }).click();
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0]).toMatchObject({
+    betOrigin: 'hibrida',
+    freebetId: credit,
+    stake: '60.00',
+    odds: '2.0000',
+  });
 });
 
 test('the Mini App explains how to open it when Telegram is unavailable (R5)', async ({ page }) => {
