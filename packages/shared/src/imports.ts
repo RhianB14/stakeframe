@@ -266,12 +266,13 @@ export const importDetailSchema = z
       .object({
         id: z.uuid(),
         state: z.enum(['open', 'settled', 'cancelled']),
-        stake: z.string(),
-        odds: z.string(),
-        remaining: z.string(),
+        completionState: z.enum(['incomplete', 'complete']),
+        stake: z.string().nullable(),
+        odds: z.string().nullable(),
+        remaining: z.string().nullable(),
         // R8: casa canônica da aposta (finance.bet) e seleções com datas —
         // alimentam as seções pós-importação do Mini App.
-        bookmakerId: z.uuid(),
+        bookmakerId: z.uuid().nullable(),
         bookmakerName: z.string().nullable(),
         // STK-G0-20 B5 — tipster canônico da aposta (seção "Alterar Tipster").
         tipsterId: z.uuid().nullable(),

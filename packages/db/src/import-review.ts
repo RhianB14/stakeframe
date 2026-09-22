@@ -357,6 +357,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         betOrigin?: 'real' | 'freebet' | 'hibrida' | null | undefined;
         freebetId?: string | null | undefined;
         eventAt?: string | null | undefined;
+        bookmakerId?: string | null | undefined;
         tipsterId?: string | null | undefined;
         sport?: string | null | undefined;
         tournament?: string | null | undefined;
@@ -475,17 +476,18 @@ export function createImportService(database: Database, storage?: ObjectStorage)
               await client.query<{
                 id: string;
                 state: string;
-                stake: string;
-                odds: string;
-                remaining: string;
-                bookmaker_id: string;
-                bookmaker_name: string;
+                stake: string | null;
+                odds: string | null;
+                remaining: string | null;
+                bookmaker_id: string | null;
+                bookmaker_name: string | null;
+                completion_state: 'incomplete' | 'complete';
                 tipster_id: string | null;
                 tipster_name: string | null;
                 freebet_id: string | null;
                 freebet_amount: string | null;
               }>(
-                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.freebet_id,f.amount as freebet_amount,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
+                'select b.id,b.state,b.stake,b.odds,b.remaining,b.bookmaker_id,b.completion_state,b.freebet_id,f.amount as freebet_amount,b.tipster_id,c.name as bookmaker_name,t.name as tipster_name from finance.bet b left join finance.catalog c on c.id=b.bookmaker_id and c.organization_id=b.organization_id left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id left join finance.catalog t on t.id=b.tipster_id and t.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1',
                 [row.imported_bet_id],
               )
             ).rows[0] ?? null)
@@ -557,6 +559,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           bet: bet
             ? {
                 id: bet.id,
+                completionState: bet.completion_state,
                 state:
                   bet.state === 'open' || bet.state === 'settled'
                     ? bet.state
@@ -594,7 +597,11 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           },
           duplicates: duplicates.slice(0, 100),
           duplicateCount: duplicates.length,
-          automatic: decision.success && decision.data.reason === 'IMPORTED',
+          // A aposta é criada automaticamente mesmo quando ainda incompleta;
+          // `automatic` descreve a origem do registro, não a existência de
+          // lançamento financeiro. O estado financeiro fica em
+          // `bet.completionState` e continua sem exposição até a confirmação.
+          automatic: row.state === 'imported' && row.imported_bet_id !== null,
           automaticReason: decision.success
             ? decision.data.reason
             : ('LAYOUT_NOT_VALIDATED' as const),
@@ -638,6 +645,89 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         if (!row) throw new FinanceError('NOT_FOUND');
         if (row.imported_bet_id) {
           const bet = await getBetRow(client, row.imported_bet_id);
+          if (bet.completion_state === 'incomplete') {
+            if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
+            const evidence =
+              row.extraction && typeof row.extraction === 'object' && 'extraction' in row.extraction
+                ? (row.extraction as { extraction: unknown }).extraction
+                : row.extraction;
+            const extraction = ticketExtractionSchema.safeParse(evidence);
+            if (!extraction.success) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+            const overrides = draftOverrides(row.metadata);
+            const selections = (
+              overrides.selections.length
+                ? overrides.selections
+                : extraction.data.selections.map(({ event, market, selection, odds }) => ({
+                    event,
+                    market,
+                    selection,
+                    odds,
+                  }))
+            ).map((value) => ({
+              event: value.event ?? 'A definir',
+              market: value.market ?? 'A definir',
+              selection: value.selection ?? 'A definir',
+              odds: 'odds' in value ? value.odds : null,
+            }));
+            const bookmakerId = row.bookmaker_override_id ?? bet.bookmaker_id;
+            const stake = overrides.stake ?? extraction.data.stake;
+            const odds = overrides.odds ?? extraction.data.odds;
+            if (
+              !bookmakerId ||
+              !stake ||
+              !odds ||
+              selections.some(
+                (value) =>
+                  value.event.trim() === '' ||
+                  value.market.trim() === '' ||
+                  value.selection.trim() === '' ||
+                  value.event === 'A definir' ||
+                  value.market === 'A definir' ||
+                  value.selection === 'A definir',
+              )
+            )
+              throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+            const settings = (
+              await client.query<SettingsRow>(
+                'select * from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid for update',
+              )
+            ).rows[0];
+            if (!settings) throw new FinanceError('NOT_FOUND');
+            const origin =
+              row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+                ? row.bet_origin
+                : 'real';
+            const command = financeCommandSchema.parse({
+              type: 'bet.complete',
+              expectedVersion: settings.version,
+              id: bet.id,
+              bookmakerId,
+              tipsterId: overrides.tipsterId ?? bet.tipster_id,
+              stake,
+              odds,
+              placedAt: bet.placed_at.toISOString(),
+              freebetId: origin === 'real' ? null : row.freebet_id,
+              reference: bet.reference ?? extraction.data.reference ?? '',
+              allowMissingUnit: true,
+              selections: selections.map((selection) => ({
+                event: normalizeEventLabel(selection.event),
+                sport: overrides.sport ?? extraction.data.selections[0]?.sport ?? null,
+                market: selection.market,
+                selection: selection.selection,
+                odds: selection.odds ?? null,
+                eventDate: row.event_at ? saoPauloDate(row.event_at) : null,
+                eventAt: row.event_at?.toISOString() ?? null,
+                dateStatus: row.event_at ? 'confirmed' : 'pending',
+              })),
+            });
+            await executeFinancialCommand(
+              client,
+              actor,
+              deterministicKey(`miniapp-import-complete:${idempotencyKey}`),
+              command,
+              settings,
+            );
+          }
           return { version: row.version, betId: bet.id, betState: bet.state };
         }
         if (row.version !== input.version) throw new FinanceError('VERSION_CONFLICT');
@@ -784,13 +874,15 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             remaining: string;
             odds: string;
             stake: string;
+            completion_state: 'incomplete' | 'complete';
             freebet_amount: string | null;
           }>(
-            'select b.id,b.state,b.remaining,b.odds,b.stake,f.amount as freebet_amount from finance.bet b left join finance.freebet f on f.organization_id=b.organization_id and f.id=b.freebet_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1 for update of b',
+            'select b.id,b.state,b.remaining,b.odds,b.stake,b.completion_state,f.amount as freebet_amount from finance.bet b left join finance.freebet f on f.organization_id=b.organization_id and f.id=b.freebet_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1 for update of b',
             [row.imported_bet_id],
           )
         ).rows[0];
         if (!bet) throw new FinanceError('NOT_FOUND');
+        if (bet.completion_state !== 'complete') throw new FinanceError('INCOMPLETE_BET');
         if (bet.state !== 'open') {
           // Repetição idempotente: a MESMA liquidação já registrada é sucesso —
           // nunca um segundo efeito financeiro.

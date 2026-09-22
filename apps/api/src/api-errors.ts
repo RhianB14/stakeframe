@@ -38,6 +38,7 @@ const messages: Record<ApiErrorCode, string> = {
   ALIAS_CONFLICT: 'Este nome ou alias já pertence a outro cadastro.',
   ORIGIN_REQUIRED: 'Confirme a origem da aposta (dinheiro real ou freebet) antes de registrar.',
   FREEBET_UNRESOLVED: 'Confira o crédito de freebet escolhido para esta aposta.',
+  INCOMPLETE_BET: 'Preencha todos os campos obrigatórios da aposta antes de alterar o status.',
   DUPLICATE_REVIEW_REQUIRED:
     'Há uma aposta possivelmente repetida. Confira e justifique o novo registro.',
   INVALID_INBOX_IMAGE: 'Envie uma imagem PNG ou JPEG válida, com até 8 MiB e 40 milhões de pixels.',

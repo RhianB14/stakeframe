@@ -262,11 +262,13 @@ describe('durable extraction inbox', () => {
               .rows[0]?.state,
           { timeout: 15_000 },
         )
-        .toBe('review');
+        .toBe('imported');
       const saved = (
         await database.pool.query('select extraction from integration.inbox where id=$1', [id])
       ).rows[0]?.extraction;
       expect(saved.extraction).toEqual(candidate);
+      // O aviso continua na evidência para diagnóstico, mas não cria uma fila
+      // manual: o bilhete já foi registrado como incompleto.
       expect(saved.requiresReview).toBe(true);
       expect(fetchImpl).toHaveBeenCalledTimes(1);
       requireBudget.mockRejectedValueOnce(new IntegrationError('AI_BUDGET_UNAVAILABLE'));

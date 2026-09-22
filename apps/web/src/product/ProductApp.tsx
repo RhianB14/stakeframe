@@ -54,15 +54,15 @@ type Owner = { id: string; name: string };
 const navigation = [
   { id: 'overview', title: 'Visão geral', icon: '◫' },
   { id: 'bets', title: 'Apostas', icon: '▤' },
-  { id: 'imports', title: 'Importações', icon: '⇧' },
   { id: 'calendar', title: 'Calendário', icon: '▦' },
   { id: 'analytics', title: 'Análises', icon: '↗' },
   { id: 'finance', title: 'Financeiro', icon: '⇄' },
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
-type Page = (typeof navigation)[number]['id'];
+type Page = (typeof navigation)[number]['id'] | 'imports';
 function currentPage(): Page {
   const id = location.hash.slice(1);
+  if (id === 'imports') return 'imports';
   return navigation.find((item) => item.id === id)?.id ?? 'overview';
 }
 

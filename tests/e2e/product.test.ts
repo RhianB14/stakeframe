@@ -97,6 +97,7 @@ const bet: Bet = {
   freebetId: null,
   freebetStakeReturned: null,
   reference: '',
+  completionState: 'complete',
   state: 'open',
   remaining: '100.00',
   unitMonth: '2026-09',
@@ -1167,6 +1168,7 @@ test('opens the status section from the Telegram button and liquidates for real 
   detail.bet = {
     id: betId,
     state: 'open',
+    completionState: 'complete',
     stake: '25.50',
     odds: '2.1000',
     remaining: '25.50',
@@ -1274,6 +1276,7 @@ test('opens an existing hybrid bet as hybrid and preserves it when saved unchang
   detail.bet = {
     id: betId,
     state: 'open',
+    completionState: 'complete',
     stake: '60.00',
     odds: '2.0000',
     remaining: '60.00',
@@ -1371,6 +1374,7 @@ test('freebet house change loads credits for the DESTINATION house and saves ato
   detail.bet = {
     id: '30000000-0000-4000-8000-0000000000b1',
     state: 'open',
+    completionState: 'complete',
     stake: '100.00',
     odds: '2.0000',
     remaining: '100.00',

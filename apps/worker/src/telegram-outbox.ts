@@ -52,6 +52,7 @@ type InboxRow = ImportMessageRow & {
   override_country: string | null;
   bet_id: string | null;
   bet_state: string | null;
+  bet_completion_state: 'incomplete' | 'complete' | null;
   bet_stake: string | null;
   bet_odds: string | null;
   bet_placed_at: Date | null;
@@ -97,7 +98,7 @@ export function createTelegramOutboxService(
                 i.metadata->'userOverrides'->>'odds' as override_odds,
                 i.metadata->'userOverrides'->'selections' as override_selections,
                 draftf.amount as draft_freebet_amount,
-                b.id as bet_id,b.state as bet_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,f.amount as bet_freebet_amount,
+                b.id as bet_id,b.state as bet_state,b.completion_state as bet_completion_state,b.stake as bet_stake,b.odds as bet_odds,b.placed_at as bet_placed_at,b.freebet_id as bet_freebet_id,f.amount as bet_freebet_amount,
                 bc.name as bet_bookmaker,t.name as bet_tipster
          from integration.inbox i
           left join finance.catalog c on c.id=i.bookmaker_override_id and c.organization_id=i.organization_id
@@ -131,14 +132,15 @@ export function createTelegramOutboxService(
       }[];
       row.canonical = {
         state: row.bet_state ?? 'open',
+        completionState: row.bet_completion_state ?? 'complete',
         bookmaker: row.bet_bookmaker,
         tipster: row.bet_tipster,
         // G0-20 B2b — a modalidade deriva do par (stake real, crédito): sem
         // crédito = real; crédito igual à stake = freebet; crédito distinto =
         // híbrida. O valor do crédito alimenta o retorno potencial exibido.
         origin: deriveBetOrigin(row.bet_stake ?? '0.00', row.bet_freebet_amount),
-        stake: row.bet_stake ?? '0.00',
-        odds: row.bet_odds ?? '1.0000',
+        stake: row.bet_stake,
+        odds: row.bet_odds,
         freebetAmount: row.bet_freebet_amount,
         placedAt: row.bet_placed_at,
         selections: selections.map((selection) => ({

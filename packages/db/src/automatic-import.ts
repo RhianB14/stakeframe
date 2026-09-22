@@ -15,12 +15,12 @@ import {
   type ValidatedLayout,
   type AutomaticPolicyV3,
   type AutomaticReason,
+  automaticReasonSchema,
   type BetInput,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
 import { FinanceError, type SettingsRow } from './finance-core.js';
-import { createFinanceService } from './finance-service.js';
 import { executeFinancialCommand } from './finance-transaction.js';
 import { automaticBookmakerSlug, automaticPolicyDigest, layoutDigest } from './automatic-policy.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
@@ -48,6 +48,57 @@ const normalized = (value: string) =>
     .trim()
     .toLocaleLowerCase('pt-BR')
     .replace(/\s+/g, ' ');
+
+async function createIncompleteTicket(
+  client: PoolClient,
+  settings: SettingsRow,
+  extractionValue: unknown,
+  bookmakerContext: BookmakerContext,
+  now: Date,
+) {
+  const parsed = ticketExtractionSchema.safeParse(extractionValue);
+  const extraction = parsed.success ? parsed.data : null;
+  const id = randomUUID();
+  const ticketNumber = settings.next_ticket_number;
+  if (!Number.isInteger(ticketNumber) || ticketNumber < 1)
+    throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+  await client.query(
+    'update finance.settings set next_ticket_number=next_ticket_number+1 where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+  );
+  const resolved = bookmakerContext.state === 'resolved' ? bookmakerContext : null;
+  const stake = extraction?.stake && extraction.stake !== '0' ? extraction.stake : null;
+  const reference = extraction?.reference?.trim() || null;
+  await client.query(
+    "insert into finance.bet(id,ticket_number,bookmaker_id,tipster_id,stake,odds,placed_at,freebet_id,promotional_stake_returned,reference,remaining,unit_month,unit_amount,stake_journal_id,completion_state) values($1,$2,$3,$4,$5,$6,$7,null,false,$8,null,null,null,null,'incomplete')",
+    [
+      id,
+      ticketNumber,
+      resolved?.bookmakerId ?? null,
+      resolved?.tipsterId ?? null,
+      stake,
+      extraction?.odds ?? null,
+      now,
+      reference,
+    ],
+  );
+  const selections = extraction?.selections?.length
+    ? extraction.selections
+    : [{ event: null, sport: null, market: null, selection: null, odds: null }];
+  for (const [position, selection] of selections.entries())
+    await client.query(
+      "insert into finance.selection(bet_id,position,event,sport,market,selection,odds,event_date,event_at,date_status) values($1,$2,$3,$4,$5,$6,$7,null,null,'pending')",
+      [
+        id,
+        position,
+        normalizeEventLabel(selection.event?.trim() || 'A definir'),
+        selection.sport?.trim() || null,
+        selection.market?.trim() || 'A definir',
+        selection.selection?.trim() || 'A definir',
+        selection.odds ?? null,
+      ],
+    );
+  return id;
+}
 
 function resolveAlias(
   aliases: CatalogAlias[],
@@ -219,7 +270,6 @@ export function createAutomaticImportService(
     configuredPolicy && !Array.isArray(configuredPolicy)
       ? automaticPolicyV3Schema.parse(configuredPolicy)
       : null;
-  const finance = createFinanceService(database);
   const tenant = createTenantContext(database);
   return {
     async complete(
@@ -228,7 +278,6 @@ export function createAutomaticImportService(
       attempt: number,
       result: Evidence & object,
     ) {
-      if (legacyLayouts.length || globalPolicy) await finance.ensureCurrentUnit(context);
       return tenant.withOrganizationTransaction(context, async (client) => {
         // All financial writers acquire locks in this order: settings, inbox, attachment.
         const settings = (
@@ -243,15 +292,16 @@ export function createAutomaticImportService(
             bet_origin: string | null;
             freebet_id: string | null;
             bookmaker_override_id: string | null;
+            imported_bet_id: string | null;
           }>(
-            "update integration.inbox set state='review',extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version,bet_origin,freebet_id,bookmaker_override_id",
+            "update integration.inbox set extraction=$2,error_code=null,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and state='processing' and attempts=$3 returning caption,version,bet_origin,freebet_id,bookmaker_override_id,imported_bet_id",
             [id, JSON.stringify(result), attempt],
           )
         ).rows[0];
         if (!row) return { state: 'unchanged' as const };
         const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
-        let reason: AutomaticReason = 'LAYOUT_NOT_VALIDATED';
-        let betId: string | null = null;
+        let reason: AutomaticReason = 'IMPORTED';
+        let betId: string | null = row.imported_bet_id;
         const modelSelectedLayout =
           (result.layoutId !== undefined && result.layoutId !== null) ||
           (result.policyDigest !== undefined && result.policyDigest !== null);
@@ -311,26 +361,25 @@ export function createAutomaticImportService(
         else if (!layout && activeGlobalPolicy && !approvedBookmaker)
           reason = 'BOOKMAKER_NOT_APPROVED';
         else if (!layout) reason = 'LAYOUT_NOT_VALIDATED';
-        if (layout && bookmakerContext.state === 'resolved') {
-          await client.query('savepoint automatic_finance');
-          try {
-            const assessed = await candidate(
-              client,
-              result,
-              layout,
-              bookmakerContext.bookmakerId,
-              bookmakerContext.tipsterId,
-              {
-                kind:
-                  row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
-                    ? row.bet_origin
-                    : 'real',
-                freebetId: row.freebet_id,
-              },
-              now,
-            );
-            reason = assessed.reason;
-            if (assessed.bet) {
+        if (!betId && layout && bookmakerContext.state === 'resolved') {
+          const assessed = await candidate(
+            client,
+            result,
+            layout,
+            bookmakerContext.bookmakerId,
+            bookmakerContext.tipsterId,
+            {
+              kind:
+                row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
+                  ? row.bet_origin
+                  : 'real',
+              freebetId: row.freebet_id,
+            },
+            now,
+          );
+          reason = assessed.reason;
+          if (assessed.bet) {
+            try {
               const command = financeCommandSchema.parse({
                 type: 'import.confirm',
                 expectedVersion: settings.version,
@@ -340,48 +389,37 @@ export function createAutomaticImportService(
                   kind: 'create',
                   bet: assessed.bet,
                   duplicateReason: '',
-                  // Ausência de origem significa dinheiro real; somente
-                  // freebet/híbrida precisam de declaração e crédito explícitos.
                   betOrigin:
                     row.bet_origin === 'freebet' || row.bet_origin === 'hibrida'
                       ? row.bet_origin
                       : 'real',
                 },
               });
-              const applied = await executeFinancialCommand(
-                client,
-                'system:automatic-import',
-                randomUUID(),
-                command,
-                settings,
-              );
-              betId = applied.id;
-            }
-            await client.query('release savepoint automatic_finance');
-          } catch (error) {
-            await client.query('rollback to savepoint automatic_finance');
-            if (error instanceof FinanceError) {
-              reason =
-                error.code === 'UNIT_REQUIRED' || error.code === 'DUPLICATE_REVIEW_REQUIRED'
-                  ? error.code
-                  : 'FINANCIAL_REVIEW_REQUIRED';
-            } else if (
-              error instanceof Error &&
-              ['INVALID_MONEY', 'MONEY_OUT_OF_RANGE', 'INVALID_ODDS'].includes(error.message)
-            ) {
-              reason = 'FINANCIAL_REVIEW_REQUIRED';
-            } else if (
-              error &&
-              typeof error === 'object' &&
-              'code' in error &&
-              ['23505', '23514', '23503'].includes(String(error.code))
-            ) {
-              reason = 'FINANCIAL_REVIEW_REQUIRED';
-            } else {
-              throw error;
+              betId = (
+                await executeFinancialCommand(
+                  client,
+                  'system:automatic-import',
+                  randomUUID(),
+                  command,
+                  settings,
+                )
+              ).id;
+            } catch (error) {
+              if (error instanceof FinanceError) {
+                const knownReason = automaticReasonSchema.safeParse(error.code);
+                reason = knownReason.success ? knownReason.data : 'FINANCIAL_REVIEW_REQUIRED';
+              } else throw error;
             }
           }
         }
+        if (!betId)
+          betId = await createIncompleteTicket(
+            client,
+            settings,
+            result.extraction,
+            bookmakerContext,
+            now,
+          );
         const automatic = {
           reason,
           policyId: activeGlobalPolicy ? 'automatic-import-v2' : (legacyLayout?.id ?? null),
@@ -394,14 +432,14 @@ export function createAutomaticImportService(
           visualLayoutId: null,
         };
         await client.query(
-          'update integration.inbox set extraction=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
-          [id, JSON.stringify({ ...result, automatic })],
+          "update integration.inbox set state='imported',imported_bet_id=$2,extraction=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
+          [id, betId, JSON.stringify({ ...result, automatic })],
         );
         await client.query(
           "insert into finance.audit(type,actor,entity_id,after) values('import.automatic','system:automatic-import',$1,$2)",
           [id, JSON.stringify({ attempt, ...automatic, betId })],
         );
-        return { state: betId ? ('imported' as const) : ('review' as const), reason };
+        return { state: 'imported' as const, reason };
       });
     },
   };

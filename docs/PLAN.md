@@ -209,15 +209,15 @@ pela diretriz D019 (§5.1); os critérios operacionais de conclusão do M0 perma
 Visual com fundo grafite, superfícies discretas e azul para ações. Resultados
 positivos e negativos usam cores acompanhadas de texto ou símbolos.
 
-| Área          | Conteúdo                                             |
-| ------------- | ---------------------------------------------------- |
-| Visão geral   | Banca, exposição, resultados e pendências            |
-| Apostas       | Lista, filtros, detalhes, cadastro e liquidação      |
-| Importações   | Upload, comprovantes, revisão e vínculos com apostas |
-| Calendário    | Eventos e apostas relacionadas                       |
-| Financeiro    | Reserva, casas, aportes, retiradas e conciliação     |
-| Análises      | Resultados por período, tipster, casa e esporte      |
-| Configurações | Casas, tipsters, unidade, integrações e preferências |
+| Área          | Conteúdo                                                           |
+| ------------- | ------------------------------------------------------------------ |
+| Visão geral   | Banca, exposição, resultados e pendências                          |
+| Apostas       | Lista, filtros, detalhes, cadastro e liquidação                    |
+| Recebimento   | Upload, comprovantes, processamento técnico e vínculos com apostas |
+| Calendário    | Eventos e apostas relacionadas                                     |
+| Financeiro    | Reserva, casas, aportes, retiradas e conciliação                   |
+| Análises      | Resultados por período, tipster, casa e esporte                    |
+| Configurações | Casas, tipsters, unidade, integrações e preferências               |
 
 Unidades com destaque, valores em reais sempre acessíveis. Estados de
 carregamento, erro, vazio e indisponibilidade com tratamento explícito.
@@ -233,14 +233,14 @@ Tipo da aposta (real ou freebet)
 Data da aposta (opcional, DD/MM/AAAA HH:mm)
 ```
 
-A terceira linha é obrigatória para qualquer registro automático; a quarta é
-obrigatória para a automação quando a imagem não traz data legível: envios de
-duas linhas e valores ausentes, desconhecidos ou ambíguos permanecem em revisão
-manual. O tipo informado é a fonte de verdade financeira; a IA apenas sinaliza
-conflito visual. A data/hora do evento não entra na extração automática desta
-fase: as seleções nascem pendentes de enriquecimento posterior e a data do
-evento nunca autoriza, bloqueia ou é persistida pela importação (`eventDateText`
-reservado/depreciado).
+A terceira linha é opcional quando o usuário não tiver tipster ou casa
+cadastrados. A aposta é criada imediatamente como Pendente, com os campos
+ausentes vazios e origem inicial em dinheiro real; o Mini App completa o mesmo
+registro depois. O tipo informado é a fonte de verdade financeira; a IA apenas
+organiza o OCR e sinaliza conflito visual. A data/hora do evento não entra na
+extração automática desta fase: as seleções nascem pendentes de enriquecimento
+posterior e a data do evento nunca autoriza, bloqueia ou é persistida pela
+importação (`eventDateText` reservado/depreciado).
 
 A legenda é interpretada por regras determinísticas. A IA extrai os dados do
 bilhete, preservando o conteúdo original para conferência.
@@ -252,18 +252,18 @@ Fluxo:
 3. Extrair aposta, seleções, valores, odds e informações de eventos.
 4. Validar campos essenciais e procurar duplicidades.
 5. Registrar automaticamente quando os dados estiverem consistentes.
-6. Encaminhar casos duvidosos para revisão, com os campos problemáticos
-   destacados.
+6. Criar o bilhete Pendente com os campos problemáticos destacados para edição
+   posterior, sem criar lançamento financeiro enquanto estiver incompleto.
 
 Regras:
 
-- Divergência entre a casa da legenda e a casa visível no bilhete exige
-  revisão antes do lançamento financeiro.
+- Divergência entre a casa da legenda e a casa visível no bilhete mantém o
+  diagnóstico e exige correção no Mini App antes do lançamento financeiro.
 - Ausência ou incerteza de data e hora do evento não bloqueia uma aposta
   financeiramente válida.
 - Reenvios e novas tentativas não podem duplicar apostas ou movimentações.
 - Bilhetes parecidos não serão descartados automaticamente como duplicados.
-- Layouts ainda não validados permanecem sujeitos à revisão.
+- Layouts ainda não validados mantêm o bilhete incompleto e sem lançamento.
 - Cadastro manual continua disponível quando IA ou serviços externos falharem.
 
 Tipster é uma classificação própria. Estratégias e tags ficam fora da primeira
@@ -499,7 +499,7 @@ específica do Codex — versionamento e rastreabilidade em
 | M0 — Setup             | GitHub, permissões, CI, ambientes, infraestrutura, integrações e restauração |
 | M1 — Fundação          | Login, navegação, visual, contratos e migrações iniciais                     |
 | M2 — Núcleo financeiro | Banca, casas, unidade, apostas manuais, liquidações, freebets e cashouts     |
-| M3 — Importação        | Telegram, upload, extração, revisão e prevenção de duplicidade               |
+| M3 — Recebimento       | Telegram, upload, extração técnica, edição e prevenção de duplicidade        |
 | M4 — Eventos           | Datas, fusos, buscas e calendário                                            |
 | M5 — Análises          | Dashboard, relatórios, filtros e exportações                                 |
 | M6 — Validação         | Piloto real, recuperação, desempenho, custos e release `v1.0.0`              |

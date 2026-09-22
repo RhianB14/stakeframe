@@ -36,11 +36,12 @@ const formatInstant = (value: string | Date | null) =>
 // depois da importação a mensagem NÃO usa legenda/OCR como fonte prioritária.
 export type CanonicalBetData = {
   state: string;
+  completionState: 'incomplete' | 'complete';
   bookmaker: string | null;
   tipster: string | null;
   origin: BetOrigin;
-  stake: string;
-  odds: string;
+  stake: string | null;
+  odds: string | null;
   /** Valor do crédito freebet (apenas na modalidade híbrida). */
   freebetAmount?: string | null;
   placedAt: Date | null;
@@ -144,7 +145,7 @@ export function buildImportMessage(row: ImportMessageRow): string {
     return renderImportMessage({
       id: row.id,
       statusLabel,
-      success: canonical.state === 'open',
+      success: canonical.state === 'open' && canonical.completionState === 'complete',
       bonus: canonical.origin,
       sport: distinctValues(canonical.selections.map((item) => item.sport)),
       tournament: null,
@@ -154,12 +155,15 @@ export function buildImportMessage(row: ImportMessageRow): string {
       market: kind === 'simple' ? (canonical.selections[0]?.market ?? null) : ticketKindLabel[kind],
       stake: canonical.stake,
       odds: canonical.odds,
-      potentialReturn: potentialReturnFor(
-        canonical.origin,
-        canonical.stake,
-        canonical.odds,
-        canonical.freebetAmount ?? null,
-      ),
+      potentialReturn:
+        canonical.stake && canonical.odds
+          ? potentialReturnFor(
+              canonical.origin,
+              canonical.stake,
+              canonical.odds,
+              canonical.freebetAmount ?? null,
+            )
+          : null,
       kind,
       sentAt: formatInstant(row.telegram_received_at),
       eventAt: datePending || firstDate === null ? null : formatInstant(firstDate),

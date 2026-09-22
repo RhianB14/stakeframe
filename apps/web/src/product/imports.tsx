@@ -688,7 +688,14 @@ function ExistingBetPicker({
     ]),
   );
   for (const bet of query.data?.items ?? [])
-    options.set(bet.id, { ...bet, event: bet.selections[0]?.event ?? 'Bilhete' });
+    options.set(bet.id, {
+      id: bet.id,
+      reference: bet.reference ?? '',
+      bookmakerId: bet.bookmakerId ?? '',
+      stake: bet.stake ?? '0.00',
+      placedAt: bet.placedAt,
+      event: bet.selections[0]?.event ?? 'Bilhete',
+    });
   return (
     <>
       <div className="form-grid">

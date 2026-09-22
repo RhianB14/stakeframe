@@ -11,7 +11,7 @@ import {
 import { automaticPolicyNotice } from './layout-policy.js';
 import type { Database } from './index.js';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
-import { FinanceError } from './finance-core.js';
+import { FinanceError, saveSelections } from './finance-core.js';
 
 // STK-G0-19-R5 — sincronização Telegram/Web.
 // O banco é a fonte canônica; esta fila idempotente transporta as operações de
@@ -110,18 +110,19 @@ async function applyDraftUpdate(
         telegram_chat_id: string | null;
         telegram_result_message_id: string | null;
         telegram_deleted_at: string | null;
+        imported_bet_id: string | null;
         caption: string;
         extraction: unknown;
         bookmaker_override_id: string | null;
         metadata: unknown;
       }>(
-        'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,caption,extraction,bookmaker_override_id,metadata from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+        'select version,state,bet_origin,freebet_id,event_at,telegram_chat_id,telegram_result_message_id,telegram_deleted_at,imported_bet_id,caption,extraction,bookmaker_override_id,metadata from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
         [id],
       )
     ).rows[0];
     if (!row) throw new FinanceError('NOT_FOUND');
     if (row.version !== patch.version) throw new FinanceError('VERSION_CONFLICT');
-    if (!['pending', 'review', 'failed'].includes(row.state))
+    if (!['pending', 'review', 'failed', 'imported'].includes(row.state))
       throw new FinanceError('STATE_CONFLICT');
     let nextOrigin: string | null = row.bet_origin;
     if (patch.betOrigin !== undefined) nextOrigin = patch.betOrigin;
@@ -264,6 +265,47 @@ async function applyDraftUpdate(
       ],
     );
     const version = updated.rows[0]!.version;
+    if (row.imported_bet_id) {
+      const bet = (
+        await client.query<{
+          bookmaker_id: string | null;
+          tipster_id: string | null;
+          stake: string | null;
+          odds: string | null;
+          freebet_id: string | null;
+          completion_state: 'incomplete' | 'complete';
+        }>(
+          'select bookmaker_id,tipster_id,stake,odds,freebet_id,completion_state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          [row.imported_bet_id],
+        )
+      ).rows[0];
+      if (!bet) throw new FinanceError('NOT_FOUND');
+      if (bet.completion_state === 'incomplete') {
+        const selectionInputs = nextOverrides.selections?.map((selection) => ({
+          event: selection.event ?? 'A definir',
+          sport: nextOverrides.sport ?? null,
+          market: selection.market ?? 'A definir',
+          selection: selection.selection ?? 'A definir',
+          odds: null,
+          eventDate: nextEventAt ? nextEventAt.slice(0, 10) : null,
+          eventAt: nextEventAt,
+          dateStatus: nextEventAt ? ('confirmed' as const) : ('pending' as const),
+        }));
+        await client.query(
+          "update finance.bet set bookmaker_id=$2,tipster_id=$3,stake=$4,odds=$5,freebet_id=$6 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and completion_state='incomplete'",
+          [
+            row.imported_bet_id,
+            effectiveBookmakerId ?? bet.bookmaker_id,
+            nextOverrides.tipsterId ?? bet.tipster_id,
+            nextOverrides.stake ?? bet.stake,
+            nextOverrides.odds ?? bet.odds,
+            nextFreebet,
+          ],
+        );
+        if (selectionInputs?.length)
+          await saveSelections(client, row.imported_bet_id, selectionInputs);
+      }
+    }
     await client.query(
       "insert into finance.audit(type,actor,entity_id,after) values('import.draft_update',$2,$1,$3)",
       [

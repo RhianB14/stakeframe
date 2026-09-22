@@ -58,6 +58,16 @@ export function StatusSection({
         </p>
       </div>
     );
+  if (bet.completionState !== 'complete')
+    return (
+      <div className="draft-controls">
+        <h3>Status da aposta</h3>
+        <p className="notice warning" role="status">
+          Complete os campos obrigatórios em “Editar” para liberar a alteração de status. A aposta
+          já foi criada e permanece Pendente.
+        </p>
+      </div>
+    );
   if (bet.state !== 'open')
     return (
       <div className="draft-controls">
@@ -89,8 +99,9 @@ export function StatusSection({
     <div className="draft-controls">
       <h3>Status da aposta</h3>
       <p role="status">
-        Estado atual: <strong>{stateLabel(bet.state)}</strong> · Stake {formatBRL(bet.stake)} · Odd{' '}
-        {bet.odds} · Em aberto {formatBRL(bet.remaining)}
+        Estado atual: <strong>{stateLabel(bet.state)}</strong> · Stake{' '}
+        {formatBRL(bet.stake ?? '0.00')} · Odd {bet.odds ?? 'A definir'} · Em aberto{' '}
+        {formatBRL(bet.remaining ?? '0.00')}
       </p>
       <fieldset>
         <legend>Nova transição *</legend>
@@ -505,7 +516,8 @@ export function CashoutSection({
     <div className="draft-controls">
       <h3>Cashout</h3>
       <p role="status">
-        Em aberto {formatBRL(bet.remaining)} · Stake {formatBRL(bet.stake)} · Odd {bet.odds}
+        Em aberto {formatBRL(bet.remaining ?? '0.00')} · Stake {formatBRL(bet.stake ?? '0.00')} ·
+        Odd {bet.odds ?? 'A definir'}
       </p>
       <fieldset>
         <legend>Tipo de cashout *</legend>
