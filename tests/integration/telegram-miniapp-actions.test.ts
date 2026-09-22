@@ -94,10 +94,10 @@ const draftExtraction = {
   ],
   warnings: [],
 };
-const seedExtraction = (id: string) =>
+const seedExtraction = (id: string, patch: { warnings?: string[] } = {}) =>
   database.pool.query('update integration.inbox set extraction=$2::jsonb where id=$1', [
     id,
-    JSON.stringify({ extraction: draftExtraction }),
+    JSON.stringify({ extraction: { ...draftExtraction, ...patch } }),
   ]);
 async function betInput(over: Partial<BetInput> = {}): Promise<BetInput> {
   return {
@@ -497,6 +497,45 @@ describe('Mini App draft confirmation (G0-22)', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ betState: 'open' });
+  });
+
+  it('confirms from the Mini App after the owner fixes extraction warnings', async () => {
+    const id = await upload();
+    await seedExtraction(id, {
+      warnings: [
+        'Rótulos de stake e retorno potencial não identificados na imagem.',
+        'Odds individuais de cada seleção não são exibidas no criador de aposta.',
+      ],
+    });
+    const bookmakerId = await houseId();
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: {
+        version: 1,
+        betOrigin: 'real',
+        bookmakerId,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${id}/confirm`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
+      payload: { version: (patch.json() as { version: number }).version },
+    });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()).toMatchObject({ betState: 'open' });
+    expect((await imports.detail(tenantContext, id)).item.state).toBe('imported');
   });
 });
 

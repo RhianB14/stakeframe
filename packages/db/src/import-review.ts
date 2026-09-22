@@ -657,7 +657,13 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             : row.extraction;
         const extraction = ticketExtractionSchema.safeParse(evidence);
         if (!extraction.success) throw new FinanceError('INVALID_FINANCIAL_OPERATION');
-        if (extraction.data.currency !== 'BRL' || extraction.data.warnings.length)
+        // Warnings describe what the model/OCR could not read reliably. They
+        // must not block the Mini App confirmation after the owner has filled
+        // the corresponding canonical overrides (stake, odds and selections).
+        // The parsed bet below remains the authoritative completeness and
+        // validation gate; currency is not editable and therefore stays
+        // fail-closed here.
+        if (extraction.data.currency !== 'BRL')
           throw new FinanceError('INVALID_FINANCIAL_OPERATION');
 
         const placedAtCandidates = (['iso-offset', 'br-sao-paulo', 'br-textual-sao-paulo'] as const)
