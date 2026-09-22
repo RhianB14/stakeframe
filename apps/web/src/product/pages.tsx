@@ -251,14 +251,14 @@ export function BetsPage({
                       </td>
                       <td>{catalogName(workspace, bet.bookmakerId)}</td>
                       <td className="tabular">
-                        {formatBRL(bet.stake)}
+                        {formatBRL(bet.stake ?? '0.00')}
                         <small>
                           {bet.stakeUnits === null
                             ? 'Unidade a conferir'
                             : `${Number(bet.stakeUnits).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} u`}
                         </small>
                       </td>
-                      <td className="tabular">{bet.odds}</td>
+                      <td className="tabular">{bet.odds ?? 'A definir'}</td>
                       <td>
                         <span className={`status-badge status-${bet.state}`}>
                           {stateLabels[bet.state]}
@@ -330,17 +330,17 @@ export function BetDetails({
         <div>
           <span>Valor apostado</span>
           <strong>
-            {formatBRL(bet.stake)}
+            {formatBRL(bet.stake ?? '0.00')}
             {bet.freebetId ? ' · freebet' : ''}
           </strong>
         </div>
         <div>
           <span>Odd total</span>
-          <strong>{bet.odds}</strong>
+          <strong>{bet.odds ?? 'A definir'}</strong>
         </div>
         <div>
           <span>Principal aberto</span>
-          <strong>{formatBRL(bet.remaining)}</strong>
+          <strong>{formatBRL(bet.remaining ?? '0.00')}</strong>
         </div>
         <div>
           <span>Retorno recebido</span>

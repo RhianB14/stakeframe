@@ -168,8 +168,7 @@ export async function startIntegrations(
           const completed = await automatic.complete(context, inboxId, claim.attempt, result);
           // R5: a resposta final é enfileirada somente após o rascunho persistido;
           // sem vínculo Telegram é no-op e nunca duplica mensagem.
-          if (completed.state === 'review' || completed.state === 'imported')
-            await draft.queueResultMessage(context, inboxId);
+          if (completed.state === 'imported') await draft.queueResultMessage(context, inboxId);
           return completed;
         } catch (error) {
           const code = error instanceof IntegrationError ? error.code : 'AI_OUTCOME_UNCERTAIN';

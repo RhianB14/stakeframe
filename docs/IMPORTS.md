@@ -1,11 +1,12 @@
 # Importações e comprovantes privados — STK-M3-01
 
-Upload, revisão, vínculos e retenção estão implementados. O ambiente local
-permite revisar e registrar manualmente mesmo com Telegram, IA e R2 desativados.
+Recebimento, processamento automático, vínculos e retenção estão implementados.
+O inbox permanece como trilha técnica de idempotência, evidência e auditoria;
+ele não é uma fila de aprovação do usuário.
 Autoria e verificações diretas do Codex, conforme D019; esta entrega não é
 implantação nem validação independente no GitHub.
 
-## Recebimento e revisão
+## Recebimento e processamento automático
 
 O site aceita PNG/JPEG de até 8 MiB, uma página e até 40 milhões de pixels.
 Sharp decodifica o arquivo completo, recusando truncamento; o processo limita
@@ -26,39 +27,29 @@ chave é recusado. Entradas diferentes podem compartilhar os bytes do mesmo
 hash SHA-256, preservando legenda, origem, extração e situação próprias.
 Limites de admissão: 2.000 entradas não encerradas e 1 GiB de imagens locais.
 
-A legenda segue primeira linha tipster, segunda linha casa e terceira linha o
-tipo da aposta (`real` ou `freebet`). O legado de duas linhas continua
-disponível para revisão manual e nunca autoriza importação automática;
-terceiro valor ausente, desconhecido ou ambíguo falha fechado. A quarta linha
-é opcional e informa a data e hora da aposta (`DD/MM/AAAA HH:mm`); ela é
-obrigatória para a automação quando a imagem não traz data legível, e imagem e
-contexto precisam apontar para o mesmo instante (divergência ou ambiguidade
-permanece em revisão; o horário de upload nunca é usado como horário da
-aposta). Aliases ativos
-resolvem nomes sem diferenciar caixa/acentos. Divergência entre legenda e
-extração fica explícita e impede preselecionar a casa no formulário. Datas
-escritas permanecem evidência: o formulário exige confirmar o instante da
-aposta e mantém as datas dos eventos vazias até conferência. O tipo informado
-na legenda é a fonte de verdade financeira; a leitura visual da IA só bloqueia
-quando contradiz esse contexto (`FREEBET_CONFLICT`) e `null` da IA não
-contradiz contexto explícito. Sem tipo na legenda, a escolha manual de origem
-real/freebet permanece. Ausência de evento/data não inventa fatos.
+A legenda informa tipster e casa quando disponíveis; a origem começa como
+dinheiro real e pode ser alterada para freebet ou híbrida no Mini App. Alias
+ausente, desconhecido ou ambíguo não interrompe o fluxo: o bilhete é criado
+com número e status Pendente, com o campo faltante vazio. A IA organiza os
+dados entregues pelo OCR, mas não escolhe casa, layout ou crédito. O horário
+de upload é apenas referência operacional inicial; a data do evento continua
+separada e editável. Conflitos e campos ausentes ficam na evidência para
+diagnóstico, não em uma fila de aprovação.
 
 A data/hora do evento não pertence à extração automática desta fase:
 `eventDateText` é reservado e depreciado (a importação sempre envia `null` e
-ignora o valor), nunca autoriza nem bloqueia a importação e nunca é
-convertido em data. Toda seleção criada automaticamente nasce pendente de
-enriquecimento — `eventDate` e `eventAt` nulos e `dateStatus` `pending` — e o
-enriquecimento de eventos acontece por processo posterior (docs/EVENTS.md).
+ignora o valor), nunca bloqueia a criação do bilhete e nunca é convertido em
+data. Toda seleção criada automaticamente nasce pendente de enriquecimento —
+`eventDate` e `eventAt` nulos e `dateStatus` `pending` — e pode ser completada
+no Mini App.
 Período ao vivo, minuto da partida e placar jamais são tratados como
 data/hora do evento.
 
 Nenhuma policy vem aprovada por padrão: a policy explícita (v3) nomeia as
-casas homologadas e as pendentes, e ainda não existe amostra privada autorizada
-para todas as casas. Nessas condições, `automatic=false` e
-`LAYOUT_NOT_VALIDATED` mantêm a restrição verificável. Uma única amostra de IA
-da fase M0 não habilita lançamento automático. O fluxo de habilitação e o
-avaliador de amostras estão em [VALIDATION.md](VALIDATION.md).
+casas homologadas e as pendentes. Sem policy, ou para uma casa pendente, o
+bilhete ainda é criado automaticamente como incompleto; `LAYOUT_NOT_VALIDATED`
+ou `BOOKMAKER_NOT_APPROVED` ficam registrados como diagnóstico e não liberam
+lançamento financeiro.
 
 Com uma policy explícita v3 privada aprovada e ativação explícita no worker, a
 IA recebe somente o contrato neutro: ela organiza os dados entregues pelo OCR e
@@ -66,8 +57,8 @@ nunca escolhe casa ou layout. O servidor resolve a casa e o tipster pelos
 aliases/catálogo ativos da organização, aplica o modelo e os formatos aprovados
 pela policy e registra o digest dessa policy. A casa escolhida pelo usuário é a
 autoridade — e precisa estar entre as aprovadas na policy: casa pendente ou
-fora da lista permanece em revisão (`BOOKMAKER_NOT_APPROVED`); qualquer
-tentativa de a IA fornecer bookmaker/layout fica em revisão. O servidor exige
+fora da lista permanece incompleta (`BOOKMAKER_NOT_APPROVED`); qualquer
+tentativa de a IA fornecer bookmaker/layout fica registrada como diagnóstico. O servidor exige
 moeda BRL, tipo da aposta informado na
 legenda (contexto confiável, com a leitura visual apenas como detecção de
 conflito), referência
@@ -76,26 +67,28 @@ gravada e a deduplicação por imagem/similaridade segue bloqueando colisões),
 stake/odd e seleções válidas, nenhuma dúvida na extração e instante da aposta
 interpretável pelo formato aprovado. Não reduz textos para fazê-los caber.
 Datas sem ano, datas futuras e horários ambíguos/inexistentes no horário de
-verão ficam em revisão. Eventos com data explícita entram como estimados;
+verão ficam pendentes. Eventos com data explícita entram como evidência;
 ausências permanecem pendentes e horários não são inventados.
 
 Os rótulos autorizados de retorno potencial vêm da política da casa (ex.:
 Bet365 `Retorno Total`; Superbet `Prêmio` e `Ganho Potencial`); rótulos como
 `Retorno Obtido`, `Retorno Líquido`, cashout, saldo, stake e odds nunca
-preenchem o campo, e uma divergência entre OCR e modelo mantém a revisão. O
+preenchem o campo, e uma divergência entre OCR e modelo mantém o campo
+incompleto com diagnóstico conservador. O
 retorno potencial, quando escrito, deve conferir centavo a centavo. O tipo
 informado decide a criação: dinheiro real nunca consome crédito promocional e
 um conflito visual de freebet (`FREEBET_CONFLICT`) bloqueia a importação.
 Freebets exigem permissão na política e exatamente um crédito disponível da
 mesma casa, valor e validade; as regras desse crédito determinam a devolução do
 principal.
-Unidade histórica ausente e qualquer candidato a duplicata mantêm revisão.
-O sistema nunca justifica duplicata nem escolhe um crédito ambíguo automaticamente.
+Unidade histórica ausente e qualquer candidato a duplicata mantêm o bilhete
+Pendente/incompleto, sem lançamento. O sistema nunca justifica duplicata nem
+escolhe um crédito ambíguo automaticamente.
 
-Extração, aposta, contabilidade, vínculo, versão, recibo e auditoria da decisão
-automática são gravados em uma transação, com os mesmos locks e regras da
-confirmação manual. Validações recusadas preservam a extração e o motivo para
-revisão; falhas inesperadas desfazem tudo e o worker registra resultado incerto,
+Extração, registro inicial, vínculo, versão, recibo e auditoria da decisão
+automática são gravados em uma transação. O bilhete incompleto não cria journal
+nem exposição; o mesmo ID é completado depois pelo Mini App, que então cria o
+lançamento financeiro uma única vez. Falhas inesperadas desfazem tudo e o worker registra resultado incerto,
 sem repetir a chamada paga. Uma tentativa concluída ou substituída não pode
 registrar outra aposta. A auditoria `import.automatic` inclui tentativa,
 política/digest, motivo e vínculo; a exportação JSON já inclui essa tabela.
@@ -141,8 +134,8 @@ A imagem é entregue pela API após conferir a sessão em cada leitura, com
 visível após a imagem expirar (D020).
 
 O worker verifica retenção a cada minuto. Todas as referências devem estar
-descartadas ou vinculadas a apostas encerradas há 30 dias. Revisão pendente,
-aposta aberta, vínculo recente ou liquidação registrada tardiamente preserva
+descartadas ou vinculadas a apostas encerradas há 30 dias. Diagnóstico pendente,
+aposta incompleta, aposta aberta, vínculo recente ou liquidação registrada tardiamente preserva
 o arquivo. Auditoria e datas de criação evitam expirar imediatamente uma
 liquidação retroativa. Arquivos compartilhados aguardam todas as referências.
 
@@ -183,7 +176,7 @@ para aplicar a migração; Compose local usa o migrador habitual.
 upgrade com imagens existentes, rollback financeiro, duplicidade, vínculo,
 aliases, divergência, outbox, resposta atrasada, upload/exclusão incertos,
 retenção compartilhada, reabertura e acesso privado. Dados são fictícios em
-bancos descartáveis. `pnpm test:e2e` cobre revisão em desktop/mobile, campos
+bancos descartáveis. `pnpm test:e2e` cobre edição em desktop/mobile, campos
 incertos vazios, vínculo e recuperação da imagem/chave após recarregar a página.
 O adaptador R2 é verificado com armazenamento simulado; nenhum teste público
 usa credencial real, bilhete privado ou chamada paga.
@@ -193,30 +186,30 @@ Referências técnicas: [Sharp input](https://sharp.pixelplumbing.com/api-constr
 
 ## Fluxo definitivo Telegram/Web (STK-G0-19-R5)
 
-A foto chega pelo Telegram com a legenda canônica (`tipster` + `casa` — nada de
-tipo, data ou valor). O backend cria o rascunho idempotente com os
+A foto chega pelo Telegram com a legenda canônica (`tipster` + `casa` quando
+disponíveis). O backend cria o registro técnico idempotente com os
 identificadores privados da mensagem (`telegramChatId`,
 `telegramSourceMessageId`, `telegramReceivedAt`), responde de imediato com uma
 mensagem temporária (recibo + protocolo sanitizado) e enfileira a extração.
-Após o OCR/IA, o rascunho é persistido, a mensagem final é entregue respondendo
-à foto e — somente com a entrega confirmada — a temporária é excluída. Falha
-na entrega final preserva a temporária e não duplica rascunho, aposta ou
-mensagem.
+Após o OCR/IA, a aposta é criada imediatamente como Pendente, mesmo que existam
+campos incompletos; a mensagem final é entregue respondendo à foto e — somente
+com a entrega confirmada — a temporária é excluída. Falha na entrega final
+preserva a temporária e não duplica registro, aposta ou mensagem.
 
-O retorno potencial é sempre calculado no servidor
-(`potentialReturn = stake × totalOdds`, aritmética decimal exata); o valor
-visual do bilhete é apenas diagnóstico de fidelidade — ausência não bloqueia e
-divergência (stake/odd possivelmente incorretos) encaminha para revisão.
+O retorno potencial é calculado no servidor somente depois que os campos
+financeiros obrigatórios forem preenchidos. O valor visual do bilhete é apenas
+diagnóstico de fidelidade; ausência não impede a criação do bilhete Pendente.
+Enquanto o registro estiver incompleto não há journal nem exposição financeira.
 
 ### Origem financeira declarada
 
-O tipo financeiro (`real | freebet | null`) é declarado pelo usuário no Mini
-App do Telegram ou no formulário de revisão web; nunca vem da legenda, da
-imagem, do OCR ou da IA. Enquanto for nulo nenhuma aposta é criada e a
-automação permanece em revisão (fail-closed). Freebet exige a seleção
-explícita do crédito (validado por organização, casa, valor, validade e
-disponibilidade); dinheiro real com crédito é contradição. A leitura visual de
-freebet só pode encaminhar para revisão e nunca altera a escolha.
+O tipo financeiro começa como dinheiro real e pode ser alterado pelo usuário
+no Mini App. Freebet e híbrida exigem a seleção explícita do crédito, validado
+por organização, casa, valor, validade e disponibilidade; dinheiro real com
+crédito é contradição. O registro é criado como Pendente antes dessa edição,
+mas só recebe journal/exposição quando os campos obrigatórios estiverem
+completos. A leitura visual de freebet é apenas diagnóstico e nunca altera a
+escolha do usuário.
 
 ### Datas com semânticas separadas
 
@@ -314,10 +307,8 @@ Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
   explícita) — nunca preservado em silêncio.
 - **Declaração × policy automática** — a declaração real/freebet do usuário é
   validada SOMENTE contra o crédito da própria organização (casa efetiva, valor
-  exato da stake, validade, disponibilidade) e é salva mesmo sem arquivo de
-  política; o Mini App informa o estado da política automática
-  (`disabled|absent|invalid|approved`). A importação AUTOMÁTICA é estritamente
-  fail-closed: policy ausente/inválida/expirada ⇒ revisão
-  (`LAYOUT_NOT_VALIDATED`); casa fora das aprovadas ⇒ revisão
-  (`BOOKMAKER_NOT_APPROVED`); policy sem `allowFreebet` ou crédito inválido ⇒
-  revisão (`FREEBET_UNRESOLVED`); `null` nunca significa autorização.
+  exato da stake, validade, disponibilidade). O Mini App informa o estado da
+  policy automática (`disabled|absent|invalid|approved`). Policy ausente,
+  inválida, expirada, casa não aprovada ou crédito inválido não manda o usuário
+  para uma fila: mantém a aposta Pendente/incompleta, registra o motivo técnico
+  e impede apenas o lançamento financeiro até a correção.

@@ -22,6 +22,7 @@ export class FinanceError extends Error {
       | 'ALIAS_CONFLICT'
       | 'ORIGIN_REQUIRED'
       | 'FREEBET_UNRESOLVED'
+      | 'INCOMPLETE_BET'
       | 'NOT_FOUND',
   ) {
     super(code);
@@ -38,20 +39,39 @@ export type SettingsRow = {
 export type BetRow = {
   id: string;
   ticket_number: number;
-  bookmaker_id: string;
+  bookmaker_id: string | null;
   tipster_id: string | null;
-  stake: string;
-  odds: string;
+  stake: string | null;
+  odds: string | null;
   placed_at: Date;
   created_at: Date;
   freebet_id: string | null;
   promotional_stake_returned: boolean;
-  reference: string;
+  reference: string | null;
   state: 'open' | 'settled' | 'cancelled';
-  remaining: string;
+  remaining: string | null;
   unit_month: string | null;
   unit_amount: string | null;
+  stake_journal_id: string | null;
+  completion_state: 'incomplete' | 'complete';
+};
+export type CompleteBetRow = Omit<
+  BetRow,
+  | 'bookmaker_id'
+  | 'stake'
+  | 'odds'
+  | 'reference'
+  | 'remaining'
+  | 'stake_journal_id'
+  | 'completion_state'
+> & {
+  bookmaker_id: string;
+  stake: string;
+  odds: string;
+  reference: string;
+  remaining: string;
   stake_journal_id: string;
+  completion_state: 'complete';
 };
 export type AccountRow = {
   id: string;
@@ -300,6 +320,19 @@ export async function getBetRow(client: PoolClient, id: string) {
   ).rows[0];
   if (!row) throw new FinanceError('NOT_FOUND');
   return row;
+}
+export function requireCompleteBet(row: BetRow): CompleteBetRow {
+  if (
+    row.completion_state !== 'complete' ||
+    row.bookmaker_id === null ||
+    row.stake === null ||
+    row.odds === null ||
+    row.reference === null ||
+    row.remaining === null ||
+    row.stake_journal_id === null
+  )
+    throw new FinanceError('INCOMPLETE_BET');
+  return row as CompleteBetRow;
 }
 export async function insertUnit(
   client: PoolClient,

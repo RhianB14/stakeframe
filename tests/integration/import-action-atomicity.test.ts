@@ -395,10 +395,14 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     );
     await database.pool.query('alter table finance.bet drop column if exists ticket_number');
     await database.pool.query(
+      'alter table finance.bet drop constraint if exists bet_completion_state, drop constraint if exists bet_complete_fields, drop column if exists completion_state',
+    );
+    await database.pool.query('alter table finance.bet alter column bookmaker_id set not null');
+    await database.pool.query(
       'alter table finance.settings drop column if exists next_ticket_number',
     );
     await database.pool.query(
-      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 3)',
+      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 5)',
     );
     await migrateLocalDatabase(database);
     const exists = (

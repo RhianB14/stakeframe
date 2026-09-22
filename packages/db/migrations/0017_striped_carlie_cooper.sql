@@ -1,0 +1,1 @@
+ALTER TABLE "finance"."bet" ALTER COLUMN "bookmaker_id" DROP NOT NULL;

@@ -146,7 +146,8 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       remaining: row.remaining,
       unitMonth: row.unit_month,
       unitAmount: row.unit_amount,
-      stakeUnits: unitsFor(row.stake, row.unit_amount),
+      completionState: row.completion_state,
+      stakeUnits: row.stake === null ? null : unitsFor(row.stake, row.unit_amount),
       returnAmount: total?.returns ?? '0.00',
       profit: total?.profit ?? '0.00',
       selections: selections

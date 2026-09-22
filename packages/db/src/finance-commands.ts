@@ -23,6 +23,7 @@ import {
   reverseJournal,
   saveSelections,
   getBetRow,
+  requireCompleteBet,
   insertUnit,
   type SettingsRow,
 } from './finance-core.js';
@@ -39,6 +40,94 @@ async function hasSettlementHistory(client: PoolClient, betId: string): Promise<
   return row !== undefined;
 }
 
+async function completeIncompleteBet(
+  client: PoolClient,
+  command: Extract<FinanceCommand, { type: 'bet.complete' }>,
+  actor: string,
+  settings: SettingsRow,
+  now: Date,
+) {
+  const before = await getBetRow(client, command.id);
+  if (before.completion_state === 'complete') return { id: before.id, before };
+  if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
+  await activeCatalog(client, command.bookmakerId, 'bookmaker');
+  if (command.tipsterId) await activeCatalog(client, command.tipsterId, 'tipster');
+  const placedAt = verifyPast(command.placedAt, now);
+  const month = saoPauloDate(placedAt).slice(0, 7);
+  const unit = (
+    await client.query<{ month: string; amount: string }>(
+      'select month,amount from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid and month=$1',
+      [month],
+    )
+  ).rows[0];
+  const unitKnown = !!unit && cents(unit.amount) > 0n;
+  if (!unitKnown && !command.allowMissingUnit) throw new FinanceError('UNIT_REQUIRED');
+  const stake = cents(command.stake);
+  let stakeReturned = false;
+  let hybrid = false;
+  if (command.freebetId) {
+    const promo = (
+      await client.query<{
+        amount: string;
+        bookmaker_id: string;
+        used_by: string | null;
+        expires_on: string;
+        stake_returned: boolean;
+      }>(
+        'select *, expires_on::text as expires_on from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+        [command.freebetId],
+      )
+    ).rows[0];
+    if (
+      !promo ||
+      promo.bookmaker_id !== command.bookmakerId ||
+      promo.used_by ||
+      promo.expires_on < saoPauloDate(placedAt)
+    )
+      throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+    hybrid = cents(promo.amount) !== stake;
+    stakeReturned = promo.stake_returned;
+  }
+  const house = await accountByKind(client, 'bookmaker', command.bookmakerId);
+  const exposure = await accountByKind(client, 'exposure');
+  const realStake = command.freebetId && !hybrid ? 0n : stake;
+  const journalId = await writeJournal(client, {
+    kind: 'bet_stake',
+    effectiveAt: placedAt,
+    actor,
+    reason: command.freebetId && !hybrid ? 'Uso de crédito promocional' : 'Registro da aposta',
+    postings: [
+      { accountId: house.id, amount: -realStake },
+      { accountId: exposure.id, amount: realStake },
+    ],
+  });
+  await client.query(
+    "update finance.bet set bookmaker_id=$2,tipster_id=$3,stake=$4,odds=$5,placed_at=$6,freebet_id=$7,promotional_stake_returned=$8,reference=$9,remaining=$4,unit_month=$10,unit_amount=$11,stake_journal_id=$12,completion_state='complete' where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and completion_state='incomplete'",
+    [
+      command.id,
+      command.bookmakerId,
+      command.tipsterId,
+      money(stake),
+      command.odds,
+      placedAt,
+      command.freebetId,
+      stakeReturned,
+      command.reference,
+      unitKnown ? month : null,
+      unitKnown ? unit.amount : null,
+      journalId,
+    ],
+  );
+  if (command.freebetId)
+    await client.query(
+      'update finance.freebet set used_by=$2 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [command.freebetId, command.id],
+    );
+  await saveSelections(client, command.id, command.selections);
+  await enqueueBetSync(client, command.id);
+  return { id: command.id, before };
+}
+
 export async function applyFinanceCommand(
   client: PoolClient,
   command: FinanceCommand,
@@ -48,7 +137,7 @@ export async function applyFinanceCommand(
 ): Promise<{ id: string; before: unknown }> {
   const type = command.type;
   if (type === 'bet.unit.resolve') {
-    const before = await getBetRow(client, command.id);
+    const before = requireCompleteBet(await getBetRow(client, command.id));
     if (before.unit_amount && cents(before.unit_amount) > 0n)
       throw new FinanceError('STATE_CONFLICT');
     const month = saoPauloDate(before.placed_at).slice(0, 7);
@@ -87,7 +176,7 @@ export async function applyFinanceCommand(
     ).rows[0];
     if (!row) throw new FinanceError('NOT_FOUND');
     if (row.version !== command.expectedInboxVersion) throw new FinanceError('VERSION_CONFLICT');
-    if (!['pending', 'review', 'failed'].includes(row.state))
+    if (!['pending', 'review', 'failed', 'processing'].includes(row.state))
       throw new FinanceError('STATE_CONFLICT');
     if (type === 'import.discard') {
       await client.query(
@@ -376,6 +465,14 @@ export async function applyFinanceCommand(
     return { id, before: null };
   }
   if (type === 'bet.create') {
+    if (
+      !command.bookmakerId ||
+      !command.stake ||
+      !command.odds ||
+      command.stake.trim() === '' ||
+      command.odds.trim() === ''
+    )
+      throw new FinanceError('INVALID_FINANCIAL_OPERATION');
     await activeCatalog(client, command.bookmakerId, 'bookmaker');
     if (command.tipsterId) await activeCatalog(client, command.tipsterId, 'tipster');
     const placedAt = verifyPast(command.placedAt, now);
@@ -462,8 +559,9 @@ export async function applyFinanceCommand(
     await saveSelections(client, id, command.selections);
     return { id, before: null };
   }
+  if (type === 'bet.complete') return completeIncompleteBet(client, command, actor, settings, now);
   if (type === 'bet.update') {
-    const before = await getBetRow(client, command.id);
+    const before = requireCompleteBet(await getBetRow(client, command.id));
     if (before.state === 'cancelled') throw new FinanceError('STATE_CONFLICT');
     if (command.tipsterId) await activeCatalog(client, command.tipsterId, 'tipster');
     const selections = (
@@ -482,7 +580,7 @@ export async function applyFinanceCommand(
     return { id: command.id, before: { ...before, selections } };
   }
   if (type === 'bet.cancel') {
-    const before = await getBetRow(client, command.id);
+    const before = requireCompleteBet(await getBetRow(client, command.id));
     const active = (
       await client.query(
         'select s.id from finance.settlement s left join finance.settlement_reversal r on r.settlement_id=s.id and r.organization_id=s.organization_id where s.organization_id=current_setting($$app.organization_id$$, true)::uuid and s.bet_id=$1 and r.settlement_id is null',
@@ -511,7 +609,7 @@ export async function applyFinanceCommand(
     return { id: command.id, before };
   }
   if (type === 'bet.settle') {
-    const before = await getBetRow(client, command.id);
+    const before = requireCompleteBet(await getBetRow(client, command.id));
     const principal = cents(command.closedPrincipal);
     const amount = cents(command.returnAmount);
     if (
@@ -596,7 +694,7 @@ export async function applyFinanceCommand(
     // alterar banca nem exposição totais. Freebet: o crédito da casa antiga
     // nunca permanece vinculado à casa nova — um crédito compatível é exigido
     // NA MESMA operação, trocado atomicamente, ou a troca é recusada.
-    const before = await getBetRow(client, command.id);
+    const before = requireCompleteBet(await getBetRow(client, command.id));
     if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
     // STK-G0-19-R9 — liquidação (inclusive parcial) congela a aposta:
     // qualquer histórico de settlement (mesmo revertido — o fato histórico não
@@ -669,7 +767,7 @@ export async function applyFinanceCommand(
     // STK-G0-19-R8 — troca de origem canônica de aposta ABERTA. Journals
     // compensatórios (nunca reescrever journals antigos) e crédito
     // consumido/liberado atomicamente. Depois de liquidar/cancelar: recusa.
-    const before = await getBetRow(client, command.id);
+    const before = requireCompleteBet(await getBetRow(client, command.id));
     if (before.state !== 'open') throw new FinanceError('STATE_CONFLICT');
     // STK-G0-19-R9 — liquidação (inclusive parcial) congela a aposta:
     // qualquer histórico de settlement (mesmo revertido — o fato histórico não

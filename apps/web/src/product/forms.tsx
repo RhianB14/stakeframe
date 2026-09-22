@@ -891,8 +891,8 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
     value === 'cashout' || value === 'partial_cashout'
       ? ''
       : suggestedReturn(
-          bet.remaining,
-          bet.odds,
+          bet.remaining ?? '0.00',
+          bet.odds ?? '1.00',
           value,
           !!bet.freebetId,
           bet.freebetStakeReturned ?? false,
@@ -908,15 +908,15 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
         type: 'bet.settle',
         id: bet.id,
         outcome,
-        closedPrincipal: decimalInput(principal),
+        closedPrincipal: decimalInput(principal ?? '0.00'),
         returnAmount: decimalInput(amount),
         settledAt: localInstant(at),
         reason,
       })}
     >
       <p className="form-intro">
-        Principal ainda aberto: <strong>{formatBRL(bet.remaining)}</strong>. Confira o valor
-        efetivamente recebido na casa.
+        Principal ainda aberto: <strong>{formatBRL(bet.remaining ?? '0.00')}</strong>. Confira o
+        valor efetivamente recebido na casa.
       </p>
       <div className="form-grid">
         <Field label="Resultado">
@@ -946,7 +946,7 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
             required
             disabled={outcome !== 'partial_cashout'}
             inputMode="decimal"
-            value={principal}
+            value={principal ?? ''}
             onChange={(event) => setPrincipal(event.target.value)}
           />
         </Field>

@@ -127,7 +127,6 @@ function LegacyDraftControls({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const provisional = detail.eventDateStatus === 'pending';
-  const [automaticHold, setAutomaticHold] = useState(false);
   const [cleared, setCleared] = useState(false);
   const save = async () => {
     setBusy(true);
@@ -150,7 +149,6 @@ function LegacyDraftControls({
       });
       setSaved(true);
       setCleared(result.freebetCleared);
-      setAutomaticHold(result.automaticPolicy !== 'approved');
       await onSaved(result.version);
     } catch (failure) {
       setError(
@@ -338,9 +336,6 @@ function LegacyDraftControls({
       {saved ? (
         <p className="notice" role="status">
           Rascunho atualizado. A mensagem do Telegram será sincronizada.
-          {automaticHold
-            ? ' Sem política automática ativa, a importação automática permanece desligada e este bilhete seguirá em revisão.'
-            : ''}
           {cleared
             ? ' O crédito anterior não era compatível com a casa atual e foi removido — escolha outro crédito.'
             : ''}
@@ -388,7 +383,7 @@ function ImportedControls({
     detail.betOrigin ??
     (bet.freebetId
       ? bet.freebetAmount
-        ? deriveBetOrigin(bet.stake, bet.freebetAmount)
+        ? deriveBetOrigin(bet.stake ?? '0.00', bet.freebetAmount)
         : 'freebet'
       : 'real');
   const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(currentOrigin);
@@ -416,6 +411,12 @@ function ImportedControls({
     let active = true;
     setCredits(null);
     setCreditsError(null);
+    if (!bet.bookmakerId) {
+      setCreditsError('Escolha a casa da aposta antes de carregar os créditos.');
+      return () => {
+        active = false;
+      };
+    }
     creditsSender(bet.bookmakerId)
       .then((list) => {
         if (active) setCredits(list);
