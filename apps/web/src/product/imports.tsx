@@ -527,7 +527,8 @@ function ReviewContent({
               {detail.duplicates.map((candidate) => (
                 <div key={candidate.betId}>
                   <strong>{candidate.reference || 'Sem referência'}</strong> ·{' '}
-                  {formatBRL(candidate.stake)} · {dateLabel(candidate.placedAt)}
+                  {candidate.stake ? formatBRL(candidate.stake) : 'Valor pendente'} ·{' '}
+                  {candidate.placedAt ? dateLabel(candidate.placedAt) : 'Data pendente'}
                   <span>
                     {candidate.reasons.includes('image')
                       ? 'Mesma imagem'
@@ -679,9 +680,9 @@ function ExistingBetPicker({
       candidate.betId,
       {
         id: candidate.betId,
-        reference: candidate.reference,
-        bookmakerId: candidate.bookmakerId,
-        stake: candidate.stake,
+        reference: candidate.reference ?? '',
+        bookmakerId: candidate.bookmakerId ?? '',
+        stake: candidate.stake ?? '',
         placedAt: candidate.placedAt,
         event: 'Possível duplicação',
       },
@@ -731,7 +732,9 @@ function ExistingBetPicker({
           {[...options.values()].map((bet) => (
             <option key={bet.id} value={bet.id}>
               {workspace.catalog.find((item) => item.id === bet.bookmakerId)?.name ?? 'Casa'} ·{' '}
-              {bet.reference || bet.event} · {dateLabel(bet.placedAt)} · {formatBRL(bet.stake)}
+              {bet.reference || bet.event} ·{' '}
+              {bet.placedAt ? dateLabel(bet.placedAt) : 'Data pendente'} ·{' '}
+              {bet.stake ? formatBRL(bet.stake) : 'Valor pendente'}
             </option>
           ))}
         </select>
