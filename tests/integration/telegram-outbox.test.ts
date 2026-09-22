@@ -425,6 +425,8 @@ describe('telegram outbox executor', () => {
     await tenant.withOrganizationTransaction(tenantContext, (client) =>
       enqueueOutbox(client, id, 'delete_source_message', version),
     );
+    // Mudança de versão ainda liquidada não invalida a limpeza da foto.
+    await database.pool.query('update integration.inbox set version=version+1 where id=$1', [id]);
     responses.push(json({ ok: true, result: true }));
     let progressed = true;
     while (progressed && fetchImpl.mock.calls.length === 0)

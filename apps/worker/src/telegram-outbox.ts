@@ -236,7 +236,8 @@ export function createTelegramOutboxService(
         // Uma correção rápida pode reabrir o bilhete antes do worker processar
         // a limpeza antiga. Não apague a foto nem marque o registro como
         // excluído se uma versão mais nova já restaurou o status.
-        if (item.version !== row.version) return;
+        const terminal = row.bet_state === 'settled' || row.bet_state === 'cancelled';
+        if (item.version !== row.version && !terminal) return;
         if (!row.telegram_source_message_id) return;
         await client.deleteMessage(chatId, Number(row.telegram_source_message_id));
         if (row.bet_state === 'settled') {
