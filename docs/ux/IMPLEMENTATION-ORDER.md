@@ -13,13 +13,14 @@ Sequência sugerida para levar os protótipos de `docs/ux/prototypes/` ao produt
 **O que fazer:**
 
 - Adicionar `--positive`, `--negative`, `--neutral-value`, `--pending` em `product.css`.
-- `R$ 0,00`, saldo e resultado em aberto → `--neutral-value`.
-- `Retorno recebido` e `Resultado realizado` de aposta aberta → `—` / `Não liquidado`.
+- `R$ 0,00`, saldo e aposta aberta **sem realização** → `--neutral-value`.
+- `Retorno recebido` e `Resultado realizado` de aposta aberta **sem liquidação** → `—` / `Não liquidado`.
+- Aposta ainda aberta **com cashout parcial** mantém o retorno e o lucro/prejuízo já realizados, rotulados como parciais; não escondê-los por causa de `state=open`.
 - Sinal `+` em lucro positivo.
 
 **Não mexe em:** cálculo, exposição, ledger, liquidação. É só apresentação do valor já calculado.
 
-**Verificação:** unit nos formatters de moeda; E2E visual comparando a linha de aposta aberta e a liquidada.
+**Verificação:** unit na apresentação sem recalcular dinheiro; E2E desktop/mobile para aberta sem liquidação, cashout parcial (positivo/negativo) e aposta liquidada.
 
 ---
 
