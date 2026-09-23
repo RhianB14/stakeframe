@@ -14,7 +14,7 @@ export function OverviewReport({ version }: { version: number }) {
     <div className="panel">
       <div className="section-heading">
         <div>
-          <h2>Resultado do mês</h2>
+          <h2>Resultado realizado do mês</h2>
           <p>Até hoje · último evento com data confirmada</p>
         </div>
         <a className="text-link" href="#analytics">

@@ -13,6 +13,7 @@ import { Field } from './forms.js';
 import { request, dateLabel } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
+import { betFinancialDisplay } from './financial-display.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
 const outcomeLabels: Record<string, string> = {
@@ -230,57 +231,61 @@ export function BetsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {query.data.items.map((bet) => (
-                    <tr key={bet.id}>
-                      <td>
-                        <small className="ticket-number">Bilhete #{bet.ticketNumber}</small>
-                        <button
-                          className="table-title"
-                          onClick={() => open({ kind: 'detail', id: bet.id })}
-                        >
-                          {bet.selections[0]?.event ?? 'Bilhete'}
-                          {bet.selections.length > 1 ? ` +${bet.selections.length - 1}` : ''}
-                        </button>
-                        <small>
-                          {dateLabel(bet.placedAt)}
-                          {bet.freebetId ? ' · Freebet' : ''}
-                        </small>
-                        {bet.selections.some((item) => item.dateStatus !== 'confirmed') ? (
-                          <span className="pending-label">Data do evento a conferir</span>
-                        ) : null}
-                      </td>
-                      <td>{catalogName(workspace, bet.bookmakerId)}</td>
-                      <td className="tabular">
-                        {formatBRL(bet.stake ?? '0.00')}
-                        <small>
-                          {bet.stakeUnits === null
-                            ? 'Unidade a conferir'
-                            : `${Number(bet.stakeUnits).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} u`}
-                        </small>
-                      </td>
-                      <td className="tabular">{bet.odds ?? 'A definir'}</td>
-                      <td>
-                        <span className={`status-badge status-${bet.state}`}>
-                          {stateLabels[bet.state]}
-                        </span>
-                      </td>
-                      <td
-                        className={`tabular ${bet.profit.startsWith('-') ? 'negative' : 'positive'}`}
-                      >
-                        {formatBRL(bet.profit)}
-                      </td>
-                      <td>
-                        <Button
-                          variant="ghost"
-                          size="small"
-                          aria-label={`Ver aposta ${bet.selections[0]?.event ?? bet.reference}`}
-                          onClick={() => open({ kind: 'detail', id: bet.id })}
-                        >
-                          Ver ↗
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {query.data.items.map((bet) => {
+                    const financial = betFinancialDisplay(bet);
+                    return (
+                      <tr key={bet.id}>
+                        <td>
+                          <small className="ticket-number">Bilhete #{bet.ticketNumber}</small>
+                          <button
+                            className="table-title"
+                            onClick={() => open({ kind: 'detail', id: bet.id })}
+                          >
+                            {bet.selections[0]?.event ?? 'Bilhete'}
+                            {bet.selections.length > 1 ? ` +${bet.selections.length - 1}` : ''}
+                          </button>
+                          <small>
+                            {dateLabel(bet.placedAt)}
+                            {bet.freebetId ? ' · Freebet' : ''}
+                          </small>
+                          {bet.selections.some((item) => item.dateStatus !== 'confirmed') ? (
+                            <span className="pending-label">Data do evento a conferir</span>
+                          ) : null}
+                        </td>
+                        <td>{catalogName(workspace, bet.bookmakerId)}</td>
+                        <td className="tabular">
+                          {formatBRL(bet.stake ?? '0.00')}
+                          <small>
+                            {bet.stakeUnits === null
+                              ? 'Unidade a conferir'
+                              : `${Number(bet.stakeUnits).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} u`}
+                          </small>
+                        </td>
+                        <td className="tabular">{bet.odds ?? 'A definir'}</td>
+                        <td>
+                          <span className={`status-badge status-${bet.state}`}>
+                            {stateLabels[bet.state]}
+                          </span>
+                        </td>
+                        <td className={`tabular ${financial.tone}`}>
+                          {financial.profitText}
+                          {financial.qualifier !== 'Realizado' ? (
+                            <small>{financial.qualifier}</small>
+                          ) : null}
+                        </td>
+                        <td>
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            aria-label={`Ver aposta ${bet.selections[0]?.event ?? bet.reference}`}
+                            onClick={() => open({ kind: 'detail', id: bet.id })}
+                          >
+                            Ver ↗
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -317,6 +322,7 @@ export function BetDetails({
       />
     );
   const { bet, settlements } = query.data;
+  const financial = betFinancialDisplay(bet);
   return (
     <div className="bet-detail">
       <div className="detail-heading">
@@ -344,11 +350,13 @@ export function BetDetails({
         </div>
         <div>
           <span>Retorno recebido</span>
-          <strong>{formatBRL(bet.returnAmount)}</strong>
+          <strong className="neutral">{financial.returnText}</strong>
+          {financial.qualifier !== 'Realizado' ? <small>{financial.qualifier}</small> : null}
         </div>
         <div>
           <span>Resultado realizado</span>
-          <strong>{formatBRL(bet.profit)}</strong>
+          <strong className={financial.tone}>{financial.profitText}</strong>
+          {financial.qualifier !== 'Realizado' ? <small>{financial.qualifier}</small> : null}
         </div>
         <div>
           <span>Unidade do registro</span>

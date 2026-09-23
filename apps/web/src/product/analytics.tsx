@@ -28,6 +28,7 @@ import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { request } from './api.js';
 import type { OpenModal } from './ProductApp.js';
+import { betFinancialDisplay } from './financial-display.js';
 
 const dayLabel = (date: string) => date.split('-').reverse().join('/');
 const units = (value: string | null) =>
@@ -587,32 +588,44 @@ export default function AnalyticsPage({
                         <th>Aposta</th>
                         <th>Casa</th>
                         <th>Situação</th>
-                        <th>Resultado</th>
+                        <th>Resultado realizado</th>
                         <th>Unidades</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {bets.data.items.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            {dayLabel(row.eventDate)}
-                            {row.dateStatus === 'estimated' ? ' · estimada' : ''}
-                          </td>
-                          <td>
-                            <button
-                              className="text-link report-event"
-                              onClick={() => open({ kind: 'detail', id: row.id })}
-                            >
-                              {row.eventSummary}
-                            </button>
-                            {row.freebet ? <small className="muted"> · Freebet</small> : null}
-                          </td>
-                          <td>{row.bookmaker}</td>
-                          <td>{row.state === 'open' ? 'Em aberto' : 'Liquidada'}</td>
-                          <td>{formatReportBRL(row.profit)}</td>
-                          <td>{units(row.profitUnits)}</td>
-                        </tr>
-                      ))}
+                      {bets.data.items.map((row) => {
+                        const financial = betFinancialDisplay({
+                          state: row.state,
+                          returnAmount: row.returns,
+                          profit: row.profit,
+                        });
+                        return (
+                          <tr key={row.id}>
+                            <td>
+                              {dayLabel(row.eventDate)}
+                              {row.dateStatus === 'estimated' ? ' · estimada' : ''}
+                            </td>
+                            <td>
+                              <button
+                                className="text-link report-event"
+                                onClick={() => open({ kind: 'detail', id: row.id })}
+                              >
+                                {row.eventSummary}
+                              </button>
+                              {row.freebet ? <small className="muted"> · Freebet</small> : null}
+                            </td>
+                            <td>{row.bookmaker}</td>
+                            <td>{row.state === 'open' ? 'Em aberto' : 'Liquidada'}</td>
+                            <td className={financial.tone}>
+                              {financial.profitText}
+                              {financial.qualifier !== 'Realizado' ? (
+                                <small>{financial.qualifier}</small>
+                              ) : null}
+                            </td>
+                            <td>{units(row.profitUnits)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -962,6 +962,9 @@
 .positive {
   color: #9ecbbb;
 }
+.neutral {
+  color: #a8b3c5;
+}
 .status-badge {
   display: inline-block;
   border-radius: 5px;
@@ -1398,6 +1401,12 @@
   font-size: 16px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.detail-metrics small {
+  display: block;
+  margin-top: 5px;
+  color: #a8b3c5;
+  font-size: 12px;
 }
 .bet-detail > p {
   margin: 14px 0;

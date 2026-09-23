@@ -51,15 +51,15 @@ O fundo `#101318` é o único amplamente usado e é mantido. As camadas acima s�
 
 ### 2.3 Semântica — o achado mais importante
 
-| Token             | Valor     | Regra                                                        |
-| ----------------- | --------- | ------------------------------------------------------------ |
-| `--positive`      | `#4ade80` | **somente** lucro liquidado                                  |
-| `--negative`      | `#f87171` | **somente** prejuízo liquidado                               |
-| `--neutral-value` | `#a8b3c5` | saldo, valor apostado, **`R$ 0,00`, resultado ainda aberto** |
-| `--pending`       | `#fbbf24` | aposta em aberto, datas a conferir                           |
-| `--danger`        | `#ef4444` | ações destrutivas                                            |
+| Token             | Valor     | Regra                                                                |
+| ----------------- | --------- | -------------------------------------------------------------------- |
+| `--positive`      | `#4ade80` | lucro realizado positivo, inclusive cashout parcial em aposta aberta |
+| `--negative`      | `#f87171` | prejuízo realizado, inclusive cashout parcial em aposta aberta       |
+| `--neutral-value` | `#a8b3c5` | saldo, valor apostado, **`R$ 0,00`, resultado não realizado**        |
+| `--pending`       | `#fbbf24` | aposta em aberto, datas a conferir                                   |
+| `--danger`        | `#ef4444` | ações destrutivas                                                    |
 
-**Regra que muda comportamento visual:** aposta em aberto **não usa verde**. O verde é exclusivo de resultado liquidado positivo. Isso corrige o achado `H1`/`§6` do inventário.
+**Regra que muda comportamento visual:** aposta em aberto **sem realização** não usa verde. O verde é exclusivo de lucro já realizado, inclusive a parcela liquidada por cashout parcial. Isso corrige o achado `H1`/`§6` do inventário sem ocultar dinheiro recebido.
 
 ### 2.4 Texto e contraste
 
@@ -130,9 +130,9 @@ dispositivos móveis, **não** o mínimo exigido pelo nível AA. Fontes:
 
 **Não altera:** nenhuma lógica de envio, confirmação ou comando canônico.
 
-### D2 — Verde só para lucro liquidado
+### D2 — Verde só para lucro realizado
 
-**Decisão:** `--neutral-value` para `R$ 0,00`, saldo e resultado em aberto.
+**Decisão:** `--neutral-value` para `R$ 0,00`, saldo e resultado ainda não realizado. Uma aposta pode continuar aberta após cashout parcial; nesse caso, o valor já realizado permanece visível e é identificado como parcial.
 
 **Justificativa:** em produto financeiro, **zerado e lucrativo não podem dividir cor**. É o único achado que afeta a confiança nos números.
 
@@ -172,7 +172,7 @@ dispositivos móveis, **não** o mínimo exigido pelo nível AA. Fontes:
 
 ### D8 — Zero é `—`, não `R$ 0,00`
 
-**Decisão:** em aposta aberta, `Retorno recebido` e `Resultado realizado` exibem `—` ou `Não liquidado`.
+**Decisão:** em aposta aberta **sem liquidação**, `Retorno recebido` e `Resultado realizado` exibem `—` ou `Não liquidado`. Havendo cashout parcial, mostram os valores realizados com indicação de parcialidade.
 
 **Justificativa:** `R$ 0,00` em aposta aberta lê-se como "já fechou em zero".
 

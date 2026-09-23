@@ -118,7 +118,12 @@ const bet: Bet = {
     },
   ],
 };
-async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = []) {
+async function enabledProduct(
+  page: Page,
+  workspace = fixture(),
+  bets: Bet[] = [],
+  detailBet: Bet = bet,
+) {
   await page.route('**/api/v1/system/status', (route) =>
     route.fulfill({
       json: {
@@ -166,7 +171,7 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
     route.fulfill({ json: { items: bets, total: bets.length, page: 1, pageSize: 25 } }),
   );
   await page.route(`**/api/v1/bets/${betId}`, (route) =>
-    route.fulfill({ json: { bet, settlements: [] } }),
+    route.fulfill({ json: { bet: detailBet, settlements: [] } }),
   );
   await page.route('**/api/v1/journal?*', (route) =>
     route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
@@ -174,6 +179,93 @@ async function enabledProduct(page: Page, workspace = fixture(), bets: Bet[] = [
   await page.route('**/api/v1/imports?*', (route) =>
     route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
   );
+}
+for (const scenario of [
+  {
+    name: 'open without settlement',
+    state: 'open' as const,
+    returnAmount: '0.00',
+    profit: '0.00',
+    expected: '—',
+    qualifier: 'Não liquidado',
+    tone: 'neutral',
+  },
+  {
+    name: 'open after positive partial cashout',
+    state: 'open' as const,
+    returnAmount: '65.00',
+    profit: '25.00',
+    expected: '+R$ 25,00',
+    qualifier: 'Realizado parcialmente',
+    tone: 'positive',
+  },
+  {
+    name: 'open after negative partial cashout',
+    state: 'open' as const,
+    returnAmount: '25.00',
+    profit: '-15.00',
+    expected: '−R$ 15,00',
+    qualifier: 'Realizado parcialmente',
+    tone: 'negative',
+  },
+  {
+    name: 'settled with a win',
+    state: 'settled' as const,
+    returnAmount: '200.00',
+    profit: '100.00',
+    expected: '+R$ 100,00',
+    qualifier: 'Realizado',
+    tone: 'positive',
+  },
+  {
+    name: 'settled with a loss',
+    state: 'settled' as const,
+    returnAmount: '0.00',
+    profit: '-100.00',
+    expected: '−R$ 100,00',
+    qualifier: 'Realizado',
+    tone: 'negative',
+  },
+  {
+    name: 'settled with zero profit',
+    state: 'settled' as const,
+    returnAmount: '100.00',
+    profit: '0.00',
+    expected: 'R$ 0,00',
+    qualifier: 'Realizado',
+    tone: 'neutral',
+  },
+]) {
+  test(`financial display distinguishes ${scenario.name}`, async ({ page }) => {
+    const sample: Bet = {
+      ...bet,
+      state: scenario.state,
+      remaining:
+        scenario.state === 'settled'
+          ? '0.00'
+          : scenario.qualifier === 'Realizado parcialmente'
+            ? '60.00'
+            : '100.00',
+      returnAmount: scenario.returnAmount,
+      profit: scenario.profit,
+    };
+    await enabledProduct(page, fixture(), [sample], sample);
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+    const result = page.locator('.product-table tbody tr').first().locator('td').nth(5);
+    await expect(result).toContainText(scenario.expected);
+    await expect(result).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
+    if (scenario.qualifier !== 'Realizado') {
+      await expect(result).toContainText(scenario.qualifier);
+    }
+    await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
+    const detail = page.getByRole('dialog').locator('.detail-metrics');
+    const profit = detail.locator('div').filter({ hasText: 'Resultado realizado' });
+    await expect(profit).toContainText(scenario.expected);
+    if (scenario.qualifier !== 'Realizado') {
+      await expect(profit).toContainText(scenario.qualifier);
+    }
+  });
 }
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,
