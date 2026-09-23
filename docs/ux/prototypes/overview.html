@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>STK-UX-02 · Protótipo — Visão geral</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="shell.css" />
+    <style>
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--space-4);
+      }
+      .kpi {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
+      }
+      .kpi--lead {
+        background: var(--surface-2);
+        border-color: var(--border-strong);
+      }
+      .kpi__label {
+        margin: 0;
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+      .kpi__value {
+        margin: var(--space-2) 0 0;
+        font: var(--font-metric);
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .kpi__hint {
+        margin: var(--space-1) 0 0;
+        font: var(--font-meta);
+        color: var(--text-faint);
+      }
+
+      .accounts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+      .account {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: var(--space-4);
+      }
+      .account__name {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+      .account__mark {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-sm);
+        background: rgb(148 175 255 / 16%);
+        color: var(--action);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .account__value {
+        margin: var(--space-2) 0 0;
+        font-size: 20px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-5);
+      }
+      .metric__label {
+        margin: 0;
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+      .metric__value {
+        margin: var(--space-2) 0 0;
+        font-size: 24px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric__hint {
+        margin: var(--space-1) 0 0;
+        font: var(--font-meta);
+        color: var(--text-faint);
+      }
+
+      /* Tabela: colunas numéricas alinhadas à direita (D2/D8) */
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table th,
+      .table td {
+        padding: var(--space-3) var(--space-2);
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      .table th {
+        font: var(--font-meta);
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+      .table td {
+        font-size: 13px;
+      }
+      .table .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .table tr:last-child td {
+        border-bottom: 0;
+      }
+      .table__meta {
+        font: var(--font-meta);
+        color: var(--text-faint);
+      }
+      .table__action {
+        text-align: right;
+      }
+      .table__action a {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--tap-min);
+        padding: 0 var(--space-3);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        color: var(--action);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .table__action a:hover {
+        background: rgb(148 175 255 / 10%);
+      }
+
+      @media (max-width: 900px) {
+        .kpis {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .accounts {
+          grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: 1fr;
+          gap: var(--space-4);
+        }
+      }
+
+      @media (max-width: 640px) {
+        .kpis {
+          grid-template-columns: 1fr;
+        }
+        /* Tabela vira lista de cards (D5) */
+        .table,
+        .table tbody,
+        .table tr,
+        .table td {
+          display: block;
+          width: 100%;
+        }
+        .table thead {
+          display: none;
+        }
+        .table tr {
+          padding: var(--space-3) 0;
+          border-bottom: 1px solid var(--border);
+        }
+        .table tr:last-child {
+          border-bottom: 0;
+        }
+        .table td {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: var(--space-3);
+          padding: var(--space-1) 0;
+          border-bottom: 0;
+          text-align: right;
+        }
+        .table td::before {
+          content: attr(data-label);
+          font: var(--font-meta);
+          color: var(--text-muted);
+          text-align: left;
+        }
+        .table td.cell-event {
+          display: block;
+          text-align: left;
+          font-weight: 600;
+        }
+        .table td.cell-event::before {
+          display: none;
+        }
+        .table .num {
+          text-align: right;
+        }
+        .table__action {
+          text-align: right;
+        }
+        .table__action a {
+          width: 100%;
+          justify-content: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar__logo">stakeframe.</div>
+        <div class="sidebar__section">Seu espaço pessoal</div>
+        <nav class="nav" aria-label="Navegação principal">
+          <a class="nav__item nav__item--active" href="#" aria-current="page">Visão geral</a>
+          <a class="nav__item" href="#">Apostas</a>
+          <a class="nav__item" href="#">Calendário</a>
+          <a class="nav__item" href="#">Análises</a>
+          <a class="nav__item" href="#">Financeiro</a>
+          <a class="nav__item" href="#">Configurações</a>
+        </nav>
+        <div class="sidebar__foot">
+          <span class="dot" aria-hidden="true"></span> Acesso privado
+          <div class="sidebar__caption">Horário de São Paulo</div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <span>Olá, Usuário.</span>
+          <div class="topbar__actions">
+            <a class="link-quiet" href="#">Sair da conta</a>
+            <button class="btn btn--primary" type="button">+ Nova aposta</button>
+          </div>
+        </header>
+
+        <div class="content">
+          <div class="page-head">
+            <div>
+              <div class="breadcrumb">Stakeframe / Setembro de 2026</div>
+              <h1 class="page-title">Visão geral</h1>
+            </div>
+            <span class="badge badge--freebet">Registros pessoais</span>
+          </div>
+
+          <p class="proto-note">
+            <strong>Protótipo STK-UX-02 · Fluxo 1 de 3.</strong> Dados sintéticos. Corrige
+            <strong>D2</strong> (verde só para lucro liquidado → <code>R$ 0,00</code> em
+            <code>--neutral-value</code>), <strong>D3</strong> (piso de 12px) e o achado
+            <strong>H1</strong> (card de banca sem destaque ambíguo).
+          </p>
+
+          <section class="kpis" aria-label="Resumo da banca">
+            <div class="kpi kpi--lead">
+              <p class="kpi__label">Banca real</p>
+              <p class="kpi__value">R$ 2.480,00</p>
+              <p class="kpi__hint">Disponível + principal em aberto</p>
+            </div>
+            <div class="kpi">
+              <p class="kpi__label">Disponível</p>
+              <p class="kpi__value">R$ 1.770,00</p>
+              <p class="kpi__hint">Reserva e saldo nas casas</p>
+            </div>
+            <div class="kpi">
+              <p class="kpi__label">Em apostas abertas</p>
+              <p class="kpi__value">R$ 710,00</p>
+              <p class="kpi__hint">Somente dinheiro real</p>
+            </div>
+            <div class="kpi">
+              <p class="kpi__label">Unidade do mês</p>
+              <p class="kpi__value">R$ 24,80</p>
+              <p class="kpi__hint">Valor congelado durante o mês</p>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card__head">
+              <div>
+                <h2 class="card__title">Onde está sua banca</h2>
+                <p class="card__sub">Saldo disponível por conta</p>
+              </div>
+              <a class="card__link" href="#">Ver movimentações ↗</a>
+            </div>
+            <div class="accounts">
+              <div class="account">
+                <div class="account__name">
+                  <span class="account__mark" aria-hidden="true">◈</span> Reserva
+                </div>
+                <p class="account__value">R$ 980,00</p>
+              </div>
+              <div class="account">
+                <div class="account__name">
+                  <span class="account__mark" aria-hidden="true">B</span> Bet365
+                </div>
+                <p class="account__value">R$ 540,00</p>
+              </div>
+              <div class="account">
+                <div class="account__name">
+                  <span class="account__mark" aria-hidden="true">S</span> Sportingbet
+                </div>
+                <p class="account__value">R$ 250,00</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card__head">
+              <div>
+                <h2 class="card__title">Resultado do mês</h2>
+                <p class="card__sub">Até hoje · último evento com data confirmada</p>
+              </div>
+              <a class="card__link" href="#">Ver análises ↗</a>
+            </div>
+            <div class="metrics">
+              <div>
+                <p class="metric__label">Resultado realizado</p>
+                <!-- D2: positivo liquidado usa --positive -->
+                <p class="metric__value money money--positive">+R$ 728,40</p>
+                <p class="metric__hint">14,568 u · real + freebets</p>
+              </div>
+              <div>
+                <p class="metric__label">Dinheiro real</p>
+                <p class="metric__value money money--positive">+R$ 426,40</p>
+                <p class="metric__hint">Freebets: R$ 302,00</p>
+              </div>
+              <div>
+                <p class="metric__label">Apostas no período</p>
+                <p class="metric__value">42</p>
+                <p class="metric__hint">7 em aberto neste período</p>
+              </div>
+            </div>
+            <div class="alert alert--warning" style="margin-top: var(--space-4)">
+              <span class="alert__icon" aria-hidden="true">⚠</span>
+              <div class="alert__body">
+                <p class="alert__title">Datas a conferir</p>
+                2 apostas com datas incompletas em todos os períodos; 1 com data estimada.
+              </div>
+              <a class="card__link" href="#">Conferir datas ↗</a>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card__head">
+              <div>
+                <h2 class="card__title">Últimas apostas</h2>
+                <p class="card__sub">Valores e datas conforme seus registros</p>
+              </div>
+              <a class="card__link" href="#">Ver todas ↗</a>
+            </div>
+            <table class="table">
+              <caption class="sr-only">
+                Últimas apostas registradas
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">N° / bilhete / evento</th>
+                  <th scope="col">Casa</th>
+                  <th scope="col" class="num">Valor</th>
+                  <th scope="col" class="num">Odd</th>
+                  <th scope="col">Situação</th>
+                  <th scope="col" class="num">Resultado realizado</th>
+                  <th scope="col" class="table__action">Detalhes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="cell-event">
+                    Aurora × Central
+                    <div class="table__meta">Bilhete #42 · 20/09/2026, 15:00</div>
+                  </td>
+                  <td data-label="Casa">Bet365</td>
+                  <td data-label="Valor" class="num money">R$ 100,00</td>
+                  <td data-label="Odd" class="num">2.00</td>
+                  <td data-label="Situação"><span class="badge badge--open">Em aberto</span></td>
+                  <!-- D2: aberto não é verde; D8: não é R$ 0,00 -->
+                  <td data-label="Resultado" class="num money money--neutral">—</td>
+                  <td class="table__action"><a href="#">Ver ↗</a></td>
+                </tr>
+                <tr>
+                  <td class="cell-event">
+                    Vila Nova × Remo
+                    <div class="table__meta">Bilhete #41 · 19/09/2026, 12:30</div>
+                  </td>
+                  <td data-label="Casa">Sportingbet</td>
+                  <td data-label="Valor" class="num money">R$ 80,00</td>
+                  <td data-label="Odd" class="num">1.85</td>
+                  <td data-label="Situação">
+                    <span class="badge badge--settled">Liquidada</span>
+                  </td>
+                  <td data-label="Resultado" class="num money money--positive">+R$ 68,00</td>
+                  <td class="table__action"><a href="#">Ver ↗</a></td>
+                </tr>
+                <tr>
+                  <td class="cell-event">
+                    Grêmio × Bahia
+                    <div class="table__meta">Bilhete #40 · 18/09/2026, 18:00 · Freebet</div>
+                  </td>
+                  <td data-label="Casa">Betano</td>
+                  <td data-label="Valor" class="num money">R$ 40,00</td>
+                  <td data-label="Odd" class="num">3.10</td>
+                  <td data-label="Situação">
+                    <span class="badge badge--lost">Perdida</span>
+                  </td>
+                  <td data-label="Resultado" class="num money money--negative">−R$ 40,00</td>
+                  <td class="table__action"><a href="#">Ver ↗</a></td>
+                </tr>
+                <tr>
+                  <td class="cell-event">
+                    Palmeiras × São Paulo
+                    <div class="table__meta">
+                      Bilhete #39 · 17/09/2026, 11:00 · data do evento a conferir
+                    </div>
+                  </td>
+                  <td data-label="Casa">Bet365</td>
+                  <td data-label="Valor" class="num money">R$ 25,50</td>
+                  <td data-label="Odd" class="num">2.10</td>
+                  <td data-label="Situação"><span class="badge badge--open">Em aberto</span></td>
+                  <td data-label="Resultado" class="num money money--neutral">—</td>
+                  <td class="table__action"><a href="#">Ver ↗</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <footer class="page-foot">
+            <span>Seus movimentos, com contexto.</span>
+            <span>BRL · America/Sao_Paulo · protótipo</span>
+          </footer>
+        </div>
+      </div>
+
+      <nav class="bottomnav" aria-label="Navegação principal (mobile)">
+        <a class="bottomnav__item bottomnav__item--active" href="#" aria-current="page"
+          >Visão geral</a
+        >
+        <a class="bottomnav__item" href="#">Apostas</a>
+        <a class="bottomnav__item" href="#">Calendário</a>
+        <a class="bottomnav__item" href="#">Análises</a>
+        <a class="bottomnav__item" href="#">Financeiro</a>
+        <a class="bottomnav__item" href="#">Ajustes</a>
+      </nav>
+    </div>
+
+    <style>
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+    </style>
+  </body>
+</html>

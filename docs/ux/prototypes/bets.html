@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>STK-UX-02 · Protótipo — Apostas (lista e detalhe)</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="shell.css" />
+    <style>
+      /* D4: padrão único de filtro — mesmo de Análises, com Aplicar e Limpar */
+      .filters {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: var(--space-3);
+        align-items: end;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+      .field label {
+        font: var(--font-meta);
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+      .field select,
+      .field input {
+        min-height: var(--tap-min);
+        padding: 0 var(--space-3);
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-md);
+        color: var(--text);
+        font: var(--font-body);
+      }
+      .filters__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        grid-column: 1 / -1;
+      }
+
+      /* Chips de filtros ativos (F3) */
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-top: var(--space-3);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 28px;
+        padding: 0 var(--space-2) 0 var(--space-3);
+        background: rgb(148 175 255 / 14%);
+        border: 1px solid rgb(148 175 255 / 34%);
+        border-radius: 999px;
+        color: var(--action);
+        font: var(--font-meta);
+        font-weight: 600;
+      }
+      .chip__x {
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .chip__x:hover {
+        background: rgb(148 175 255 / 24%);
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table th,
+      .table td {
+        padding: var(--space-3) var(--space-2);
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      .table th {
+        font: var(--font-meta);
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+      .table td {
+        font-size: 13px;
+      }
+      .table .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .table tbody tr:hover {
+        background: rgb(255 255 255 / 3%);
+      }
+      .table tr:last-child td {
+        border-bottom: 0;
+      }
+      .event {
+        font-weight: 600;
+      }
+      .event__meta {
+        font: var(--font-meta);
+        color: var(--text-faint);
+        font-weight: 400;
+      }
+      .row-action a {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--tap-min);
+        padding: 0 var(--space-3);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        color: var(--action);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .row-action a:hover {
+        background: rgb(148 175 255 / 10%);
+      }
+
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+      .pagination__btns {
+        display: flex;
+        gap: var(--space-2);
+      }
+
+      /* Detalhe — dialog com footer separado (D7) */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: grid;
+        place-items: center;
+        padding: var(--space-4);
+        background: rgb(0 0 0 / 62%);
+      }
+      .dialog {
+        width: min(720px, 100%);
+        max-height: 88vh;
+        overflow: auto;
+        background: var(--surface-1);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 24px 60px rgb(0 0 0 / 55%);
+      }
+      .dialog__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        padding: var(--space-4) var(--space-5);
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog__title {
+        margin: 0;
+        font: var(--font-section);
+      }
+      .dialog__close {
+        display: grid;
+        place-items: center;
+        width: var(--tap-min);
+        height: var(--tap-min);
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 18px;
+        cursor: pointer;
+      }
+      .dialog__close:hover {
+        background: var(--surface-2);
+        color: var(--text);
+      }
+      .dialog__body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-5);
+        padding: var(--space-5);
+      }
+      .dialog__meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-3);
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+
+      /* D8: bloco de resumo prioriza o que importa para aposta aberta */
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: var(--space-4);
+        padding: var(--space-4);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+      }
+      .summary__label {
+        margin: 0;
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+      .summary__value {
+        margin: var(--space-1) 0 0;
+        font-size: 20px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .section__title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--text-muted);
+      }
+      .section__empty {
+        margin: 0;
+        font: var(--font-meta);
+        color: var(--text-faint);
+      }
+
+      .selection {
+        padding: var(--space-4);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+      }
+      .selection__title {
+        margin: 0;
+        font-weight: 700;
+      }
+      .selection__meta {
+        margin: var(--space-1) 0 0;
+        font: var(--font-meta);
+        color: var(--text-muted);
+      }
+
+      /* D7: footer separa ação principal de destrutiva */
+      .dialog__foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-5);
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+      .dialog__foot-primary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+
+      @media (max-width: 640px) {
+        /* D5: tabela vira cards */
+        .table,
+        .table tbody,
+        .table tr,
+        .table td {
+          display: block;
+          width: 100%;
+        }
+        .table thead {
+          display: none;
+        }
+        .table tr {
+          padding: var(--space-3) 0;
+          border-bottom: 1px solid var(--border);
+        }
+        .table tr:last-child {
+          border-bottom: 0;
+        }
+        .table td {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: var(--space-3);
+          padding: var(--space-1) 0;
+          border-bottom: 0;
+          text-align: right;
+        }
+        .table td::before {
+          content: attr(data-label);
+          font: var(--font-meta);
+          color: var(--text-muted);
+          text-align: left;
+        }
+        .table td.cell-event {
+          display: block;
+          text-align: left;
+        }
+        .table td.cell-event::before {
+          display: none;
+        }
+        .table .num {
+          text-align: right;
+        }
+        .row-action a {
+          width: 100%;
+          justify-content: center;
+        }
+        .filters {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .dialog__foot {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .dialog__foot-primary {
+          flex-direction: column;
+        }
+        .dialog__foot-primary .btn {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar__logo">stakeframe.</div>
+        <div class="sidebar__section">Seu espaço pessoal</div>
+        <nav class="nav" aria-label="Navegação principal">
+          <a class="nav__item" href="#">Visão geral</a>
+          <a class="nav__item nav__item--active" href="#" aria-current="page">Apostas</a>
+          <a class="nav__item" href="#">Calendário</a>
+          <a class="nav__item" href="#">Análises</a>
+          <a class="nav__item" href="#">Financeiro</a>
+          <a class="nav__item" href="#">Configurações</a>
+        </nav>
+        <div class="sidebar__foot">
+          <span class="dot" aria-hidden="true"></span> Acesso privado
+          <div class="sidebar__caption">Horário de São Paulo</div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <span>Olá, Usuário.</span>
+          <div class="topbar__actions">
+            <a class="link-quiet" href="#">Sair da conta</a>
+            <button class="btn btn--primary" type="button">+ Nova aposta</button>
+          </div>
+        </header>
+
+        <div class="content">
+          <div class="page-head">
+            <div>
+              <div class="breadcrumb">Stakeframe / Setembro de 2026</div>
+              <h1 class="page-title">Apostas</h1>
+            </div>
+            <span class="badge badge--freebet">Registros pessoais</span>
+          </div>
+
+          <p class="proto-note">
+            <strong>Protótipo STK-UX-02 · Fluxo 2 de 3.</strong> Dados sintéticos. Aplica
+            <strong>D4</strong> (filtro único com <em>Aplicar</em> e <em>Limpar</em>, hoje ausente
+            nesta tela), <strong>D5</strong> (tabela vira cards no mobile),
+            <strong>D7</strong> (footer separado), <strong>D8</strong> (aposta aberta mostra
+            <code>—</code>, não <code>R$ 0,00</code>) e o achado de
+            <strong>coluna numérica alinhada à direita</strong>.
+          </p>
+
+          <section class="card">
+            <div class="card__head">
+              <div>
+                <h2 class="card__title">Seus bilhetes</h2>
+                <p class="card__sub">Valores e datas conforme seus registros</p>
+              </div>
+            </div>
+
+            <form class="filters" onsubmit="return false;">
+              <div class="field">
+                <label for="f-status">Situação</label>
+                <select id="f-status">
+                  <option>Todas</option>
+                  <option>Em aberto</option>
+                  <option>Liquidada</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-house">Casa</label>
+                <select id="f-house">
+                  <option>Todas as casas</option>
+                  <option>Bet365</option>
+                  <option>Sportingbet</option>
+                  <option>Betano</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-tipster">Tipster</label>
+                <select id="f-tipster">
+                  <option>Todos</option>
+                  <option>Ana Ribeiro</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-from">Apostada desde</label>
+                <input id="f-from" type="text" placeholder="dd/mm/aaaa" />
+              </div>
+              <div class="field">
+                <label for="f-to">Apostada até</label>
+                <input id="f-to" type="text" placeholder="dd/mm/aaaa" />
+              </div>
+
+              <div class="filters__actions">
+                <button class="btn btn--primary" type="submit">Aplicar filtros</button>
+                <button class="btn btn--ghost" type="reset">Limpar filtros</button>
+              </div>
+            </form>
+
+            <div class="chips" aria-label="Filtros ativos">
+              <span class="chip">
+                Situação: Em aberto
+                <button class="chip__x" type="button" aria-label="Remover filtro Situação">
+                  ×
+                </button>
+              </span>
+              <span class="chip">
+                Casa: Bet365
+                <button class="chip__x" type="button" aria-label="Remover filtro Casa">×</button>
+              </span>
+            </div>
+
+            <table class="table" style="margin-top: var(--space-4)">
+              <caption class="sr-only">
+                Bilhetes filtrados
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">N° / bilhete / evento</th>
+                  <th scope="col">Casa</th>
+                  <th scope="col" class="num">Valor</th>
+                  <th scope="col" class="num">Odd</th>
+                  <th scope="col">Situação</th>
+                  <th scope="col" class="num">Resultado realizado</th>
+                  <th scope="col" class="num">Detalhes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="cell-event">
+                    <span class="event">Aurora × Central</span>
+                    <div class="event__meta">Bilhete #42 · 20/09/2026, 15:00 · 4,032 u</div>
+                  </td>
+                  <td data-label="Casa">Bet365</td>
+                  <td data-label="Valor" class="num money">R$ 100,00</td>
+                  <td data-label="Odd" class="num">2.00</td>
+                  <td data-label="Situação"><span class="badge badge--open">Em aberto</span></td>
+                  <td data-label="Resultado" class="num money money--neutral">—</td>
+                  <td class="row-action"><a href="#">Ver ↗</a></td>
+                </tr>
+                <tr>
+                  <td class="cell-event">
+                    <span class="event">Vila Nova × Remo</span>
+                    <div class="event__meta">Bilhete #41 · 19/09/2026, 12:30 · 3,226 u</div>
+                  </td>
+                  <td data-label="Casa">Sportingbet</td>
+                  <td data-label="Valor" class="num money">R$ 80,00</td>
+                  <td data-label="Odd" class="num">1.85</td>
+                  <td data-label="Situação">
+                    <span class="badge badge--settled">Liquidada</span>
+                  </td>
+                  <td data-label="Resultado" class="num money money--positive">+R$ 68,00</td>
+                  <td class="row-action"><a href="#">Ver ↗</a></td>
+                </tr>
+                <tr>
+                  <td class="cell-event">
+                    <span class="event">Grêmio × Bahia</span>
+                    <div class="event__meta">Bilhete #40 · 18/09/2026, 18:00 · Freebet</div>
+                  </td>
+                  <td data-label="Casa">Betano</td>
+                  <td data-label="Valor" class="num money">R$ 40,00</td>
+                  <td data-label="Odd" class="num">3.10</td>
+                  <td data-label="Situação"><span class="badge badge--lost">Perdida</span></td>
+                  <td data-label="Resultado" class="num money money--negative">−R$ 40,00</td>
+                  <td class="row-action"><a href="#">Ver ↗</a></td>
+                </tr>
+                <tr>
+                  <td class="cell-event">
+                    <span class="event">Palmeiras × São Paulo</span>
+                    <div class="event__meta">
+                      Bilhete #39 · 17/09/2026, 11:00 · data do evento a conferir
+                    </div>
+                  </td>
+                  <td data-label="Casa">Bet365</td>
+                  <td data-label="Valor" class="num money">R$ 25,50</td>
+                  <td data-label="Odd" class="num">2.10</td>
+                  <td data-label="Situação"><span class="badge badge--open">Em aberto</span></td>
+                  <td data-label="Resultado" class="num money money--neutral">—</td>
+                  <td class="row-action"><a href="#">Ver ↗</a></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="pagination">
+              <span>4 registros · Página 1</span>
+              <div class="pagination__btns">
+                <button class="btn btn--secondary" type="button" disabled>Anterior</button>
+                <button class="btn btn--secondary" type="button">Próxima</button>
+              </div>
+            </div>
+          </section>
+
+          <footer class="page-foot">
+            <span>Seus movimentos, com contexto.</span>
+            <span>BRL · America/Sao_Paulo · protótipo</span>
+          </footer>
+        </div>
+      </div>
+
+      <nav class="bottomnav" aria-label="Navegação principal (mobile)">
+        <a class="bottomnav__item" href="#">Visão geral</a>
+        <a class="bottomnav__item bottomnav__item--active" href="#" aria-current="page">Apostas</a>
+        <a class="bottomnav__item" href="#">Calendário</a>
+        <a class="bottomnav__item" href="#">Análises</a>
+        <a class="bottomnav__item" href="#">Financeiro</a>
+        <a class="bottomnav__item" href="#">Ajustes</a>
+      </nav>
+    </div>
+
+    <!-- Detalhe da aposta — D7/D8 -->
+    <div class="overlay">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title" tabindex="-1">
+        <div class="dialog__head">
+          <h2 class="dialog__title" id="dlg-title">Detalhes da aposta</h2>
+          <button class="dialog__close" type="button" aria-label="Fechar">×</button>
+        </div>
+
+        <div class="dialog__body">
+          <div class="dialog__meta">
+            <span class="badge badge--open">Em aberto</span>
+            <span>Bilhete #42</span>
+            <span>Bet365 · sem tipster</span>
+          </div>
+
+          <!-- D8: aberto mostra potencial, não retorno zerado -->
+          <div class="summary">
+            <div>
+              <p class="summary__label">Valor apostado</p>
+              <p class="summary__value money">R$ 100,00</p>
+            </div>
+            <div>
+              <p class="summary__label">Odd total</p>
+              <p class="summary__value">2.00</p>
+            </div>
+            <div>
+              <p class="summary__label">Retorno potencial</p>
+              <p class="summary__value money">R$ 200,00</p>
+            </div>
+            <div>
+              <p class="summary__label">Lucro potencial</p>
+              <p class="summary__value money money--positive">+R$ 100,00</p>
+            </div>
+            <div>
+              <p class="summary__label">Retorno recebido</p>
+              <p class="summary__value money money--neutral">—</p>
+            </div>
+            <div>
+              <p class="summary__label">Resultado realizado</p>
+              <p class="summary__value money money--neutral">Não liquidado</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section__title">Seleção</h3>
+            <div class="selection">
+              <p class="selection__title">1. Aurora × Central</p>
+              <p class="selection__meta">Futebol · Gols · Mais de 2,5 · Odd 2.00</p>
+              <p class="selection__meta">Evento em 21/09/2026, 17:00 · data confirmada</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section__title">Registro</h3>
+            <p class="section__empty">
+              Apostada em 20/09/2026, 15:00 · Cadastrada em 20/09/2026, 15:00 · Referência BIL-4821
+            </p>
+          </div>
+
+          <div class="section">
+            <h3 class="section__title">Comprovantes</h3>
+            <p class="section__empty">Nenhum comprovante vinculado.</p>
+          </div>
+
+          <div class="section">
+            <h3 class="section__title">Histórico de liquidações</h3>
+            <p class="section__empty">Nenhuma liquidação registrada.</p>
+          </div>
+        </div>
+
+        <!-- D7: principal e destrutiva separadas -->
+        <div class="dialog__foot">
+          <button class="btn btn--danger" type="button">Cancelar registro</button>
+          <div class="dialog__foot-primary">
+            <button class="btn btn--secondary" type="button">Corrigir dados</button>
+            <button class="btn btn--primary" type="button">Liquidar aposta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+    </style>
+  </body>
+</html>

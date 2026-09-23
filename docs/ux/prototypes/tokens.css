@@ -1,0 +1,251 @@
+/* STK-UX-02 — tokens do protótipo.
+   Derivados do produto real em 6be4f0e, conforme docs/ux/DESIGN-DECISIONS.md.
+   Nenhuma regra financeira é alterada: isto é apresentação. */
+
+:root {
+  /* superfície — escada derivada de #101318 (real) */
+  --bg: #101318;
+  --surface-1: #161b24;
+  --surface-2: #1d232e;
+  --border: #262d3a;
+  --border-strong: #333c4d;
+
+  /* ação — de seis azuis para um */
+  --action: #94afff;
+  --action-hover: #aabaff;
+  --action-ink: #0d1220;
+  --focus: #739bff;
+
+  /* semântica — verde exclusivo de lucro liquidado */
+  --positive: #4ade80;
+  --negative: #f87171;
+  --neutral-value: #a8b3c5;
+  --pending: #fbbf24;
+  --danger: #ef4444;
+
+  /* texto — piso de 12px em --text-faint */
+  --text: #edf0f6;
+  --text-muted: #a7b1c2;
+  --text-faint: #8794a8;
+
+  /* tipografia */
+  --font-metric: 700 32px/1.15 var(--font-sans);
+  --font-section: 600 17px/1.3 var(--font-sans);
+  --font-body: 400 14px/1.5 var(--font-sans);
+  --font-meta: 500 12px/1.4 var(--font-sans);
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  /* espaço */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* raio */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* breakpoints (referência — aplicados nas media queries de cada protótipo) */
+  --bp-sm: 640px;
+  --bp-md: 900px;
+  --bp-lg: 1200px;
+
+  /* meta própria de alvo de toque (não é mínimo AA — 2.5.8 exige 24×24) */
+  --tap-min: 44px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--font-body);
+}
+
+/* Foco visível consistente — 3:1 contra o fundo */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Utilitários de valor monetário.
+   Regra D2: verde só para lucro liquidado; aberto e zero usam --neutral-value. */
+.money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+.money--positive {
+  color: var(--positive);
+}
+.money--negative {
+  color: var(--negative);
+}
+.money--neutral {
+  color: var(--neutral-value);
+}
+.money--pending {
+  color: var(--pending);
+}
+
+/* Rótulo de estado */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  font: var(--font-meta);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge--open {
+  background: rgb(251 191 36 / 14%);
+  color: var(--pending);
+}
+.badge--settled {
+  background: rgb(74 222 128 / 14%);
+  color: var(--positive);
+}
+.badge--lost {
+  background: rgb(248 113 113 / 14%);
+  color: var(--negative);
+}
+.badge--freebet {
+  background: rgb(148 175 255 / 14%);
+  color: var(--action);
+}
+
+/* Card */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.card__title {
+  margin: 0;
+  font: var(--font-section);
+}
+.card__sub {
+  margin: 2px 0 0;
+  font: var(--font-meta);
+  color: var(--text-muted);
+}
+.card__link {
+  font: var(--font-meta);
+  color: var(--action);
+  text-decoration: none;
+}
+.card__link:hover {
+  text-decoration: underline;
+}
+
+/* Ações */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn--primary {
+  background: var(--action);
+  color: var(--action-ink);
+}
+.btn--primary:hover {
+  background: var(--action-hover);
+}
+.btn--secondary {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+.btn--danger {
+  background: transparent;
+  border-color: rgb(239 68 68 / 55%);
+  color: var(--danger);
+}
+
+/* Alerta — componente com papel visual (decisão D6) */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font: var(--font-body);
+}
+.alert--error {
+  background: rgb(239 68 68 / 10%);
+  border-color: rgb(239 68 68 / 42%);
+  color: #fecaca;
+}
+.alert--warning {
+  background: rgb(251 191 36 / 10%);
+  border-color: rgb(251 191 36 / 42%);
+  color: #fde68a;
+}
+.alert__icon {
+  flex: none;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.alert__body {
+  flex: 1;
+  min-width: 0;
+}
+.alert__title {
+  margin: 0 0 2px;
+  font-weight: 600;
+}
+
+/* Indicador de atenção do protótipo (não faz parte do produto) */
+.proto-note {
+  margin: var(--space-6) 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--action);
+  background: rgb(148 175 255 / 8%);
+  color: var(--text-muted);
+  font: var(--font-meta);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.proto-note strong {
+  color: var(--text);
+}
