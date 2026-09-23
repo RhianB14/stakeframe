@@ -47,3 +47,5 @@ desktop.ini
 .eslintcache
 .vite/
 .wrangler/
+tests/ux-capture/ux-results/
+tests/ux-capture/ux-report/

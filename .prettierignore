@@ -6,3 +6,6 @@ coverage
 pnpm-lock.yaml
 playwright-report
 test-results
+ux-results
+ux-report
+docs/ux/captures

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>STK-UX-02 · Protótipo — Edição no Mini App</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <style>
+      body {
+        display: grid;
+        place-items: center;
+        padding: var(--space-5);
+        background: #07101f;
+      }
+
+      .phone {
+        width: min(420px, 100%);
+        background: #101a2b;
+        border: 1px solid #253450;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 30px 70px rgb(0 0 0 / 55%);
+      }
+
+      .app-head {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: var(--space-4);
+        border-bottom: 1px solid #253450;
+        background: #0c1526;
+      }
+      /* D9: hierarquia real — h1 visível, contexto em apoio */
+      .app-head__brand {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--action);
+        letter-spacing: 0.4px;
+      }
+      .app-head__crumb {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .app-head h1 {
+        margin: 2px 0 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .app-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+        padding: var(--space-4);
+        /* espaço para a barra fixa de salvar */
+        padding-bottom: calc(52px + var(--space-5) + env(safe-area-inset-bottom));
+      }
+
+      /* D9: cada bloco de formulário ganha cabeçalho e separador */
+      .fset {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        margin: 0;
+        padding: 0 0 var(--space-4);
+        border: 0;
+        border-bottom: 1px solid #253450;
+      }
+      .fset:last-of-type {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+      .fset__legend {
+        padding: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .fset__hint {
+        margin: -2px 0 0;
+        font-size: 12px;
+        color: #9aa9c1;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+      }
+      .field > span {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+      }
+      .field input,
+      .field select {
+        min-height: var(--tap-min);
+        padding: 0 var(--space-3);
+        background: #0b1424;
+        border: 1px solid #2b3d5c;
+        border-radius: var(--radius-md);
+        color: var(--text);
+        font-size: 16px; /* 16px evita zoom automático no iOS */
+      }
+      .field input::placeholder {
+        /* WCAG 4.5:1 sobre #0b1424 */
+        color: #8b9ab4;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+
+      /* Estado financeiro explícito */
+      .note {
+        display: flex;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        background: rgb(251 191 36 / 10%);
+        border: 1px solid rgb(251 191 36 / 42%);
+        border-radius: var(--radius-md);
+        color: #fde68a;
+        font-size: 12px;
+      }
+
+      /* Segmented: 44px mínimo (achado A3) e item ativo com borda + cor */
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+        padding: 4px;
+        background: #081223;
+        border-radius: 11px;
+      }
+      .segmented label {
+        display: grid;
+        place-items: center;
+        min-height: var(--tap-min);
+        padding: 0 var(--space-2);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: #aab7cb;
+        font-size: 13px;
+        text-align: center;
+        cursor: pointer;
+      }
+      .segmented label:has(input:checked) {
+        background: #21385f;
+        border-color: var(--action);
+        color: #fff;
+        box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+      }
+      .segmented input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .segmented label:has(input:focus-visible) {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* Barra de ação fixa — hierarquia explícita */
+      .save-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 30;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+        background: rgb(7 16 31 / 94%);
+        backdrop-filter: blur(14px);
+        border-top: 1px solid #22314c;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        min-height: var(--tap-min);
+        padding: 0 var(--space-4);
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .btn--primary {
+        width: 100%;
+        min-height: 52px;
+        background: var(--action);
+        color: var(--action-ink);
+        font-size: 16px;
+        font-weight: 800;
+      }
+      .btn--primary:hover {
+        background: var(--action-hover);
+      }
+      .btn--secondary {
+        background: #16233a;
+        border-color: #2b3d5c;
+        color: var(--text);
+      }
+      .btn--danger {
+        background: transparent;
+        border-color: rgb(239 68 68 / 55%);
+        color: var(--danger);
+      }
+      .save-actions {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--space-2);
+      }
+
+      /* Estado de salvamento (já existente no produto — mantido e reforçado) */
+      .save-state {
+        font-size: 12px;
+        color: var(--text-muted);
+        text-align: center;
+      }
+      .save-state--busy {
+        color: var(--action);
+      }
+
+      /* D6/E2: conflito de versão com papel visual de alerta */
+      .alert {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        padding: var(--space-3);
+        border: 1px solid;
+        border-radius: var(--radius-md);
+        font-size: 13px;
+      }
+      .alert--error {
+        background: rgb(239 68 68 / 10%);
+        border-color: rgb(239 68 68 / 42%);
+        color: #fecaca;
+      }
+      .alert__title {
+        font-weight: 700;
+      }
+      .alert__actions {
+        display: flex;
+        gap: var(--space-2);
+        margin-top: var(--space-2);
+      }
+
+      @media (max-width: 480px) {
+        body {
+          padding: 0;
+        }
+        .phone {
+          width: 100%;
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+        }
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+        .save-actions {
+          grid-template-columns: 1fr;
+        }
+        .save-actions .btn {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="phone">
+      <header class="app-head">
+        <span class="app-head__brand">stakeframe.</span>
+        <span class="app-head__crumb">Mini app · Importação #IMP-2043</span>
+        <!-- D9: o h1 deixa de ser o menor texto da tela -->
+        <h1>Editar aposta</h1>
+      </header>
+
+      <div class="app-body">
+        <p class="proto-note" style="margin: 0">
+          <strong>Protótipo STK-UX-02 · Fluxo 3 de 3.</strong> Dados sintéticos. Aplica
+          <strong>D9</strong> (cabeçalho por seção e <code>h1</code> legível),
+          <strong>D3</strong> (piso de 12px), alvo de toque de <strong>44px</strong> no filtro
+          segmentado, contraste de placeholder em <strong>4.5:1</strong> e o
+          <strong>conflito de versão com papel visual de alerta</strong>.
+        </p>
+
+        <fieldset class="fset">
+          <legend class="fset__legend">Aposta</legend>
+          <p class="fset__hint">Dados do bilhete recebido pelo Telegram.</p>
+
+          <div class="field">
+            <span>Casa de aposta</span>
+            <select>
+              <option>Bet365</option>
+              <option>Sportingbet</option>
+              <option>Betano</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <span>Status</span>
+            <select>
+              <option>Pendente</option>
+              <option>Ganha</option>
+              <option>Perdida</option>
+              <option>Meio-Ganha</option>
+              <option>Meio-Perdida</option>
+              <option>Reembolsada</option>
+            </select>
+          </div>
+
+          <div class="note">
+            <span aria-hidden="true">🔒</span>
+            <span>
+              Valor apostado e odd total não podem ser alterados aqui: aposta já confirmada exige
+              correção pelo fluxo financeiro.
+            </span>
+          </div>
+        </fieldset>
+
+        <fieldset class="fset">
+          <legend class="fset__legend">Origem financeira</legend>
+          <p class="fset__hint">Define como o valor conta na sua banca.</p>
+
+          <div class="segmented" role="radiogroup" aria-label="Origem financeira">
+            <label><input type="radio" name="origin" checked />Dinheiro</label>
+            <label><input type="radio" name="origin" />Freebet</label>
+            <label><input type="radio" name="origin" />Bônus</label>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <span>Tipster</span>
+              <select>
+                <option>Sem tipster</option>
+                <option>Ana Ribeiro</option>
+              </select>
+            </div>
+            <div class="field">
+              <span>Crédito utilizado</span>
+              <select>
+                <option>Nenhum</option>
+                <option>Crédito casa</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fset">
+          <legend class="fset__legend">Evento</legend>
+
+          <div class="grid-2">
+            <div class="field">
+              <span>Data da aposta</span>
+              <input type="text" value="20/09/2026" placeholder="dd/mm/aaaa" />
+            </div>
+            <div class="field">
+              <span>Data do evento</span>
+              <input type="text" value="21/09/2026" placeholder="dd/mm/aaaa" />
+            </div>
+          </div>
+
+          <div class="field">
+            <span>Esporte</span>
+            <select>
+              <option>Futebol</option>
+              <option>Basquete</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset class="fset">
+          <legend class="fset__legend">Seleção</legend>
+
+          <div class="field">
+            <span>Evento</span>
+            <input type="text" value="Aurora × Central" />
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <span>Mercado</span>
+              <input type="text" value="Mais de 2,5 gols" />
+            </div>
+            <div class="field">
+              <span>Odd</span>
+              <input type="text" value="2.00" />
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Conflito de versão: alerta com ação de recuperação -->
+        <div class="alert alert--error" role="alert">
+          <span class="alert__title">Não foi possível salvar suas alterações.</span>
+          <span>
+            Os dados foram atualizados em outra operação. O que você digitou aqui continua neste
+            aparelho — recarregue e confira antes de tentar novamente.
+          </span>
+          <div class="alert__actions">
+            <button class="btn btn--secondary" type="button">Recarregar</button>
+            <button class="btn btn--secondary" type="button">Tentar de novo</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <div class="save-actions">
+          <button class="btn btn--primary" type="button">Salvar e confirmar aposta</button>
+          <button class="btn btn--danger" type="button">Descartar</button>
+        </div>
+        <div class="save-state save-state--busy" aria-live="polite">Salvando e confirmando…</div>
+      </div>
+    </div>
+  </body>
+</html>
