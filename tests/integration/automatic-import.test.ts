@@ -539,6 +539,80 @@ describe('automatic import financial boundary', () => {
     );
     expect(settled.betState).toBe('settled');
   });
+  it('STK-G0-23 salva os dados mas recusa a liquidacao de uma aposta incompleta', async () => {
+    const value = await input({ warnings: ['Campo ausente para completar no Mini App'] });
+    expect(await complete(value)).toMatchObject({
+      state: 'imported',
+      reason: 'EXTRACTION_UNCERTAIN',
+    });
+    const service = createImportService(database);
+    const before = await service.detail(tenantContext, value.id);
+    // Falha parcial: a aposta existe e esta INCOMPLETA, entao o status e
+    // recusado — os dados gravados permanecem e nada de sucesso integral.
+    expect(before.bet).toMatchObject({ completionState: 'incomplete', state: 'open' });
+    await expect(
+      service.setStatus(
+        tenantContext,
+        value.id,
+        { version: before.item.version, action: 'win' },
+        'fixture-owner',
+      ),
+    ).rejects.toMatchObject({ code: 'INCOMPLETE_BET' });
+    expect((await database.pool.query('select id from finance.settlement')).rowCount).toBe(0);
+    const afterFailure = await service.detail(tenantContext, value.id);
+    expect(afterFailure.bet).toMatchObject({ completionState: 'incomplete', state: 'open' });
+    // Recuperacao segura: completar o registro e ENTao aplicar o status
+    // escolhido, usando a versao devolvida por cada operacao.
+    const bookmakerId = (await finance.workspace(tenantContext)).catalog.find(
+      (entry) => entry.name === 'Bet365',
+    )!.id;
+    const saved = await service.updateDraft(
+      tenantContext,
+      value.id,
+      {
+        version: before.item.version,
+        betOrigin: 'real',
+        bookmakerId,
+        tipsterId: null,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+      'fixture-owner',
+    );
+    const confirmed = await service.confirmDraft(
+      tenantContext,
+      value.id,
+      { version: saved.version },
+      'fixture-owner',
+      randomUUID(),
+    );
+    // A versao devolvida por cada operacao e a versao REAL do rascunho — e e
+    // ela que o cliente precisa reenviar na chamada seguinte (o fluxo do
+    // Mini App encadeia PATCH -> confirm -> status exatamente assim).
+    const raw = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [value.id],
+      )
+    ).rows[0]!;
+    expect(confirmed.version).toBe(raw.version);
+    const settled = await service.setStatus(
+      tenantContext,
+      value.id,
+      { version: confirmed.version, action: 'win' },
+      'fixture-owner',
+    );
+    expect(settled.betState).toBe('settled');
+    expect((await database.pool.query('select id from finance.settlement')).rowCount).toBe(1);
+    // Reabertura: o resultado vigente aparece de novo.
+    const reopened = await service.detail(tenantContext, value.id);
+    expect(reopened.bet).toMatchObject({ state: 'settled', activeOutcome: 'win' });
+  });
   it('uses the explicitly selected freebet credit and does not debit cash', async () => {
     const credit = await run({
       type: 'freebet.create',

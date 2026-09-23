@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
+  deriveBetOrigin,
   parseCaption,
   telegramOperationSchema,
   ticketExtractionSchema,
@@ -92,6 +93,97 @@ type DraftPatch = {
   selections?:
     { event: string | null; market: string | null; selection: string | null }[] | undefined;
 };
+
+// STK-G0-23 — uma aposta já COMPLETA tem a sua fonte canônica em finance.bet /
+// finance.selection (valor, odd, casa, tipster, crédito, seleções e datas), que
+// é exatamente de onde a Web e a mensagem do Telegram leem. Gravar apenas a
+// inbox faria o servidor responder 200 "salvo" enquanto o registro financeiro
+// e a mensagem permaneciam nos valores antigos: três fontes divergentes
+// (rascunho, aposta financeira, mensagem). Depois da confirmação esses campos
+// só mudam pelos comandos canônicos já existentes (bet.origin, bet.bookmaker,
+// bet.update, event.update); valor e odd total ainda NÃO têm comando, e essa
+// lacuna é um bloqueio de produto/contrato registrado em STK-G0-23.
+// Um valor igual ao vigente não é divergência: não há o que persistir, então um
+// PATCH que apenas reenvia o conteúdo continua sendo aceito.
+type RegisteredBet = {
+  bookmaker_id: string | null;
+  tipster_id: string | null;
+  stake: string | null;
+  odds: string | null;
+  freebet_id: string | null;
+  freebet_amount: string | null;
+  completion_state: 'incomplete' | 'complete';
+};
+
+async function canonicalDivergences(
+  client: PoolClient,
+  patch: DraftPatch,
+  bet: RegisteredBet,
+  betId: string,
+): Promise<string[]> {
+  const conflicts: string[] = [];
+  const differs = (declared: string | null | undefined, current: string | null) => {
+    if (declared === undefined) return false;
+    if (declared === null || current === null) return declared !== current;
+    return Number(declared) !== Number(current);
+  };
+  if (differs(patch.stake, bet.stake)) conflicts.push('stake');
+  if (differs(patch.odds, bet.odds)) conflicts.push('odds');
+  if (patch.bookmakerId !== undefined && patch.bookmakerId !== bet.bookmaker_id)
+    conflicts.push('bookmakerId');
+  if (patch.tipsterId !== undefined && patch.tipsterId !== bet.tipster_id)
+    conflicts.push('tipsterId');
+  if (patch.freebetId !== undefined && patch.freebetId !== bet.freebet_id)
+    conflicts.push('freebetId');
+  // A origem canônica é DERIVADA do par (stake, crédito) — não existe coluna
+  // de origem em finance.bet —, então uma declaração divergente também seria
+  // uma informação que o registro canônico não sustenta.
+  if (patch.betOrigin !== undefined && patch.betOrigin !== null) {
+    const canonical = bet.stake === null ? 'real' : deriveBetOrigin(bet.stake, bet.freebet_amount);
+    if (patch.betOrigin !== canonical) conflicts.push('betOrigin');
+  }
+  if (patch.selections === undefined && patch.eventAt === undefined && patch.sport === undefined)
+    return conflicts;
+  const current = (
+    await client.query<{
+      event: string;
+      sport: string | null;
+      market: string;
+      selection: string;
+      event_at: Date | null;
+    }>(
+      'select event,sport,market,selection,event_at from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
+      [betId],
+    )
+  ).rows;
+  if (patch.selections !== undefined) {
+    const shifted =
+      patch.selections.length !== current.length ||
+      patch.selections.some((selection, index) => {
+        const canonical = current[index];
+        if (!canonical) return true;
+        return (
+          (selection.event ?? 'A definir') !== canonical.event ||
+          (selection.market ?? 'A definir') !== canonical.market ||
+          (selection.selection ?? 'A definir') !== canonical.selection
+        );
+      });
+    if (shifted) conflicts.push('selections');
+  }
+  if (patch.eventAt !== undefined) {
+    const toMs = (value: Date | string | null) => {
+      if (value === null) return null;
+      const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+      return Number.isNaN(ms) ? null : ms;
+    };
+    const canonical = current.find((selection) => selection.event_at !== null)?.event_at ?? null;
+    if (toMs(patch.eventAt) !== toMs(canonical)) conflicts.push('eventAt');
+  }
+  if (patch.sport !== undefined && patch.sport !== null) {
+    if (current.some((selection) => selection.sport !== patch.sport)) conflicts.push('sport');
+  }
+  return conflicts;
+}
 
 async function applyDraftUpdate(
   client: PoolClient,
@@ -252,6 +344,28 @@ async function applyDraftUpdate(
       if (!credit) throw new FinanceError('FREEBET_UNRESOLVED');
     }
     const nextEventAt = patch.eventAt === undefined ? row.event_at : patch.eventAt;
+    // STK-G0-23 — a aposta é lida ANTES de gravar a inbox: quando ela já está
+    // completa, o registro canônico é a autoridade, e recusar aqui aborta a
+    // transação inteira sem deixar rascunho gravado em estado mentiroso.
+    let registeredBet: RegisteredBet | undefined;
+    if (row.imported_bet_id) {
+      registeredBet = (
+        await client.query<RegisteredBet>(
+          'select b.bookmaker_id,b.tipster_id,b.stake,b.odds,b.freebet_id,b.completion_state,f.amount as freebet_amount from finance.bet b left join finance.freebet f on f.id=b.freebet_id and f.organization_id=b.organization_id where b.organization_id=current_setting($$app.organization_id$$, true)::uuid and b.id=$1 for update of b',
+          [row.imported_bet_id],
+        )
+      ).rows[0];
+      if (!registeredBet) throw new FinanceError('NOT_FOUND');
+      if (registeredBet.completion_state === 'complete') {
+        const conflicts = await canonicalDivergences(
+          client,
+          patch,
+          registeredBet,
+          row.imported_bet_id,
+        );
+        if (conflicts.length) throw new FinanceError('STATE_CONFLICT');
+      }
+    }
     const updated = await client.query<{ version: number }>(
       "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,metadata=$7,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
       [
@@ -265,46 +379,31 @@ async function applyDraftUpdate(
       ],
     );
     const version = updated.rows[0]!.version;
-    if (row.imported_bet_id) {
-      const bet = (
-        await client.query<{
-          bookmaker_id: string | null;
-          tipster_id: string | null;
-          stake: string | null;
-          odds: string | null;
-          freebet_id: string | null;
-          completion_state: 'incomplete' | 'complete';
-        }>(
-          'select bookmaker_id,tipster_id,stake,odds,freebet_id,completion_state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
-          [row.imported_bet_id],
-        )
-      ).rows[0];
-      if (!bet) throw new FinanceError('NOT_FOUND');
-      if (bet.completion_state === 'incomplete') {
-        const selectionInputs = nextOverrides.selections?.map((selection) => ({
-          event: selection.event ?? 'A definir',
-          sport: nextOverrides.sport ?? null,
-          market: selection.market ?? 'A definir',
-          selection: selection.selection ?? 'A definir',
-          odds: null,
-          eventDate: nextEventAt ? nextEventAt.slice(0, 10) : null,
-          eventAt: nextEventAt,
-          dateStatus: nextEventAt ? ('confirmed' as const) : ('pending' as const),
-        }));
-        await client.query(
-          "update finance.bet set bookmaker_id=$2,tipster_id=$3,stake=$4,odds=$5,freebet_id=$6 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and completion_state='incomplete'",
-          [
-            row.imported_bet_id,
-            effectiveBookmakerId ?? bet.bookmaker_id,
-            nextOverrides.tipsterId ?? bet.tipster_id,
-            nextOverrides.stake ?? bet.stake,
-            nextOverrides.odds ?? bet.odds,
-            nextFreebet,
-          ],
-        );
-        if (selectionInputs?.length)
-          await saveSelections(client, row.imported_bet_id, selectionInputs);
-      }
+    if (row.imported_bet_id && registeredBet?.completion_state === 'incomplete') {
+      const bet = registeredBet;
+      const selectionInputs = nextOverrides.selections?.map((selection) => ({
+        event: selection.event ?? 'A definir',
+        sport: nextOverrides.sport ?? null,
+        market: selection.market ?? 'A definir',
+        selection: selection.selection ?? 'A definir',
+        odds: null,
+        eventDate: nextEventAt ? nextEventAt.slice(0, 10) : null,
+        eventAt: nextEventAt,
+        dateStatus: nextEventAt ? ('confirmed' as const) : ('pending' as const),
+      }));
+      await client.query(
+        "update finance.bet set bookmaker_id=$2,tipster_id=$3,stake=$4,odds=$5,freebet_id=$6 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and completion_state='incomplete'",
+        [
+          row.imported_bet_id,
+          effectiveBookmakerId ?? bet.bookmaker_id,
+          nextOverrides.tipsterId ?? bet.tipster_id,
+          nextOverrides.stake ?? bet.stake,
+          nextOverrides.odds ?? bet.odds,
+          nextFreebet,
+        ],
+      );
+      if (selectionInputs?.length)
+        await saveSelections(client, row.imported_bet_id, selectionInputs);
     }
     await client.query(
       "insert into finance.audit(type,actor,entity_id,after) values('import.draft_update',$2,$1,$3)",

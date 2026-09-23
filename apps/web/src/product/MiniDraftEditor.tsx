@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   classifyTicketKind,
+  deriveBetOrigin,
   formatBRL,
   potentialReturnFor,
   type TicketKind,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
-import { localInstant } from './api.js';
+import { ApiFailure, localInstant } from './api.js';
+import {
+  partialFailureMessage,
+  planConfirmedSave,
+  refusalMessage,
+  type FormValues,
+} from './confirmed-save.js';
 import type { DraftControlsProps } from './drafts.js';
 import { Field } from './forms.js';
 import { MobilePicker } from './MobilePicker.js';
@@ -47,16 +54,44 @@ export function MiniDraftEditor({
   sender,
   confirmSender,
   statusSender,
+  originSender,
+  eventSender,
+  bookmakerSender,
+  tipsterSender,
   creditsSender,
   onSaved,
 }: DraftControlsProps) {
-  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(detail.betOrigin ?? 'real');
-  const [credit, setCredit] = useState(detail.freebetId ?? '');
-  const initialEvent = inputInstant(detail.eventAt);
+  // STK-G0-23-R1 — aposta já registrada: origem, crédito e data vêm do
+  // REGISTRO, não da inbox. A origem é derivada do par (valor, crédito) e a
+  // inbox não acompanha os comandos canônicos, então ler dela envelheceria a
+  // tela — e mandar esse valor velho pelo PATCH seria uma divergência que o
+  // fail-closed recusaria mesmo sem o usuário ter mexido em nada.
+  const canonicalBet = detail.bet?.completionState === 'complete' ? detail.bet : null;
+  const canonicalOrigin =
+    canonicalBet === null
+      ? null
+      : canonicalBet.stake === null
+        ? 'real'
+        : deriveBetOrigin(canonicalBet.stake, canonicalBet.freebetAmount ?? null);
+  const canonicalEventAt = canonicalBet?.selections[0]?.eventAt ?? null;
+
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(
+    canonicalOrigin ?? detail.betOrigin ?? 'real',
+  );
+  const [credit, setCredit] = useState(
+    canonicalBet ? (canonicalBet.freebetId ?? '') : (detail.freebetId ?? ''),
+  );
+  const initialEvent = inputInstant(canonicalBet ? canonicalEventAt : (detail.eventAt ?? null));
   const [eventDate, setEventDate] = useState(initialEvent.date);
   const [eventTime, setEventTime] = useState(initialEvent.time);
   const extractedSport =
     detail.extraction?.selections.find((item) => item.sport !== null)?.sport ?? null;
+  // STK-G0-23 — aposta já registrada: o registro financeiro é a fonte e
+  // prevalece sobre os overrides do rascunho. Sem esta precedência a tela
+  // reabria mostrando a casa/tipster/valor/odd/seleções ANTIGOS depois que o
+  // registro canônico já havia mudado (a mensagem do Telegram mostrava o
+  // valor novo, a tela o velho). Esporte fica com o override porque o
+  // detalhe canônico não expõe o esporte das seleções.
   const [sport, setSport] = useState(detail.sportOverride ?? extractedSport ?? '');
   const [tournament, setTournament] = useState(detail.tournamentOverride ?? '');
   const [country, setCountry] = useState(detail.countryOverride ?? '');
@@ -64,29 +99,29 @@ export function MiniDraftEditor({
     detail.ticketKindOverride ?? classifyTicketKind(detail.extraction?.selections ?? []),
   );
   const [stake, setStake] = useState(
-    detail.stakeOverride ?? detail.bet?.stake ?? detail.extraction?.stake ?? '',
+    detail.bet?.stake ?? detail.stakeOverride ?? detail.extraction?.stake ?? '',
   );
   const [odds, setOdds] = useState(
-    detail.oddsOverride ?? detail.bet?.odds ?? detail.extraction?.odds ?? '',
+    detail.bet?.odds ?? detail.oddsOverride ?? detail.extraction?.odds ?? '',
   );
   const [bookmaker, setBookmaker] = useState(
-    detail.bookmakerOverrideId ??
-      detail.bet?.bookmakerId ??
+    detail.bet?.bookmakerId ??
+      detail.bookmakerOverrideId ??
       detail.matches.captionBookmakerId ??
       '',
   );
   const [tipster, setTipster] = useState(
-    detail.tipsterOverrideId ?? detail.bet?.tipsterId ?? detail.matches.tipsterId ?? '',
+    detail.bet?.tipsterId ?? detail.tipsterOverrideId ?? detail.matches.tipsterId ?? '',
   );
   const [selections, setSelections] = useState(() => {
-    const initial = detail.selectionOverrides.length
-      ? detail.selectionOverrides.map((item) => ({ ...item }))
-      : detail.bet?.selections?.length
-        ? detail.bet.selections.map(({ event, market, selection }) => ({
-            event,
-            market,
-            selection,
-          }))
+    const initial = detail.bet?.selections.length
+      ? detail.bet.selections.map(({ event, market, selection }) => ({
+          event,
+          market,
+          selection,
+        }))
+      : detail.selectionOverrides.length
+        ? detail.selectionOverrides.map((item) => ({ ...item }))
         : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
             event,
             market,
@@ -94,6 +129,45 @@ export function MiniDraftEditor({
           }));
     return initial.length ? initial : [{ event: null, market: null, selection: null }];
   });
+
+  // STK-G0-23-R1 — linha de base da edição: é com o que a TELA ABRIU que o
+  // formulário é comparado, para separar o que o usuário mexeu do que já era
+  // assim. Com a aposta completa essa base vem do registro canônico.
+  type AppliedStep = { key: string; label: string; target: string };
+  type Recovery = { applied: AppliedStep[]; version: number };
+  const [recovery, setRecovery] = useState<Recovery | null>(null);
+  const financialsFixed = detail.bet?.completionState === 'complete';
+  const baselineSelections = detail.bet?.selections.length
+    ? detail.bet.selections.map(({ event, market, selection }) => ({ event, market, selection }))
+    : detail.selectionOverrides.length
+      ? detail.selectionOverrides.map((item) => ({ ...item }))
+      : (detail.extraction?.selections ?? []).map(({ event, market, selection }) => ({
+          event,
+          market,
+          selection,
+        }));
+  const baseline: FormValues = {
+    origin: canonicalOrigin ?? detail.betOrigin ?? 'real',
+    credit: canonicalBet ? (canonicalBet.freebetId ?? '') : (detail.freebetId ?? ''),
+    bookmaker:
+      detail.bet?.bookmakerId ??
+      detail.bookmakerOverrideId ??
+      detail.matches.captionBookmakerId ??
+      '',
+    tipster: detail.bet?.tipsterId ?? detail.tipsterOverrideId ?? detail.matches.tipsterId ?? '',
+    eventAt: canonicalBet ? canonicalEventAt : (detail.eventAt ?? null),
+    stake: detail.bet?.stake ?? detail.stakeOverride ?? detail.extraction?.stake ?? '',
+    odds: detail.bet?.odds ?? detail.oddsOverride ?? detail.extraction?.odds ?? '',
+    sport: detail.sportOverride ?? extractedSport ?? '',
+    tournament: detail.tournamentOverride ?? '',
+    country: detail.countryOverride ?? '',
+    ticketKind:
+      detail.ticketKindOverride ?? classifyTicketKind(detail.extraction?.selections ?? []),
+    selections: baselineSelections.length
+      ? baselineSelections
+      : [{ event: null, market: null, selection: null }],
+  };
+
   const [credits, setCredits] = useState(detail.credits);
   const [creditsBusy, setCreditsBusy] = useState(false);
   const [creditsError, setCreditsError] = useState<string | null>(null);
@@ -117,8 +191,8 @@ export function MiniDraftEditor({
       return;
     }
     const initialBookmaker =
-      detail.bookmakerOverrideId ??
       detail.bet?.bookmakerId ??
+      detail.bookmakerOverrideId ??
       detail.matches.captionBookmakerId ??
       '';
     if (
@@ -229,23 +303,133 @@ export function MiniDraftEditor({
       )
         throw new Error('Preencha evento, aposta e mercado de todas as seleções.');
 
-      const result = await sender({
-        version: detail.item.version,
-        betOrigin: origin,
-        freebetId: origin === 'freebet' || origin === 'hibrida' ? credit : null,
-        ...(eventDate && eventTime ? { eventAt: localInstant(`${eventDate}T${eventTime}`) } : {}),
-        bookmakerId: bookmaker,
-        tipsterId: tipster || null,
-        sport: sport.trim() || null,
-        tournament: tournament.trim() || null,
-        country: country.trim() || null,
-        ticketKind,
-        stake,
-        odds,
-        selections,
+      // STK-G0-23-R1 — depois da confirmação o registro financeiro é a fonte.
+      // Casa, tipster, origem/crédito e data JÁ têm comando canônico, então o
+      // formulário os encaminha por esses comandos (com as versões retornadas
+      // em sequência) e o PATCH do rascunho passa a levar só metadados. O
+      // PATCH não é capaz de atualizar o registro financeiro: enviá-lo como se
+      // fosse capaz era o defeito apontado na revisão.
+      const plan = planConfirmedSave({
+        completionState: financialsFixed ? 'complete' : 'incomplete',
+        selectionIds: (detail.bet?.selections ?? []).map((item) => item.id),
+        baseline,
+        current: {
+          origin,
+          credit,
+          bookmaker,
+          tipster,
+          eventAt: eventDate && eventTime ? localInstant(`${eventDate}T${eventTime}`) : null,
+          stake,
+          odds,
+          sport,
+          tournament,
+          country,
+          ticketKind,
+          selections,
+        },
       });
-      const confirmed = confirmSender ? await confirmSender({ version: result.version }) : null;
-      const version = confirmed?.version ?? result.version;
+      // Recusa ANTES de qualquer escrita — nada chega ao rascunho.
+      if (plan.blocked.length) throw new Error(refusalMessage(plan.blocked));
+
+      // Recuperação de falha parcial: a nova tentativa reusa a versão já
+      // alcançada e não repete ação já persistida, para não duplicar efeito
+      // financeiro nem anunciar sucesso falso.
+      const applied: AppliedStep[] = recovery ? [...recovery.applied] : [];
+      let version = recovery ? recovery.version : detail.item.version;
+      const savedLabels = () => applied.map((step) => step.label);
+      const runStep = async (
+        key: string,
+        label: string,
+        target: string,
+        call: () => Promise<{ version: number }>,
+      ) => {
+        if (applied.some((step) => step.key === key && step.target === target)) return;
+        try {
+          const result = await call();
+          version = result.version;
+          applied.push({ key, label, target });
+          setRecovery({ applied: [...applied], version });
+        } catch (failure) {
+          const reason = failure instanceof Error ? failure.message : 'Tente novamente.';
+          if (applied.length) {
+            throw new Error(partialFailureMessage(savedLabels(), label, reason), {
+              cause: failure,
+            });
+          }
+          throw failure;
+        }
+      };
+
+      if (plan.origin) {
+        if (!originSender) throw new Error('Este Mini App não tem o comando de origem disponível.');
+        await runStep(
+          'origin',
+          `origem ${plan.origin.kind}`,
+          `${plan.origin.kind}:${plan.origin.freebetId ?? ''}`,
+          () =>
+            originSender({
+              version,
+              kind: plan.origin!.kind,
+              freebetId: plan.origin!.freebetId ?? null,
+            }),
+        );
+      }
+      if (plan.bookmaker) {
+        if (!bookmakerSender)
+          throw new Error('Este Mini App não tem o comando de casa disponível.');
+        await runStep('bookmaker', 'casa', plan.bookmaker, () =>
+          bookmakerSender({ version, bookmakerId: plan.bookmaker! }),
+        );
+      }
+      if (plan.tipster) {
+        if (!tipsterSender)
+          throw new Error('Este Mini App não tem o comando de tipster disponível.');
+        await runStep('tipster', 'tipster', plan.tipster, () =>
+          tipsterSender({ version, tipsterId: plan.tipster! }),
+        );
+      }
+      for (const date of plan.dates) {
+        if (!eventSender) throw new Error('Este Mini App não tem o comando de data disponível.');
+        await runStep(`date:${date.selectionId}`, 'data', date.eventAt ?? '', () =>
+          eventSender({ version, selectionId: date.selectionId, eventAt: date.eventAt }),
+        );
+      }
+
+      let result: Awaited<ReturnType<typeof sender>>;
+      try {
+        // STK-G0-23-R2 — a versão é a do ENVIO, não a do plano. Cada comando
+        // canônico acima já avançou a inbox; mandar a versão capturada na
+        // montagem do plano fazia o servidor recusar por VERSION_CONFLICT e
+        // deixava o salvamento parcial (a troca de casa já persistida, o
+        // rascunho não).
+        result = await sender({ ...plan.patch, version });
+      } catch (failure) {
+        const reason = failure instanceof Error ? failure.message : 'Tente novamente.';
+        if (applied.length) {
+          throw new Error(
+            partialFailureMessage(savedLabels(), 'torneio, país e tipo do rascunho', reason),
+            {
+              cause: failure,
+            },
+          );
+        }
+        throw failure;
+      }
+      version = result.version;
+
+      let confirmed: Awaited<ReturnType<NonNullable<typeof confirmSender>>> | null = null;
+      try {
+        confirmed = confirmSender ? await confirmSender({ version: result.version }) : null;
+      } catch (failure) {
+        const reason = failure instanceof Error ? failure.message : 'Tente novamente.';
+        if (applied.length) {
+          throw new Error(partialFailureMessage(savedLabels(), 'confirmação da aposta', reason), {
+            cause: failure,
+          });
+        }
+        throw failure;
+      }
+      version = confirmed?.version ?? result.version;
       if (statusChanged && statusSender) {
         let updated: { version: number; betState: string };
         try {
@@ -256,15 +440,26 @@ export function MiniDraftEditor({
             { cause: failure },
           );
         }
-        await onSaved(updated.version);
-      } else {
-        await onSaved(version);
+        version = updated.version;
       }
+      // Só agora o fluxo principal está confirmado: o Mini App pode fechar.
+      setRecovery(null);
+      await onSaved(version);
       setConfirmStatus(false);
     } catch (failure) {
       setConfirmStatus(false);
+      // STK-G0-23 — nada é anunciado como salvo se não foi persistido. Uma
+      // recusa do servidor sem nenhuma ação já gravada é dita pelo motivo
+      // concreto, sem declarar o formulário inteiro imutável.
+      const canonicalRefusal =
+        failure instanceof ApiFailure && failure.code === 'STATE_CONFLICT'
+          ? 'O registro financeiro recusou esta alteração por conflito de estado e NADA foi salvo. Reabra o Mini App: os valores exibidos são os do registro da aposta.'
+          : null;
       setError(
-        failure instanceof Error ? failure.message : 'Não foi possível salvar. Tente novamente.',
+        canonicalRefusal ??
+          (failure instanceof Error
+            ? failure.message
+            : 'Não foi possível salvar. Tente novamente.'),
       );
     } finally {
       setBusy(false);
@@ -316,7 +511,9 @@ export function MiniDraftEditor({
               disabled={creditsBusy || !bookmaker}
               onChange={(value) => {
                 setCredit(value);
-                if (origin === 'freebet') {
+                // Aposta confirmada: o valor já está fixado no registro e não
+                // tem comando canônico, então a escolha do crédito não o altera.
+                if (origin === 'freebet' && !financialsFixed) {
                   const chosen = credits.find((item) => item.id === value);
                   if (chosen) setStake(chosen.amount);
                 }
@@ -536,17 +733,31 @@ export function MiniDraftEditor({
         <div className="mini-two-columns">
           <Field
             label={origin === 'hibrida' ? 'Valor em dinheiro real (R$)' : 'Valor apostado (R$)'}
+            hint={
+              financialsFixed
+                ? 'Aposta confirmada: o valor já está fixado no registro financeiro e não tem comando próprio para ser alterado — mexer nele mudaria exposição, liquidação e histórico, o que depende de decisão de produto.'
+                : undefined
+            }
           >
             <input
               inputMode="decimal"
               value={stake}
+              readOnly={financialsFixed}
               onChange={(event) => setStake(event.target.value)}
             />
           </Field>
-          <Field label="Odd">
+          <Field
+            label="Odd"
+            hint={
+              financialsFixed
+                ? 'Aposta confirmada: a odd total já está fixada no registro financeiro e não tem comando próprio para ser alterada — mexer nela mudaria o retorno e o histórico, o que depende de decisão de produto.'
+                : undefined
+            }
+          >
             <input
               inputMode="decimal"
               value={odds}
+              readOnly={financialsFixed}
               onChange={(event) => setOdds(event.target.value)}
             />
           </Field>

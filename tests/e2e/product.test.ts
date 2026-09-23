@@ -1610,3 +1610,291 @@ test('freebet house change loads credits for the DESTINATION house and saves ato
   expect(posts[0]).toMatchObject({ bookmakerId: superbet, freebetId: superbetCredit });
   await expect(page.getByText('Casa salva: Superbet', { exact: false })).toBeVisible();
 });
+
+// STK-G0-23-R2 — a revisão do Codex mostrou que `save()` mandava o PATCH com a
+// versão capturada quando o PLANO foi montado, ignorando a versão devolvida
+// pelo último comando canônico. Como cada comando canônico incrementa a versão
+// da inbox, o PATCH chegava obsoleto e o servidor recusava por
+// VERSION_CONFLICT — o salvamento ficava parcial. Os testes abaixo clicam o
+// formulário REAL (desktop e mobile), não as rotas isoladas.
+test.describe('STK-G0-23-R2 versao encadeada no salvamento completo', () => {
+  const superbet = '10000000-0000-4000-8000-000000000002';
+  const creditId = '10000000-0000-4000-8000-000000000009';
+  const selectionId = '10000000-0000-4000-8000-00000000000a';
+  // 18:00Z é 15:00 em São Paulo — o formulário abre com data e hora preenchidas.
+  const eventAt = '2026-09-20T18:00:00.000Z';
+  const openDate = '2026-09-20';
+  const changedDate = '2026-09-21';
+
+  // Aposta CONFIRMADA (complete) vinculada, com casa e crédito disponíveis.
+  function confirmedEditor(): ImportDetail {
+    const detail = importFixture();
+    detail.item.state = 'imported';
+    detail.item.betId = betId;
+    detail.item.version = 2;
+    detail.bookmakers = [
+      { id: house, name: 'Bet365' },
+      { id: superbet, name: 'Superbet' },
+    ];
+    detail.betOrigin = 'real';
+    detail.freebetId = null;
+    detail.credits = [
+      {
+        id: creditId,
+        bookmakerId: house,
+        amount: '60.00',
+        expiresOn: '2026-12-31',
+        stakeReturned: false,
+      },
+    ];
+    detail.bet = {
+      id: betId,
+      state: 'open',
+      completionState: 'complete',
+      stake: '60.00',
+      odds: '2.0000',
+      remaining: '60.00',
+      bookmakerId: house,
+      bookmakerName: 'Bet365',
+      tipsterId: null,
+      tipsterName: null,
+      freebetId: null,
+      freebetAmount: null,
+      selections: [
+        {
+          id: selectionId,
+          event: 'Aurora × Central',
+          market: 'Gols',
+          selection: 'Mais de 2,5',
+          eventAt,
+          dateStatus: 'confirmed',
+        },
+      ],
+    };
+    return detail;
+  }
+
+  type Call = Record<string, unknown>;
+  type Script = {
+    afterBookmaker?: number;
+    afterOrigin?: number;
+    afterEvent?: number;
+    // Versão devolvida pelo PATCH por tentativa. -1 simula 500 e -2 simula 409.
+    patchResponses?: number[];
+  };
+
+  // Todo comando canônico devolve a versão NOVA da inbox — é isso que o PATCH
+  // precisa reutilizar. `enabledProduct`/`importRoutes` cobrem a navegação.
+  async function editorRoutes(page: Page, detail: ImportDetail, script: Script) {
+    const calls = {
+      bookmaker: [] as Call[],
+      origin: [] as Call[],
+      event: [] as Call[],
+      patches: [] as Call[],
+      confirm: [] as Call[],
+    };
+    let patchAttempts = 0;
+    await enabledProduct(page);
+    await importRoutes(page, detail);
+    await page.addInitScript(() => {
+      (window as unknown as { Telegram: unknown }).Telegram = {
+        WebApp: {
+          initData: 'stub-initdata',
+          close: () => undefined,
+          HapticFeedback: { notificationOccurred: () => undefined },
+        },
+      };
+    });
+    await page.route(`**/api/v1/imports/${importId}/credits*`, (route) =>
+      route.fulfill({ json: { credits: detail.credits } }),
+    );
+    if (script.afterBookmaker !== undefined) {
+      const version = script.afterBookmaker;
+      await page.route(`**/api/v1/imports/${importId}/bookmaker`, (route) => {
+        calls.bookmaker.push(route.request().postDataJSON());
+        return route.fulfill({
+          json: {
+            version,
+            betState: 'open',
+            bookmakerId: superbet,
+            bookmakerName: 'Superbet',
+            freebetCleared: false,
+          },
+        });
+      });
+    }
+    if (script.afterOrigin !== undefined) {
+      const version = script.afterOrigin;
+      await page.route(`**/api/v1/imports/${importId}/origin`, (route) => {
+        calls.origin.push(route.request().postDataJSON());
+        return route.fulfill({
+          json: { version, betState: 'open', kind: 'freebet', freebetCleared: false },
+        });
+      });
+    }
+    if (script.afterEvent !== undefined) {
+      const version = script.afterEvent;
+      await page.route(`**/api/v1/imports/${importId}/event`, (route) => {
+        calls.event.push(route.request().postDataJSON());
+        return route.fulfill({ json: { version, betState: 'open' } });
+      });
+    }
+    await page.route(`**/api/v1/imports/${importId}/confirm`, (route) => {
+      calls.confirm.push(route.request().postDataJSON());
+      return route.fulfill({ json: { version: 9, betId, betState: 'open' } });
+    });
+    // Registrada DEPOIS de importRoutes de propósito: em Playwright a última
+    // rota registrada vence, então este PATCH não é engolido pelo GET do fixture.
+    await page.route(`**/api/v1/imports/${importId}`, (route) => {
+      if (route.request().method() !== 'PATCH') return route.fulfill({ json: detail });
+      calls.patches.push(route.request().postDataJSON());
+      const responses = script.patchResponses ?? [9];
+      const next = responses[Math.min(patchAttempts, responses.length - 1)]!;
+      patchAttempts += 1;
+      if (next === -1)
+        return route.fulfill({
+          status: 500,
+          json: {
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: 'Não foi possível concluir a solicitação.',
+              requestId: '00000000-0000-4000-8000-00000000ffff',
+            },
+          },
+        });
+      if (next === -2)
+        return route.fulfill({
+          status: 409,
+          json: {
+            error: {
+              code: 'VERSION_CONFLICT',
+              message:
+                'Os dados foram atualizados em outra operação. Recarregue e confira antes de tentar novamente.',
+              requestId: '00000000-0000-4000-8000-00000000fffe',
+            },
+          },
+        });
+      return route.fulfill({
+        json: { version: next, freebetCleared: false, automaticPolicy: 'absent' },
+      });
+    });
+    return calls;
+  }
+
+  const saveButton = (page: Page) =>
+    page.getByRole('button', { name: 'Salvar e confirmar aposta' });
+
+  test('troca de casa: o PATCH usa a versao devolvida pelo comando canonico', async ({ page }) => {
+    const detail = confirmedEditor();
+    const calls = await editorRoutes(page, detail, { afterBookmaker: 3, patchResponses: [5] });
+    await page.goto(`/#miniapp?import=${importId}`);
+    await expect(page.getByLabel('Casa de aposta', { exact: true })).toHaveValue(house);
+    await page.getByLabel('Casa de aposta', { exact: true }).selectOption(superbet);
+    await saveButton(page).click();
+    await expect.poll(() => calls.patches.length).toBe(1);
+    // O comando canônico recebe a versão do detalhe e devolve a versão nova.
+    expect(calls.bookmaker[0]).toMatchObject({ version: 2, bookmakerId: superbet });
+    // O PATCH precisa usar a versão DEVOLVIDA (3) — a do plano era 2.
+    expect(calls.patches[0]!.version).toBe(3);
+    await expect(page.locator('.mini-save-error')).toHaveCount(0);
+    await expect.poll(() => calls.confirm.length).toBe(1);
+    expect(calls.confirm[0]!.version).toBe(5);
+  });
+
+  test('troca de origem/credito: o PATCH usa a versao devolvida pelo comando canonico', async ({
+    page,
+  }) => {
+    const detail = confirmedEditor();
+    const calls = await editorRoutes(page, detail, { afterOrigin: 3, patchResponses: [5] });
+    await page.goto(`/#miniapp?import=${importId}`);
+    await page.getByLabel('Freebet', { exact: true }).click({ force: true });
+    await expect(page.getByLabel('Freebet', { exact: true })).toBeChecked();
+    await page.getByRole('button', { name: /Selecione o crédito/ }).click();
+    await page.getByRole('option', { name: /Aposta grátis/ }).click();
+    await saveButton(page).click();
+    await expect.poll(() => calls.patches.length).toBe(1);
+    expect(calls.origin[0]).toMatchObject({ version: 2, kind: 'freebet', freebetId: creditId });
+    expect(calls.patches[0]!.version).toBe(3);
+    await expect(page.locator('.mini-save-error')).toHaveCount(0);
+  });
+
+  test('troca de data: o PATCH usa a versao devolvida pelo comando canonico', async ({ page }) => {
+    const detail = confirmedEditor();
+    const calls = await editorRoutes(page, detail, { afterEvent: 3, patchResponses: [5] });
+    await page.goto(`/#miniapp?import=${importId}`);
+    const date = page.getByLabel('Data do jogo', { exact: true });
+    await expect(date).toHaveValue(openDate);
+    await date.fill(changedDate);
+    await saveButton(page).click();
+    await expect.poll(() => calls.patches.length).toBe(1);
+    expect(calls.event[0]).toMatchObject({ version: 2, selectionId });
+    expect(calls.patches[0]!.version).toBe(3);
+    await expect(page.locator('.mini-save-error')).toHaveCount(0);
+  });
+
+  test('duas alteracoes canonicas no mesmo salvamento encadeiam as versoes ate o PATCH', async ({
+    page,
+  }) => {
+    const detail = confirmedEditor();
+    const calls = await editorRoutes(page, detail, {
+      afterBookmaker: 3,
+      afterEvent: 4,
+      patchResponses: [5],
+    });
+    await page.goto(`/#miniapp?import=${importId}`);
+    await page.getByLabel('Casa de aposta', { exact: true }).selectOption(superbet);
+    await page.getByLabel('Data do jogo', { exact: true }).fill(changedDate);
+    await saveButton(page).click();
+    await expect.poll(() => calls.patches.length).toBe(1);
+    expect(calls.bookmaker[0]).toMatchObject({ version: 2 });
+    // A segunda operação recebe a versão que a primeira devolveu.
+    expect(calls.event[0]).toMatchObject({ version: 3 });
+    // E o PATCH recebe a versão da ÚLTIMA operação — não a do plano.
+    expect(calls.patches[0]!.version).toBe(4);
+    await expect(page.locator('.mini-save-error')).toHaveCount(0);
+  });
+
+  test('falha apos o primeiro comando: alteracao parcial, Mini App aberto e retry sem duplicar', async ({
+    page,
+  }) => {
+    const detail = confirmedEditor();
+    const calls = await editorRoutes(page, detail, {
+      afterBookmaker: 3,
+      patchResponses: [-1, 5],
+    });
+    await page.goto(`/#miniapp?import=${importId}`);
+    await page.getByLabel('Casa de aposta', { exact: true }).selectOption(superbet);
+    await saveButton(page).click();
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('Alteração parcial');
+    await expect(alert).toContainText('Salvo: casa');
+    await expect(alert).toContainText('Não aplicado');
+    // Nada de sucesso falso e o Mini App continua utilizável.
+    await expect(page.getByText('Alterações salvas')).toHaveCount(0);
+    await saveButton(page).click();
+    await expect.poll(() => calls.patches.length).toBe(2);
+    // O comando já persistido NÃO é repetido...
+    expect(calls.bookmaker.length).toBe(1);
+    // ...e o retry usa a versão alcançada, não a original.
+    expect(calls.patches[1]!.version).toBe(3);
+    await expect(page.locator('.mini-save-error')).toHaveCount(0);
+  });
+
+  test('versao concorrente obsoleta: recusa honesta, sem sobrescrever e sem falso sucesso', async ({
+    page,
+  }) => {
+    const detail = confirmedEditor();
+    const calls = await editorRoutes(page, detail, { afterBookmaker: 3, patchResponses: [-2] });
+    await page.goto(`/#miniapp?import=${importId}`);
+    await page.getByLabel('Casa de aposta', { exact: true }).selectOption(superbet);
+    await saveButton(page).click();
+    await expect.poll(() => calls.patches.length).toBe(1);
+    expect(calls.patches[0]!.version).toBe(3);
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(
+      'Os dados foram atualizados em outra operação. Recarregue e confira antes de tentar novamente.',
+    );
+    await expect(alert).toContainText('Salvo: casa');
+    await expect(page.getByText('Alterações salvas')).toHaveCount(0);
+  });
+});

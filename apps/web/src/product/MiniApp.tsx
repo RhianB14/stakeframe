@@ -214,6 +214,8 @@ export function MiniAppPage() {
             statusSender={(body) => setImportStatus(id, body, initData)}
             originSender={(body) => applyImportOrigin(id, body, initData)}
             eventSender={(body) => applyImportEvent(id, body, initData)}
+            bookmakerSender={(body) => applyImportBookmaker(id, body, initData)}
+            tipsterSender={(body) => applyImportTipster(id, body, initData)}
             creditsSender={(bookmakerId) =>
               getImportCredits(id, bookmakerId, initData).then((result) => result.credits)
             }

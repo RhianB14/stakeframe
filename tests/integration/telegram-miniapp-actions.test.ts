@@ -1142,3 +1142,716 @@ describe('Mini App cashout section (G0-20 B4/B5)', () => {
     expect(Number(settlements)).toBe(1);
   });
 });
+
+describe('STK-G0-23 confiabilidade do salvamento no Mini App', () => {
+  // Caminho real do Mini App: upload -> extracao -> PATCH do rascunho -> confirm.
+  // Assim a fixture nasce como o fluxo a produz, e nao por escrita direta.
+  async function registeredComplete() {
+    const id = await upload();
+    await seedExtraction(id);
+    const bookmakerId = await houseId();
+    const draft = await imports.updateDraft(
+      tenantContext,
+      id,
+      {
+        version: 1,
+        betOrigin: 'real',
+        bookmakerId,
+        tipsterId: null,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+      'web',
+    );
+    const confirmed = await imports.confirmDraft(
+      tenantContext,
+      id,
+      { version: draft.version },
+      'web',
+      randomUUID(),
+    );
+    return { importId: id, betId: confirmed.betId, version: confirmed.version, bookmakerId };
+  }
+  const betRow = async (betId: string) => {
+    const row = (
+      await database.pool.query<{
+        stake: string;
+        odds: string;
+        bookmaker_id: string;
+        state: string;
+        completion_state: string;
+      }>('select stake,odds,bookmaker_id,state,completion_state from finance.bet where id=$1', [
+        betId,
+      ])
+    ).rows[0];
+    if (!row) throw new Error('BET_NOT_FOUND');
+    return row;
+  };
+  const inboxVersion = async (importId: string) =>
+    (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where id=$1',
+        [importId],
+      )
+    ).rows[0]!.version;
+
+  it('recusa no servidor uma edicao que nao pode ser persistida no registro canonico', async () => {
+    const { importId, betId, version } = await registeredComplete();
+    const before = await betRow(betId);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: {
+        version,
+        betOrigin: 'real',
+        stake: '250.00',
+        odds: '3.50',
+        selections: [{ event: 'C x D', market: 'Total', selection: 'C' }],
+      },
+    });
+    // Nunca 200: o servidor nao pode anunciar "salvo" algo que nao gravou.
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: 'STATE_CONFLICT' } });
+    // O registro financeiro permanece intacto (fonte da Web e da mensagem).
+    expect(await betRow(betId)).toEqual(before);
+    expect(before).toMatchObject({ stake: '100.00', odds: '2.0000', completion_state: 'complete' });
+    // Nada foi gravado no rascunho: a versao nem avancou.
+    expect(await inboxVersion(importId)).toBe(version);
+    const detail = await imports.detail(tenantContext, importId);
+    // O override do rascunho pode existir, mas nunca com o valor recusado.
+    expect(detail.stakeOverride).not.toBe('250.00');
+    expect(detail.bet).toMatchObject({ stake: '100.00' });
+  });
+
+  it('aceita o PATCH quando nao ha divergencia com o registro canonico', async () => {
+    const { importId, version } = await registeredComplete();
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      // Mesmo conteudo vigente: nao ha nada a persistir, logo nao ha mentira.
+      payload: {
+        version,
+        betOrigin: 'real',
+        stake: '100.00',
+        odds: '2.00',
+        sport: 'Futebol',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(await inboxVersion(importId)).toBeGreaterThan(version);
+  });
+
+  it('reflete a troca de casa feita pelo comando canonico no registro financeiro', async () => {
+    const { importId, betId, version } = await registeredComplete();
+    const houses = (await finance.workspace(tenantContext)).catalog;
+    const target = houses.find((entry) => entry.name === 'Superbet');
+    expect(target).toBeDefined();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/bookmaker`,
+      headers: {
+        ...tg,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { version, bookmakerId: target!.id },
+    });
+    expect(response.statusCode).toBe(200);
+    const bet = await betRow(betId);
+    expect(bet.bookmaker_id).toBe(target!.id);
+    // A mensagem do Telegram le o canonico, portanto ja ve a casa nova.
+    const detail = await imports.detail(tenantContext, importId);
+    expect(detail.bet?.bookmakerId).toBe(target!.id);
+    // O que prevalece na tela e na mensagem e o canonico (o editor foi
+    // corrigido para dar precedencia a ele sobre o override do rascunho).
+    expect(detail.bet?.bookmakerId ?? detail.bookmakerOverrideId).toBe(target!.id);
+  });
+
+  it('nao deixa uma versao stale sobrescrever a mudanca mais recente', async () => {
+    const { importId, betId, version } = await registeredComplete();
+    const stale = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: version - 1, tournament: 'Torneio antigo' },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+    // A mudanca nova continua valendo.
+    expect(await inboxVersion(importId)).toBe(version);
+    expect((await betRow(betId)).stake).toBe('100.00');
+    const fresh = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, tournament: 'Torneio novo' },
+    });
+    expect(fresh.statusCode).toBe(200);
+    const detail = await imports.detail(tenantContext, importId);
+    expect(detail.tournamentOverride).toBe('Torneio novo');
+  });
+
+  it('liquidada -> outro resultado -> Pendente preserva a trilha contabil', async () => {
+    const { importId, version } = await registeredComplete();
+    const won = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action: 'win' },
+    });
+    expect(won.statusCode).toBe(200);
+    const settledVersion = (won.json() as { version: number }).version;
+    const first = (
+      await database.pool.query<{ id: string; outcome: string; return_amount: string }>(
+        'select id,outcome,return_amount from finance.settlement',
+      )
+    ).rows;
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ outcome: 'win', return_amount: '200.00' });
+    // Correcao para outro resultado liquida a MESMA aposta sem duplicar.
+    const loss = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: settledVersion, action: 'loss' },
+    });
+    expect(loss.statusCode).toBe(200);
+    // Correcao gera estorno da liquidacao anterior + nova: duas linhas no
+    // historico, mas UMA unica liquidacao ativa (a vigente).
+    expect(
+      (
+        await database.pool.query(
+          'select s.id from finance.settlement s left join finance.settlement_reversal r on r.organization_id=s.organization_id and r.settlement_id=s.id where r.settlement_id is null',
+        )
+      ).rowCount,
+    ).toBe(1);
+    const reopenVersion = (loss.json() as { version: number }).version;
+    const pending = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version: reopenVersion, action: 'pending' },
+    });
+    expect(pending.statusCode).toBe(200);
+    expect((pending.json() as { betState: string }).betState).toBe('open');
+    const reversals = (
+      await database.pool.query<{ settlement_id: string }>(
+        'select settlement_id from finance.settlement_reversal',
+      )
+    ).rows;
+    // O estorno fica auditavel: a liquidacao vigente foi revertida.
+    expect(reversals.length).toBeGreaterThanOrEqual(1);
+    expect(reversals.map((row) => row.settlement_id)).toContain(first[0]!.id);
+  });
+
+  it('reabre mostrando o resultado vigente', async () => {
+    const { importId, version } = await registeredComplete();
+    const settled = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action: 'half_win' },
+    });
+    expect(settled.statusCode).toBe(200);
+    const reopened = await imports.detail(tenantContext, importId);
+    expect(reopened.bet).toMatchObject({ state: 'settled', activeOutcome: 'half_win' });
+    // O menu suspenso da tela Editar aposta reabre no resultado vigente.
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: tg,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ bet: { state: 'settled', activeOutcome: 'half_win' } });
+  });
+
+  it('repeticao da liquidacao nao duplica efeito financeiro', async () => {
+    const { importId, version } = await registeredComplete();
+    const first = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action: 'win' },
+    });
+    expect(first.statusCode).toBe(200);
+    const settlements = async () =>
+      (await database.pool.query('select id from finance.settlement')).rowCount;
+    expect(await settlements()).toBe(1);
+    // Rede incerta / retry com a MESMA versao e a MESMA acao: o servidor
+    // reconhece a liquidacao ativa como sucesso idempotente — mas nao cria
+    // outro journal nem altera o resultado de novo.
+    const retry = await app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/status`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, action: 'win' },
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(await settlements()).toBe(1);
+    // O registro continua integro e a aposta segue liquida UMA vez.
+    const detail = await imports.detail(tenantContext, importId);
+    expect(detail.bet).toMatchObject({ state: 'settled', activeOutcome: 'win' });
+  });
+
+  it('distingue persistencia concluida de entrega Telegram pendente', async () => {
+    const { importId, version } = await registeredComplete();
+    await database.pool.query(
+      'update integration.inbox set telegram_chat_id=42,telegram_result_message_id=902,telegram_sync_state=$2 where id=$1',
+      [importId, 'synced'],
+    );
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, tournament: 'Copa do Brasil' },
+    });
+    expect(response.statusCode).toBe(200);
+    const persisted = await imports.detail(tenantContext, importId);
+    expect(persisted.tournamentOverride).toBe('Copa do Brasil');
+    // Persistencia concluida ANTES do envio: a fila fica pendente a parte.
+    const state = (
+      await database.pool.query<{ telegram_sync_state: string }>(
+        'select telegram_sync_state from integration.inbox where id=$1',
+        [importId],
+      )
+    ).rows[0]!;
+    expect(state.telegram_sync_state).toBe('pending');
+    expect(await outbox(importId)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ state: 'pending' })]),
+    );
+  });
+});
+
+// STK-G0-23-R1 — a revisão do Codex mostrou que o formulário completo do Mini
+// App mandava TUDO pelo PATCH do rascunho, de modo que campos que JÁ têm
+// comando canônico (casa, tipster, origem/crédito e data) acabavam recusados
+// pelo fail-closed. Estes casos exercitam o caminho HTTP real que o editor
+// passou a usar e leem o resultado depois de cada chamada.
+describe('STK-G0-23-R1 encaminhamento canonico no Mini App', () => {
+  const createTipster = async (tipsterName: string) =>
+    (
+      await run({
+        type: 'catalog.create',
+        kind: 'tipster',
+        name: tipsterName,
+        aliases: [],
+      } as CommandInput)
+    ).id;
+  const createCredit = async (bookmakerId: string) =>
+    (
+      await run({
+        type: 'freebet.create',
+        bookmakerId,
+        amount: '100.00',
+        expiresOn: '2026-12-31',
+        stakeReturned: false,
+        note: '',
+      } as CommandInput)
+    ).id;
+  const inboxRow = async (importId: string) =>
+    (
+      await database.pool.query<{
+        version: number;
+        tournament: unknown;
+        stake_override: unknown;
+        telegram_sync_state: string;
+      }>('select version,metadata,telegram_sync_state from integration.inbox where id=$1', [
+        importId,
+      ])
+    ).rows[0]!;
+  const betRow = async (betId: string) =>
+    (
+      await database.pool.query<{
+        bookmaker_id: string;
+        tipster_id: string | null;
+        freebet_id: string | null;
+        stake: string;
+        odds: string;
+      }>('select bookmaker_id,tipster_id,freebet_id,stake,odds from finance.bet where id=$1', [
+        betId,
+      ])
+    ).rows[0]!;
+  const settingsVersion = async () =>
+    (await database.pool.query<{ version: number }>('select version from finance.settings'))
+      .rows[0]!.version;
+
+  // Aposta CONFIRMADA e vinculada ao Telegram — mesmo caminho do Mini App.
+  async function confirmedWithTelegram() {
+    const id = await upload();
+    await seedExtraction(id);
+    const bookmakerId = await houseId();
+    const draft = await imports.updateDraft(
+      tenantContext,
+      id,
+      {
+        version: 1,
+        betOrigin: 'real',
+        bookmakerId,
+        tipsterId: null,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+      'web',
+    );
+    const confirmed = await imports.confirmDraft(
+      tenantContext,
+      id,
+      { version: draft.version },
+      'web',
+      randomUUID(),
+    );
+    // Baseline: mensagem já sincronizada, para medir a re-sincronização.
+    await database.pool.query(
+      'update integration.inbox set telegram_chat_id=42,telegram_source_message_id=901,telegram_processing_message_id=900,telegram_result_message_id=902,telegram_sync_state=$2 where id=$1',
+      [id, 'synced'],
+    );
+    const version = (await inboxRow(id)).version;
+    const selections = (
+      await database.pool.query<{ id: string }>(
+        'select id from finance.selection where bet_id=$1 order by position',
+        [confirmed.betId],
+      )
+    ).rows;
+    return {
+      importId: id,
+      betId: confirmed.betId,
+      version,
+      bookmakerId,
+      selectionId: selections[0]!.id,
+    };
+  }
+  const post = (importId: string, route: string, payload: unknown, key = randomUUID()) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/${route}`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': key },
+      payload: payload as Record<string, unknown>,
+    });
+
+  it('encaminha casa e tipster pelos comandos canonicos: registro, web e mensagem do Telegram', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const tipster = await createTipster('R1Tipster');
+    const before = (await outbox(importId)).length;
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const houseVersion = (house.json() as { version: number }).version;
+    // A versão devolvida é a que a próxima chamada DEVE usar.
+    expect(houseVersion).toBeGreaterThanOrEqual(version);
+
+    const tipsterRes = await post(importId, 'tipster', {
+      version: houseVersion,
+      tipsterId: tipster,
+    });
+    expect(tipsterRes.statusCode).toBe(200);
+    const tipsterVersion = (tipsterRes.json() as { version: number }).version;
+
+    // Registro canônico alterado.
+    expect(await betRow(betId)).toMatchObject({
+      bookmaker_id: superbet,
+      tipster_id: tipster,
+    });
+    // A Web lê o MESMO registro, com nomes resolvidos.
+    const viaWeb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(viaWeb.json().bet).toMatchObject({
+      bookmakerId: superbet,
+      bookmakerName: 'Superbet',
+      tipsterId: tipster,
+      tipsterName: 'R1Tipster',
+    });
+    // A mensagem do Telegram foi re-enfileirada (não depende do PATCH).
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops.length).toBeGreaterThan(before);
+    expect(ops).toContain('edit_result_message');
+    expect((await inboxRow(importId)).telegram_sync_state).toBe('pending');
+    // Reabertura: o detalhe devolve a versão nova, que é a que o editor usa.
+    const reopened = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: tg,
+    });
+    expect((reopened.json() as { item: { version: number } }).item.version).toBe(tipsterVersion);
+  });
+
+  it('usa o comando de origem/crédito proprio e o replay nao duplica efeito', async () => {
+    const { importId, betId, version, bookmakerId } = await confirmedWithTelegram();
+    const credit = await createCredit(bookmakerId);
+    const key = randomUUID();
+    const before = await settingsVersion();
+
+    const applied = await post(
+      importId,
+      'origin',
+      { version, kind: 'freebet', freebetId: credit },
+      key,
+    );
+    expect(applied.statusCode).toBe(200);
+    expect(applied.json()).toMatchObject({ kind: 'freebet' });
+    expect(await betRow(betId)).toMatchObject({ freebet_id: credit });
+    const afterApply = await settingsVersion();
+    expect(afterApply).toBeGreaterThan(before);
+
+    // Retry incerto: mesma chave devolve o MESMO resultado e não executa de novo.
+    const replay = await post(
+      importId,
+      'origin',
+      { version, kind: 'freebet', freebetId: credit },
+      key,
+    );
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(applied.json());
+    expect(await settingsVersion()).toBe(afterApply);
+    expect(await betRow(betId)).toMatchObject({ freebet_id: credit });
+  });
+
+  it('usa o comando de data proprio e atualiza a selecao sem duplicar', async () => {
+    const { importId, betId, version, selectionId } = await confirmedWithTelegram();
+    const key = randomUUID();
+    const before = await settingsVersion();
+    const eventAt = '2026-09-30T15:00:00.000Z';
+
+    const applied = await post(importId, 'event', { version, selectionId, eventAt }, key);
+    expect(applied.statusCode).toBe(200);
+    const selection = (
+      await database.pool.query<{ event_at: Date | null }>(
+        'select event_at from finance.selection where id=$1',
+        [selectionId],
+      )
+    ).rows[0]!;
+    expect(selection.event_at?.toISOString()).toBe(eventAt);
+    expect(await settingsVersion()).toBeGreaterThan(before);
+
+    const replay = await post(importId, 'event', { version, selectionId, eventAt }, key);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(applied.json());
+    expect(await settingsVersion()).toBe(before + 1);
+    // O PATCH do rascunho continua sendo quem guarda torneio/país.
+    expect(betId).toBeTruthy();
+  });
+
+  it('recusa valor e odd ANTES de gravar o rascunho, mesmo com metadados no mesmo payload', async () => {
+    const { importId, version } = await confirmedWithTelegram();
+    const before = await inboxRow(importId);
+
+    const refused = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, stake: '250.00', odds: '3.50', tournament: 'Torneio Novo' },
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ error: { code: 'STATE_CONFLICT' } });
+
+    // Nada foi escrito — nem o campo bloqueado nem o metadado que vinha junto.
+    const after = await inboxRow(importId);
+    expect(after.version).toBe(before.version);
+    expect(after.telegram_sync_state).toBe(before.telegram_sync_state);
+    const metadata = after.tournament as { tournamentOverride?: string | null } | null;
+    expect(metadata?.tournamentOverride ?? 'Fixture').not.toBe('Torneio Novo');
+  });
+
+  it('mantem editavel a aposta confirmada quando nada financeiro muda', async () => {
+    const { importId, version } = await confirmedWithTelegram();
+
+    const saved = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, tournament: 'Copa do Brasil', country: 'Brasil', ticketKind: 'simple' },
+    });
+    expect(saved.statusCode).toBe(200);
+    const newVersion = (saved.json() as { version: number }).version;
+    expect(newVersion).toBeGreaterThan(version);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(detail.json().tournamentOverride).toBe('Copa do Brasil');
+  });
+
+  it('versao stale nao sobrescreve e a falha parcial preserva o que ja foi aplicado', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const fresh = (house.json() as { version: number }).version;
+
+    // Versão obsoleta: repete o valor ANTIGO — não pode sobrescrever nada.
+    const stale = await post(importId, 'bookmaker', { version, bookmakerId: await houseId() });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+
+    // Falha parcial REAL: a casa ficou aplicada e o tipster falhou por versão
+    // velha. O estado parcial existe e é exatamente o que a interface precisa
+    // nomear (coberto em tests/unit/miniapp-confirmed-save.test.ts).
+    const staleTipster = await post(importId, 'tipster', {
+      version,
+      tipsterId: await createTipster('R1TipsterStale'),
+    });
+    expect(staleTipster.statusCode).toBe(409);
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    expect((await betRow(betId)).tipster_id).toBeNull();
+
+    // Recuperação segura: usar a versão devolvida completa a sequência sem
+    // repetir a troca de casa.
+    const settingsBefore = await settingsVersion();
+    const tipster = await createTipster('R1TipsterFinal');
+    const recovered = await post(importId, 'tipster', { version: fresh, tipsterId: tipster });
+    expect(recovered.statusCode).toBe(200);
+    expect(await betRow(betId)).toMatchObject({ bookmaker_id: superbet, tipster_id: tipster });
+    expect(await settingsVersion()).toBeGreaterThan(settingsBefore);
+  });
+
+  // STK-G0-23-R2 — a revisão do Codex mostrou que `save()` mandava o PATCH com a
+  // versão capturada quando o PLANO foi montado, ignorando a versão devolvida
+  // pelo último comando canônico. Como cada comando avança a inbox, o PATCH
+  // chegava obsoleto e o servidor recusava por VERSION_CONFLICT — o botão
+  // "Salvar e confirmar aposta" deixava o salvamento parcial. Estes testes rodam
+  // a SEQUÊNCIA REAL do cliente (comandos + PATCH) contra o servidor.
+  const patch = (importId: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload,
+    });
+
+  it('a sequencia do botao salvar conclui com a versao devolvida pelo comando canonico', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const before = (await outbox(importId)).length;
+    // O plano é montado ANTES de qualquer escrita: os campos não alterados e os
+    // metadados do rascunho, com a versão capturada na abertura.
+    const planned = {
+      tournament: 'Copa do Brasil',
+      country: 'Brasil',
+      ticketKind: 'simple',
+      stake: '100.00',
+      odds: '2.00',
+    };
+
+    // O comando canônico avança a inbox...
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const fresh = (house.json() as { version: number }).version;
+    expect(fresh).toBeGreaterThan(version);
+
+    // ...então a versão do PLANO está obsoleta: é o defeito apontado.
+    const stale = await patch(importId, { ...planned, version });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+    expect((await inboxRow(importId)).version).toBe(fresh);
+
+    // Com a versão DEVOLVIDA pelo comando, a sequência conclui.
+    const saved = await patch(importId, { ...planned, version: fresh });
+    expect(saved.statusCode).toBe(200);
+    const savedVersion = (saved.json() as { version: number }).version;
+    expect(savedVersion).toBeGreaterThan(fresh);
+
+    // Registro canônico, Web e mensagem do Telegram — os dois caminhos da edição.
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    const viaWeb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(viaWeb.json().bet).toMatchObject({ bookmakerId: superbet, bookmakerName: 'Superbet' });
+    expect(viaWeb.json().tournamentOverride).toBe('Copa do Brasil');
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops.length).toBeGreaterThan(before);
+    expect(ops).toContain('edit_result_message');
+    expect((await inboxRow(importId)).telegram_sync_state).toBe('pending');
+  });
+
+  it('duas alteracoes canonicas no mesmo salvamento encadeiam a versao ate o PATCH', async () => {
+    const { importId, betId, version, selectionId } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const eventAt = '2026-10-02T18:00:00.000Z';
+    const planned = {
+      tournament: 'Copa do Brasil',
+      country: 'Brasil',
+      ticketKind: 'simple',
+      stake: '100.00',
+      odds: '2.00',
+    };
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const afterHouse = (house.json() as { version: number }).version;
+
+    // O segundo comando usa a versão que o PRIMEIRO devolveu.
+    const date = await post(importId, 'event', { version: afterHouse, selectionId, eventAt });
+    expect(date.statusCode).toBe(200);
+    const afterDate = (date.json() as { version: number }).version;
+    expect(afterDate).toBeGreaterThan(afterHouse);
+
+    // A versão do plano (a da abertura) já está obsoleta nos dois saltos.
+    const stale = await patch(importId, { ...planned, version });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+
+    const saved = await patch(importId, { ...planned, version: afterDate });
+    expect(saved.statusCode).toBe(200);
+
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    const selection = (
+      await database.pool.query<{ event_at: Date | null }>(
+        'select event_at from finance.selection where id=$1',
+        [selectionId],
+      )
+    ).rows[0]!;
+    expect(selection.event_at?.toISOString()).toBe(eventAt);
+  });
+
+  it('o PATCH fecha a sequencia com a versao alcancada apos uma falha parcial', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const planned = {
+      tournament: 'Copa do Brasil',
+      country: 'Brasil',
+      ticketKind: 'simple',
+      stake: '100.00',
+      odds: '2.00',
+    };
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const reached = (house.json() as { version: number }).version;
+    const settingsAfterHouse = await settingsVersion();
+
+    // Falha parcial: o PATCH da PRIMEIRA tentativa sai com a versão do plano.
+    const failed = await patch(importId, { ...planned, version });
+    expect(failed.statusCode).toBe(409);
+    // A troca de casa continua aplicada — é exatamente o "parcial" que a
+    // interface precisa nomear, e não pode ser re-aplicada no retry.
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+
+    // Retry do cliente: mesma versão alcançada, sem repetir o comando canônico.
+    const saved = await patch(importId, { ...planned, version: reached });
+    expect(saved.statusCode).toBe(200);
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    expect(await settingsVersion()).toBe(settingsAfterHouse);
+  });
+});
