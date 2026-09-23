@@ -134,6 +134,42 @@ describe('release notes hygiene — beta.7 status correction', () => {
   });
 });
 
+// STK-REL-14 — beta.8 registra a apresentação financeira (sem recalcular) e
+// as melhorias de acessibilidade/ergonomia móvel das PRs UX-03 e UX-04.
+describe('release notes hygiene — beta.8 UX preparation (STK-REL-14)', () => {
+  const BETA8_NOTES = 'v0.1.0-beta.8.md';
+
+  it('documents unrealized values separately from realized partial cashouts', () => {
+    expect(notes).toContain(BETA8_NOTES);
+    const content = readFileSync(`${RELEASES_DIR}/${BETA8_NOTES}`, 'utf8');
+    expect(content).toMatch(/apostas abertas sem retorno realizado.*Não liquidado/is);
+    expect(content).toMatch(/Cashout parcial.*Realizado parcialmente/is);
+    expect(content).toMatch(/sem recalcular valores no cliente/i);
+    expect(content).toMatch(/resultado realizado/i);
+  });
+
+  it('records the mobile accessibility targets and WCAG distinction accurately', () => {
+    const content = readFileSync(`${RELEASES_DIR}/${BETA8_NOTES}`, 'utf8');
+    expect(content).toMatch(/pelo menos 12 px/i);
+    expect(content).toMatch(/contraste mínimo\s+4\.5:1/i);
+    expect(content).toMatch(/não (?:é )?um requisito WCAG\s+2\.2 AA/i);
+    expect(content).toMatch(/Configurações.*rolar horizontalmente/s);
+  });
+
+  it('keeps beta.8 as preparation and declares no production-side changes', () => {
+    const content = readFileSync(`${RELEASES_DIR}/${BETA8_NOTES}`, 'utf8');
+    expect(tableField(content, 'Tag')).toMatch(/NÃO CRIADA/i);
+    expect(tableField(content, 'Commit-fonte')).toContain('`v0.1.0-beta.8`');
+    expect(tableField(content, 'Commit-fonte')).toMatch(/reconfirmado no momento da autorização/i);
+    expect(tableField(content, 'Estado')).toMatch(/Preparação/);
+    expect(content).toMatch(/Nenhuma migração de banco foi adicionada/i);
+    expect(content).toMatch(
+      /Nenhuma tag beta\.8, GitHub Release, publicação de imagem, deploy ou migração/is,
+    );
+    expect(content).toMatch(/não altera regras de cálculo, ledger, liquidação/i);
+  });
+});
+
 // STK-REL-12 — a preparação da beta.4 acrescenta garantias escopadas à própria
 // nota: o escopo do Mini App de confirmação (idempotência, sincronização,
 // fechamento automático, status e edição de campos), o registro de zero
