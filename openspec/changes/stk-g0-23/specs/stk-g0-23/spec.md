@@ -85,3 +85,32 @@ ficar pendente ou falhar sem invalidar a gravação.
 - **THEN** o detalhe já reflete o valor novo
 - **AND** a fila de sincronização permanece `pending`
 - **AND** o Mini App fecha apenas após a operação principal ser confirmada
+
+### Requirement: a versão vem do envio, não do plano
+
+Quando o salvamento do formulário completo encadeia comandos canônicos, o PATCH
+do rascunho, a confirmação da aposta e a alteração de status DEVEM (MUST) usar a
+versão devolvida pela operação anterior — nunca a versão capturada quando o
+plano foi montado, que fica obsoleta assim que o primeiro comando avança a
+inbox. A versão DEVE (MUST) ser resolvida no momento do envio.
+
+#### Scenario: casa, origem/crédito ou data alterada e salva
+
+- **WHEN** o proprietário altera no formulário completo um campo que tem comando
+  canônico e aciona "Salvar e confirmar aposta"
+- **THEN** o PATCH do rascunho carrega a versão devolvida pelo comando
+- **AND** a sequência conclui sem `409 VERSION_CONFLICT`
+- **AND** o valor novo aparece na Web e na mensagem gerada para o Telegram
+
+#### Scenario: duas alterações canônicas no mesmo salvamento
+
+- **WHEN** o mesmo salvamento altera dois campos que têm comando canônico
+- **THEN** o segundo comando e o PATCH usam, cada um, a versão devolvida pelo
+  passo anterior
+- **AND** nenhum passo é recusado por versão obsoleta
+
+#### Scenario: retry depois de falha parcial
+
+- **WHEN** uma ação falha depois de outra já persistida
+- **THEN** a nova tentativa parte da versão alcançada
+- **AND** o comando já confirmado não é repetido

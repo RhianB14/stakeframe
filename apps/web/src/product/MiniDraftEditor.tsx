@@ -310,7 +310,6 @@ export function MiniDraftEditor({
       // PATCH não é capaz de atualizar o registro financeiro: enviá-lo como se
       // fosse capaz era o defeito apontado na revisão.
       const plan = planConfirmedSave({
-        version: detail.item.version,
         completionState: financialsFixed ? 'complete' : 'incomplete',
         selectionIds: (detail.bet?.selections ?? []).map((item) => item.id),
         baseline,
@@ -398,7 +397,12 @@ export function MiniDraftEditor({
 
       let result: Awaited<ReturnType<typeof sender>>;
       try {
-        result = await sender(plan.patch);
+        // STK-G0-23-R2 — a versão é a do ENVIO, não a do plano. Cada comando
+        // canônico acima já avançou a inbox; mandar a versão capturada na
+        // montagem do plano fazia o servidor recusar por VERSION_CONFLICT e
+        // deixava o salvamento parcial (a troca de casa já persistida, o
+        // rascunho não).
+        result = await sender({ ...plan.patch, version });
       } catch (failure) {
         const reason = failure instanceof Error ? failure.message : 'Tente novamente.';
         if (applied.length) {

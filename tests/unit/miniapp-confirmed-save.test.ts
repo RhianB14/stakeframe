@@ -28,7 +28,6 @@ const baseline = {
 };
 
 const input: ConfirmedSaveInput = {
-  version: 4,
   completionState: 'complete',
   selectionIds: ['40000000-0000-4000-8000-000000000001'],
   baseline,
@@ -72,7 +71,10 @@ describe('STK-G0-23-R1 planejamento da edição de aposta confirmada', () => {
     expect(plan.patch.stake).toBe('100.00');
     expect(plan.patch.odds).toBe('2.00');
     expect(plan.patch.selections).toEqual(baseline.selections);
-    expect(plan.patch.version).toBe(4);
+    // A versão NÃO vem do plano: congelá-la aqui era o defeito da revisão — o
+    // PATCH recebia a versão da montagem mesmo depois de um comando canônico
+    // avançar a inbox.
+    expect('version' in plan.patch).toBe(false);
     expect(plan.patch.tournament).toBe('Fixture');
     expect(plan.patch.country).toBe('Brasil');
     expect(plan.patch.ticketKind).toBe('simple');
@@ -89,7 +91,6 @@ describe('STK-G0-23-R1 planejamento da edição de aposta confirmada', () => {
     expect(plan.bookmaker).toBeNull();
     expect(plan.tipster).toBeNull();
     expect(plan.dates).toEqual([]);
-    expect(plan.patch.version).toBe(4);
     expect(plan.patch.tournament).toBe('Fixture');
     expect(plan.patch.stake).toBeUndefined();
 
@@ -136,8 +137,22 @@ describe('STK-G0-23-R1 planejamento da edição de aposta confirmada', () => {
     expect(plan.bookmaker).toBeNull();
     expect(plan.tipster).toBeNull();
     expect(plan.dates).toEqual([]);
-    expect(plan.patch.version).toBe(4);
     expect(plan.patch.tournament).toBe('Fixture');
+  });
+
+  it('não congela a versão no plano, nem confirmado nem em rascunho (R2)', () => {
+    // A versão é do ENVIO: cada comando canônico incrementa a inbox DEPOIS que
+    // o plano foi montado. Este teste fixa o contrato para os dois caminhos.
+    const confirmed = planConfirmedSave({
+      ...input,
+      current: { ...baseline, bookmaker: '20000000-0000-4000-8000-000000000002' },
+    });
+    expect(confirmed.bookmaker).toBe('20000000-0000-4000-8000-000000000002');
+    expect('version' in confirmed.patch).toBe(false);
+
+    const draft = planConfirmedSave({ ...input, completionState: 'incomplete' });
+    expect(draft.canonical).toBe(false);
+    expect('version' in draft.patch).toBe(false);
   });
 
   it('aposta INCOMPLETA continua com os campos roteados pelo rascunho', () => {
@@ -161,7 +176,7 @@ describe('STK-G0-23-R1 planejamento da edição de aposta confirmada', () => {
     expect(plan.patch.stake).toBe('250.00');
     expect(plan.patch.bookmakerId).toBe('20000000-0000-4000-8000-000000000002');
     expect(plan.patch.betOrigin).toBe('real');
-    expect(plan.patch.version).toBe(4);
+    expect('version' in plan.patch).toBe(false);
   });
 
   it('nomeia exatamente o que foi salvo e o que não foi em falha parcial', () => {

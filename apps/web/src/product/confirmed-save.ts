@@ -29,7 +29,6 @@ export type FormValues = {
 export type BlockedConfirmedField = 'stake' | 'odds' | 'selections' | 'sport' | 'tipsterClear';
 
 export type ConfirmedSaveInput = {
-  version: number;
   completionState: 'incomplete' | 'complete';
   // Seleções do registro canônico em ordem; a data é gravada por seleção.
   selectionIds: string[];
@@ -38,8 +37,12 @@ export type ConfirmedSaveInput = {
   current: FormValues;
 };
 
+// STK-G0-23-R2 — o corpo NÃO carrega `version`. O plano é montado antes de
+// qualquer escrita, e cada comando canônico DEPOIS incrementa a versão da inbox:
+// congelar aqui a versão da montagem fazia o PATCH chegar obsoleto e o servidor
+// recusar por VERSION_CONFLICT. Quem envia é quem sabe a versão vigente, então o
+// chamador injeta `version` no momento do envio.
 export type DraftPatch = {
-  version: number;
   tournament: string | null;
   country: string | null;
   ticketKind: TicketKind;
@@ -78,14 +81,13 @@ const sameSelections = (a: FormValues['selections'], b: FormValues['selections']
   );
 
 export function planConfirmedSave(input: ConfirmedSaveInput): ConfirmedPlan {
-  const { version, completionState, selectionIds, baseline, current } = input;
+  const { completionState, selectionIds, baseline, current } = input;
   const canonical = completionState === 'complete';
 
   const usesCredit = (origin: FormValues['origin']) => origin === 'freebet' || origin === 'hibrida';
 
   // Metadados do rascunho: não têm contrapartida canônica, continuam no PATCH.
   const metadataPatch = {
-    version,
     tournament: current.tournament.trim() || null,
     country: current.country.trim() || null,
     ticketKind: current.ticketKind,

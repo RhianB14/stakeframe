@@ -1723,4 +1723,135 @@ describe('STK-G0-23-R1 encaminhamento canonico no Mini App', () => {
     expect(await betRow(betId)).toMatchObject({ bookmaker_id: superbet, tipster_id: tipster });
     expect(await settingsVersion()).toBeGreaterThan(settingsBefore);
   });
+
+  // STK-G0-23-R2 — a revisão do Codex mostrou que `save()` mandava o PATCH com a
+  // versão capturada quando o PLANO foi montado, ignorando a versão devolvida
+  // pelo último comando canônico. Como cada comando avança a inbox, o PATCH
+  // chegava obsoleto e o servidor recusava por VERSION_CONFLICT — o botão
+  // "Salvar e confirmar aposta" deixava o salvamento parcial. Estes testes rodam
+  // a SEQUÊNCIA REAL do cliente (comandos + PATCH) contra o servidor.
+  const patch = (importId: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload,
+    });
+
+  it('a sequencia do botao salvar conclui com a versao devolvida pelo comando canonico', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const before = (await outbox(importId)).length;
+    // O plano é montado ANTES de qualquer escrita: os campos não alterados e os
+    // metadados do rascunho, com a versão capturada na abertura.
+    const planned = {
+      tournament: 'Copa do Brasil',
+      country: 'Brasil',
+      ticketKind: 'simple',
+      stake: '100.00',
+      odds: '2.00',
+    };
+
+    // O comando canônico avança a inbox...
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const fresh = (house.json() as { version: number }).version;
+    expect(fresh).toBeGreaterThan(version);
+
+    // ...então a versão do PLANO está obsoleta: é o defeito apontado.
+    const stale = await patch(importId, { ...planned, version });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+    expect((await inboxRow(importId)).version).toBe(fresh);
+
+    // Com a versão DEVOLVIDA pelo comando, a sequência conclui.
+    const saved = await patch(importId, { ...planned, version: fresh });
+    expect(saved.statusCode).toBe(200);
+    const savedVersion = (saved.json() as { version: number }).version;
+    expect(savedVersion).toBeGreaterThan(fresh);
+
+    // Registro canônico, Web e mensagem do Telegram — os dois caminhos da edição.
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    const viaWeb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(viaWeb.json().bet).toMatchObject({ bookmakerId: superbet, bookmakerName: 'Superbet' });
+    expect(viaWeb.json().tournamentOverride).toBe('Copa do Brasil');
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops.length).toBeGreaterThan(before);
+    expect(ops).toContain('edit_result_message');
+    expect((await inboxRow(importId)).telegram_sync_state).toBe('pending');
+  });
+
+  it('duas alteracoes canonicas no mesmo salvamento encadeiam a versao ate o PATCH', async () => {
+    const { importId, betId, version, selectionId } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const eventAt = '2026-10-02T18:00:00.000Z';
+    const planned = {
+      tournament: 'Copa do Brasil',
+      country: 'Brasil',
+      ticketKind: 'simple',
+      stake: '100.00',
+      odds: '2.00',
+    };
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const afterHouse = (house.json() as { version: number }).version;
+
+    // O segundo comando usa a versão que o PRIMEIRO devolveu.
+    const date = await post(importId, 'event', { version: afterHouse, selectionId, eventAt });
+    expect(date.statusCode).toBe(200);
+    const afterDate = (date.json() as { version: number }).version;
+    expect(afterDate).toBeGreaterThan(afterHouse);
+
+    // A versão do plano (a da abertura) já está obsoleta nos dois saltos.
+    const stale = await patch(importId, { ...planned, version });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+
+    const saved = await patch(importId, { ...planned, version: afterDate });
+    expect(saved.statusCode).toBe(200);
+
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    const selection = (
+      await database.pool.query<{ event_at: Date | null }>(
+        'select event_at from finance.selection where id=$1',
+        [selectionId],
+      )
+    ).rows[0]!;
+    expect(selection.event_at?.toISOString()).toBe(eventAt);
+  });
+
+  it('o PATCH fecha a sequencia com a versao alcancada apos uma falha parcial', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const planned = {
+      tournament: 'Copa do Brasil',
+      country: 'Brasil',
+      ticketKind: 'simple',
+      stake: '100.00',
+      odds: '2.00',
+    };
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const reached = (house.json() as { version: number }).version;
+    const settingsAfterHouse = await settingsVersion();
+
+    // Falha parcial: o PATCH da PRIMEIRA tentativa sai com a versão do plano.
+    const failed = await patch(importId, { ...planned, version });
+    expect(failed.statusCode).toBe(409);
+    // A troca de casa continua aplicada — é exatamente o "parcial" que a
+    // interface precisa nomear, e não pode ser re-aplicada no retry.
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+
+    // Retry do cliente: mesma versão alcançada, sem repetir o comando canônico.
+    const saved = await patch(importId, { ...planned, version: reached });
+    expect(saved.statusCode).toBe(200);
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    expect(await settingsVersion()).toBe(settingsAfterHouse);
+  });
 });

@@ -54,14 +54,52 @@ capaz de atualizar o registro financeiro.
       a inbox). Falhas de `onboarding:232` (flake de 30 s, já conhecido) e
       `product:238` (passou no x86, só no emulador ARM64) são preexistentes
 
+## R2 — versão do PATCH após os comandos canônicos
+
+Contexto: a revisão mostrou que `save()` mandava o PATCH com a versão capturada
+quando o PLANO foi montado (`version: detail.item.version`), ignorando a versão
+devolvida pelo último comando canônico. Como cada comando avança a inbox, o
+PATCH chegava obsoleto e o servidor recusava por `VERSION_CONFLICT`
+(`telegram-sync.ts`: `row.version !== patch.version`) — a troca de casa ficava
+persistida e o rascunho não: salvamento parcial no botão "Salvar e confirmar
+aposta".
+
+- [x] 17. Causa-raiz confirmada no código: `planConfirmedSave` recebia
+      `version: detail.item.version` e o resultado era enviado direto
+      (`sender(plan.patch)`), enquanto a variável local `version` já tinha
+      avançado com o retorno de cada comando canônico
+- [x] 18. O plano deixou de carregar `version`: `ConfirmedSaveInput` e
+      `DraftPatch` não têm mais o campo e o chamador injeta a versão no ENVIO
+      (`sender({ ...plan.patch, version })`) — quem envia é quem sabe a versão
+- [x] 19. Retry/recuperação usam a versão alcançada: o PATCH, a confirmação da
+      aposta e a alteração de status passam todos a ler a mesma variável local,
+      que parte de `recovery.version` quando há falha parcial anterior
+- [x] 20. Testes E2E do CLIQUE REAL (desktop + mobile, 6 cenários x 2 projetos =
+      12): troca de casa, origem/crédito e data com o PATCH na versão devolvida;
+      duas alterações canônicas encadeando 2->3->4 até o PATCH; falha após o
+      primeiro comando com alteração parcial, Mini App aberto e retry sem
+      duplicar; versão concorrente obsoleta recusada sem falso sucesso
+- [x] 21. Integração contra o servidor real (3 cenários): a sequência do botão
+      com o PATCH recusado na versão do plano (409 `VERSION_CONFLICT`) e aceito
+      na versão devolvida (200), com a casa na Web, `tournamentOverride` gravado
+      e `edit_result_message` enfileirado; encadeamento de dois comandos; e o
+      fechamento da sequência após falha parcial sem re-aplicar o comando e sem
+      segundo efeito financeiro
+- [x] 22. Bateria R2: typecheck, lint, unit 306/306, arquivo
+      `telegram-miniapp-actions.test.ts` 47/47, E2E `product.test.ts` 68/68
+      (desktop + mobile), build, OpenAPI, formatação, diff-check, OpenSpec strict
+- [x] 23. E2E local DESTRAVADO: o bloqueio era a CDN do Chromium
+      (`chromium_headless_shell-1243`, que a CI baixa). `PLAYWRIGHT_CHANNEL`
+      (navegador do sistema) + `E2E_BASE_URL` apontando para um estático do
+      `apps/web/dist` fazem os dois projetos rodarem localmente — o E2E deixou
+      de ser só da CI
+
 ## Fora desta change
 
-- [ ] E2E desktop+mobile: bloqueado localmente pela CDN do Chromium; a CI roda
-      os dois no mesmo head (gate `application-check`) — decidido na R0 e
-      mantido na R1
 - [ ] Decisão de produto pendente: comando canônico para alterar valor apostado
       e odd total de aposta confirmada (hoje bloqueio explícito, sem comando
       inventado)
+- [ ] Remover o tipster de uma aposta confirmada não tem comando canônico
 
 Obs.: a abertura desta change ocorreu **após** a implementação (a moldura do
 repositório prefere abertura antes); registrado aqui em vez de simular ordem.
