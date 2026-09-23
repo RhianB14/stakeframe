@@ -26,11 +26,15 @@ Sequência sugerida para levar os protótipos de `docs/ux/prototypes/` ao produt
 
 ## Etapa 2 — Piso tipográfico e contraste (D3) · rápido
 
+**Estado:** entregue no STK-UX-04 — sete rótulos medidos agora usam pelo menos
+12px; o token `--text-faint` e os placeholders do Mini App passam pelo teste de
+contraste de 4.5:1 nas superfícies reais.
+
 **O que fazer:**
 
-- Os sete `8px`/`9px` medidos → `12px` (`product.css:572, 660, 1496, 1523, 1569` e `style.css:157, 239`).
+- Os sete estilos medidos em `8px`/`9px` → `12px` (`.sidebar-caption`, `.product-eyebrow`, `.metric-card small`, `.product-footer`, `.card-kicker` e `.updating`, incluindo overrides mobile).
 - `--text-faint` com contraste ≥ 4.5:1.
-- Placeholder do Mini App `#8b9ab4` (hoje abaixo do mínimo).
+- Placeholder do Mini App usando `--text-faint` no seletor visível, em vez do tom abaixo do mínimo.
 
 **Risco:** baixo — muda só CSS. Pode alterar quebra de linha em telas estreitas; conferir nos breakpoints reais.
 
@@ -38,10 +42,14 @@ Sequência sugerida para levar os protótipos de `docs/ux/prototypes/` ao produt
 
 ## Etapa 3 — Acessibilidade mobile (A1, A2, A3) · rápido
 
+**Estado:** entregue no STK-UX-04 — navegação inferior sem corte/overflow,
+espaço inferior para a última linha da tabela e alvos segmentados de 44px
+(meta de ergonomia do produto, não critério WCAG AA).
+
 **O que fazer:**
 
-- `padding-bottom` no conteúdo para a bottom nav não cobrir a tabela (hoje cobre).
-- Rótulo da bottom nav quebra por palavra em vez de cortar `Conf`.
+- `padding-bottom` suficiente para a bottom nav não cobrir a tabela.
+- Rótulo da bottom nav quebra sem truncar `Configurações`.
 - `.mini-segmented label { min-height: 44px }` (hoje `42px`) — **meta própria de
   experiência móvel**, não exigência de AA: o alvo medido (210×42 desktop /
   115,33×42 mobile) já é **conforme WCAG 2.2, 2.5.8 (AA, ≥24×24)**; a meta

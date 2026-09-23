@@ -16,6 +16,22 @@ const house = '10000000-0000-4000-8000-000000000001';
 const reserve = '10000000-0000-4000-8000-000000000002';
 const houseAccount = '10000000-0000-4000-8000-000000000003';
 const betId = '10000000-0000-4000-8000-000000000004';
+function luminance(color: string) {
+  const channels = color
+    .match(/\d+(?:\.\d+)?/g)
+    ?.slice(0, 3)
+    .map(Number);
+  if (!channels || channels.length !== 3) throw new Error(`Unsupported CSS color: ${color}`);
+  const [red, green, blue] = channels.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+}
+function contrastRatio(foreground: string, background: string) {
+  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (values[0]! + 0.05) / (values[1]! + 0.05);
+}
 const emptyMetrics: ReportMetrics = {
   bets: 0,
   settledBets: 0,
@@ -274,6 +290,42 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
   await expect(page.getByText('R$ 1.000,00', { exact: true })).toBeVisible();
+  const smallText = await page
+    .locator('.sidebar-caption, .product-eyebrow, .metric-card small, .product-footer')
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        let surface: Element | null = element;
+        while (surface) {
+          const background = getComputedStyle(surface).backgroundColor;
+          if (background !== 'rgba(0, 0, 0, 0)') {
+            return {
+              fontSize: getComputedStyle(element).fontSize,
+              color: getComputedStyle(element).color,
+              background,
+            };
+          }
+          surface = surface.parentElement;
+        }
+        throw new Error('Text surface background missing');
+      }),
+    );
+  const faintContrast = await page.evaluate(() => {
+    const text = document.querySelector('.product-eyebrow');
+    if (!text) throw new Error('Product eyebrow missing');
+    let surface: Element | null = text;
+    while (surface && getComputedStyle(surface).backgroundColor === 'rgba(0, 0, 0, 0)') {
+      surface = surface.parentElement;
+    }
+    if (!surface) throw new Error('Product text surface missing');
+    return {
+      token: getComputedStyle(text).color,
+      background: getComputedStyle(surface).backgroundColor,
+    };
+  });
+  expect(smallText.length).toBeGreaterThan(0);
+  expect(smallText.every((item) => Number.parseFloat(item.fontSize) >= 12)).toBe(true);
+  expect(smallText.every((item) => contrastRatio(item.color, item.background) >= 4.5)).toBe(true);
+  expect(contrastRatio(faintContrast.token, faintContrast.background)).toBeGreaterThanOrEqual(4.5);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= (visualViewport?.width ?? innerWidth),
@@ -286,6 +338,42 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
   await page.getByRole('button', { name: 'Fechar janela' }).click();
+  if ((page.viewportSize()?.width ?? 0) <= 760) {
+    const nav = page.locator('.product-sidebar nav');
+    const configLabel = page
+      .getByRole('link', { name: 'Configurações', exact: true })
+      .locator('.nav-label');
+    const navLayout = await nav.evaluate((element) => ({
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    const navTargetHeights = await nav
+      .locator('a')
+      .evaluateAll((links) => links.map((link) => link.getBoundingClientRect().height));
+    const labelLayout = await configLabel.evaluate((element) => ({
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      height: element.getBoundingClientRect().height,
+    }));
+    expect(navLayout.scrollWidth).toBeLessThanOrEqual(navLayout.width);
+    expect(navTargetHeights.every((height) => height >= 44)).toBe(true);
+    expect(labelLayout.scrollWidth).toBeLessThanOrEqual(labelLayout.width);
+    expect(labelLayout.height).toBeGreaterThan(12);
+
+    await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+    await expect(page.locator('.product-table tbody tr').last()).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const bottomSpacing = await page.evaluate(() => {
+      const navElement = document.querySelector('.product-sidebar');
+      const lastRow = document.querySelector('.product-table tbody tr:last-child');
+      if (!navElement || !lastRow) throw new Error('Mobile nav or last bet row missing');
+      return {
+        navTop: navElement.getBoundingClientRect().top,
+        rowBottom: lastRow.getBoundingClientRect().bottom,
+      };
+    });
+    expect(bottomSpacing.rowBottom).toBeLessThanOrEqual(bottomSpacing.navTop + 1);
+  }
   await page.getByRole('link', { name: 'Configurações', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Unidades mensais' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1312,6 +1400,26 @@ test('edits the same canonical draft from the Telegram Mini App with validated i
   });
   await page.goto(`/miniapp#miniapp?import=${importId}`);
   await expect(page.getByRole('heading', { name: 'Editar aposta' })).toBeVisible();
+  const countryPlaceholder = page
+    .getByRole('button', { name: /Selecione o país ou região/ })
+    .locator('.mini-placeholder');
+  await expect(countryPlaceholder).toBeVisible();
+  const placeholderStyles = await countryPlaceholder.evaluate((element) => {
+    const trigger = element.closest('.mini-picker-trigger');
+    if (!trigger) throw new Error('Mini App picker trigger missing');
+    return {
+      color: getComputedStyle(element).color,
+      background: getComputedStyle(trigger).backgroundColor,
+    };
+  });
+  expect(
+    contrastRatio(placeholderStyles.color, placeholderStyles.background),
+  ).toBeGreaterThanOrEqual(4.5);
+  const segmentedHeights = await page
+    .locator('.mini-segmented label')
+    .evaluateAll((labels) => labels.map((label) => label.getBoundingClientRect().height));
+  expect(segmentedHeights.length).toBeGreaterThan(0);
+  expect(segmentedHeights.every((height) => height >= 44)).toBe(true);
   await page.getByRole('button', { name: /Futebol/ }).click();
   await page
     .getByRole('dialog', { name: 'Esporte' })

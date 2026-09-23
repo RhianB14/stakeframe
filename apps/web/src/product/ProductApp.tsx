@@ -161,8 +161,20 @@ function ProductShell({
               href={`#${item.id}`}
               aria-current={page === item.id ? 'page' : undefined}
             >
-              <span aria-hidden="true">{item.icon}</span>
-              {item.title}
+              <span className="nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span className="nav-label">
+                {item.id === 'settings' ? (
+                  <>
+                    Configura
+                    <wbr />
+                    ções
+                  </>
+                ) : (
+                  item.title
+                )}
+              </span>
             </a>
           ))}
         </nav>

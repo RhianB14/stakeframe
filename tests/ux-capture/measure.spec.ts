@@ -191,6 +191,9 @@ test('STK-UX-01/R1 mede o alvo efetivo do mini-segmented', async ({ page }, info
   });
 
   const summary = { viewport: page.viewportSize(), groups: measurement };
+  const targets = measurement.flatMap((group) => group.labels);
+  expect(targets.length).toBeGreaterThan(0);
+  expect(targets.every((target) => target.height >= 44)).toBe(true);
   const path = info.outputPath('target-size.json');
   const fs = await import('node:fs');
   fs.writeFileSync(path, JSON.stringify(summary, null, 2), 'utf8');

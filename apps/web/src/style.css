@@ -8,6 +8,7 @@
   font-family: 'Segoe UI', system-ui, sans-serif;
   color: #f0f2f6;
   background: #101216;
+  --text-faint: #a7b1c2;
   font-synthesis: none;
   color-scheme: dark;
 }
@@ -154,9 +155,9 @@ h1 span {
   align-items: center;
 }
 .card-kicker {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1.9px;
-  color: #a2aabc;
+  color: var(--text-faint);
 }
 .stage-label {
   font-family: monospace;
@@ -236,7 +237,8 @@ h2 {
   background: #75c9a1;
 }
 .updating {
-  font-size: 9px;
+  font-size: 12px;
+  color: var(--text-faint);
   margin-left: auto;
 }
 .access-note {
