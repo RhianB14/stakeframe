@@ -76,6 +76,17 @@ export type DraftControlsProps = {
     selectionId: string;
     eventAt: string | null;
   }) => Promise<{ version: number; betState: string | null }>;
+  // STK-G0-23-R1 — casa e tipster também têm comando canônico. O formulário
+  // completo do Mini App precisa deles para encaminhar a edição em vez de
+  // mandá-la pelo PATCH do rascunho, que não atualiza o registro financeiro.
+  bookmakerSender?: (body: {
+    version: number;
+    bookmakerId: string;
+  }) => Promise<{ version: number; bookmakerId: string; bookmakerName: string | null }>;
+  tipsterSender?: (body: {
+    version: number;
+    tipsterId: string;
+  }) => Promise<{ version: number; tipsterId: string; tipsterName: string | null }>;
   creditsSender?: (
     bookmakerId: string,
   ) => Promise<{ id: string; amount: string; expiresOn: string; stakeReturned: boolean }[]>;

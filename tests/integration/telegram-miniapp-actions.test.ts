@@ -1429,3 +1429,298 @@ describe('STK-G0-23 confiabilidade do salvamento no Mini App', () => {
     );
   });
 });
+
+// STK-G0-23-R1 — a revisão do Codex mostrou que o formulário completo do Mini
+// App mandava TUDO pelo PATCH do rascunho, de modo que campos que JÁ têm
+// comando canônico (casa, tipster, origem/crédito e data) acabavam recusados
+// pelo fail-closed. Estes casos exercitam o caminho HTTP real que o editor
+// passou a usar e leem o resultado depois de cada chamada.
+describe('STK-G0-23-R1 encaminhamento canonico no Mini App', () => {
+  const createTipster = async (tipsterName: string) =>
+    (
+      await run({
+        type: 'catalog.create',
+        kind: 'tipster',
+        name: tipsterName,
+        aliases: [],
+      } as CommandInput)
+    ).id;
+  const createCredit = async (bookmakerId: string) =>
+    (
+      await run({
+        type: 'freebet.create',
+        bookmakerId,
+        amount: '100.00',
+        expiresOn: '2026-12-31',
+        stakeReturned: false,
+        note: '',
+      } as CommandInput)
+    ).id;
+  const inboxRow = async (importId: string) =>
+    (
+      await database.pool.query<{
+        version: number;
+        tournament: unknown;
+        stake_override: unknown;
+        telegram_sync_state: string;
+      }>('select version,metadata,telegram_sync_state from integration.inbox where id=$1', [
+        importId,
+      ])
+    ).rows[0]!;
+  const betRow = async (betId: string) =>
+    (
+      await database.pool.query<{
+        bookmaker_id: string;
+        tipster_id: string | null;
+        freebet_id: string | null;
+        stake: string;
+        odds: string;
+      }>('select bookmaker_id,tipster_id,freebet_id,stake,odds from finance.bet where id=$1', [
+        betId,
+      ])
+    ).rows[0]!;
+  const settingsVersion = async () =>
+    (await database.pool.query<{ version: number }>('select version from finance.settings'))
+      .rows[0]!.version;
+
+  // Aposta CONFIRMADA e vinculada ao Telegram — mesmo caminho do Mini App.
+  async function confirmedWithTelegram() {
+    const id = await upload();
+    await seedExtraction(id);
+    const bookmakerId = await houseId();
+    const draft = await imports.updateDraft(
+      tenantContext,
+      id,
+      {
+        version: 1,
+        betOrigin: 'real',
+        bookmakerId,
+        tipsterId: null,
+        sport: 'Futebol',
+        tournament: 'Fixture',
+        country: 'Brasil',
+        ticketKind: 'simple',
+        stake: '100.00',
+        odds: '2.00',
+        selections: [{ event: 'A x B', market: 'Resultado', selection: 'A' }],
+      },
+      'web',
+    );
+    const confirmed = await imports.confirmDraft(
+      tenantContext,
+      id,
+      { version: draft.version },
+      'web',
+      randomUUID(),
+    );
+    // Baseline: mensagem já sincronizada, para medir a re-sincronização.
+    await database.pool.query(
+      'update integration.inbox set telegram_chat_id=42,telegram_source_message_id=901,telegram_processing_message_id=900,telegram_result_message_id=902,telegram_sync_state=$2 where id=$1',
+      [id, 'synced'],
+    );
+    const version = (await inboxRow(id)).version;
+    const selections = (
+      await database.pool.query<{ id: string }>(
+        'select id from finance.selection where bet_id=$1 order by position',
+        [confirmed.betId],
+      )
+    ).rows;
+    return {
+      importId: id,
+      betId: confirmed.betId,
+      version,
+      bookmakerId,
+      selectionId: selections[0]!.id,
+    };
+  }
+  const post = (importId: string, route: string, payload: unknown, key = randomUUID()) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/imports/${importId}/${route}`,
+      headers: { ...tg, 'content-type': 'application/json', 'idempotency-key': key },
+      payload: payload as Record<string, unknown>,
+    });
+
+  it('encaminha casa e tipster pelos comandos canonicos: registro, web e mensagem do Telegram', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+    const tipster = await createTipster('R1Tipster');
+    const before = (await outbox(importId)).length;
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const houseVersion = (house.json() as { version: number }).version;
+    // A versão devolvida é a que a próxima chamada DEVE usar.
+    expect(houseVersion).toBeGreaterThanOrEqual(version);
+
+    const tipsterRes = await post(importId, 'tipster', {
+      version: houseVersion,
+      tipsterId: tipster,
+    });
+    expect(tipsterRes.statusCode).toBe(200);
+    const tipsterVersion = (tipsterRes.json() as { version: number }).version;
+
+    // Registro canônico alterado.
+    expect(await betRow(betId)).toMatchObject({
+      bookmaker_id: superbet,
+      tipster_id: tipster,
+    });
+    // A Web lê o MESMO registro, com nomes resolvidos.
+    const viaWeb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(viaWeb.json().bet).toMatchObject({
+      bookmakerId: superbet,
+      bookmakerName: 'Superbet',
+      tipsterId: tipster,
+      tipsterName: 'R1Tipster',
+    });
+    // A mensagem do Telegram foi re-enfileirada (não depende do PATCH).
+    const ops = (await outbox(importId)).map((item) => item.operation);
+    expect(ops.length).toBeGreaterThan(before);
+    expect(ops).toContain('edit_result_message');
+    expect((await inboxRow(importId)).telegram_sync_state).toBe('pending');
+    // Reabertura: o detalhe devolve a versão nova, que é a que o editor usa.
+    const reopened = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: tg,
+    });
+    expect((reopened.json() as { item: { version: number } }).item.version).toBe(tipsterVersion);
+  });
+
+  it('usa o comando de origem/crédito proprio e o replay nao duplica efeito', async () => {
+    const { importId, betId, version, bookmakerId } = await confirmedWithTelegram();
+    const credit = await createCredit(bookmakerId);
+    const key = randomUUID();
+    const before = await settingsVersion();
+
+    const applied = await post(
+      importId,
+      'origin',
+      { version, kind: 'freebet', freebetId: credit },
+      key,
+    );
+    expect(applied.statusCode).toBe(200);
+    expect(applied.json()).toMatchObject({ kind: 'freebet' });
+    expect(await betRow(betId)).toMatchObject({ freebet_id: credit });
+    const afterApply = await settingsVersion();
+    expect(afterApply).toBeGreaterThan(before);
+
+    // Retry incerto: mesma chave devolve o MESMO resultado e não executa de novo.
+    const replay = await post(
+      importId,
+      'origin',
+      { version, kind: 'freebet', freebetId: credit },
+      key,
+    );
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(applied.json());
+    expect(await settingsVersion()).toBe(afterApply);
+    expect(await betRow(betId)).toMatchObject({ freebet_id: credit });
+  });
+
+  it('usa o comando de data proprio e atualiza a selecao sem duplicar', async () => {
+    const { importId, betId, version, selectionId } = await confirmedWithTelegram();
+    const key = randomUUID();
+    const before = await settingsVersion();
+    const eventAt = '2026-09-30T15:00:00.000Z';
+
+    const applied = await post(importId, 'event', { version, selectionId, eventAt }, key);
+    expect(applied.statusCode).toBe(200);
+    const selection = (
+      await database.pool.query<{ event_at: Date | null }>(
+        'select event_at from finance.selection where id=$1',
+        [selectionId],
+      )
+    ).rows[0]!;
+    expect(selection.event_at?.toISOString()).toBe(eventAt);
+    expect(await settingsVersion()).toBeGreaterThan(before);
+
+    const replay = await post(importId, 'event', { version, selectionId, eventAt }, key);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(applied.json());
+    expect(await settingsVersion()).toBe(before + 1);
+    // O PATCH do rascunho continua sendo quem guarda torneio/país.
+    expect(betId).toBeTruthy();
+  });
+
+  it('recusa valor e odd ANTES de gravar o rascunho, mesmo com metadados no mesmo payload', async () => {
+    const { importId, version } = await confirmedWithTelegram();
+    const before = await inboxRow(importId);
+
+    const refused = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, stake: '250.00', odds: '3.50', tournament: 'Torneio Novo' },
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ error: { code: 'STATE_CONFLICT' } });
+
+    // Nada foi escrito — nem o campo bloqueado nem o metadado que vinha junto.
+    const after = await inboxRow(importId);
+    expect(after.version).toBe(before.version);
+    expect(after.telegram_sync_state).toBe(before.telegram_sync_state);
+    const metadata = after.tournament as { tournamentOverride?: string | null } | null;
+    expect(metadata?.tournamentOverride ?? 'Fixture').not.toBe('Torneio Novo');
+  });
+
+  it('mantem editavel a aposta confirmada quando nada financeiro muda', async () => {
+    const { importId, version } = await confirmedWithTelegram();
+
+    const saved = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${importId}`,
+      headers: { ...tg, 'content-type': 'application/json' },
+      payload: { version, tournament: 'Copa do Brasil', country: 'Brasil', ticketKind: 'simple' },
+    });
+    expect(saved.statusCode).toBe(200);
+    const newVersion = (saved.json() as { version: number }).version;
+    expect(newVersion).toBeGreaterThan(version);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/imports/${importId}`,
+      headers: session,
+    });
+    expect(detail.json().tournamentOverride).toBe('Copa do Brasil');
+  });
+
+  it('versao stale nao sobrescreve e a falha parcial preserva o que ja foi aplicado', async () => {
+    const { importId, betId, version } = await confirmedWithTelegram();
+    const superbet = await houseId('Superbet');
+
+    const house = await post(importId, 'bookmaker', { version, bookmakerId: superbet });
+    expect(house.statusCode).toBe(200);
+    const fresh = (house.json() as { version: number }).version;
+
+    // Versão obsoleta: repete o valor ANTIGO — não pode sobrescrever nada.
+    const stale = await post(importId, 'bookmaker', { version, bookmakerId: await houseId() });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+
+    // Falha parcial REAL: a casa ficou aplicada e o tipster falhou por versão
+    // velha. O estado parcial existe e é exatamente o que a interface precisa
+    // nomear (coberto em tests/unit/miniapp-confirmed-save.test.ts).
+    const staleTipster = await post(importId, 'tipster', {
+      version,
+      tipsterId: await createTipster('R1TipsterStale'),
+    });
+    expect(staleTipster.statusCode).toBe(409);
+    expect((await betRow(betId)).bookmaker_id).toBe(superbet);
+    expect((await betRow(betId)).tipster_id).toBeNull();
+
+    // Recuperação segura: usar a versão devolvida completa a sequência sem
+    // repetir a troca de casa.
+    const settingsBefore = await settingsVersion();
+    const tipster = await createTipster('R1TipsterFinal');
+    const recovered = await post(importId, 'tipster', { version: fresh, tipsterId: tipster });
+    expect(recovered.statusCode).toBe(200);
+    expect(await betRow(betId)).toMatchObject({ bookmaker_id: superbet, tipster_id: tipster });
+    expect(await settingsVersion()).toBeGreaterThan(settingsBefore);
+  });
+});
