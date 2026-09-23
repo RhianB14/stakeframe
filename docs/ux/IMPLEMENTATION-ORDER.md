@@ -41,10 +41,14 @@ Sequência sugerida para levar os protótipos de `docs/ux/prototypes/` ao produt
 
 - `padding-bottom` no conteúdo para a bottom nav não cobrir a tabela (hoje cobre).
 - Rótulo da bottom nav quebra por palavra em vez de cortar `Conf`.
-- `.mini-segmented label { min-height: 44px }` (hoje `42px`).
-- `aria-live` nas regiões que hoje são só `role="status"` (51 vs 1).
+- `.mini-segmented label { min-height: 44px }` (hoje `42px`) — **meta própria de
+  experiência móvel**, não exigência de AA: o alvo medido (210×42 desktop /
+  115,33×42 mobile) já é **conforme WCAG 2.2, 2.5.8 (AA, ≥24×24)**; a meta
+  aproxima de **2.5.5 (AAA, ≥44×44)**, critério não exigido.
 
-**Verificação:** E2E mobile — última linha da tabela visível sem scroll extra; alvo medido ≥ 44.
+**Verificação:** E2E mobile — última linha da tabela visível sem scroll extra;
+alvo medido ≥ 44 (meta própria). Reproduzir a medição com
+`tests/ux-capture/measure.spec.ts`.
 
 ---
 

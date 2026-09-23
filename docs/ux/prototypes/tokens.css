@@ -56,7 +56,7 @@
   --bp-md: 900px;
   --bp-lg: 1200px;
 
-  /* alvo de toque mínimo */
+  /* meta própria de alvo de toque (não é mínimo AA — 2.5.8 exige 24×24) */
   --tap-min: 44px;
 }
 

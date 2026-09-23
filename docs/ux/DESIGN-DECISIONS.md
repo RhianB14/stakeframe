@@ -15,7 +15,7 @@ Derivado do produto **real** em `6be4f0e`, não de referência externa. Cada tok
 | Fundos distintos                     | 3 (`#101318`, `#101216`, `#07101f`)                                            |
 | Fontes abaixo de 10px                | 7 (`8px` ×1, `9px` ×6)                                                         |
 | Breakpoints                          | 5 (`430`, `760`, `960`, `1100`, `1180`)                                        |
-| `aria-live` vs `role="status"`       | 1 vs 51                                                                        |
+| `aria-live` vs `role="status"`       | 1 vs 51 (sem efeito: `status` já é `aria-live="polite"` implícito)             |
 
 O `UI-UX-PLAN.md` propõe `action: #92ADFF` e `surface: #181D26`. Confrontado com o código: **`#92adff` existe** (rótulo e gráfico) mas não é a cor do botão; **`#181d26` não existe** em lugar nenhum. Por isso este documento **não adota a paleta do plano** — adota a paleta implementada e a consolida.
 
@@ -101,9 +101,22 @@ Os atuais `430`, `760`, `960`, `1100`, `1180` são migrados. `1100` e `1180` sã
 
 ### 2.8 Alvo de toque
 
-| Token       | Valor  | Corrige                                            |
-| ----------- | ------ | -------------------------------------------------- |
-| `--tap-min` | `44px` | `.mini-segmented label` hoje em `min-height: 42px` |
+| Token       | Valor  | Referência correta                                                     |
+| ----------- | ------ | ---------------------------------------------------------------------- |
+| `--tap-min` | `44px` | **meta própria de experiência móvel** — não é "mínimo AA" (ver abaixo) |
+
+**Fundamentação corrigida (STK-UX-01/02-R1).** Dois critérios distintos, citados
+com nível e exceções:
+
+| Critério                                    | Nível  | Alvo mínimo                                                                                  | Situação do `.mini-segmented label` (medido)                                 |
+| ------------------------------------------- | ------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **WCAG 2.2 — 2.5.8 Target Size (Minimum)**  | **AA** | **24×24 CSS px** (+ 5 exceções; alternativa: espaçamento — círculo Ø24 sem tocar outro alvo) | **Conforme**: medido **210×42** (desktop) e **115,33×42** (mobile) — 42 ≥ 24 |
+| **WCAG 2.2 — 2.5.5 Target Size (Enhanced)** | AAA    | **44×44 CSS px** (+ exceções)                                                                | **Não atinge**: 42 < 44 — mas **AAA não é exigido**                          |
+
+Portanto **`44px` é uma meta própria do projeto** para ergonomia de polegar em
+dispositivos móveis, **não** o mínimo exigido pelo nível AA. Fontes:
+[2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum) ·
+[2.5.5](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced).
 
 ---
 
@@ -186,12 +199,12 @@ Bloqueios herdados de STK-G0-23 e preservados integralmente:
 
 ## 5. Referências — verificadas
 
-| Fonte                                                                                                                                                        | Uso                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [W3C — How to Meet WCAG (Quick Reference)](https://www.w3.org/WAI/WCAG22/quickref/)                                                                          | critérios de contraste 4.5:1 e alvo 44×44 |
-| [Mobbin — KakaoBank iOS Account Overview](https://mobbin.com/explore/screens/04517e3b-abac-4250-8af0-433d2c26d7de)                                           | hierarquia saldo + ação                   |
-| [Mobbin — Front Inbox Email Thread](https://mobbin.com/explore/web/screens/emails-messages)                                                                  | listagem → detalhe                        |
-| [Mobbin — Saturn Calendar iOS Scheduled Events](https://mobbin.com/explore/screens/8a1dfb72-930d-4665-8de0-c67e54416dfd)                                     | seleção inline                            |
-| [Mercury — Transactions page](https://support.mercury.com/hc/en-us/articles/38790547830036-Viewing-cashflow-and-transactions-data-on-your-Transactions-page) | leitura de tabela densa                   |
+| Fonte                                                                                                                                                        | Uso                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| [W3C — How to Meet WCAG (Quick Reference)](https://www.w3.org/WAI/WCAG22/quickref/)                                                                          | critérios de contraste 4.5:1 (AA); alvo 24×24 em 2.5.8 (AA) e 44×44 em 2.5.5 (AAA) |
+| [Mobbin — KakaoBank iOS Account Overview](https://mobbin.com/explore/screens/04517e3b-abac-4250-8af0-433d2c26d7de)                                           | hierarquia saldo + ação                                                            |
+| [Mobbin — Front Inbox Email Thread](https://mobbin.com/explore/web/screens/emails-messages)                                                                  | listagem → detalhe                                                                 |
+| [Mobbin — Saturn Calendar iOS Scheduled Events](https://mobbin.com/explore/screens/8a1dfb72-930d-4665-8de0-c67e54416dfd)                                     | seleção inline                                                                     |
+| [Mercury — Transactions page](https://support.mercury.com/hc/en-us/articles/38790547830036-Viewing-cashflow-and-transactions-data-on-your-Transactions-page) | leitura de tabela densa                                                            |
 
 **Não citada:** a referência `Origin Spending Overview` não foi confirmada individualmente e por isso não aparece em nenhum documento desta entrega.

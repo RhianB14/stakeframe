@@ -100,7 +100,19 @@ Cinco breakpoints sem escada aparente: `430`, `760`, `960`, `1100`, `1180`.
 | Campos com `<label>` direto     | 19                                                                        |
 | Campos com `aria-label`         | 0                                                                         |
 
-Conclusão: **o componente `Field` está bem feito** e não é fonte de problema. O risco real está em `aria-live` aparecer só 1 vez para 51 regiões `role="status"` — anúncios de atualização podem não chegar a leitores de tela.
+Conclusão: **o componente `Field` está bem feito** e não é fonte de problema.
+
+> **Correção STK-UX-01/02-R1 (fundamentação de acessibilidade).** A contagem
+> `aria-live` 1× contra 51 `role="status"` **não é, por si, defeito**: conforme a
+> técnica [ARIA22](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA22), o
+> `role="status"` possui `aria-live="polite"` **implícito** — as 51 regiões já são
+> anunciadas sem nenhum `aria-live` explícito. Adicionar `aria-live` aos 51
+> elementos por contagem seria ruído, não correção. A ARIA22 recomenda apenas
+> `aria-atomic="true"` explícito quando o conteúdo completo do contêiner deve ser
+> anunciado. **Um defeito de anúncio só será registrado aqui se houver
+> reprodução com mensagem e tecnologia assistiva identificadas** — nenhuma
+> reprodução foi feita nesta auditoria, portanto **não há defeito de anúncio
+> registrado**.
 
 ---
 
@@ -183,7 +195,17 @@ Análise obtida por inspeção das capturas reais em `docs/ux/captures/`.
 2. **O botão principal domina a barra de ação**: `.mini-save-bar button` tem `min-height: 52px`, `font-size: 16px`, `font-weight: 800`, `background: var(--mini-blue)` e largura `min(652px, 100%)` — é o elemento de maior peso da tela.
 3. **Título do app quase invisível**: `stakeframe. · Mini app · Editar aposta` em `10px` e `var(--muted)`; a única `h1` da tela tem o menor peso.
 4. Contraste de placeholder `Edit as necessary` **abaixo do mínimo WCAG**.
-5. **Filtro de `.mini-segmented label` tem `min-height: 42px`** — 2px abaixo do alvo de toque mínimo de 44×44. E o item ativo é sinalizado **apenas por `background` + `box-shadow`**, sem borda.
+5. **Filtro de `.mini-segmented label` — alvo medido em produção**: o elemento
+   acionável é o **`<label>`** (`cursor: pointer`); o `input` é
+   `opacity: 0; pointer-events: none` (13×13 px, não acionável). Medição
+   `getBoundingClientRect`: **210×42 px no desktop** (1440) e **115,33×42 px no
+   mobile** (412), com **5 px** entre alvos vizinhos. Com 42 ≥ 24 o alvo é
+   **conforme WCAG 2.2, 2.5.8 Target Size (Minimum), nível AA** — **não há
+   falha AA**. Fica abaixo de **2.5.5 Target Size (Enhanced), nível AAA
+   (44×44)**, critério não exigido; `min-height: 42px` é 2 px abaixo da meta
+   AAA. Manter `44px` é decisão própria de ergonomia móvel
+   (`DESIGN-DECISIONS.md` §2.8), não correção de AA. O item ativo é sinalizado
+   **apenas por `background` + `box-shadow`**, sem borda.
 6. O estado de salvamento **existe e é adequado**: o botão passa para `Salvando e confirmando…` / `Salvando e sincronizando…`, fica `disabled` e recebe `opacity: 0.6; cursor: wait`.
 
 #### 4.8.1 Mobile (análise visual independente)
@@ -244,9 +266,14 @@ Análise obtida por inspeção das capturas reais em `docs/ux/captures/`.
 | E1  | Erro como linha de texto, sem papel visual                     | `#overview` erro |
 | E2  | Conflito de versão só por `hint`, sem alerta de não-salvamento | Mini App         |
 | E4  | `Tentar novamente` sem feedback de retomada                    | `#overview` erro |
-| E5  | `aria-live` 1× para 51 `role="status"`                         | app              |
 
 > Verificado: o estado de salvamento do Mini App **não** é um problema — o botão muda de rótulo, desabilita e escurece. Não entrou nesta lista.
+>
+> **Correção STK-UX-01/02-R1:** a contagem `aria-live` 1× para 51 `role="status"`
+> **foi retirada desta lista**. `role="status"` já tem `aria-live="polite"`
+> implícito ([ARIA22](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA22)), de
+> modo que a contagem não demonstra falha de anúncio. Nenhum defeito de anúncio
+> é registrado sem reprodução com mensagem e tecnologia assistiva identificadas.
 
 ### 5.5 Carregamento
 
@@ -257,16 +284,16 @@ Análise obtida por inspeção das capturas reais em `docs/ux/captures/`.
 
 ### 5.6 Acessibilidade
 
-| ID  | Problema                                                                             | Onde                          |
-| --- | ------------------------------------------------------------------------------------ | ----------------------------- |
-| A1  | Bottom nav cobre conteúdo da tabela                                                  | mobile                        |
-| A2  | 6 itens na bottom nav; `Conf` cortado                                                | mobile                        |
-| A3  | `.mini-segmented label` com `min-height: 42px` (2px abaixo de 44)                    | Mini App                      |
-| A4  | Itens ativos de seguidores só por borda                                              | Mini App                      |
-| A5  | Sem `aria-label` em nenhum dos 134 controles                                         | app (mitigado pelo `<Field>`) |
-| A6  | Barra fixa de salvar sem `padding-bottom` suficiente: **sobrepuja o formulário**     | Mini App mobile               |
-| A7  | Campo informativo (`Enviado em…`) com aparência de editável                          | Mini App                      |
-| A8  | Rótulos ambíguos: `Origem da aposta` × `Origem e identificação`; `Aposta 1` repetido | Mini App                      |
+| ID  | Problema                                                                                                              | Onde                          |
+| --- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| A1  | Bottom nav cobre conteúdo da tabela                                                                                   | mobile                        |
+| A2  | 6 itens na bottom nav; `Conf` cortado                                                                                 | mobile                        |
+| A3  | `.mini-segmented label` medido **210×42 / 115,33×42 px** — conforme AA (2.5.8), 2 px abaixo da meta AAA 44×44 (2.5.5) | Mini App                      |
+| A4  | Itens ativos de seguidores só por borda                                                                               | Mini App                      |
+| A5  | Sem `aria-label` em nenhum dos 134 controles                                                                          | app (mitigado pelo `<Field>`) |
+| A6  | Barra fixa de salvar sem `padding-bottom` suficiente: **sobrepuja o formulário**                                      | Mini App mobile               |
+| A7  | Campo informativo (`Enviado em…`) com aparência de editável                                                           | Mini App                      |
+| A8  | Rótulos ambíguos: `Origem da aposta` × `Origem e identificação`; `Aposta 1` repetido                                  | Mini App                      |
 
 ---
 
