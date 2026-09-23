@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   classifyTicketKind,
+  deriveBetOrigin,
   formatBRL,
   potentialReturnFor,
   type TicketKind,
@@ -60,9 +61,27 @@ export function MiniDraftEditor({
   creditsSender,
   onSaved,
 }: DraftControlsProps) {
-  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(detail.betOrigin ?? 'real');
-  const [credit, setCredit] = useState(detail.freebetId ?? '');
-  const initialEvent = inputInstant(detail.eventAt);
+  // STK-G0-23-R1 — aposta já registrada: origem, crédito e data vêm do
+  // REGISTRO, não da inbox. A origem é derivada do par (valor, crédito) e a
+  // inbox não acompanha os comandos canônicos, então ler dela envelheceria a
+  // tela — e mandar esse valor velho pelo PATCH seria uma divergência que o
+  // fail-closed recusaria mesmo sem o usuário ter mexido em nada.
+  const canonicalBet = detail.bet?.completionState === 'complete' ? detail.bet : null;
+  const canonicalOrigin =
+    canonicalBet === null
+      ? null
+      : canonicalBet.stake === null
+        ? 'real'
+        : deriveBetOrigin(canonicalBet.stake, canonicalBet.freebetAmount ?? null);
+  const canonicalEventAt = canonicalBet?.selections[0]?.eventAt ?? null;
+
+  const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(
+    canonicalOrigin ?? detail.betOrigin ?? 'real',
+  );
+  const [credit, setCredit] = useState(
+    canonicalBet ? (canonicalBet.freebetId ?? '') : (detail.freebetId ?? ''),
+  );
+  const initialEvent = inputInstant(canonicalBet ? canonicalEventAt : (detail.eventAt ?? null));
   const [eventDate, setEventDate] = useState(initialEvent.date);
   const [eventTime, setEventTime] = useState(initialEvent.time);
   const extractedSport =
@@ -128,15 +147,15 @@ export function MiniDraftEditor({
           selection,
         }));
   const baseline: FormValues = {
-    origin: detail.betOrigin ?? 'real',
-    credit: detail.freebetId ?? '',
+    origin: canonicalOrigin ?? detail.betOrigin ?? 'real',
+    credit: canonicalBet ? (canonicalBet.freebetId ?? '') : (detail.freebetId ?? ''),
     bookmaker:
       detail.bet?.bookmakerId ??
       detail.bookmakerOverrideId ??
       detail.matches.captionBookmakerId ??
       '',
     tipster: detail.bet?.tipsterId ?? detail.tipsterOverrideId ?? detail.matches.tipsterId ?? '',
-    eventAt: detail.eventAt,
+    eventAt: canonicalBet ? canonicalEventAt : (detail.eventAt ?? null),
     stake: detail.bet?.stake ?? detail.stakeOverride ?? detail.extraction?.stake ?? '',
     odds: detail.bet?.odds ?? detail.oddsOverride ?? detail.extraction?.odds ?? '',
     sport: detail.sportOverride ?? extractedSport ?? '',

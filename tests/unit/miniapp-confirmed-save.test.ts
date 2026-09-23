@@ -59,17 +59,19 @@ describe('STK-G0-23-R1 planejamento da edição de aposta confirmada', () => {
     expect(plan.dates).toEqual([
       { selectionId: '40000000-0000-4000-8000-000000000001', eventAt: '2026-09-30T18:00:00.000Z' },
     ]);
-    // O PATCH do rascunho NUNCA pode carregar os campos roteados: ele não é
-    // capaz de atualizar o registro financeiro e o fail-closed os recusaria.
+    // O PATCH do rascunho NUNCA carrega o que foi ALTERADO: ele não é capaz de
+    // atualizar o registro financeiro e o fail-closed recusaria a divergência.
     expect(plan.patch.bookmakerId).toBeUndefined();
     expect(plan.patch.tipsterId).toBeUndefined();
     expect(plan.patch.betOrigin).toBeUndefined();
     expect(plan.patch.freebetId).toBeUndefined();
     expect(plan.patch.eventAt).toBeUndefined();
-    expect(plan.patch.stake).toBeUndefined();
-    expect(plan.patch.odds).toBeUndefined();
-    expect(plan.patch.selections).toBeUndefined();
     expect(plan.patch.sport).toBeUndefined();
+    // ...mas continua levando o que o usuário NÃO mexeu, para o "salvar sem
+    // mudança" preservar o rascunho como o contrato exige.
+    expect(plan.patch.stake).toBe('100.00');
+    expect(plan.patch.odds).toBe('2.00');
+    expect(plan.patch.selections).toEqual(baseline.selections);
     expect(plan.patch.version).toBe(4);
     expect(plan.patch.tournament).toBe('Fixture');
     expect(plan.patch.country).toBe('Brasil');

@@ -26,7 +26,9 @@ capaz de atualizar o registro financeiro.
 
 - [x] 9. Matriz campo->comando: casa, tipster, origem/crédito e data roteiam
       pelos comandos canônicos com as versões retornadas em sequência; o PATCH
-      de uma aposta confirmada passa a levar só metadados (torneio, país, tipo)
+      de uma aposta confirmada passa a levar apenas o que o usuário NÃO mexeu
+      (metadados + campos iguais ao registro) e nunca um campo alterado —
+      `eventAt` e `sport` ficam de fora por terem linha de base de rascunho
 - [x] 10. Valor apostado e odd total bloqueados na interface, cada um com a
       explicação do próprio limite — sem dizer que todo o formulário é imutável
 - [x] 11. Recusa ANTES de gravar o rascunho, nomeando apenas os campos sem
@@ -43,6 +45,14 @@ capaz de atualizar o registro financeiro.
       `telegram-miniapp-actions.test.ts` 44/44, build, OpenAPI, formatação,
       diff-check, OpenSpec strict
 - [x] 15. Diff-review dos 6 arquivos alterados (883 inserções / 26 remoções)
+- [x] 16. Regressão de CI encontrada e corrigida: no head `48d1f93` os jobs
+      `application-check` e `application-arm64-check` falharam só em
+      `product.test.ts:1399` ("preserva quando salvo sem mudança"), porque o
+      PATCH tinha deixado de levar os campos inalterados. Corrigido para
+      enviá-los iguais e continuar omitindo os alterados; origem/crédito/data
+      passaram a abrir pelo registro em vez da inbox (`bet.origin` não atualiza
+      a inbox). Falhas de `onboarding:232` (flake de 30 s, já conhecido) e
+      `product:238` (passou no x86, só no emulador ARM64) são preexistentes
 
 ## Fora desta change
 

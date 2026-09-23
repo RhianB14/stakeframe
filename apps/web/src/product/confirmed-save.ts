@@ -56,8 +56,9 @@ export type DraftPatch = {
 }>;
 
 export type ConfirmedPlan = {
-  // true → a aposta já está registrada: os campos financeiros vão pelos
-  // comandos canônicos e o PATCH só leva metadados do rascunho.
+  // true → a aposta já está registrada: os campos que mudaram vão pelos
+  // comandos canônicos (ou são bloqueados) e o PATCH leva os inalterados +
+  // metadados do rascunho.
   canonical: boolean;
   blocked: BlockedConfirmedField[];
   origin: { kind: FormValues['origin']; freebetId?: string } | null;
@@ -132,29 +133,53 @@ export function planConfirmedSave(input: ConfirmedSaveInput): ConfirmedPlan {
     current.tipster.trim() !== '' &&
     !blocked.includes('tipsterClear');
   const dateChanged = current.eventAt !== baseline.eventAt;
+  const anythingBlocked = blocked.length > 0;
+
+  const routeOrigin = originChanged && !anythingBlocked;
+  const routeBookmaker = bookmakerChanged && !anythingBlocked;
+  const routeTipster = tipsterChanged && !anythingBlocked;
+  const routeDate = dateChanged && !anythingBlocked;
+
+  // O PATCH de uma aposta confirmada volta a levar os campos que o usuário NÃO
+  // mexeu, com o valor vigente. Isso preserva o rascunho tal como o contrato do
+  // "salvar sem mudança" exige — e, como o valor enviado é idêntico ao
+  // canônico, o fail-closed não o recusa. O que foi alterado é que sai daqui:
+  // ou tem comando canônico (casa, tipster, origem/crédito, data) ou é
+  // bloqueado antes de qualquer escrita.
+  //
+  // eventAt e sport ficam de fora SEMPRE neste modo: a linha de base deles é a
+  // visão do rascunho (inbox), não a do registro, então enviá-los equivaleria a
+  // declarar uma divergência que não é do usuário. A data roteia pelo comando
+  // canônico; o esporte é bloqueado se mudar.
+  const patch: DraftPatch = {
+    ...metadataPatch,
+    ...(routeOrigin
+      ? {}
+      : {
+          betOrigin: current.origin,
+          freebetId: usesCredit(current.origin) ? current.credit || null : null,
+        }),
+    ...(routeBookmaker ? {} : { bookmakerId: current.bookmaker || null }),
+    ...(routeTipster ? {} : { tipsterId: current.tipster || null }),
+    ...(blocked.includes('stake') ? {} : { stake: current.stake }),
+    ...(blocked.includes('odds') ? {} : { odds: current.odds }),
+    ...(blocked.includes('selections') ? {} : { selections: current.selections }),
+  };
 
   return {
     canonical: true,
     blocked,
-    origin:
-      originChanged && !blocked.includes('stake') && !blocked.includes('odds')
-        ? usesCredit(current.origin)
-          ? { kind: current.origin, freebetId: current.credit }
-          : { kind: current.origin }
-        : null,
-    bookmaker:
-      bookmakerChanged && !blocked.includes('stake') && !blocked.includes('odds')
-        ? current.bookmaker
-        : null,
-    tipster:
-      tipsterChanged && !blocked.includes('stake') && !blocked.includes('odds')
-        ? current.tipster
-        : null,
-    dates:
-      dateChanged && !blocked.length
-        ? selectionIds.map((selectionId) => ({ selectionId, eventAt: current.eventAt }))
-        : [],
-    patch: metadataPatch,
+    origin: routeOrigin
+      ? usesCredit(current.origin)
+        ? { kind: current.origin, freebetId: current.credit }
+        : { kind: current.origin }
+      : null,
+    bookmaker: routeBookmaker ? current.bookmaker : null,
+    tipster: routeTipster ? current.tipster : null,
+    dates: routeDate
+      ? selectionIds.map((selectionId) => ({ selectionId, eventAt: current.eventAt }))
+      : [],
+    patch,
   };
 }
 
