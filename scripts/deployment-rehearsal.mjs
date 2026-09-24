@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, X509Certificate } from 'node:crypto';
-import { mkdir, writeFile, realpath, lstat, readdir, unlink, rmdir } from 'node:fs/promises';
+import {
+  mkdir,
+  readFile,
+  writeFile,
+  realpath,
+  lstat,
+  readdir,
+  unlink,
+  rmdir,
+} from 'node:fs/promises';
 import { join, dirname, basename } from 'node:path';
 import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';
+import { connect as tlsConnect } from 'node:tls';
 import { execute, root, assertLocalEndpoint, assertWithinWorkspace } from './recovery/runtime.mjs';
 import { assertDeploymentConfig } from './deployment/config.mjs';
 import { assertRestoreConfig } from './deployment/restore-config.mjs';
@@ -33,6 +43,8 @@ const knownFiles = [
   'google_vision_api_key',
   'empty.env',
   'deployment.env',
+  // Public test CA copied out of the pinned Pebble image at run time.
+  'pebble.minica.pem',
 ];
 const origin = 'https://stakeframe.example.test';
 const controller = new AbortController();
@@ -116,6 +128,71 @@ function https(port, ca, path, method = 'GET', headers = {}) {
     req.on('timeout', () => req.destroy(new Error('REQUEST_TIMEOUT')));
     req.end();
   });
+}
+
+function tlsObservation(port, ca) {
+  return new Promise((resolve, reject) => {
+    const socket = tlsConnect(
+      {
+        host: '127.0.0.1',
+        port,
+        servername: 'stakeframe.example.test',
+        ca,
+        rejectUnauthorized: true,
+      },
+      () => {
+        const certificate = new X509Certificate(socket.getPeerCertificate().raw);
+        socket.end();
+        resolve({
+          serialNumber: certificate.serialNumber,
+          validFrom: certificate.validFrom,
+          validTo: certificate.validTo,
+        });
+      },
+    );
+    socket.on('error', reject);
+    socket.setTimeout(5000, () => socket.destroy(new Error('TLS_OBSERVATION_TIMEOUT')));
+  });
+}
+
+async function waitForCertificate(port, ca, { distinctFrom, deadline = 120_000 } = {}) {
+  const limit = Date.now() + deadline;
+  let lastError;
+  let handshakes = 0;
+  let handshakeFailures = 0;
+  while (Date.now() < limit) {
+    try {
+      const observation = await tlsObservation(port, ca);
+      handshakes += 1;
+      if (observation.serialNumber !== distinctFrom)
+        return { ...observation, handshakes, handshakeFailures };
+    } catch (error) {
+      handshakeFailures += 1;
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw lastError ?? new Error('TLS_CERTIFICATE_DEADLINE');
+}
+
+async function pebbleAnchor(path) {
+  const result = await compose(
+    [
+      'exec',
+      '-T',
+      'web',
+      'curl',
+      '-fsS',
+      '--cacert',
+      '/etc/caddy/pebble/pebble.minica.pem',
+      '--connect-to',
+      'localhost:15000:pebble:15000',
+      `https://localhost:15000/${path}`,
+    ],
+    { allowFailure: true },
+  );
+  assert.equal(result.code, 0, 'PEBBLE_TRUST_ANCHOR_UNREACHABLE');
+  return result.stdout;
 }
 
 async function main() {
@@ -452,8 +529,14 @@ async function main() {
   stage = 'config';
   const config = JSON.parse((await compose(['config', '--format', 'json'])).stdout);
   assertDeploymentConfig(config, { rehearsal: true });
-  // The production checker must reject the rehearsal's daemon-local image IDs.
-  assert.throws(() => assertDeploymentConfig(config), /IMMUTABLE_IMAGE_REQUIRED/);
+  // Production mode must refuse the rehearsal overlay (additional service);
+  // on its own, the daemon-local image IDs must also be refused.
+  assert.throws(() => assertDeploymentConfig(config));
+  {
+    const productionShape = structuredClone(config);
+    delete productionShape.services.pebble;
+    assert.throws(() => assertDeploymentConfig(productionShape), /IMMUTABLE_IMAGE_REQUIRED/);
+  }
   for (const mutate of [
     (value) => {
       value.services.api.ports = [{ target: 3000, published: '3000' }];
@@ -469,6 +552,15 @@ async function main() {
     },
     (value) => {
       value.networks.backend.internal = false;
+    },
+    (value) => {
+      delete value.services.pebble;
+    },
+    (value) => {
+      value.services.pebble.ports = [{ target: 15000, published: '15000' }];
+    },
+    (value) => {
+      value.networks['rehearsal-acme'].internal = false;
     },
   ]) {
     const unsafe = structuredClone(config);
@@ -503,12 +595,27 @@ async function main() {
     'migrate',
   ]);
   checked('explicit-and-repeatable-migration');
+  stage = 'pebble';
+  await compose(['up', '-d', '--wait', '--wait-timeout', '120', 'pebble']);
+  const pebbleId = (await compose(['ps', '-q', 'pebble'])).stdout.trim();
+  assert.ok(pebbleId);
+  // The static minica root signs the Pebble management API certificate; the
+  // web container verifies that API with it once it is mounted.
+  await docker([
+    'cp',
+    `${pebbleId}:/test/certs/pebble.minica.pem`,
+    join(directory, 'pebble.minica.pem'),
+  ]);
+  const minica = new X509Certificate(await readFile(join(directory, 'pebble.minica.pem')));
+  assert.match(minica.subject, /minica/i);
+  checked('pinned-acme-test-server-and-static-trust-anchor');
   stage = 'startup';
   await compose(['up', '-d', '--wait', '--wait-timeout', '120', 'api', 'worker', 'web']);
   const containers = await resources('container');
   for (const container of containers) {
     const service = container.Config.Labels['com.docker.compose.service'];
-    assert.equal(container.State.Health.Status, 'healthy');
+    if (service === 'pebble') assert.equal(container.State.Status, 'running');
+    else assert.equal(container.State.Health.Status, 'healthy');
     if (service !== 'web')
       assert.ok(Object.keys(container.HostConfig.PortBindings ?? {}).length === 0);
     if (service !== 'postgres') {
@@ -548,10 +655,11 @@ async function main() {
   await dbCommand("INSERT INTO public.rehearsal_marker VALUES (1, 'preserved')");
   checked('non-superuser-database-role');
   stage = 'tls';
-  const ca = (
-    await compose(['exec', '-T', 'web', 'cat', '/data/caddy/pki/authorities/local/root.crt'])
-  ).stdout;
-  const fingerprint = new X509Certificate(ca).fingerprint256;
+  // Pebble regenerates its issuing CA on every start, so the rehearsal reads
+  // the live anchors from its management API; that fetch is itself verified
+  // against the static minica root already mounted into the web container.
+  const ca = (await pebbleAnchor('roots/0')) + (await pebbleAnchor('intermediates/0'));
+  assert.ok(ca.includes('BEGIN CERTIFICATE'));
   const portOutput = (await compose(['port', 'web', '8443'])).stdout.trim();
   assert.match(portOutput, /^127\.0\.0\.1:\d+$/);
   let port = Number(portOutput.split(':').at(-1));
@@ -577,6 +685,11 @@ async function main() {
   });
   assert.equal(redirect.statusCode, 308);
   assert.equal(redirect.headers.location, `${origin}/health/ready`);
+  const issued = await waitForCertificate(port, ca);
+  assert.equal(issued.handshakeFailures, 0);
+  console.info(
+    `DEPLOYMENT_REHEARSAL_TLS_EVENT phase=issued serial=${issued.serialNumber} notBefore=${issued.validFrom} notAfter=${issued.validTo} handshakes=${issued.handshakes}`,
+  );
   await assert.rejects(https(port, undefined, '/health/ready'));
   const ready = await https(port, ca, '/health/ready');
   assert.equal(ready.status, 200);
@@ -609,6 +722,40 @@ async function main() {
       cookies.every((cookie) => /; Secure/i.test(cookie) && /; HttpOnly/i.test(cookie)),
   );
   checked('trusted-tls-auth-denials-and-secure-oauth-cookies');
+  stage = 'tls-renewal';
+  // renewal_window_ratio 0.98 against one-hour rehearsal certificates: the
+  // first maintenance pass after two percent of the lifetime must rotate the
+  // serial in place while the service keeps completing handshakes.
+  const renewalStarted = Date.now();
+  const renewed = await waitForCertificate(port, ca, {
+    distinctFrom: issued.serialNumber,
+    deadline: 300_000,
+  });
+  assert.equal(renewed.handshakeFailures, 0);
+  console.info(
+    `DEPLOYMENT_REHEARSAL_TLS_EVENT phase=renewed previousSerial=${issued.serialNumber} serial=${renewed.serialNumber} notBefore=${renewed.validFrom} notAfter=${renewed.validTo} handshakes=${renewed.handshakes} elapsedMs=${Date.now() - renewalStarted}`,
+  );
+  checked('in-place-acme-renewal-serial-rotation');
+  stage = 'tls-reissuance';
+  // Destroying the disposable project's caddy-data volume forces a new ACME
+  // order: a fresh serial that was never served before proves reissuance.
+  await compose(['rm', '-sf', 'web']);
+  const caddyData = (await resources('volume')).find(
+    (volume) => volume.Labels['com.docker.compose.volume'] === 'caddy-data',
+  );
+  assert.ok(caddyData, 'CADDY_DATA_VOLUME_MISSING');
+  await docker(['volume', 'rm', caddyData.Name]);
+  await compose(['up', '-d', '--wait', '--wait-timeout', '120', 'web']);
+  const reissueStarted = Date.now();
+  const reissued = await waitForCertificate(
+    Number((await compose(['port', 'web', '8443'])).stdout.trim().split(':').at(-1)),
+    ca,
+    { distinctFrom: renewed.serialNumber },
+  );
+  console.info(
+    `DEPLOYMENT_REHEARSAL_TLS_EVENT phase=reissued previousSerial=${renewed.serialNumber} serial=${reissued.serialNumber} notBefore=${reissued.validFrom} notAfter=${reissued.validTo} elapsedMs=${Date.now() - reissueStarted}`,
+  );
+  checked('acme-reissuance-after-caddy-data-reset');
   stage = 'restart';
   await compose(['restart', 'postgres', 'api', 'worker', 'web']);
   stage = 'restart-ready';
@@ -620,10 +767,43 @@ async function main() {
   port = Number(restartedPort.split(':').at(-1));
   assert.equal((await https(port, ca, '/health/ready')).status, 200);
   stage = 'restart-certificate';
-  const restoredCa = (
-    await compose(['exec', '-T', 'web', 'cat', '/data/caddy/pki/authorities/local/root.crt'])
-  ).stdout;
-  assert.equal(new X509Certificate(restoredCa).fingerprint256, fingerprint);
+  // The certificate archive lives on the caddy-data volume; the certificate
+  // answering after the restart must be one of the persisted files.
+  const storedSerials = async () => {
+    const paths = (
+      await compose([
+        'exec',
+        '-T',
+        'web',
+        'find',
+        '/data/caddy/certificates',
+        '-type',
+        'f',
+        '-name',
+        'stakeframe.example.test.crt',
+      ])
+    ).stdout
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    assert.ok(paths.length > 0, 'CERTIFICATE_ARCHIVE_MISSING');
+    const serials = [];
+    for (const path of paths) {
+      assert.match(path, /^\/data\/caddy\/certificates\//);
+      serials.push(
+        new X509Certificate((await compose(['exec', '-T', 'web', 'cat', path])).stdout)
+          .serialNumber,
+      );
+    }
+    return serials;
+  };
+  const beforeRestart = await storedSerials();
+  const restarted = await tlsObservation(port, ca);
+  const afterRestart = await storedSerials();
+  assert.ok(
+    [...beforeRestart, ...afterRestart].includes(restarted.serialNumber),
+    'RESTARTED_CERTIFICATE_NOT_PERSISTED',
+  );
   stage = 'restart-database';
   assert.deepEqual(await dbCommand('SELECT value FROM public.rehearsal_marker WHERE id=1'), [
     { value: 'preserved' },

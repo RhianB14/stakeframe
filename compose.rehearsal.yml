@@ -1,6 +1,47 @@
-# Applied only by the disposable local rehearsal runner.
+# Applied only by the disposable local rehearsal runner. The production
+# artifacts stay untouched: the ACME override exists only here, and the
+# production Caddyfile treats an absent /etc/caddy/global.d as a no-op.
 services:
   web:
     ports: !override ['127.0.0.1::8080', '127.0.0.1::8443']
     volumes:
-      - ./infra/production/tls.rehearsal.conf:/etc/caddy/tls.conf:ro
+      - ./infra/production/tls.rehearsal-acme.conf:/etc/caddy/global.d/tls.rehearsal-acme.conf:ro
+      # Static minica root copied from the pinned Pebble image by the runner;
+      # Caddy verifies the Pebble management API certificate with it.
+      - ${SECRET_DIRECTORY:?Private secret directory required}/pebble.minica.pem:/etc/caddy/pebble/pebble.minica.pem:ro
+    networks: !override
+      backend: {}
+      frontend: {}
+      rehearsal-acme:
+        aliases:
+          - stakeframe.example.test
+    depends_on:
+      pebble: { condition: service_started }
+
+  pebble:
+    # Test ACME server for the isolated rehearsal, pinned by digest; the
+    # published index covers linux/amd64 and linux/arm64. It keeps its issuing
+    # CA in memory (regenerated per start), so the rehearsal reads the current
+    # root and intermediate from its management API.
+    image: ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
+    user: '1000:1000'
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    command: ['-config', '/etc/pebble/pebble-config.json']
+    volumes:
+      - ./infra/production/pebble-config.json:/etc/pebble/pebble-config.json:ro
+    networks: [rehearsal-acme]
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
+
+networks:
+  rehearsal-acme:
+    internal: true
+    labels:
+      io.stakeframe.deployment: ${DEPLOYMENT_ID:?Deployment identifier required}
