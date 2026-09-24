@@ -194,3 +194,16 @@ registrado. Testes cobrem: nome de erro desconhecido com e sem aborto do
 sinal, `AbortError`, `TimeoutError`, falha de rede real, HTTP não-2xx, payload
 inválido, resposta válida e a persistência/limpeza de
 `lastError`/`lastHttpStatus`.
+
+## 13. Complemento STK-A3 — sinal de expiração TLS
+
+O conjunto exato de checks validado no `probeHealth` passou de doze para treze
+com o novo sinal `tls`: expiração do certificado servido pela aplicação —
+`ready` com 21 dias ou mais restantes, `warning` abaixo de 21 e `failed` abaixo
+de 7, com `TLS_EXPIRY_WARN_DAYS`/`TLS_EXPIRY_FAIL_DAYS` ajustando os limiares
+(leitura interna em `web:8443` com SNI da origem; `disabled` sem alvo; rótulo
+do alerta: `certificado TLS`). Como a validação exige o conjunto exato, o
+deploy do monitor precede o da aplicação; a histerese de três observações
+absorve a janela de transição quando as duas etapas caem dentro de
+aproximadamente quinze minutos — um intervalo maior registra um alerta
+transitório de payload seguido de recuperação.

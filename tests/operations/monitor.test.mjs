@@ -27,6 +27,7 @@ const names = [
   'aiBudget',
   'eventQueue',
   'recovery',
+  'tls',
 ];
 
 function makeStorage(db) {
@@ -1116,6 +1117,7 @@ test('notifies retention, processing and AI budget with their own labels', async
     ['retention', 'retenção'],
     ['worker', 'processamento'],
     ['aiBudget', 'orçamento de IA'],
+    ['tls', 'certificado TLS'],
   ];
   for (const [name, label] of cases) {
     const fixture = setup();

@@ -19,6 +19,7 @@ export const operationsHealthSchema = z
         aiBudget: operationStateSchema,
         eventQueue: operationStateSchema,
         recovery: operationStateSchema,
+        tls: operationStateSchema,
       })
       .strict(),
   })

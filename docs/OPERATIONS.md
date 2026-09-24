@@ -222,8 +222,12 @@ O endpoint HTTPS `/api/v1/operations/health` exige token próprio e retorna apen
 estados e horário. O token não autentica acesso financeiro. A leitura tem limite
 total de tempo: um check interno que não responde dentro do orçamento permanece
 `failed` em vez de segurar a resposta. São monitorados banco,
-worker, backup, retenção, disco, filas, anexos, cota e orçamento de IA, quarentena
-e ensaio mensal. Backup com cutoff de uma hora falha; teste mensal avisa aos 32
+worker, backup, retenção, disco, filas, anexos, cota e orçamento de IA, quarentena,
+ensaio mensal e expiração do certificado TLS servido pela aplicação (leitura
+interna em `web:8443` com SNI da origem, sem fetch público; avisa abaixo de 21
+dias restantes e falha abaixo de 7; `TLS_EXPIRY_WARN_DAYS` e
+`TLS_EXPIRY_FAIL_DAYS` ajustam os limiares, valor inválido cai no padrão e o
+estado é `disabled` sem alvo configurado). Backup com cutoff de uma hora falha; teste mensal avisa aos 32
 dias e falha aos 35, ou imediatamente em caso de execução/limpeza malsucedida.
 Disco avisa abaixo de 5 GiB ou 15% livres e falha abaixo de 1 GiB ou 5%.
 
