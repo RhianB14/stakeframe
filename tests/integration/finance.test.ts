@@ -282,6 +282,7 @@ describe('financial core with PostgreSQL', () => {
       profit: '85.00',
       returnAmount: '185.00',
       state: 'settled',
+      latestOutcome: 'win',
       stakeUnits: '10.000000',
     });
     await expect(
@@ -306,11 +307,38 @@ describe('financial core with PostgreSQL', () => {
     });
     expect((await service.bet(tenantContext, first.id)).bet).toMatchObject({
       ticketNumber: 1,
+      ticketKind: 'simple',
+      latestOutcome: null,
       selections: [{ event: 'Corinthians x Palmeiras' }],
     });
     expect((await service.bet(tenantContext, second.id)).bet).toMatchObject({
       ticketNumber: 2,
       selections: [{ event: 'Flamengo x Fluminense' }],
+    });
+  });
+  it('classifies BetBuild and multiple tickets in the bets list', async () => {
+    const { bookmakerId } = await initialized();
+    const betbuild = await createBet(bookmakerId, {
+      selections: [
+        { ...selection, market: 'Resultado final', selection: 'Time A' },
+        { ...selection, market: 'Total de gols', selection: 'Mais de 2,5' },
+      ],
+    });
+    const multiple = await createBet(bookmakerId, {
+      selections: [
+        { ...selection, event: 'Time A x Time B' },
+        { ...selection, event: 'Time C x Time D' },
+      ],
+    });
+
+    const page = await service.bets(tenantContext, { page: 1, pageSize: 25 });
+    expect(page.items.find((item) => item.id === betbuild.id)).toMatchObject({
+      ticketKind: 'betbuild',
+      latestOutcome: null,
+    });
+    expect(page.items.find((item) => item.id === multiple.id)).toMatchObject({
+      ticketKind: 'multiple',
+      latestOutcome: null,
     });
   });
   it('tracks partial cashout principal independently from payout and reverses without deleting history', async () => {

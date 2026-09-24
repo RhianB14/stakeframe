@@ -1223,6 +1223,12 @@
           "reference": { "nullable": true, "type": "string" },
           "freebetStakeReturned": { "nullable": true, "type": "boolean" },
           "state": { "type": "string", "enum": ["open", "settled", "cancelled"] },
+          "ticketKind": { "type": "string", "enum": ["simple", "multiple", "betbuild"] },
+          "latestOutcome": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["win", "loss", "void", "half_win", "half_loss", "cashout", "partial_cashout"]
+          },
           "remaining": {
             "nullable": true,
             "type": "string",
@@ -1302,6 +1308,8 @@
           "reference",
           "freebetStakeReturned",
           "state",
+          "ticketKind",
+          "latestOutcome",
           "remaining",
           "completionState",
           "unitMonth",
@@ -4953,6 +4961,12 @@
           "reference": { "nullable": true, "type": "string" },
           "freebetStakeReturned": { "nullable": true, "type": "boolean" },
           "state": { "type": "string", "enum": ["open", "settled", "cancelled"] },
+          "ticketKind": { "type": "string", "enum": ["simple", "multiple", "betbuild"] },
+          "latestOutcome": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["win", "loss", "void", "half_win", "half_loss", "cashout", "partial_cashout"]
+          },
           "remaining": {
             "nullable": true,
             "type": "string",
@@ -5032,6 +5046,8 @@
           "reference",
           "freebetStakeReturned",
           "state",
+          "ticketKind",
+          "latestOutcome",
           "remaining",
           "completionState",
           "unitMonth",

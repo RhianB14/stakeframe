@@ -451,14 +451,13 @@ export async function enqueueOutbox(
 
 /**
  * Espelha alterações de uma aposta importada na mensagem do Telegram.
- * `cleanup` remove todas as mensagens após descarte. `preserveStatusEntry`
- * remove a foto, mantém a resposta final (botões Editar/Status) e a sincroniza.
- * Sem as opções, edita a resposta final. Nunca edita mensagem já excluída.
+ * `cleanup` remove todas as mensagens após descarte ou liquidação total.
+ * Sem essa opção, edita a resposta final. Nunca edita mensagem já excluída.
  */
 export async function enqueueBetSync(
   client: PoolClient,
   betId: string,
-  options: { cleanup?: boolean; preserveStatusEntry?: boolean } = {},
+  options: { cleanup?: boolean } = {},
 ) {
   const rows = (
     await client.query<{
@@ -474,22 +473,20 @@ export async function enqueueBetSync(
     )
   ).rows;
   for (const row of rows) {
+    // A liquidação já removeu a trilha do Telegram; não reabra o estado de sync
+    // como pending quando uma correção financeira posterior não tem mensagem a editar.
+    if (row.deleted_at) continue;
     const updated = await client.query<{ version: number }>(
       "update integration.inbox set version=version+1,telegram_sync_state='pending',updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
       [row.id],
     );
     const version = updated.rows[0]!.version;
     if (options.cleanup) {
-      if (row.deleted_at) continue;
       if (row.source_id) await enqueueOutbox(client, row.id, 'delete_source_message', version);
       if (row.result_id) await enqueueOutbox(client, row.id, 'delete_result_message', version);
       if (row.processing_id)
         await enqueueOutbox(client, row.id, 'delete_processing_message', version);
     } else if (!row.deleted_at) {
-      if (options.preserveStatusEntry && row.source_id)
-        await enqueueOutbox(client, row.id, 'delete_source_message', version);
-      if (options.preserveStatusEntry && row.processing_id)
-        await enqueueOutbox(client, row.id, 'delete_processing_message', version);
       if (row.result_id) await enqueueOutbox(client, row.id, 'edit_result_message', version);
     }
   }

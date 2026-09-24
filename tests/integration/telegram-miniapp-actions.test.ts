@@ -227,7 +227,7 @@ describe('Mini App status section (R7)', () => {
     expect(body.automaticPolicy).toBe('disabled');
   });
 
-  it('settles a pending bet for real, persists it, syncs Telegram and queues the cleanup', async () => {
+  it('settles a pending bet for real, persists it, and removes all Telegram messages', async () => {
     const { importId, version } = await importedWithTelegram();
     const response = await app.inject({
       method: 'POST',
@@ -253,16 +253,16 @@ describe('Mini App status section (R7)', () => {
       headers: session,
     });
     expect((viaWeb.json() as { bet: { state: string } | null }).bet?.state).toBe('settled');
-    // O bilhete mantém a resposta final como reentrada do Mini App; foto e
-    // temporária são removidas e a mensagem final recebe o novo status.
+    // A liquidação encerra o fluxo no Telegram: foto, processamento e resposta
+    // final são removidos, inclusive os botões de reentrada.
     const ops = (await outbox(importId)).map((item) => item.operation);
     for (const operation of [
       'delete_source_message',
       'delete_processing_message',
-      'edit_result_message',
+      'delete_result_message',
     ])
       expect(ops).toContain(operation);
-    expect(ops).not.toContain('delete_result_message');
+    expect(ops).not.toContain('edit_result_message');
   });
 
   it('replays the same liquidation idempotently and corrects a settled outcome with audited reversals', async () => {
@@ -1067,8 +1067,8 @@ describe('Mini App cashout section (G0-20 B4/B5)', () => {
     const ops = (await outbox(importId)).map((item) => item.operation);
     for (const operation of ['delete_source_message', 'delete_processing_message'])
       expect(ops).toContain(operation);
-    expect(ops).toContain('edit_result_message');
-    expect(ops).not.toContain('delete_result_message');
+    expect(ops).toContain('delete_result_message');
+    expect(ops).not.toContain('edit_result_message');
   });
 
   it('registers a partial cashout closing only the informed part', async () => {

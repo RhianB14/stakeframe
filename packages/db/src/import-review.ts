@@ -1008,9 +1008,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           expectedVersion: currentSettings.version,
         });
         const key = deterministicKey(`import-status:${id}:${input.version}:${input.action}`);
-        await executeFinancialCommand(client, actor, key, command, currentSettings, {
-          preserveTelegramStatusEntry: actor !== 'telegram:bot',
-        });
+        await executeFinancialCommand(client, actor, key, command, currentSettings);
         let updated = (
           await client.query<{ version: number }>(
             'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
