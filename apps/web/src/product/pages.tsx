@@ -6,6 +6,7 @@ import {
   journalPageSchema,
   formatBRL,
   saoPauloDate,
+  type Bet,
   type Workspace,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
@@ -14,6 +15,7 @@ import { request, dateLabel } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
 import { betFinancialDisplay } from './financial-display.js';
+import { betResultLabel, betResultQualifier, betTablePresentation } from './bet-table.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
 const outcomeLabels: Record<string, string> = {
@@ -37,7 +39,88 @@ const journalLabels: Record<string, string> = {
   reversal: 'Estorno',
 };
 const catalogName = (workspace: Workspace, id: string | null) =>
-  workspace.catalog.find((item) => item.id === id)?.name ?? 'Sem tipster';
+  id ? (workspace.catalog.find((item) => item.id === id)?.name ?? '—') : '—';
+
+function BetListDetails({
+  bet,
+  workspace,
+  open,
+}: {
+  bet: Bet;
+  workspace: Workspace;
+  open: OpenModal;
+}) {
+  const financial = betFinancialDisplay(bet);
+  const freebetAmount =
+    workspace.freebets.find((freebet) => freebet.id === bet.freebetId)?.amount ?? null;
+  const details = betTablePresentation(bet, freebetAmount);
+  const tipster = catalogName(workspace, bet.tipsterId);
+  const bookmaker = catalogName(workspace, bet.bookmakerId);
+  const result = betResultLabel(bet);
+  const resultQualifier = betResultQualifier(bet);
+  const accessibleTitle = bet.selections[0]?.event?.trim() || bet.reference?.trim() || 'sem título';
+  const id = bet.id;
+  const fields = [
+    ['Data do jogo', details.gameDate],
+    ['Hora do jogo', details.gameTime],
+    ['Evento', details.event],
+    ['Status da aposta', resultQualifier ? `${result} · ${resultQualifier}` : result],
+    ['Aposta', details.selection],
+    ['Mercado', details.market],
+    ['Tipo', details.ticketKind],
+    ['Tipster', tipster],
+    ['Casa de aposta', bookmaker],
+    ['Valor apostado', bet.stake === null ? 'A definir' : formatBRL(bet.stake)],
+    ['Odd total', bet.odds ?? 'A definir'],
+    [
+      'Retorno potencial',
+      details.potentialReturn === null ? 'A definir' : formatBRL(details.potentialReturn),
+    ],
+    ['Retorno realizado', financial.returnText],
+    ['Lucro/prejuízo realizado', financial.profitText],
+    ['ID da aposta', id],
+  ];
+
+  return (
+    <article className="bet-list-card">
+      <div className="bet-list-card-heading">
+        <div>
+          <small className="ticket-number">Bilhete #{bet.ticketNumber}</small>
+          <strong>{details.event}</strong>
+        </div>
+        <span className={`status-badge status-${bet.state}`}>{result}</span>
+      </div>
+      <dl className="bet-list-card-fields">
+        {fields.map(([label, value]) => (
+          <div
+            className={
+              label === 'Evento' ||
+              label === 'Status da aposta' ||
+              label === 'Aposta' ||
+              label === 'ID da aposta'
+                ? 'wide'
+                : ''
+            }
+            key={label}
+          >
+            <dt>{label}</dt>
+            <dd title={label === 'ID da aposta' ? value : undefined}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {details.scheduleQualifier ? (
+        <p className="bet-schedule-note">{details.scheduleQualifier}</p>
+      ) : null}
+      <Button
+        variant="secondary"
+        onClick={() => open({ kind: 'detail', id: bet.id })}
+        aria-label={`Ver aposta ${accessibleTitle}`}
+      >
+        Abrir bilhete
+      </Button>
+    </article>
+  );
+}
 export function Empty({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="empty-state">
@@ -184,14 +267,14 @@ export function BetsPage({
                 ))}
             </select>
           </Field>
-          <Field label="Apostada desde">
+          <Field label="Data da aposta desde">
             <input
               type="date"
               value={from}
               onChange={(event) => change(setFrom, event.target.value)}
             />
           </Field>
-          <Field label="Apostada até">
+          <Field label="Data da aposta até">
             <input type="date" value={to} onChange={(event) => change(setTo, event.target.value)} />
           </Field>
         </div>
@@ -215,16 +298,56 @@ export function BetsPage({
           />
         ) : (
           <>
-            <div className="table-scroll">
-              <table className="product-table">
+            {!compact ? (
+              <p className="bet-table-scroll-hint">
+                A tabela é mais larga que a tela. Deslize horizontalmente para ver todas as colunas.
+              </p>
+            ) : null}
+            {!compact ? (
+              <div className="bet-list-cards">
+                {query.data.items.map((bet) => (
+                  <BetListDetails key={bet.id} bet={bet} workspace={workspace} open={open} />
+                ))}
+              </div>
+            ) : null}
+            <div
+              className={`table-scroll${compact ? '' : ' bet-table-desktop'}`}
+              role="region"
+              aria-label="Tabela de apostas"
+              tabIndex={0}
+            >
+              <table className={`product-table${compact ? '' : ' bet-detail-table'}`}>
                 <thead>
                   <tr>
-                    <th>Nº / bilhete / evento</th>
-                    <th>Casa</th>
-                    <th>Valor</th>
-                    <th>Odd</th>
-                    <th>Situação</th>
-                    <th>Resultado realizado</th>
+                    {compact ? (
+                      <>
+                        <th>Nº / bilhete / evento</th>
+                        <th>Casa</th>
+                        <th>Valor</th>
+                        <th>Odd</th>
+                        <th>Situação</th>
+                        <th>Resultado realizado</th>
+                      </>
+                    ) : (
+                      <>
+                        <th>Bilhete</th>
+                        <th>Data do jogo</th>
+                        <th>Hora</th>
+                        <th>Evento</th>
+                        <th>Status da aposta</th>
+                        <th>Aposta</th>
+                        <th>Mercado</th>
+                        <th>Tipo</th>
+                        <th>Tipster</th>
+                        <th>Casa de aposta</th>
+                        <th>Valor apostado</th>
+                        <th>Odd total</th>
+                        <th>Retorno potencial</th>
+                        <th>Retorno realizado</th>
+                        <th>Lucro/prejuízo</th>
+                        <th>ID da aposta</th>
+                      </>
+                    )}
                     <th>
                       <span className="sr-only">Abrir</span>
                     </th>
@@ -233,6 +356,75 @@ export function BetsPage({
                 <tbody>
                   {query.data.items.map((bet) => {
                     const financial = betFinancialDisplay(bet);
+                    const freebetAmount =
+                      workspace.freebets.find((freebet) => freebet.id === bet.freebetId)?.amount ??
+                      null;
+                    const details = betTablePresentation(bet, freebetAmount);
+                    if (!compact) {
+                      const result = betResultLabel(bet);
+                      const resultQualifier = betResultQualifier(bet);
+                      const accessibleTitle =
+                        bet.selections[0]?.event?.trim() || bet.reference?.trim() || 'sem título';
+                      return (
+                        <tr key={bet.id}>
+                          <td className="tabular">
+                            <strong>#{bet.ticketNumber}</strong>
+                            {bet.freebetId ? <small>Freebet</small> : null}
+                          </td>
+                          <td className="tabular">
+                            {details.gameDate}
+                            {details.scheduleQualifier ? (
+                              <small>{details.scheduleQualifier}</small>
+                            ) : null}
+                          </td>
+                          <td className="tabular">{details.gameTime}</td>
+                          <td className="bet-event-cell">{details.event}</td>
+                          <td>
+                            <span className={`status-badge status-${bet.state}`}>{result}</span>
+                            {resultQualifier ? <small>{resultQualifier}</small> : null}
+                          </td>
+                          <td className="bet-description-cell">{details.selection}</td>
+                          <td>{details.market}</td>
+                          <td>{details.ticketKind}</td>
+                          <td>{catalogName(workspace, bet.tipsterId)}</td>
+                          <td>{catalogName(workspace, bet.bookmakerId)}</td>
+                          <td className="tabular">
+                            {bet.stake === null ? 'A definir' : formatBRL(bet.stake)}
+                          </td>
+                          <td className="tabular">{bet.odds ?? 'A definir'}</td>
+                          <td className="tabular">
+                            {details.potentialReturn === null
+                              ? 'A definir'
+                              : formatBRL(details.potentialReturn)}
+                          </td>
+                          <td className={`tabular ${financial.tone}`}>
+                            {financial.returnText}
+                            {financial.qualifier !== 'Realizado' ? (
+                              <small>{financial.qualifier}</small>
+                            ) : null}
+                          </td>
+                          <td className={`tabular ${financial.tone}`}>
+                            {financial.profitText}
+                            {financial.qualifier !== 'Realizado' ? (
+                              <small>{financial.qualifier}</small>
+                            ) : null}
+                          </td>
+                          <td className="bet-id-cell" title={bet.id}>
+                            {bet.id}
+                          </td>
+                          <td>
+                            <Button
+                              variant="ghost"
+                              size="small"
+                              aria-label={`Ver aposta ${accessibleTitle}`}
+                              onClick={() => open({ kind: 'detail', id: bet.id })}
+                            >
+                              Ver ↗
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    }
                     return (
                       <tr key={bet.id}>
                         <td>
@@ -241,7 +433,7 @@ export function BetsPage({
                             className="table-title"
                             onClick={() => open({ kind: 'detail', id: bet.id })}
                           >
-                            {bet.selections[0]?.event ?? 'Bilhete'}
+                            {details.event}
                             {bet.selections.length > 1 ? ` +${bet.selections.length - 1}` : ''}
                           </button>
                           <small>

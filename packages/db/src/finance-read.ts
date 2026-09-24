@@ -5,6 +5,8 @@ import {
   unitsFor,
   workspaceSchema,
   betSchema,
+  classifyTicketKind,
+  ticketKindSchema,
   type BetQuery,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
@@ -128,8 +130,37 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       [ids],
     )
   ).rows;
+  const metadata = (
+    await client.query<{
+      bet_id: string;
+      ticket_kind: string | null;
+      outcome: string | null;
+    }>(
+      `select b.id as bet_id,i.ticket_kind,s.outcome
+       from unnest($1::uuid[]) as b(id)
+       left join lateral (
+         select metadata->'userOverrides'->>'ticketKind' as ticket_kind
+         from integration.inbox
+         where organization_id=current_setting($$app.organization_id$$, true)::uuid
+           and imported_bet_id=b.id
+         order by updated_at desc,id desc limit 1
+       ) i on true
+       left join lateral (
+         select settlement.outcome
+         from finance.settlement settlement
+         left join finance.settlement_reversal reversal on reversal.settlement_id=settlement.id
+         where settlement.organization_id=current_setting($$app.organization_id$$, true)::uuid
+           and settlement.bet_id=b.id and reversal.settlement_id is null
+         order by settlement.settled_at desc,settlement.created_at desc,settlement.id desc limit 1
+       ) s on true`,
+      [ids],
+    )
+  ).rows;
   return rows.map((row) => {
     const total = totals.find((value) => value.bet_id === row.id);
+    const betSelections = selections.filter((value) => value.bet_id === row.id);
+    const betMetadata = metadata.find((value) => value.bet_id === row.id);
+    const kindOverride = ticketKindSchema.safeParse(betMetadata?.ticket_kind);
     return betSchema.parse({
       id: row.id,
       ticketNumber: row.ticket_number,
@@ -143,6 +174,10 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       freebetStakeReturned: row.freebet_id ? row.promotional_stake_returned : null,
       reference: row.reference,
       state: row.state,
+      ticketKind: kindOverride.success
+        ? kindOverride.data
+        : classifyTicketKind(betSelections.map((selection) => ({ event: selection.event }))),
+      latestOutcome: betMetadata?.outcome ?? null,
       remaining: row.remaining,
       unitMonth: row.unit_month,
       unitAmount: row.unit_amount,
@@ -150,19 +185,17 @@ async function betDtos(client: PoolClient, rows: BetRow[]) {
       stakeUnits: row.stake === null ? null : unitsFor(row.stake, row.unit_amount),
       returnAmount: total?.returns ?? '0.00',
       profit: total?.profit ?? '0.00',
-      selections: selections
-        .filter((value) => value.bet_id === row.id)
-        .map((selection) => ({
-          id: selection.id,
-          event: selection.event,
-          sport: selection.sport,
-          market: selection.market,
-          selection: selection.selection,
-          odds: selection.odds,
-          eventDate: selection.event_date,
-          eventAt: selection.event_at?.toISOString() ?? null,
-          dateStatus: selection.date_status,
-        })),
+      selections: betSelections.map((selection) => ({
+        id: selection.id,
+        event: selection.event,
+        sport: selection.sport,
+        market: selection.market,
+        selection: selection.selection,
+        odds: selection.odds,
+        eventDate: selection.event_date,
+        eventAt: selection.event_at?.toISOString() ?? null,
+        dateStatus: selection.date_status,
+      })),
     });
   });
 }

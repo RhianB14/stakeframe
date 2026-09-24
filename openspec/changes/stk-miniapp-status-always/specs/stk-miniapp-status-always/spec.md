@@ -2,7 +2,7 @@
 
 ## ADDED Requirements
 
-### Requirement: Correção e reentrada de status pelo Mini App
+### Requirement: Correção e edição contínua do status pelo Mini App
 
 O Mini App DEVE (MUST) manter a seção de status acessível no editor completo
 sempre que houver uma aposta canônica vinculada, qualquer que seja o estado
@@ -15,9 +15,9 @@ NÃO DEVE ser reaberta por esta seção. Se o proprietário corrigir uma liquida
 ativa pelo Mini App ou pela Web, o servidor DEVE registrar
 `settlement.reverse` auditável e aplicar a nova transição atomicamente; ao voltar
 para Pendente, deve apenas efetivar a reversão. O teclado inline legado do
-Telegram DEVE manter sua semântica terminal. Ao liquidar pelo Mini App, a foto
-original e a mensagem temporária podem ser removidas, mas a mensagem final do
-Telegram DEVE permanecer, atualizada e com seus botões de reentrada.
+Telegram DEVE manter sua semântica terminal até a liquidação. Ao liquidar pelo
+Mini App, a outbox DEVE remover a foto original, a mensagem temporária e a
+resposta final do Telegram; edições posteriores ficam disponíveis pela Web.
 
 #### Scenario: status disponível no editor completo
 
@@ -27,13 +27,22 @@ Telegram DEVE permanecer, atualizada e com seus botões de reentrada.
 - **AND** o estado atual é exibido e ações financeiras incompletas são recusadas
   com orientação acionável
 
-#### Scenario: primeira liquidação preserva a reentrada
+#### Scenario: liquidação total remove as mensagens do Telegram
 
 - **WHEN** o proprietário confirma uma transição financeira válida para uma
   aposta pendente pelo Mini App
 - **THEN** o resultado é registrado pelo comando financeiro canônico
-- **AND** a outbox remove a foto e a mensagem de processamento, atualiza a
-  mensagem final e não agenda a exclusão dessa mensagem
+- **AND** a outbox remove a foto original, a mensagem de processamento e a
+  resposta final do bot
+- **AND** a atualização não mantém um botão do Telegram que reabra o bilhete
+
+#### Scenario: status visível na lista de apostas
+
+- **WHEN** o proprietário consulta a lista de apostas na Web
+- **THEN** a tabela mostra a coluna "Status da aposta" logo após Evento
+- **AND** o status apresenta Pendente, Ganha, Perdida, Reembolso, Meio-Ganha,
+  Meio-Perdida ou Cashout conforme o ledger
+- **AND** a apresentação móvel inclui o mesmo status no cartão do bilhete
 
 #### Scenario: correção de resultado liquidado
 

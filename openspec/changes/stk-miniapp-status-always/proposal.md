@@ -16,10 +16,14 @@ o Mini App.
   preservado no histórico.
 - Continuar recusando efeitos financeiros sem stake/casa/odd suficientes e
   impedir reabertura de aposta cancelada.
-- Ao liquidar no Mini App, remover a foto original e a mensagem temporária,
-  sincronizar e preservar a mensagem final do Telegram como ponto de reentrada.
+- Na lista de apostas, exibir data/hora do jogo, evento, seleções, mercado,
+  tipo, tipster, casa, stake, odd, retornos, status/resultado e ID; diferenciar
+  Simples, Múltipla e BetBuild, usando o tipo como mercado para as duas últimas.
+- Ao liquidar no Mini App, remover a foto original, a mensagem temporária e a
+  resposta final do Telegram. A edição posterior continua disponível pela Web.
 
 ## Impacto
 
-Sem mudança de schema, migração ou contrato público. Usa o comando canônico
+Sem migração de banco. A resposta de leitura da aposta passa a incluir o tipo do
+bilhete e o último resultado financeiro. Usa o comando canônico
 `settlement.reverse`, o ledger existente e a outbox do Telegram.

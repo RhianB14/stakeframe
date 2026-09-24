@@ -296,6 +296,8 @@ export const betSchema = z
     reference: z.string().nullable(),
     freebetStakeReturned: z.boolean().nullable(),
     state: z.enum(['open', 'settled', 'cancelled']),
+    ticketKind: z.enum(['simple', 'multiple', 'betbuild']),
+    latestOutcome: outcomeSchema.nullable(),
     remaining: moneySchema.nullable(),
     completionState: z.enum(['incomplete', 'complete']),
     unitMonth: monthSchema.nullable(),

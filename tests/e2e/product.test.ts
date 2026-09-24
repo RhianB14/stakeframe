@@ -115,6 +115,8 @@ const bet: Bet = {
   reference: '',
   completionState: 'complete',
   state: 'open',
+  ticketKind: 'simple',
+  latestOutcome: null,
   remaining: '100.00',
   unitMonth: '2026-09',
   unitAmount: '10.00',
@@ -268,7 +270,7 @@ for (const scenario of [
     await enabledProduct(page, fixture(), [sample], sample);
     await page.goto('/');
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    const result = page.locator('.product-table tbody tr').first().locator('td').nth(5);
+    const result = page.locator('.product-table tbody tr').first().locator('td').nth(14);
     await expect(result).toContainText(scenario.expected);
     await expect(result).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
     if (scenario.qualifier !== 'Realizado') {
@@ -283,6 +285,88 @@ for (const scenario of [
     }
   });
 }
+test('bets page exposes game, market, ticket kind and result details responsively', async ({
+  page,
+}, info) => {
+  const tipsterId = '10000000-0000-4000-8000-00000000000a';
+  const workspace = fixture();
+  workspace.catalog.push({
+    id: tipsterId,
+    kind: 'tipster',
+    name: 'Analista',
+    aliases: [],
+    active: true,
+  });
+  const scheduledBet: Bet = {
+    ...bet,
+    tipsterId,
+    selections: [
+      {
+        ...bet.selections[0]!,
+        eventAt: '2026-09-21T20:00:00Z',
+        eventDate: '2026-09-21',
+        dateStatus: 'confirmed',
+      },
+    ],
+  };
+  await enabledProduct(page, workspace, [scheduledBet]);
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+
+  if ((page.viewportSize()?.width ?? 0) <= 900) {
+    const card = page.locator('.bet-list-card').first();
+    await expect(card).toBeVisible();
+    await expect(card.locator('.bet-list-card-fields')).toContainText('21/09/2026');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('17:00');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('Gols');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('Simples');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('Analista');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('Bet365');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('R$ 100,00');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('2.00');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('R$ 200,00');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('Pendente');
+    await expect(card.locator('.bet-list-card-fields')).toContainText('Status da aposta');
+    await expect(card.locator('.bet-list-card-fields')).toContainText(scheduledBet.id);
+  } else {
+    await expect(
+      page.getByText('A tabela é mais larga que a tela.', { exact: false }),
+    ).toBeVisible();
+    for (const heading of [
+      'Data do jogo',
+      'Hora',
+      'Evento',
+      'Status da aposta',
+      'Aposta',
+      'Mercado',
+      'Tipo',
+      'Tipster',
+      'Casa de aposta',
+      'Valor apostado',
+      'Odd total',
+      'Retorno potencial',
+      'Retorno realizado',
+      'Lucro/prejuízo',
+      'ID da aposta',
+    ]) {
+      await expect(page.getByRole('columnheader', { name: heading, exact: true })).toBeVisible();
+    }
+    const row = page.locator('.bet-detail-table tbody tr').first();
+    await expect(row.locator('td').nth(4)).toContainText('Pendente');
+    await expect(row).toContainText('21/09/2026');
+    await expect(row).toContainText('17:00');
+    await expect(row).toContainText('Gols');
+    await expect(row).toContainText('Simples');
+    await expect(row).toContainText('Analista');
+    await expect(row).toContainText('Bet365');
+    await expect(row).toContainText('R$ 100,00');
+    await expect(row).toContainText('2.00');
+    await expect(row).toContainText('R$ 200,00');
+    await expect(row).toContainText('Pendente');
+    await expect(row).toContainText(scheduledBet.id);
+  }
+  await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
+});
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,
 }, info) => {
@@ -361,12 +445,12 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     expect(labelLayout.height).toBeGreaterThan(12);
 
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    await expect(page.locator('.product-table tbody tr').last()).toBeVisible();
+    await expect(page.locator('.bet-list-card').last()).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const bottomSpacing = await page.evaluate(() => {
       const navElement = document.querySelector('.product-sidebar');
-      const lastRow = document.querySelector('.product-table tbody tr:last-child');
-      if (!navElement || !lastRow) throw new Error('Mobile nav or last bet row missing');
+      const lastRow = document.querySelector('.bet-list-card:last-child');
+      if (!navElement || !lastRow) throw new Error('Mobile nav or last bet card missing');
       return {
         navTop: navElement.getBoundingClientRect().top,
         rowBottom: lastRow.getBoundingClientRect().bottom,

@@ -370,6 +370,39 @@ describe('telegram outbox executor', () => {
     expect(row.telegram_sync_state).toBe('deleted');
   });
 
+  it('deletes the final bot response from the chat when cleanup is dispatched', async () => {
+    const id = await boundInbox();
+    await database.pool.query(
+      'update integration.inbox set telegram_result_message_id=222 where id=$1',
+      [id],
+    );
+    await database.pool.query(
+      "update integration.telegram_outbox set state='done' where inbox_id=$1 and state='pending'",
+      [id],
+    );
+    const tenant = createTenantContext(database);
+    await tenant.withOrganizationTransaction(tenantContext, (client) =>
+      enqueueOutbox(client, id, 'delete_result_message', 3),
+    );
+    responses.push(json({ ok: true, result: true }));
+
+    expect(await service().processOnce()).toBe(true);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(String(url)).toMatch(/\/deleteMessage$/);
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      chat_id: 42,
+      message_id: 222,
+    });
+    const row = (
+      await database.pool.query<{ telegram_deleted_at: Date | null; telegram_sync_state: string }>(
+        'select telegram_deleted_at,telegram_sync_state from integration.inbox where id=$1',
+        [id],
+      )
+    ).rows[0]!;
+    expect(row.telegram_deleted_at).not.toBeNull();
+    expect(row.telegram_sync_state).toBe('deleted');
+  });
+
   it('keeps the result entry available when removing a settled ticket photo', async () => {
     const id = await boundInbox();
     await database.pool.query(

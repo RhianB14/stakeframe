@@ -937,6 +937,111 @@
   min-width: 180px;
   max-width: 300px;
 }
+.bet-table-desktop {
+  border: 1px solid #2a313e;
+  border-radius: 12px;
+  scrollbar-color: #52617a #151b26;
+}
+.bet-table-scroll-hint {
+  margin: 12px 0 8px;
+  color: #8e9ab0;
+  font-size: 12px;
+}
+.bet-detail-table {
+  min-width: 1840px;
+  table-layout: auto;
+}
+.bet-detail-table th,
+.bet-detail-table td {
+  padding: 12px 9px;
+  vertical-align: top;
+}
+.bet-detail-table th {
+  font-size: 11px;
+}
+.bet-detail-table td:first-child {
+  min-width: 88px;
+  max-width: 100px;
+}
+.bet-detail-table .bet-event-cell {
+  min-width: 170px;
+  max-width: 240px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bet-detail-table .bet-description-cell {
+  min-width: 190px;
+  max-width: 280px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bet-detail-table .bet-id-cell {
+  max-width: 120px;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bet-list-cards {
+  display: none;
+}
+.bet-schedule-note {
+  color: #d9b870;
+  font-size: 11px;
+  margin: 5px 0 0;
+}
+.bet-list-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #303a4d;
+  border-radius: 14px;
+  background: #171e2b;
+}
+.bet-list-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bet-list-card-heading > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.bet-list-card-heading strong {
+  overflow-wrap: anywhere;
+}
+.bet-list-card-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.bet-list-card-fields > div {
+  min-width: 0;
+}
+.bet-list-card-fields > .wide {
+  grid-column: 1 / -1;
+}
+.bet-list-card-fields dt {
+  color: #8e9ab0;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.bet-list-card-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.bet-list-card-fields dd[title] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.bet-list-card .ui-button {
+  justify-self: start;
+}
 .product-table small,
 .catalog-entry small,
 .history-entry small {
@@ -1649,6 +1754,29 @@
   }
   .review-modes .ui-button {
     padding: 9px 10px;
+  }
+}
+@media (max-width: 900px) {
+  .bet-table-scroll-hint {
+    display: none;
+  }
+  .bet-table-desktop {
+    display: none;
+  }
+  .bet-list-cards {
+    display: grid;
+    gap: 12px;
+  }
+}
+@media (max-width: 420px) {
+  .bet-list-card {
+    padding: 13px;
+  }
+  .bet-list-card-fields {
+    gap: 10px;
+  }
+  .bet-list-card-heading {
+    flex-direction: column;
   }
 }
 .calendar-layout {

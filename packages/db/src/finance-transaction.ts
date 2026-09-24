@@ -11,7 +11,6 @@ export async function executeFinancialCommand(
   key: string,
   command: FinanceCommand,
   settings: SettingsRow,
-  options: { preserveTelegramStatusEntry?: boolean } = {},
 ) {
   if (!actor || actor.length > 200 || !/^[a-f0-9-]{36}$/i.test(key))
     throw new FinanceError('INVALID_FINANCIAL_OPERATION');
@@ -33,7 +32,7 @@ export async function executeFinancialCommand(
   }
   if (settings.version !== command.expectedVersion) throw new FinanceError('VERSION_CONFLICT');
   const now = (await client.query<{ now: Date }>('select now()')).rows[0]!.now;
-  const applied = await applyFinanceCommand(client, command, actor, settings, now, options);
+  const applied = await applyFinanceCommand(client, command, actor, settings, now);
   const balances = (
     await client.query<{ kind: string; amount: string }>(
       'select a.kind,coalesce(sum(p.amount),0)::text as amount from finance.account a left join finance.posting p on p.account_id=a.id where a.organization_id=current_setting($$app.organization_id$$, true)::uuid group by a.id',

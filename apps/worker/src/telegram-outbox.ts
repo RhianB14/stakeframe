@@ -241,8 +241,8 @@ export function createTelegramOutboxService(
         if (!row.telegram_source_message_id) return;
         await client.deleteMessage(chatId, Number(row.telegram_source_message_id));
         if (row.bet_state === 'settled') {
-          // Após liquidar, mantenha a resposta final com os botões Editar/Status
-          // como ponto de reentrada; apenas a foto original é removida.
+          // A limpeza do settlement remove a foto antes da resposta final; esta
+          // operação isolada apenas desassocia o ID da foto original.
           await setSync(db, row.id, 'telegram_source_message_id=null');
         } else {
           await setSync(

@@ -134,7 +134,6 @@ export async function applyFinanceCommand(
   actor: string,
   settings: SettingsRow,
   now: Date,
-  options: { preserveTelegramStatusEntry?: boolean } = {},
 ): Promise<{ id: string; before: unknown }> {
   const type = command.type;
   if (type === 'bet.unit.resolve') {
@@ -672,13 +671,10 @@ export async function applyFinanceCommand(
       'update finance.bet set remaining=$2,state=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
       [command.id, money(remaining), remaining === 0n ? 'settled' : 'open'],
     );
-    // R5: liquidação total normalmente limpa o Telegram. Pelo fluxo do Mini
-    // App, mantém-se a resposta final como ponto permanente para reabrir e
-    // corrigir o status; a foto e a mensagem temporária são removidas.
+    // Liquidação total encerra o fluxo do bilhete no Telegram. A Mini App
+    // também remove a resposta final para não deixar um atalho de status obsoleto.
     if (remaining === 0n) {
-      if (options.preserveTelegramStatusEntry)
-        await enqueueBetSync(client, command.id, { preserveStatusEntry: true });
-      else await enqueueCleanupForBet(client, command.id);
+      await enqueueCleanupForBet(client, command.id);
     }
     // A full void releases the promotional credit again. For a pure freebet the
     // return is zero; for a hybrid it is the real principal, so checking only
