@@ -3325,7 +3325,8 @@
                 "type": "string",
                 "enum": ["ready", "warning", "failed", "disabled"]
               },
-              "recovery": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] }
+              "recovery": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "tls": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] }
             },
             "required": [
               "database",
@@ -3339,7 +3340,8 @@
               "aiQuota",
               "aiBudget",
               "eventQueue",
-              "recovery"
+              "recovery",
+              "tls"
             ],
             "additionalProperties": false
           }
@@ -7117,7 +7119,8 @@
                 "type": "string",
                 "enum": ["ready", "warning", "failed", "disabled"]
               },
-              "recovery": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] }
+              "recovery": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "tls": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] }
             },
             "required": [
               "database",
@@ -7131,7 +7134,8 @@
               "aiQuota",
               "aiBudget",
               "eventQueue",
-              "recovery"
+              "recovery",
+              "tls"
             ],
             "additionalProperties": false
           }

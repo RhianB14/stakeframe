@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { connect as tlsConnect } from 'node:tls';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { createTenantContext, readSecret, type Database } from '@stakeframe/db';
@@ -41,11 +42,66 @@ async function readInternal(url: string, fetchImpl: typeof fetch): Promise<unkno
   return JSON.parse(text) as unknown;
 }
 
+// The TLS probe reads the certificate served by the web service (SNI from
+// APP_ORIGIN) between containers: no public fetch and no external dependency.
+// Trust is not the signal here — the public edge verifies the chain on every
+// monitor cycle — so the handshake only needs the certificate readable; the
+// expiry is compared against the thresholds below.
+const TLS_PROBE_HOST = 'web';
+const TLS_PROBE_PORT = 8_443;
+const TLS_PROBE_TIMEOUT_MS = 2_500;
+
+// Thresholds are additive observability settings: an invalid value falls back
+// to the documented default instead of blocking the API start — the same
+// lenient policy used by the monitor hysteresis.
+function readTlsThreshold(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const value = env[name];
+  if (value === undefined || !/^\d+$/.test(value)) return fallback;
+  const days = Number(value);
+  return days >= 1 && days <= 3_650 ? days : fallback;
+}
+
+// Returns the served certificate expiry, or null when there is no configured
+// target to monitor — the check reports 'disabled' then. Monitoring itself
+// being off means no endpoint at all, decided in createOperationsService.
+async function readServedCertificate(env: NodeJS.ProcessEnv): Promise<Date | null> {
+  const origin = env.APP_ORIGIN;
+  if (!origin) return null;
+  let servername: string;
+  try {
+    servername = new URL(origin).hostname;
+  } catch {
+    return null;
+  }
+  return await new Promise<Date>((resolve, reject) => {
+    const socket = tlsConnect({
+      host: TLS_PROBE_HOST,
+      port: TLS_PROBE_PORT,
+      servername,
+      // An expired or otherwise untrusted certificate must still expose its
+      // validity instead of failing the handshake.
+      rejectUnauthorized: false,
+      timeout: TLS_PROBE_TIMEOUT_MS,
+    });
+    socket.once('secureConnect', () => {
+      const expiresAt = Date.parse(socket.getPeerCertificate()?.valid_to ?? '');
+      socket.destroy();
+      if (Number.isFinite(expiresAt)) resolve(new Date(expiresAt));
+      else reject(new Error('CERTIFICATE_UNREADABLE'));
+    });
+    socket.once('error', reject);
+    socket.once('timeout', () => {
+      socket.destroy();
+      reject(new Error('CERTIFICATE_TIMEOUT'));
+    });
+  });
+}
+
 export function createOperationsService(
   database: Database,
   env: NodeJS.ProcessEnv,
   fetchImpl: typeof fetch = fetch,
-  options: { probeDeadlineMs?: number } = {},
+  options: { probeDeadlineMs?: number; readCertificate?: () => Promise<Date | null> } = {},
 ): OperationsService | undefined {
   if (env.MONITORING_ENABLED === undefined || env.MONITORING_ENABLED === 'false') return undefined;
   if (env.MONITORING_ENABLED !== 'true') throw new Error('MONITORING_CONFIGURATION_INVALID');
@@ -54,6 +110,9 @@ export function createOperationsService(
   const probeDeadlineMs = options.probeDeadlineMs ?? 6_500;
   if (!Number.isInteger(probeDeadlineMs) || probeDeadlineMs < 1 || probeDeadlineMs > 30_000)
     throw new Error('INVALID_MONITOR_DEADLINE');
+  const tlsWarnDays = readTlsThreshold(env, 'TLS_EXPIRY_WARN_DAYS', 21);
+  const tlsFailDays = readTlsThreshold(env, 'TLS_EXPIRY_FAIL_DAYS', 7);
+  const readCertificate = options.readCertificate ?? (() => readServedCertificate(env));
   let cached: OperationsHealth | undefined;
   let inflight: Promise<OperationsHealth> | undefined;
   return {
@@ -75,6 +134,7 @@ export function createOperationsService(
           aiBudget: 'failed',
           eventQueue: 'failed',
           recovery: 'failed',
+          tls: 'failed',
         };
         const probes = Promise.allSettled([
           (async () => {
@@ -141,6 +201,20 @@ export function createOperationsService(
             checks.retention = result.retention;
             checks.disk = result.disk;
             checks.restoreTest = result.restoreTest;
+          })(),
+          (async () => {
+            const expiresAt = await readCertificate();
+            if (expiresAt === null) {
+              checks.tls = 'disabled';
+              return;
+            }
+            const daysRemaining = (expiresAt.getTime() - Date.now()) / 86_400_000;
+            checks.tls =
+              daysRemaining < tlsFailDays
+                ? 'failed'
+                : daysRemaining < tlsWarnDays
+                  ? 'warning'
+                  : 'ready';
           })(),
         ]);
         // A hung internal probe must not hold the authenticated route past the

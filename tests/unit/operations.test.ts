@@ -130,6 +130,8 @@ describe('operational monitoring', () => {
     expect(value.status).toBe('attention');
     expect(value.checks.attachments).toBe('failed');
     expect(value.checks.aiQuota).toBe('warning');
+    // Without APP_ORIGIN there is no TLS target to monitor: disabled, quietly.
+    expect(value.checks.tls).toBe('disabled');
     expect(response.body).not.toMatch(/ignored|private|postgresql|secret/i);
     await app.inject({
       url: '/api/v1/operations/health',
@@ -185,5 +187,90 @@ describe('operational monitoring', () => {
     const app = createApp({ checkDatabase: async () => {} });
     apps.push(app);
     expect((await app.inject('/api/v1/operations/health')).statusCode).toBe(404);
+  });
+  const tlsEnv = { MONITORING_ENABLED: 'true', MONITOR_TOKEN: 'a'.repeat(64) };
+  const monitoringDatabase = () => {
+    const database = createDatabase('postgresql://fixture:***@127.0.0.1/fixture');
+    databases.push(database);
+    vi.spyOn(database.pool, 'query').mockImplementation(async (text: unknown) => {
+      if (String(text).includes('core.organization')) return { rows: [] } as never;
+      return { rows: [{ quarantine: false, daily: '0', monthly: '0' }] } as never;
+    });
+    return database;
+  };
+  const healthyInternalFetch = () =>
+    vi.fn<typeof fetch>(async (url) =>
+      Response.json(
+        String(url).endsWith('/status')
+          ? {
+              backup: 'ready',
+              restoreTest: 'ready',
+              retention: 'ready',
+              lastRun: 'ready',
+              disk: 'ready',
+            }
+          : { status: 'ready' },
+      ),
+    );
+  it('maps the served certificate validity to TLS states by the configured thresholds', async () => {
+    const cases: Array<[number | null, string]> = [
+      [3, 'failed'],
+      [6.5, 'failed'],
+      [8, 'warning'],
+      [19.5, 'warning'],
+      [22, 'ready'],
+      [25, 'ready'],
+      [null, 'disabled'],
+    ];
+    for (const [days, expected] of cases) {
+      const service = createOperationsService(
+        monitoringDatabase(),
+        tlsEnv,
+        healthyInternalFetch(),
+        {
+          readCertificate: async () =>
+            days === null ? null : new Date(Date.now() + days * 86_400_000),
+        },
+      )!;
+      expect((await service.read()).checks.tls, `days=${days}`).toBe(expected);
+    }
+  });
+  it('honors TLS threshold overrides and falls back to the default on invalid values', async () => {
+    const certificateDays = (days: number) => async () => new Date(Date.now() + days * 86_400_000);
+    const warning = createOperationsService(
+      monitoringDatabase(),
+      { ...tlsEnv, TLS_EXPIRY_WARN_DAYS: '400' },
+      healthyInternalFetch(),
+      { readCertificate: certificateDays(75) },
+    )!;
+    expect((await warning.read()).checks.tls).toBe('warning');
+    const failing = createOperationsService(
+      monitoringDatabase(),
+      { ...tlsEnv, TLS_EXPIRY_WARN_DAYS: '400', TLS_EXPIRY_FAIL_DAYS: '100' },
+      healthyInternalFetch(),
+      { readCertificate: certificateDays(75) },
+    )!;
+    expect((await failing.read()).checks.tls).toBe('failed');
+    const invalid = createOperationsService(
+      monitoringDatabase(),
+      { ...tlsEnv, TLS_EXPIRY_WARN_DAYS: 'zero' },
+      healthyInternalFetch(),
+      { readCertificate: certificateDays(75) },
+    )!;
+    expect((await invalid.read()).checks.tls).toBe('ready');
+  });
+  it('keeps the TLS check failed on probe errors and disabled without a target', async () => {
+    const failed = createOperationsService(monitoringDatabase(), tlsEnv, healthyInternalFetch(), {
+      readCertificate: async () => {
+        throw new Error('private-tls-target');
+      },
+    })!;
+    const failedValue = await failed.read();
+    expect(failedValue.checks.tls).toBe('failed');
+    expect(JSON.stringify(failedValue)).not.toMatch(/private-tls-target/);
+    const disabled = createOperationsService(monitoringDatabase(), tlsEnv, healthyInternalFetch(), {
+      readCertificate: async () => null,
+    })!;
+    expect((await disabled.read()).checks.tls).toBe('disabled');
   });
 });

@@ -11,6 +11,7 @@ const names = [
   'aiBudget',
   'eventQueue',
   'recovery',
+  'tls',
 ];
 const labels = {
   database: 'banco',
@@ -25,6 +26,7 @@ const labels = {
   aiBudget: 'orçamento de IA',
   eventQueue: 'busca de eventos',
   recovery: 'conferência da recuperação',
+  tls: 'certificado TLS',
   application: 'aplicação ou acesso do monitor',
 };
 
