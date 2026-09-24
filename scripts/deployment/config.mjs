@@ -16,14 +16,10 @@ export function assertDeploymentConfig(
   assert.ok(integrations || (!tavily && !automatic && !operations), 'INTEGRATIONS_REQUIRED');
   assert.ok(!ocr || integrations, 'OCR_REQUIRES_INTEGRATIONS');
   const services = config.services;
-  assert.deepEqual(Object.keys(services).sort(), [
-    'api',
-    'migrate',
-    ...(operations ? ['operations'] : []),
-    'postgres',
-    'web',
-    'worker',
-  ]);
+  const expectedServices = ['api', 'migrate', 'postgres', 'web', 'worker'];
+  if (operations) expectedServices.push('operations');
+  if (rehearsal) expectedServices.push('pebble');
+  assert.deepEqual(Object.keys(services).sort(), expectedServices.sort());
   for (const [name, service] of Object.entries(services)) {
     assert.ok(
       digest.test(service.image) || (rehearsal && imageId.test(service.image)),
@@ -41,6 +37,15 @@ export function assertDeploymentConfig(
     }
   }
   assert.equal(config.networks.backend.internal, true);
+  if (rehearsal) {
+    assert.deepEqual(Object.keys(services.pebble.networks), ['rehearsal-acme']);
+    assert.deepEqual(Object.keys(services.web.networks).sort(), [
+      'backend',
+      'frontend',
+      'rehearsal-acme',
+    ]);
+    assert.equal(config.networks['rehearsal-acme'].internal, true);
+  }
   assert.deepEqual(Object.keys(services.postgres.networks), ['backend']);
   assert.deepEqual(
     Object.keys(services.worker.networks).sort(),
