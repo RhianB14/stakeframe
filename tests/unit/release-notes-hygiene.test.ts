@@ -170,6 +170,43 @@ describe('release notes hygiene — beta.8 UX preparation (STK-REL-14)', () => {
   });
 });
 
+// STK-REL-15 — beta.9 records the detailed bets list and Telegram cleanup after
+// terminal settlement, including the visible outcome/status column.
+describe('release notes hygiene — beta.9 bets list and Telegram cleanup', () => {
+  const BETA9_NOTES = 'v0.1.0-beta.9.md';
+
+  it('documents the bets list columns and separates status, type and market', () => {
+    expect(notes).toContain(BETA9_NOTES);
+    const content = readFileSync(`${RELEASES_DIR}/${BETA9_NOTES}`, 'utf8').replace(/\s+/g, ' ');
+    expect(content).toMatch(/data e hora do jogo.*evento.*\*\*Status da aposta\*\*/is);
+    expect(content).toMatch(/Simples.*mercado.*Múltipla.*BetBuild/is);
+    expect(content).toMatch(/Pendente, Ganha, Perdida, Reembolso, Meio-Ganha/is);
+    expect(content).toMatch(/coluna aparece logo após Evento/is);
+  });
+
+  it('documents all three Telegram deletions only for terminal settlement', () => {
+    const content = readFileSync(`${RELEASES_DIR}/${BETA9_NOTES}`, 'utf8').replace(/\s+/g, ' ');
+    expect(content).toMatch(
+      /liquidação total.*Telegram.*foto original.*mensagem temporária.*resposta final/is,
+    );
+    expect(content).toMatch(/resposta final deixa de servir como ponto de reentrada/i);
+    expect(content).toMatch(/cashout parcial.*continua aberto.*não aciona essa limpeza/i);
+    expect(content).toMatch(/edições comuns continuam atualizando a mensagem final/i);
+  });
+
+  it('keeps beta.9 a preparation with no migration or production actions', () => {
+    const content = readFileSync(`${RELEASES_DIR}/${BETA9_NOTES}`, 'utf8');
+    expect(tableField(content, 'Tag')).toMatch(/NÃO CRIADA/i);
+    expect(tableField(content, 'Commit-fonte')).toContain('`v0.1.0-beta.9`');
+    expect(tableField(content, 'Commit-fonte')).toMatch(/reconfirmado no momento da autorização/i);
+    expect(tableField(content, 'Estado')).toMatch(/Preparação/);
+    expect(content).toMatch(/Nenhuma migração de banco foi adicionada/i);
+    expect(content).toMatch(
+      /Nenhuma tag beta\.9, GitHub Release, publicação de imagem, deploy ou migração/is,
+    );
+  });
+});
+
 // STK-REL-12 — a preparação da beta.4 acrescenta garantias escopadas à própria
 // nota: o escopo do Mini App de confirmação (idempotência, sincronização,
 // fechamento automático, status e edição de campos), o registro de zero
