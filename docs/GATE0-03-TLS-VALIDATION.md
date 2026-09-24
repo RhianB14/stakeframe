@@ -100,10 +100,28 @@ recursos do projeto (containers, volumes e redes) ao final.
 
 O mesmo ensaio roda nos jobs `application-check` (x86_64) e
 `application-arm64-check` (arm64), que executam `pnpm deployment:rehearse`
-integralmente. Os identificadores do run do PR, os nomes dos jobs verdes e os
-trechos de eventos (seriais) de cada arquitetura são anexados no corpo da PR e
-na devolutiva da fase; este documento recebe a atualização correspondente após
-a primeira execução verde.
+integralmente.
+
+Run [`36067019635`](https://github.com/RhianB14/stakeframe/actions/runs/36067019635)
+(head `b6f1a2f2bd736f9b1a29d138f9120487c73e47b7`) — **5/5 jobs verdes na
+primeira tentativa**, incluindo os dois jobs de aplicação com o ensaio
+estendido. Trechos sanitizados (CA de teste, domínio fictício):
+
+```
+# application-arm64-check (linux/arm64)
+phase=issued serial=524137C839ECF720 notBefore=Sep 24 22:25:10 2026 GMT notAfter=Sep 24 23:25:09 2026 GMT handshakes=1
+phase=renewed previousSerial=524137C839ECF720 serial=5E0A901F9DA81A02 notBefore=Sep 24 22:27:08 2026 GMT notAfter=Sep 24 23:27:07 2026 GMT handshakes=24 elapsedMs=115095
+phase=reissued previousSerial=5E0A901F9DA81A02 serial=568AE6AF92DB167C notBefore=Sep 24 22:27:16 2026 GMT notAfter=Sep 24 23:27:15 2026 GMT elapsedMs=58
+
+# application-check (linux/amd64)
+phase=issued serial=1372697FA392C4C1 notBefore=Sep 24 22:25:08 2026 GMT notAfter=Sep 24 23:25:07 2026 GMT handshakes=1
+phase=renewed previousSerial=1372697FA392C4C1 serial=44EAE70C4ECA6298 notBefore=Sep 24 22:27:10 2026 GMT notAfter=Sep 24 23:27:09 2026 GMT handshakes=24 elapsedMs=115092
+phase=reissued previousSerial=44EAE70C4ECA6298 serial=7C0FBF1A484B87AF notBefore=Sep 24 22:27:19 2026 GMT notAfter=Sep 24 23:27:18 2026 GMT elapsedMs=63
+```
+
+As duas arquiteturas apresentaram comportamento idêntico (24 handshakes
+contínuos, zero falhas, renovação em ~115s e reemissão em menos de 70ms),
+confirmando o ensaio também nos runners ARM64 da CI.
 
 ## 5. Limites
 
