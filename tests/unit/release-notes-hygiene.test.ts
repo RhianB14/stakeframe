@@ -9,7 +9,9 @@ import { describe, expect, it } from 'vitest';
 // alvo incorreto (incidente corrigido na PR #147). O campo `Commit-fonte` deve
 // usar a fórmula "definido e reconfirmado no momento da autorização da tag".
 // Referências HISTÓRICAS (ex.: âncora imutável da tag anterior) permanecem
-// permitidas fora dos campos operacionais da tabela.
+// permitidas fora dos campos operacionais da tabela. Quando a tag é criada
+// (registro retroativo), o `Commit-fonte` pode fixar o SHA histórico exato do
+// commit tagueado.
 //
 // STK-REL-11 — a preparação da beta.3 acrescenta as garantias: a versão raiz
 // tem nota correspondente; a tag candidata deriva da versão no título e no
@@ -68,20 +70,34 @@ describe('release notes hygiene — current preparation (STK-REL-11)', () => {
     expect(notes).toContain(currentNotes);
   });
 
-  it('the candidate tag matches the notes title and the Commit-fonte formula', () => {
+  // A nota corrente pode estar em dois estados, ambos válidos:
+  // - Preparação (`Tag` = "NÃO CRIADA"): `Commit-fonte` pela fórmula, sem SHA fixo.
+  // - Registrada (tag criada — registro retroativo): `Commit-fonte` com o SHA
+  //   histórico exato e Estado "Registrada — nada publicado".
+  it('the current notes title matches the root version and the Commit-fonte stays consistent', () => {
     const content = readFileSync(`${RELEASES_DIR}/${currentNotes}`, 'utf8');
     expect(content.split(/\r?\n/)[0]!.trim()).toBe(`# Stakeframe — v${ROOT_PACKAGE.version}`);
     const commit = tableField(content, 'Commit-fonte');
     expect(commit).not.toBeNull();
-    expect(commit!).toContain(`\`v${ROOT_PACKAGE.version}\``);
-    expect(commit!).toMatch(/reconfirmado no momento da autorização/i);
+    const tag = tableField(content, 'Tag');
+    if (tag && !/NÃO CRIADA/i.test(tag)) {
+      expect(SHA40.test(commit!)).toBe(true);
+    } else {
+      expect(commit!).toContain(`\`v${ROOT_PACKAGE.version}\``);
+      expect(commit!).toMatch(/reconfirmado no momento da autorização/i);
+      expect(SHA40.test(commit!)).toBe(false);
+    }
   });
 
-  it('preparation notes never claim a published release', () => {
+  it('current notes never claim a published release (preparation or registered)', () => {
     const content = readFileSync(`${RELEASES_DIR}/${currentNotes}`, 'utf8');
-    expect(tableField(content, 'Tag')).toMatch(/NÃO CRIADA/i);
+    const tag = tableField(content, 'Tag');
     const state = tableField(content, 'Estado');
-    expect(state).toMatch(/Preparação/);
+    if (/NÃO CRIADA/i.test(tag ?? '')) {
+      expect(state).toMatch(/Preparação/);
+    } else {
+      expect(state).toMatch(/Registrada/);
+    }
     expect(state).toMatch(/nada publicado/i);
     expect(content).not.toMatch(/foi publicad[ao]|release publicada/i);
   });
@@ -171,7 +187,9 @@ describe('release notes hygiene — beta.8 UX preparation (STK-REL-14)', () => {
 });
 
 // STK-REL-15 — beta.9 records the detailed bets list and Telegram cleanup after
-// terminal settlement, including the visible outcome/status column.
+// terminal settlement, including the visible outcome/status column. A nota é um
+// registro retroativo: a tag existe; GitHub Release, publicação de imagem,
+// deploy e migração não ocorreram.
 describe('release notes hygiene — beta.9 bets list and Telegram cleanup', () => {
   const BETA9_NOTES = 'v0.1.0-beta.9.md';
 
@@ -194,16 +212,21 @@ describe('release notes hygiene — beta.9 bets list and Telegram cleanup', () =
     expect(content).toMatch(/edições comuns continuam atualizando a mensagem final/i);
   });
 
-  it('keeps beta.9 a preparation with no migration or production actions', () => {
+  it('keeps beta.9 registered without publication or production actions', () => {
     const content = readFileSync(`${RELEASES_DIR}/${BETA9_NOTES}`, 'utf8');
-    expect(tableField(content, 'Tag')).toMatch(/NÃO CRIADA/i);
-    expect(tableField(content, 'Commit-fonte')).toContain('`v0.1.0-beta.9`');
-    expect(tableField(content, 'Commit-fonte')).toMatch(/reconfirmado no momento da autorização/i);
-    expect(tableField(content, 'Estado')).toMatch(/Preparação/);
-    expect(content).toMatch(/Nenhuma migração de banco foi adicionada/i);
-    expect(content).toMatch(
-      /Nenhuma tag beta\.9, GitHub Release, publicação de imagem, deploy ou migração/is,
+    const tag = tableField(content, 'Tag');
+    expect(tag).toMatch(/v0\.1\.0-beta\.9/);
+    expect(tag).not.toMatch(/NÃO CRIADA/i);
+    expect(tableField(content, 'Commit-fonte')).toContain(
+      'b50ea43a1e1144bcace725e07c7f8bfbb7472764',
     );
+    const state = tableField(content, 'Estado');
+    expect(state).toMatch(/Registrada/);
+    expect(state).toMatch(/nada publicado/i);
+    expect(content).toMatch(
+      /nenhum GitHub Release,\s+publicação de imagem,\s+deploy\s+ou\s+migração/is,
+    );
+    expect(content).toMatch(/Nenhuma migração de banco foi adicionada/i);
   });
 });
 
