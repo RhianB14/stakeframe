@@ -424,22 +424,48 @@ Espera-se `lastSignature: ready → backup:failed → ready` com
 `delivery: confirmed` e `lastFiredAt`/`lastCompletedAt` coerentes. O
 `MONITOR_TOKEN` não entra em chat, docs, logs nem no repositório.
 
-## 12. Resultados do ensaio — PENDENTE (fase 2B)
+## 12. Resultados do ensaio — EXECUTADO (fase 2B, 2026-09-25)
 
-| Campo                             | Valor    |
-| --------------------------------- | -------- |
-| T0 (UTC/BRT)                      | PENDENTE |
-| Mensagem 1 recebida (hora)        | PENDENTE |
-| Janela de dedup observada (min)   | PENDENTE |
-| Mensagem 2 recebida (hora)        | PENDENTE |
-| Snapshot novo pós-ciclo (trunc16) | PENDENTE |
-| Estado final do arquivo           | PENDENTE |
-| Bearer (se houver): assinaturas   | PENDENTE |
-| Confirmação do proprietário       | PENDENTE |
-| Ocorrências fora da lista         | PENDENTE |
+Janela D3–D5 executada em 25/09/2026 com o proprietário presente e as duas
+mensagens confirmadas por escrito após a janela.
 
-Será preenchido após a janela, com os artefatos sanitizados, e motivará o
-fechamento do item no checklist (decisão 8 — PR separada da evidência).
+| Campo                             | Valor                                                                                                                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T0 (UTC/BRT)                      | 04:31:12Z (01:31) — tentativa 1 às 04:02:07Z (01:02) excedeu em 7 s o limite de 2 min → rollback §8 **antes** da observação das 04:05 (`ROLLBACK=RESTORED`, `sha256 684eac17…4292`) e reagendamento para a fronteira 04:30Z |
+| Mensagem 1 recebida (hora)        | 04:46Z (01:46) — `Stakeframe precisa de atenção: backup. Confira o procedimento operacional.` (T0+14–15 min; limite T0+17 min ✓)                                                                                            |
+| Janela de dedup observada (min)   | ≥ 10 (04:46→05:00Z), sem re-disparo e sem re-assert ativo; arquivo ainda sintético na leitura das 04:55Z                                                                                                                    |
+| Mensagem 2 recebida (hora)        | 05:11Z (02:11) — `Stakeframe: os sinais operacionais voltaram ao normal.` (orçamento ≤ 05:26Z ✓)                                                                                                                            |
+| Snapshot novo pós-ciclo (trunc16) | `b04feed5cc161d63` (ciclo das 05:00Z)                                                                                                                                                                                       |
+| Estado final do arquivo           | `state=ready cutoff=2026-09-25T05:00:02.122Z retention=true` — auto-sanitização pelo ciclo real das 05:00Z, sem ação do ensaio                                                                                              |
+| Bearer (se houver): assinaturas   | não executado (a prova principal roda sem leitura adicional)                                                                                                                                                                |
+| Confirmação do proprietário       | por escrito — as 2 mensagens da §9.1, na ordem esperada                                                                                                                                                                     |
+| Ocorrências fora da lista         | nenhuma (zero incidentes)                                                                                                                                                                                                   |
+
+Registro complementar da janela:
+
+- Injeção verificada com o código real da imagem (`volume montado read-only`,
+  sem rede): `ONLY_CUTOFF_CHANGED=OK` + `D3_VERIFY=INJECTED`
+  (`backupHealth={backup:overdue, retention:ready, lastRun:ready}`, `state`
+  intocado).
+- Cópia da tentativa 2: `sha256 57637a48…b86bfe6`; a cópia de rollback foi
+  removida da VPS após o aceite da evidência (§8), confirmando ausência por
+  `ls`.
+- Snapshots de ciclo observados durante a janela (trunc16):
+  `3356088b` (03:30Z) → `cc0c41f9` (04:00Z) → `fab0e094` (04:30Z) →
+  `b04feed5` (05:00Z) — backups reais seguiram criando acervo novo.
+- Backup real intacto: `OPS_BACKUP_VERIFIED` ×5 em 2 h (cadência dos ciclos),
+  **0** `OPS_BACKUP_FAILED`, **0** `OPS_REHEARSAL`; container
+  `stakeframe-production-operations-1` `Up (healthy)` `restart=0` durante
+  toda a janela.
+- `/etc/stakeframe/deployment.env` inalterado (hash `2864e85f749d74d7`, 5
+  pins); nenhum resíduo `.stk-a4` em `/var/lib/stakeframe/operations-status`.
+- O guard temporário de aprovação de comandos usado na sessão (janela de
+  deploy) foi revertido ao final; nenhum token ou credencial consta deste
+  registro.
+
+Checklist de provados × não exercitados: `GATE0-04-BACKUP-ALERT-VALIDATION.md`
+(PR desta evidência). O fechamento do item no checklist segue a decisão 8
+(desta PR).
 
 ## 13. Limites
 
