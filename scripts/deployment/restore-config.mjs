@@ -59,7 +59,18 @@ export function assertRestoreConfig(config, project) {
     restore.environment.R2_BACKUP_SECRET_ACCESS_KEY_FILE,
     '/run/secrets/r2_backup_restore_secret_key',
   );
+  assert.match(
+    String(restore.environment.B2_BACKUP_BUCKET ?? ''),
+    /^[a-z0-9][a-z0-9-]{4,61}[a-z0-9]$/,
+  );
+  assert.equal(restore.environment.B2_BACKUP_ACCOUNT_ID_FILE, '/run/secrets/b2_backup_account_id');
+  assert.equal(
+    restore.environment.B2_BACKUP_APPLICATION_KEY_FILE,
+    '/run/secrets/b2_backup_application_key',
+  );
   assert.deepEqual(restore.secrets.map((secret) => secret.source).sort(), [
+    'b2_backup_account_id',
+    'b2_backup_application_key',
     'db_password',
     'r2_backup_restore_access_key',
     'r2_backup_restore_secret_key',

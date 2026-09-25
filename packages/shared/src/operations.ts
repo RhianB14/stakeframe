@@ -10,6 +10,8 @@ export const operationsHealthSchema = z
         database: operationStateSchema,
         worker: operationStateSchema,
         backup: operationStateSchema,
+        backupSync: operationStateSchema,
+        backupIntegrity: operationStateSchema,
         restoreTest: operationStateSchema,
         retention: operationStateSchema,
         disk: operationStateSchema,

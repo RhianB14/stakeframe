@@ -100,6 +100,8 @@ describe('operational monitoring', () => {
               restoreTest: 'ready',
               retention: 'ready',
               lastRun: 'ready',
+              sync: 'ready',
+              integrity: 'ready',
               disk: 'ready',
               private: 'ignored',
             }
@@ -130,6 +132,9 @@ describe('operational monitoring', () => {
     expect(value.status).toBe('attention');
     expect(value.checks.attachments).toBe('failed');
     expect(value.checks.aiQuota).toBe('warning');
+    expect(value.checks.backup).toBe('ready');
+    expect(value.checks.backupSync).toBe('ready');
+    expect(value.checks.backupIntegrity).toBe('ready');
     // Without APP_ORIGIN there is no TLS target to monitor: disabled, quietly.
     expect(value.checks.tls).toBe('disabled');
     expect(response.body).not.toMatch(/ignored|private|postgresql|secret/i);
@@ -161,6 +166,8 @@ describe('operational monitoring', () => {
           restoreTest: 'ready',
           retention: 'ready',
           lastRun: 'ready',
+          sync: 'ready',
+          integrity: 'ready',
           disk: 'ready',
         });
       return Response.json({ status: 'ready' });
@@ -207,11 +214,40 @@ describe('operational monitoring', () => {
               restoreTest: 'ready',
               retention: 'ready',
               lastRun: 'ready',
+              sync: 'ready',
+              integrity: 'ready',
               disk: 'ready',
             }
           : { status: 'ready' },
       ),
     );
+  it('maps second-provider sync and integrity states straight from the operations status', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (url) =>
+      Response.json(
+        String(url).endsWith('/status')
+          ? {
+              backup: 'ready',
+              restoreTest: 'ready',
+              retention: 'ready',
+              lastRun: 'ready',
+              sync: 'warning',
+              integrity: 'failed',
+              disk: 'ready',
+            }
+          : { status: 'ready' },
+      ),
+    );
+    const service = createOperationsService(
+      monitoringDatabase(),
+      { MONITORING_ENABLED: 'true', MONITOR_TOKEN: 'a'.repeat(64) },
+      fetchImpl,
+    )!;
+    const value = await service.read();
+    expect(value.checks.backup).toBe('ready');
+    expect(value.checks.backupSync).toBe('warning');
+    expect(value.checks.backupIntegrity).toBe('failed');
+    expect(value.status).toBe('attention');
+  });
   it('maps the served certificate validity to TLS states by the configured thresholds', async () => {
     const cases: Array<[number | null, string]> = [
       [3, 'failed'],

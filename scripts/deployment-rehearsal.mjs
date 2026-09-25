@@ -258,6 +258,7 @@ async function main() {
     R2_ATTACHMENTS_BUCKET: 'fictional-attachments',
     R2_BACKUP_ACCOUNT_ID: 'a'.repeat(32),
     R2_BACKUP_BUCKET: 'fictional-backups',
+    B2_BACKUP_BUCKET: 'fictional-second-backups',
     BACKUP_CONFIRM: 'production-with-retention',
     OPERATIONS_IMAGE: images.api,
     AUTOMATIC_IMPORT_POLICIES_FILE: join(directory, 'automatic-import.json').replaceAll('\\', '/'),

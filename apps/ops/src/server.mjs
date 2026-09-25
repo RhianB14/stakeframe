@@ -1,20 +1,29 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import { writeFile, statfs } from 'node:fs/promises';
+import { writeFile, rename, statfs } from 'node:fs/promises';
 import { createDatabase } from '@stakeframe/db';
 import {
   readOpsConfig,
   readStatus,
+  readDualStatus,
   nextBackupAt,
   backupHealth,
+  syncHealth,
+  integrityHealth,
   readRestoreTestHealth,
 } from './config.mjs';
 import { backup, restic } from './backup.mjs';
+import { replicate } from './replicate.mjs';
+import { sample } from './sample.mjs';
 import { restore } from './restore.mjs';
 
 async function main() {
   const [command, ...extra] = process.argv.slice(2);
-  if (!['backup', 'daemon', 'init', 'restore', 'resume'].includes(command) || extra.length)
+  if (
+    !['backup', 'daemon', 'init', 'restore', 'resume', 'replicate', 'sample'].includes(command) ||
+    extra.length
+  )
     throw new Error('OPS_COMMAND_REFUSED');
   const config = readOpsConfig(process.env);
   const controller = new AbortController();
@@ -91,6 +100,24 @@ async function main() {
     console.info('OPS_BACKUP_VERIFIED');
     return;
   }
+  if (command === 'replicate') {
+    const status = await replicate(config, controller.signal);
+    if (status) console.info('OPS_REPLICATION_VERIFIED');
+    return;
+  }
+  if (command === 'sample') {
+    const report = await sample(config, controller.signal);
+    const temporary = `/status/restore-sample-${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify(report) + '\n', { flag: 'wx', mode: 0o600 });
+    await rename(temporary, '/status/restore-sample.json');
+    if (Object.values(report.sources).every((source) => source.ok)) {
+      console.info('OPS_SAMPLE_VERIFIED');
+      return;
+    }
+    console.warn('OPS_SAMPLE_FAILED');
+    process.exitCode = 1;
+    return;
+  }
   const server = createServer((request, response) => {
     if (request.method !== 'GET') {
       response.writeHead(405).end();
@@ -106,6 +133,7 @@ async function main() {
     }
     void readStatus()
       .then(async (status) => {
+        const dual = await readDualStatus();
         const fs = await statfs('/status', { bigint: true });
         const free = fs.bavail * fs.bsize;
         const percent = fs.blocks > 0n ? (fs.bavail * 100n) / fs.blocks : 0n;
@@ -120,6 +148,8 @@ async function main() {
           .end(
             JSON.stringify({
               ...backupHealth(status),
+              sync: syncHealth(dual),
+              integrity: integrityHealth(dual),
               disk,
               restoreTest: await readRestoreTestHealth(),
             }),
@@ -139,6 +169,12 @@ async function main() {
         console.info('OPS_BACKUP_VERIFIED');
       } catch {
         console.warn('OPS_BACKUP_FAILED');
+      }
+      try {
+        const replicated = await replicate(config, controller.signal);
+        if (replicated) console.info('OPS_REPLICATION_VERIFIED');
+      } catch {
+        console.warn('OPS_REPLICATION_FAILED');
       }
       const wait = nextBackupAt(Date.now()) - Date.now();
       await delay(Math.max(1, wait), undefined, { signal: controller.signal }).catch(() => {});

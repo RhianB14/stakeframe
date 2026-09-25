@@ -25,19 +25,23 @@ overlay, toda extração segue para conferência. Nenhum layout é aprovado por 
 
 Arquivos adicionais ficam no diretório privado de segredos, fora do Git:
 
-| Arquivos                                                                 | Consumidores e escopo                                                               |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `openrouter_api_key`                                                     | Worker; chave individual, limite mensal de US$5                                     |
-| `telegram_bot_token`, `telegram_owner_user_id`, `telegram_owner_chat_id` | Worker; bot e conversa privada do proprietário                                      |
-| `r2_reader_access_key`, `r2_reader_secret_key`                           | API e operações; leitura apenas do bucket de anexos                                 |
-| `r2_writer_access_key`, `r2_writer_secret_key`                           | Worker; leitura, escrita e exclusão apenas no bucket de anexos                      |
-| `recovery_key`                                                           | Operações e recuperação; 32 bytes aleatórios em hex, cópia sob custódia fora da VPS |
-| `r2_backup_access_key`, `r2_backup_secret_key`                           | Operações; leitura, escrita e exclusão apenas no bucket de backups                  |
-| `r2_backup_restore_access_key`, `r2_backup_restore_secret_key`           | Ensaio mensal; leitura apenas do bucket de backups                                  |
-| `monitor_token`                                                          | API e segredo do monitor externo; 32 bytes aleatórios em hex                        |
-| `tavily_api_key`                                                         | Somente worker, quando autorizado                                                   |
+| Arquivos                                                                 | Consumidores e escopo                                                                        |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `openrouter_api_key`                                                     | Worker; chave individual, limite mensal de US$5                                              |
+| `telegram_bot_token`, `telegram_owner_user_id`, `telegram_owner_chat_id` | Worker; bot e conversa privada do proprietário                                               |
+| `r2_reader_access_key`, `r2_reader_secret_key`                           | API e operações; leitura apenas do bucket de anexos                                          |
+| `r2_writer_access_key`, `r2_writer_secret_key`                           | Worker; leitura, escrita e exclusão apenas no bucket de anexos                               |
+| `recovery_key`                                                           | Operações e recuperação; 32 bytes aleatórios em hex, cópia sob custódia fora da VPS          |
+| `r2_backup_access_key`, `r2_backup_secret_key`                           | Operações; leitura, escrita e exclusão apenas no bucket de backups                           |
+| `r2_backup_restore_access_key`, `r2_backup_restore_secret_key`           | Ensaio mensal; leitura apenas do bucket de backups                                           |
+| `b2_backup_account_id`, `b2_backup_application_key`                      | Operações e ensaio isolado; Application Key restrita ao bucket de backup do segundo provedor |
+| `monitor_token`                                                          | API e segredo do monitor externo; 32 bytes aleatórios em hex                                 |
+| `tavily_api_key`                                                         | Somente worker, quando autorizado                                                            |
 
-As chaves de acesso R2 usam 32 caracteres hex e seus segredos usam 64.
+As chaves de acesso R2 usam 32 caracteres hex e seus segredos usam 64. A
+Application Key do Backblaze B2 (STK-F1-11) não segue esse formato: o keyID e a
+key são alfanuméricos, validados por faixa de caracteres e formato do bucket,
+sempre fail-closed.
 Consumidores Node executam com UID 1000. O operador provisiona arquivos legíveis
 por esse UID em diretório privado, sem conceder leitura a outros usuários.
 Instalar ou modificar credenciais e permissões exige autorização específica.
@@ -106,6 +110,18 @@ estado pronto quando essas operações terminam. As janelas do Restic são
 relativas ao snapshot mais recente; o monitor também acusa backup parado.
 Referência: [retenção do Restic](https://restic.readthedocs.io/en/stable/060_forget.html).
 
+STK-F1-11 (§12.4) acrescenta o segundo provedor. Após cada ciclo, um
+`restic copy` espelha o repositório primário no bucket B2 (apenas blobs
+ausentes; a deduplicação e os IDs de snapshot são preservados) e a retenção
+nova — 14 diárias, 8 semanais e 12 mensais nas cópias completas, 48 h nas
+incompletas — passa a ser aplicada aos dois destinos após cada sincronização;
+a política conservadora acima segue como rede de segurança enquanto o
+espelhamento não estiver saudável. Um check semanal
+(`restic check --read-data-subset 10%`) verifica os dois destinos e o ratio de
+deduplicação do primário é medido a cada ciclo. Setup, comandos, restauração
+por destino e recuperação de chave:
+[backup-dual-runbook.md](operations/backup-dual-runbook.md).
+
 Na janela autorizada, usar os três arquivos Compose citados acima em todos os
 comandos. Inicializar uma vez pelo perfil `operations`, executando
 `run --rm -e BACKUP_CONFIRM=initialize-encrypted-repository operations src/server.mjs init`.
@@ -136,7 +152,10 @@ backlog Telegram e a configuração, a retomada explícita usa o comando `resume
 Essa retomada altera dados e integrações do destino e exige autorização própria.
 
 O runner Linux `scripts/restore-rehearsal.mjs` usa a imagem de operações por
-digest e credenciais R2 de leitura. O modo sem locks evita exigir escrita no
+digest e credenciais R2 de leitura. O ensaio padrão lê o provedor primário;
+com `RESTORE_SOURCE=b2` (execução manual em janela autorizada) o mesmo runner
+ensaia a recuperação a partir do segundo provedor e o relatório registra a
+origem. O modo sem locks evita exigir escrita no
 bucket; uma poda concorrente pode interromper a leitura e o teste falha com
 segurança. Conferir esse incidente e repetir após o ciclo de backup. A conta
 de recuperação nunca recebe permissão de poda ou escrita para contornar a falha.
@@ -222,13 +241,17 @@ O endpoint HTTPS `/api/v1/operations/health` exige token próprio e retorna apen
 estados e horário. O token não autentica acesso financeiro. A leitura tem limite
 total de tempo: um check interno que não responde dentro do orçamento permanece
 `failed` em vez de segurar a resposta. São monitorados banco,
-worker, backup, retenção, disco, filas, anexos, cota e orçamento de IA, quarentena,
+worker, backup, sincronização do backup (segundo provedor) e integridade do
+backup, retenção, disco, filas, anexos, cota e orçamento de IA, quarentena,
 ensaio mensal e expiração do certificado TLS servido pela aplicação (leitura
 interna em `web:8443` com SNI da origem, sem fetch público; avisa abaixo de 21
 dias restantes e falha abaixo de 7; `TLS_EXPIRY_WARN_DAYS` e
 `TLS_EXPIRY_FAIL_DAYS` ajustam os limiares, valor inválido cai no padrão e o
 estado é `disabled` sem alvo configurado). Backup com cutoff de uma hora falha; teste mensal avisa aos 32
 dias e falha aos 35, ou imediatamente em caso de execução/limpeza malsucedida.
+A sincronização do segundo provedor avisa após 1 h sem ciclo concluído, falha
+após 2 h e avisa quando a deduplicação cai abaixo de 1,05; a integridade avisa
+após 8 dias sem check e falha após 14.
 Disco avisa abaixo de 5 GiB ou 15% livres e falha abaixo de 1 GiB ou 5%.
 
 Alertas Telegram só ocorrem quando muda o conjunto de problemas ou há recuperação.

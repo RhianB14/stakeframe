@@ -18,6 +18,8 @@ const names = [
   'database',
   'worker',
   'backup',
+  'backupSync',
+  'backupIntegrity',
   'restoreTest',
   'retention',
   'disk',

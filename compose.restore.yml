@@ -46,7 +46,16 @@ services:
       R2_BACKUP_BUCKET: ${R2_BACKUP_BUCKET:?Private backups bucket required}
       R2_BACKUP_ACCESS_KEY_ID_FILE: /run/secrets/r2_backup_restore_access_key
       R2_BACKUP_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_backup_restore_secret_key
-    secrets: [db_password, recovery_key, r2_backup_restore_access_key, r2_backup_restore_secret_key]
+      B2_BACKUP_BUCKET: ${B2_BACKUP_BUCKET:?Second-provider backup bucket required}
+      B2_BACKUP_ACCOUNT_ID_FILE: /run/secrets/b2_backup_account_id
+      B2_BACKUP_APPLICATION_KEY_FILE: /run/secrets/b2_backup_application_key
+    secrets:
+      - db_password
+      - recovery_key
+      - r2_backup_restore_access_key
+      - r2_backup_restore_secret_key
+      - b2_backup_account_id
+      - b2_backup_application_key
     volumes: [restore-status:/status]
     labels:
       io.stakeframe.restore: ${RESTORE_RUN:?Isolated restore identifier required}
@@ -79,3 +88,7 @@ secrets:
     file: ${SECRET_DIRECTORY:?Private production secrets required}/r2_backup_restore_access_key
   r2_backup_restore_secret_key:
     file: ${SECRET_DIRECTORY:?Private production secrets required}/r2_backup_restore_secret_key
+  b2_backup_account_id:
+    file: ${SECRET_DIRECTORY:?Private production secrets required}/b2_backup_account_id
+  b2_backup_application_key:
+    file: ${SECRET_DIRECTORY:?Private production secrets required}/b2_backup_application_key

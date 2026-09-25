@@ -72,6 +72,8 @@ export function assertDeploymentConfig(
       'RESTIC_PASSWORD',
       'R2_BACKUP_ACCESS_KEY_ID',
       'R2_BACKUP_SECRET_ACCESS_KEY',
+      'B2_BACKUP_ACCOUNT_ID',
+      'B2_BACKUP_APPLICATION_KEY',
       'MONITOR_TOKEN',
     ])
       assert.equal(environment[key], undefined, 'PLAINTEXT_SECRET_REFUSED');
@@ -101,6 +103,12 @@ export function assertDeploymentConfig(
     assert.match(ops.environment.R2_BACKUP_ACCOUNT_ID, /^[a-f0-9]{32}$/);
     assert.match(ops.environment.R2_BACKUP_BUCKET, /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/);
     assert.notEqual(ops.environment.R2_BACKUP_BUCKET, ops.environment.R2_ATTACHMENTS_BUCKET);
+    assert.match(ops.environment.B2_BACKUP_BUCKET, /^[a-z0-9][a-z0-9-]{4,61}[a-z0-9]$/);
+    assert.equal(ops.environment.B2_BACKUP_ACCOUNT_ID_FILE, '/run/secrets/b2_backup_account_id');
+    assert.equal(
+      ops.environment.B2_BACKUP_APPLICATION_KEY_FILE,
+      '/run/secrets/b2_backup_application_key',
+    );
     assert.equal(ops.environment.R2_ATTACHMENTS_ENABLED, 'true');
     for (const key of [
       'R2_ACCOUNT_ID',
@@ -131,6 +139,8 @@ export function assertDeploymentConfig(
       'recovery_key',
       'r2_backup_access_key',
       'r2_backup_secret_key',
+      'b2_backup_account_id',
+      'b2_backup_application_key',
       'r2_reader_access_key',
       'r2_reader_secret_key',
     ];

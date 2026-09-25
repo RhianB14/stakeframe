@@ -16,6 +16,8 @@ const backupSchema = z.object({
   backup: z.enum(['ready', 'overdue']),
   retention: z.enum(['ready', 'failed']),
   lastRun: z.enum(['ready', 'failed', 'running']),
+  sync: operationStateSchema,
+  integrity: operationStateSchema,
   disk: operationStateSchema,
   restoreTest: operationStateSchema,
 });
@@ -125,6 +127,8 @@ export function createOperationsService(
           database: 'failed',
           worker: 'failed',
           backup: 'failed',
+          backupSync: 'failed',
+          backupIntegrity: 'failed',
           restoreTest: 'failed',
           retention: 'failed',
           disk: 'failed',
@@ -198,6 +202,8 @@ export function createOperationsService(
             );
             checks.backup =
               result.backup === 'ready' && result.lastRun !== 'failed' ? 'ready' : 'failed';
+            checks.backupSync = result.sync;
+            checks.backupIntegrity = result.integrity;
             checks.retention = result.retention;
             checks.disk = result.disk;
             checks.restoreTest = result.restoreTest;
