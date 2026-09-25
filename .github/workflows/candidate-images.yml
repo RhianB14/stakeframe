@@ -1,0 +1,138 @@
+name: Candidate images
+
+# STK-F1-12: builds the five targets on both architectures, verifies the OCI
+# archives exactly like the release candidate, and publishes the verified
+# indexes to GHCR by digest under immutable sha-specific tags. This workflow
+# never touches production: no deploy, no SSH, no migration. Consumption is
+# documented in docs/deploy/promotion-runbook.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Current main commit with successful CI (40 hexadecimal characters)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: candidate-images
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: images-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      TARGET_ARCH: ${{ matrix.arch }}
+      BUILDER: stk-images-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+    steps:
+      - name: Checkout reviewed workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Require current main and successful CI on both architectures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/source.mjs
+      - name: Start isolated pinned builder
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          version: v0.37.0
+          name: ${{ env.BUILDER }}
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+            memory=4g
+          buildkitd-config: infra/production/buildkitd.toml
+          buildkitd-flags: --debug=false
+          cache-binary: false
+      - name: Build five OCI archives and verify content and provenance
+        run: |
+          set -euo pipefail
+          # The release version comes from the single source of truth at the reviewed
+          # commit (root package.json); the build date is stamped once for all five
+          # artifacts of this run. verify_oci refuses unstamped or malformed labels.
+          STAKEFRAME_VERSION="$(node -p "require('./package.json').version")"
+          STAKEFRAME_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          [[ "$STAKEFRAME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
+            || { echo "RELEASE_VERSION_INVALID"; exit 1; }
+          echo "CANDIDATE_STAMP $STAKEFRAME_VERSION $SOURCE_SHA $STAKEFRAME_BUILD_DATE"
+          for target in api worker migrate web-production operations; do
+            docker buildx build --builder "$BUILDER" --platform "linux/$TARGET_ARCH" \
+              --target "$target" --provenance=mode=max,version=v0.2 \
+              --build-arg "STAKEFRAME_VERSION=$STAKEFRAME_VERSION" \
+              --build-arg "STAKEFRAME_COMMIT=$SOURCE_SHA" \
+              --build-arg "STAKEFRAME_BUILD_DATE=$STAKEFRAME_BUILD_DATE" \
+              --tag "ghcr.io/rhianb14/stakeframe-$target:candidate-$SOURCE_SHA-$TARGET_ARCH" \
+              --label "org.opencontainers.image.source=https://github.com/RhianB14/stakeframe" \
+              --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+              --output "type=oci,dest=.cache/release/$target.oci.tar,oci-artifact=false" \
+              --metadata-file ".cache/release/$target.metadata.json" \
+              "https://github.com/RhianB14/stakeframe.git#$SOURCE_SHA"
+            python3 -B scripts/release/verify_oci.py ".cache/release/$target.oci.tar" \
+              ".cache/release/$target.metadata.json" "$SOURCE_SHA" "$TARGET_ARCH" "$target"
+          done
+          python3 -B scripts/release/manifest.py .cache/release "$SOURCE_SHA" "$TARGET_ARCH"
+          cat .cache/release/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Install registry transport
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends skopeo
+          skopeo --version
+      - name: Publish verified indexes to GHCR by digest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          python3 -B scripts/release/registry_publish.py publish \
+            --directory .cache/release --arch "$TARGET_ARCH"
+      - name: Retain candidate archives for review
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: candidate-${{ inputs.source_sha }}-${{ matrix.arch }}
+          path: |
+            .cache/release/*.oci.tar
+            .cache/release/*.metadata.json
+            .cache/release/*.verified.json
+            .cache/release/source-validation.json
+            .cache/release/candidate.json
+            .cache/release/summary.md
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+      - name: Retain promotion evidence
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: candidate-evidence-${{ inputs.source_sha }}-${{ matrix.arch }}
+          path: |
+            .cache/release/source-validation.json
+            .cache/release/candidate.json
+            .cache/release/published.json
+            .cache/release/summary.md
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
