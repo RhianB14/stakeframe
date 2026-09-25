@@ -1,14 +1,15 @@
 # G0-01 — Schema e critérios de validação do corpus de bilhetes
 
 > Contrato consolidado no parecer técnico do card `t_1e74685c` (gate G0-01) e
-> transcrito para o repositório sem alteração de conteúdo. Estado em 25/09/2026:
-> schema registrado; armazenamento privado provisionado como estrutura em
-> `data/corpus/private/` (fora de versionamento); a ingestão real dos 30
-> bilhetes aguarda o fornecimento dos artefatos pelo proprietário.
+> transcrito para o repositório. Estado em 25/09/2026: **escopo ratificado por
+> D025 — 2 casas (Bet365 e Superbet)** (ver "Ratificação D025"); armazenamento
+> privado provisionado como estrutura em `data/corpus/private/` (fora de
+> versionamento); a ingestão real dos bilhetes (>=20; >=10 por casa) usa os
+> artefatos fornecidos pelo proprietário.
 
 ## Objetivo
 
-Definir o contrato mínimo de captura e validação de um corpus privado de bilhetes para Bet365, Superbet e Novibet, separando evidência bruta, dados sanitizados e ground truth. Este contrato é vinculante tecnicamente para as tarefas dependentes do gate; ele não autoriza, por si só, coleta, chamadas de IA, ativação de importação automática, deploy ou acesso a banco.
+Definir o contrato mínimo de captura e validação de um corpus privado de bilhetes para Bet365 e Superbet, separando evidência bruta, dados sanitizados e ground truth. Este contrato é vinculante tecnicamente para as tarefas dependentes do gate; ele não autoriza, por si só, coleta, chamadas de IA, ativação de importação automática, deploy ou acesso a banco.
 
 ## Contexto e evidências
 
@@ -16,8 +17,25 @@ Definir o contrato mínimo de captura e validação de um corpus privado de bilh
 - `packages/shared/src/automatic.ts:4-33` define o envelope de avaliação privada: hash da imagem, layout esperado, expected e actual da extração.
 - `scripts/validation/corpus-core.mjs:70-117` exige, para elegibilidade de layout, >=20 positivos, >=5 negativos, >=3 múltiplas, >=3 ausências e >=3 promocionais quando aplicável, zero erros essenciais e imagens únicas. Isso é distinto do mínimo de composição deste contrato.
 - `docs/VALIDATION.md:55-108` exige que corpus, gabaritos e respostas reais permaneçam fora do Git; o avaliador é offline e uma política operacional depende de autorização explícita.
-- G0-05 possui ground truth privado v3 válido e cobertura de 20 positivos + 5 negativos por Bet365/Superbet, mas a execução real foi interrompida por `AI_RATE_LIMITED` na 7ª chamada; 6 chamadas foram consumidas, nada foi gravado e a retomada excede o teto autorizado de chamadas. D025 limita o beta a Bet365/Superbet.
+- G0-05 possui ground truth privado v3 válido e cobertura de 20 positivos + 5 negativos por Bet365/Superbet, mas a execução real foi interrompida por `AI_RATE_LIMITED` na 7ª chamada; 6 chamadas foram consumidas, nada foi gravado e a retomada excede o teto autorizado de chamadas. D025 limita o beta a Bet365/Superbet (ratificada em 25/09/2026 para o escopo deste corpus — ver "Ratificação D025").
 - O provisionamento do armazenamento privado foi recusado por limitação de writable paths do perfil DevOps (card `t_89c05818`); a estrutura passou a ser provisionada em 25/09/2026 (ver "Armazenamento privado").
+
+## Ratificação D025 (25/09/2026)
+
+Decisão do proprietário registrada pelo orquestrador em 25/09/2026: **D025
+ratificado** — o corpus do gate G0-01 passa a ter **duas casas: Bet365 e
+Superbet**; **Novibet sai do escopo do corpus**.
+
+Efeitos neste contrato:
+
+- `scope.bookmakers = ['bet365','superbet']` e `bookmaker` restrito a essas duas casas;
+- critério de composição: **>=20 tickets válidos no total, >=10 por casa**
+  (antes: >=30 no total, >=10 por cada uma das três casas);
+- Novibet removido de requisitos, listas e exemplos deste documento.
+
+A pendência 1 da seção "Pendências" fica resolvida por esta ratificação. A
+ratificação é do corpus G0-01; ela não altera sozinha outros gates (a
+homologação de importação segue `docs/VALIDATION.md`).
 
 ## Dois contratos que não podem ser confundidos
 
@@ -33,12 +51,12 @@ Contrato privado, mantido exclusivamente no diretório privado provisionado pelo
 CorpusManifest
   schemaVersion: 1
   corpusId: string UUID
-  scope: { bookmakers: ['bet365','superbet','novibet'], purpose: 'g0-01' }
+  scope: { bookmakers: ['bet365','superbet'], purpose: 'g0-01' }
   tickets: CorpusTicket[]
 
 CorpusTicket
   corpusTicketId: string (^[a-z0-9][a-z0-9-]{2,63}$; ex.: bet365-001)
-  bookmaker: 'bet365' | 'superbet' | 'novibet'
+  bookmaker: 'bet365' | 'superbet'
   source: {
     artifactKind: 'screenshot' | 'export' | 'url'
     rawRelativePath: string
@@ -93,7 +111,7 @@ CorpusTicket
 
 ### Critério de aceite de COMPOSIÇÃO G0-01
 
-- exatamente >=30 tickets válidos no manifesto; >=10 de cada uma das três casas;
+- > =20 tickets válidos no manifesto; >=10 de cada casa (Bet365 e Superbet);
 - 100% dos tickets passam schema, hashes e regra de unicidade;
 - 100% têm raw e sanitized existentes no storage privado, com PII review `pass`;
 - nenhuma evidência ou manifest privado no Git, PR, Kanban ou logs;
@@ -127,7 +145,7 @@ Não há mudança de dados por este contrato. Se uma futura captura falhar, remo
 
 ## Pendências (decisão humana)
 
-1. Decisão humana obrigatória: manter G0-01 com três casas (inclui Novibet) ou ratificar formalmente D025 para que o gate de beta tenha somente Bet365/Superbet. Sem isso, os critérios atuais continuam três casas.
+1. **Resolvida em 25/09/2026** — D025 ratificado: o corpus usa duas casas (Bet365 e Superbet) e Novibet sai do escopo (ver "Ratificação D025").
 2. Provisionamento do armazenamento privado: resolvido como estrutura em 25/09/2026 (`data/corpus/private/`); a ingestão real aguarda o fornecimento dos artefatos pelo proprietário.
 3. Decisão humana sobre retomar chamadas pagas após `AI_RATE_LIMITED`: autorizar ou não teto revisado (mínimo contabilizado: 56 chamadas para reiniciar 2x25 após 6 consumidas), com throttling. Este contrato não autoriza isso.
 4. Os critérios do gate pedem 10 por casa, mas a validação operacional existente pede >=20 positivos por layout; manter os dois gates explicitamente separados.
@@ -138,4 +156,4 @@ Não há mudança de dados por este contrato. Se uma futura captura falhar, remo
 - Schema e critérios registrados neste documento.
 - Estrutura de armazenamento provisionada (`data/corpus/private/` com `.gitignore` de cobertura dupla).
 - Validador de ingestão `scripts/validation/ingest-corpus.mjs` disponível (somente leitura).
-- Ingestão dos 30 bilhetes: **aguardando os artefatos reais do proprietário** (screenshots/exportações de Bet365, Superbet e Novibet). Nenhum bilhete foi inventado ou sintetizado como corpus; as fixtures de teste existentes em `scripts/validation/corpus-fixture.mjs` não são corpus.
+- Ingestão real: artefatos fornecidos pelo proprietário em 25/09/2026 (screenshots de Bet365 e Superbet); a captura bruta roda no armazenamento privado local, sem dados de bilhete no repositório. Nenhum bilhete foi inventado ou sintetizado como corpus; as fixtures de teste existentes em `scripts/validation/corpus-fixture.mjs` não são corpus.

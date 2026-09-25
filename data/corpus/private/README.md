@@ -18,7 +18,8 @@ Todo o restante permanece exclusivamente local (fora do Git):
 - `sanitized/<casa>/<NNN>.<ext>` — derivado com redaction/blur irreversível.
 - `manifest.json` — manifesto real (cópia preenchida de `manifest.template.json`).
 
-Casas (slugs minúsculos): `bet365`, `superbet`, `novibet`.
+Casas (slugs minúsculos; escopo ratificado por D025 em 25/09/2026): `bet365`
+e `superbet`.
 Convenção: `<casa>/NNN` com `NNN` de `001` a `010` no mínimo
 (ex.: `raw/bet365/001.png`).
 
@@ -44,5 +45,6 @@ Convenção: `<casa>/NNN` com `NNN` de `001` a `010` no mínimo
    arquivos, contagens por casa). O validador é somente leitura, não usa rede
    e nunca imprime conteúdo de bilhete.
 
-A ingestão real dos 30 bilhetes aguarda o fornecimento dos artefatos pelo
-proprietário; nenhum bilhete é inventado ou sintetizado como corpus.
+A ingestão real usa os artefatos fornecidos pelo proprietário (>=20 bilhetes
+no total; >=10 por casa); nenhum bilhete é inventado ou sintetizado como
+corpus.

@@ -42,7 +42,7 @@
     "validation:corpus": "pnpm build:types && node scripts/validation/corpus.mjs",
     "validation:policy": "pnpm build:types && node scripts/validation/policy.mjs",
     "validation:decision": "pnpm build:types && node scripts/validation/decision.mjs",
-    "validation:test-corpus": "pnpm build:types && node --test scripts/validation/corpus.test.mjs scripts/validation/policy.test.mjs scripts/validation/corpus-cli.test.mjs scripts/validation/decision.test.mjs",
+    "validation:test-corpus": "pnpm build:types && node --test scripts/validation/corpus.test.mjs scripts/validation/policy.test.mjs scripts/validation/corpus-cli.test.mjs scripts/validation/decision.test.mjs scripts/validation/ingest-corpus.test.mjs",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
   },
