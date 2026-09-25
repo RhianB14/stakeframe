@@ -49,3 +49,8 @@ desktop.ini
 .wrangler/
 tests/ux-capture/ux-results/
 tests/ux-capture/ux-report/
+
+# corpus privado (G0-01) — evidências, derivados e manifesto reais nunca são versionados
+/data/corpus/private/raw/
+/data/corpus/private/sanitized/
+/data/corpus/private/manifest.json

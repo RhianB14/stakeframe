@@ -1,0 +1,10 @@
+# Corpus privado G0-01 — nenhum dado real deste diretório pode ser versionado.
+#
+# A primeira regra ignora todo o conteúdo; as exceções mantêm versionados
+# apenas os arquivos de estrutura e instrução. Evidências brutas (raw/),
+# derivados sanitizados (sanitized/) e o manifesto real (manifest.json)
+# permanecem exclusivamente locais.
+*
+!.gitignore
+!README.md
+!manifest.template.json
