@@ -4,7 +4,8 @@ import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // G0-01 — validação da ingestão do corpus privado de bilhetes (contrato em
-// docs/corpus/G0-01-schema.md). Somente leitura: confere o manifesto contra o
+// docs/corpus/G0-01-schema.md; escopo ratificado por D025 em 25/09/2026: duas
+// casas — bet365 e superbet). Somente leitura: confere o manifesto contra o
 // contrato, a presença dos artefatos e o SHA-256 dos arquivos; nunca grava,
 // nunca imprime conteúdo de bilhete e nunca acessa a rede. `--init` cria
 // apenas a árvore de diretórios vazios por casa. A ingestão real depende dos
@@ -14,9 +15,9 @@ import { pathToFileURL } from 'node:url';
 // Uso:
 //   node scripts/validation/ingest-corpus.mjs <dir-privado> [--init] [--manifest <arquivo>]
 
-export const KNOWN_BOOKMAKERS = ['bet365', 'superbet', 'novibet'];
+export const KNOWN_BOOKMAKERS = ['bet365', 'superbet'];
 
-const MIN_TOTAL = 30;
+const MIN_TOTAL = 20;
 const MIN_PER_BOOKMAKER = 10;
 const MAX_MANIFEST_BYTES = 5 * 1024 * 1024;
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,63}$/;
