@@ -3305,6 +3305,14 @@
               "database": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
               "worker": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
               "backup": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "backupSync": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "backupIntegrity": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
               "restoreTest": {
                 "type": "string",
                 "enum": ["ready", "warning", "failed", "disabled"]
@@ -3332,6 +3340,8 @@
               "database",
               "worker",
               "backup",
+              "backupSync",
+              "backupIntegrity",
               "restoreTest",
               "retention",
               "disk",
@@ -7099,6 +7109,14 @@
               "database": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
               "worker": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
               "backup": { "type": "string", "enum": ["ready", "warning", "failed", "disabled"] },
+              "backupSync": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
+              "backupIntegrity": {
+                "type": "string",
+                "enum": ["ready", "warning", "failed", "disabled"]
+              },
               "restoreTest": {
                 "type": "string",
                 "enum": ["ready", "warning", "failed", "disabled"]
@@ -7126,6 +7144,8 @@
               "database",
               "worker",
               "backup",
+              "backupSync",
+              "backupIntegrity",
               "restoreTest",
               "retention",
               "disk",
