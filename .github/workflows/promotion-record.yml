@@ -1,0 +1,72 @@
+name: Promotion record
+
+# STK-F1-12: manual promotion gate. This workflow never deploys, never uses
+# SSH and holds no production secrets: after the owner approves the
+# `production` environment, it verifies the promotion evidence of an approved
+# candidate run and emits the immutable promotion record with the fixed
+# digests. The deployment itself is manual, over restricted SSH, following
+# docs/deploy/promotion-runbook.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Run id of the Candidate images workflow to promote
+        required: true
+        type: string
+      deployment_id:
+        description: Stable deployment identifier from the private deployment.env
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: promotion-record
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: promotion-record
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout reviewed workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download candidate evidence from the approved run
+        env:
+          RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/promotion/evidence
+          gh api "repos/RhianB14/stakeframe/actions/runs/$RUN_ID" > .cache/promotion/run.json
+          SOURCE_SHA="$(python3 -c 'import json;print(json.load(open(".cache/promotion/run.json"))["head_sha"])')"
+          gh run download "$RUN_ID" -R RhianB14/stakeframe \
+            -n "candidate-evidence-$SOURCE_SHA-amd64" -D .cache/promotion/evidence/amd64
+          gh run download "$RUN_ID" -R RhianB14/stakeframe \
+            -n "candidate-evidence-$SOURCE_SHA-arm64" -D .cache/promotion/evidence/arm64
+          echo "PROMOTION_EVIDENCE_DOWNLOADED $SOURCE_SHA"
+      - name: Verify evidence and compose the promotion record
+        run: |
+          set -euo pipefail
+          python3 -B scripts/release/promotion_record.py prepare \
+            --run-json .cache/promotion/run.json \
+            --evidence-amd64 .cache/promotion/evidence/amd64/candidate.json \
+            --evidence-arm64 .cache/promotion/evidence/arm64/candidate.json \
+            --deployment-id "${{ inputs.deployment_id }}" \
+            --requested-by "${{ github.actor }}" \
+            --output .cache/promotion/promotion-record.json
+      - name: Retain the promotion record
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: promotion-record-${{ inputs.deployment_id }}-${{ github.run_id }}
+          path: .cache/promotion/promotion-record.json
+          retention-days: 90
+          if-no-files-found: error

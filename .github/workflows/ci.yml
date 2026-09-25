@@ -134,3 +134,44 @@ jobs:
 
       - name: Simulate network safety without privileged commands
         run: python3 -B -m unittest discover -s scripts/network_security -p 'test_*.py' -v
+
+  promotion-check:
+    name: promotion-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate promotion compose composition
+        env:
+          DEPLOYMENT_ID: ci-validation
+          SECRET_DIRECTORY: /tmp/stakeframe-ci-secrets
+          APP_DOMAIN: ci.invalid
+          ACME_EMAIL: ci@ci.invalid
+          GOOGLE_CLIENT_ID: ci.invalid
+          AUTHORIZED_GOOGLE_EMAIL: ci@ci.invalid
+          AUTHORIZED_GOOGLE_SUB: ci-subject
+          MIGRATE_IMAGE: ghcr.io/example/stakeframe-migrate@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          API_IMAGE: ghcr.io/example/stakeframe-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          WORKER_IMAGE: ghcr.io/example/stakeframe-worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          WEB_IMAGE: ghcr.io/example/stakeframe-web-production@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        run: |
+          docker compose -f compose.production.yml config > /dev/null
+          docker compose -f compose.migration.yml config > /dev/null
+          echo COMPOSE_CONFIG_VERIFIED
+
+      - name: Lint promotion YAML
+        run: |
+          python3 -m pip install --quiet --user --break-system-packages 'yamllint==1.35.1'
+          yamllint -d "{extends: relaxed, rules: {line-length: {max: 130}}}" .github/workflows/candidate-images.yml .github/workflows/promotion-record.yml compose.migration.yml compose.production.yml
+
+      - name: Validate promotion runbooks and pipeline hygiene
+        run: node --test scripts/validation/promotion.test.mjs
