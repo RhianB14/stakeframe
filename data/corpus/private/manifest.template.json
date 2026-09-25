@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "<uuid-v4>",
+  "scope": { "bookmakers": ["bet365", "superbet", "novibet"], "purpose": "g0-01" },
+  "tickets": []
+}
