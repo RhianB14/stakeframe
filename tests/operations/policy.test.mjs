@@ -343,7 +343,8 @@ test('requires file-backed deployment secrets for the second provider and refuse
   // Missing second-provider key files fail closed before anything runs.
   assert.throws(() => readOpsConfig(base), /SECRET_FILE_REQUIRED/);
   await secret('b2_backup_account_id', 'f'.repeat(24));
-  await secret('b2_backup_application_key', 'g'.repeat(24));
+  // Official Backblaze B2 application keys include '/' and '+' (e.g. K005…/…).
+  await secret('b2_backup_application_key', 'K005' + 'g'.repeat(16) + '/+');
   const configured = {
     ...base,
     B2_BACKUP_ACCOUNT_ID_FILE: join(directory, 'b2_backup_account_id'),
@@ -352,6 +353,7 @@ test('requires file-backed deployment secrets for the second provider and refuse
   const config = readOpsConfig(configured);
   assert.equal(config.b2.repository, 'b2:stakeframe-backup:stakeframe-v1');
   assert.equal(config.b2.env.B2_ACCOUNT_ID, 'f'.repeat(24));
+  assert.equal(config.b2.env.B2_ACCOUNT_KEY, 'K005' + 'g'.repeat(16) + '/+');
   assert.equal(config.restoreSource, 'r2');
   assert.equal(readOpsConfig({ ...configured, RESTORE_SOURCE: 'b2' }).restoreSource, 'b2');
   assert.throws(
@@ -363,14 +365,32 @@ test('requires file-backed deployment secrets for the second provider and refuse
       () =>
         readOpsConfig({
           ...configured,
-          B2_BACKUP_ACCOUNT_ID_FILE: join(directory, 'b2_backup_application_key'),
-          B2_BACKUP_APPLICATION_KEY_FILE: join(directory, 'b2_backup_application_key'),
           B2_BACKUP_BUCKET: value,
         }),
-      /OPS_SECOND_PROVIDER_REFUSED|SECRET_FILE_INVALID/,
+      /OPS_SECOND_PROVIDER_REFUSED/,
       `bucket=${value}`,
     );
   }
+  // Content problems stay refused with distinct codes: an unsupported character
+  // in the key is a provider refusal; control characters are an invalid file.
+  await secret('b2_key_bad_charset', 'K005' + 'g'.repeat(15) + '!');
+  await secret('b2_key_control_chars', 'K005' + 'g'.repeat(15) + '\n\r\0');
+  assert.throws(
+    () =>
+      readOpsConfig({
+        ...configured,
+        B2_BACKUP_APPLICATION_KEY_FILE: join(directory, 'b2_key_bad_charset'),
+      }),
+    /OPS_SECOND_PROVIDER_REFUSED/,
+  );
+  assert.throws(
+    () =>
+      readOpsConfig({
+        ...configured,
+        B2_BACKUP_APPLICATION_KEY_FILE: join(directory, 'b2_key_control_chars'),
+      }),
+    /SECRET_FILE_INVALID/,
+  );
   // Rehearsal keeps the primary repository only; recovery with an explicit
   // second-provider source is refused when it is not configured.
   const rehearsal = readOpsConfig({
