@@ -61,7 +61,7 @@ class OciTests(unittest.TestCase):
             directory = Path(tmp)
             source = {"version": 1, "sourceSha": SHA, "ciRunId": 123, "checks": [
                 "format-check", "application-check", "application-arm64-check",
-                "network-security-simulation", "recovery-check"]}
+                "network-security-simulation", "recovery-check", "promotion-check"]}
             (directory / "source-validation.json").write_text(json.dumps(source))
             for target in TARGETS:
                 folder = directory / target

@@ -15,7 +15,7 @@ const run = {
 };
 const jobs = requiredChecks.map((name) => ({ name, status: 'completed', conclusion: 'success' }));
 
-test('binds a candidate to current main and all five successful jobs in its push CI', () => {
+test('binds a candidate to current main and all six successful jobs in its push CI', () => {
   assert.equal(validateSource(sha, branch, [run], jobs).ciRunId, 123);
   assert.throws(() => validateSource('b'.repeat(40), branch, [run], jobs));
   for (const change of [

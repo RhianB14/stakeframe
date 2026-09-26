@@ -15,7 +15,7 @@ from verify_oci import TARGETS, verify
 def candidate(directory):
     directory.mkdir()
     (directory / "source-validation.json").write_text(json.dumps({"version": 1, "sourceSha": SHA, "ciRunId": 123, "checks": [
-        "format-check", "application-check", "application-arm64-check", "network-security-simulation", "recovery-check"]}))
+        "format-check", "application-check", "application-arm64-check", "network-security-simulation", "recovery-check", "promotion-check"]}))
     for target in TARGETS:
         with tempfile.TemporaryDirectory() as tmp:
             archive, metadata = fixture(Path(tmp), target=target)

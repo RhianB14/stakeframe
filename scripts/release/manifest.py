@@ -12,7 +12,7 @@ def manifest(directory, sha, arch):
     require(type(source.get("ciRunId")) is int and source["ciRunId"] > 0, "RELEASE_CI_REQUIRED")
     require(sorted(source.get("checks", [])) == sorted([
         "format-check", "application-check", "application-arm64-check",
-        "network-security-simulation", "recovery-check"]), "RELEASE_CHECKS_REQUIRED")
+        "network-security-simulation", "recovery-check", "promotion-check"]), "RELEASE_CHECKS_REQUIRED")
     images = []
     for target in TARGETS:
         metadata = json.loads((directory / (target + ".metadata.json")).read_text())
