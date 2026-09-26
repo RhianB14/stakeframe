@@ -268,6 +268,26 @@ export function assertDeploymentConfig(
     for (const secret of mounted)
       assert.ok([secret.source, `/run/secrets/${secret.source}`].includes(secret.target));
   }
+  for (const [name, service] of Object.entries(services)) {
+    const mounted = new Set((service.secrets ?? []).map((secret) => secret.source));
+    for (const [key, value] of Object.entries(service.environment ?? {})) {
+      if (!key.endsWith('_FILE') || typeof value !== 'string') continue;
+      assert.match(
+        value,
+        /^\/run\/secrets\/[a-z0-9_]+$/,
+        `${name}: ${key} must target /run/secrets`,
+      );
+      const source = value.replace('/run/secrets/', '');
+      assert.ok(
+        mounted.has(source),
+        `${name}: ${key} points to ${value} but the secret is not mounted by the service`,
+      );
+      assert.ok(
+        config.secrets[source] !== undefined,
+        `${name}: ${key} points to ${value} but no top-level source declares it`,
+      );
+    }
+  }
   assert.deepEqual(
     Object.keys(config.secrets).sort(),
     [...new Set(Object.values(expectedSecrets).flat())].sort(),

@@ -70,3 +70,7 @@ secrets:
     file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_writer_access_key
   r2_writer_secret_key:
     file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_writer_secret_key
+  b2_backup_account_id:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/b2_backup_account_id
+  b2_backup_application_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/b2_backup_application_key

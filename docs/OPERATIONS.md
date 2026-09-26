@@ -42,6 +42,11 @@ As chaves de acesso R2 usam 32 caracteres hex e seus segredos usam 64. A
 Application Key do Backblaze B2 (STK-F1-11) não segue esse formato: o keyID e a
 key são alfanuméricos, validados por faixa de caracteres e formato do bucket,
 sempre fail-closed.
+O par do segundo provedor é declarado no `compose.integrations.yml` — arquivo
+que forma o stack real de produção — além de `compose.operations.yml`, porque o
+serviço `operations` o consome no conjunto production+integrations+operations; o
+deployment-check rejeita qualquer variável `*_FILE` cujo secret não esteja
+montado pelo serviço e declarado em uma fonte top-level.
 Consumidores Node executam com UID 1000. O operador provisiona arquivos legíveis
 por esse UID em diretório privado, sem conceder leitura a outros usuários.
 Instalar ou modificar credenciais e permissões exige autorização específica.
