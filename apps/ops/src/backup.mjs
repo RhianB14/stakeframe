@@ -66,6 +66,8 @@ export async function snapshots(command, { complete = true, cycle } = {}) {
     if (cycle) assert.ok(snapshot.tags.includes(cycle));
     assert.ok(Number.isFinite(Date.parse(snapshot.time)));
   }
+  // restic does not guarantee snapshot JSON ordering (R2 returned newest-first,
+  // B2 returned oldest-first): sort explicitly so all[0] is always the newest.
   return all.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
 }
 
