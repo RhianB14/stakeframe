@@ -82,6 +82,10 @@ docker compose --env-file /etc/stakeframe/deployment.env \
   - `backup`, `retention`, `restoreTest` — como antes (primário e ensaio).
 - Leitura direta do estado: `/var/lib/stakeframe/operations-status/backup-dual.json`
   (`sync.state/at`, `integrity.state/at/attemptAt`, `dedup.ratio`).
+- Janela do sample: o ciclo do daemon (backup + `copy` + retenção) mantém o
+  lock dos repositórios por minutos; rode o `sample` FORA da janela do ciclo.
+  Se rodar durante, o comando aguarda até 15 min pelo lock (`--retry-lock
+15m`) antes de falhar.
 
 ## 4. Comandos manuais
 
@@ -98,7 +102,8 @@ docker compose --env-file /etc/stakeframe/deployment.env \
   -f compose.production.yml -f compose.integrations.yml -f compose.operations.yml \
   --profile operations run --rm operations src/server.mjs sample
 # Saída: OPS_SAMPLE_VERIFIED (ou OPS_SAMPLE_FAILED); relatório em
-# /status/restore-sample.json. Recomendado: mensal, junto do ensaio.
+# /status/restore-sample.json. Recomendado: mensal, junto do ensaio, e fora
+# da janela do ciclo do daemon (ver §3); falhas registram reason/detail.
 
 # Check manual apenas do primário (o B2 é verificado pelo replicate).
 docker compose --env-file /etc/stakeframe/deployment.env \
