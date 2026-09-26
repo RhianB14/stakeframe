@@ -37,14 +37,6 @@ export function sampleDetail(error) {
   return cause ? cause.slice(0, 80) : null;
 }
 
-// Reports carry a code, never provider output or paths: anything that is not a
-// known OPS_* code is collapsed into a generic marker for the operator.
-export function sampleReason(error) {
-  if (error?.code === 'ERR_ASSERTION') return 'OPS_SAMPLE_VALIDATION_FAILED';
-  const message = error instanceof Error ? error.message : '';
-  return /^OPS_[A-Z_]{3,40}$/.test(message) ? message : 'OPS_SAMPLE_FAILED';
-}
-
 export async function sample(config, parentSignal, dependencies = {}) {
   const execute = dependencies.run ?? run;
   const controller = new AbortController();
