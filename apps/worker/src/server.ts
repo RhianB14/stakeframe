@@ -5,15 +5,20 @@ import {
   readDatabaseConfig,
   assertRecoveryReviewed,
 } from '@stakeframe/db';
-import { PROBE_QUEUE } from '@stakeframe/shared';
+import { PROBE_QUEUE, resolveReleaseInfo } from '@stakeframe/shared';
 import { startWorker } from './worker.js';
 import { startIntegrations } from './integrations.js';
 import { startMonthlyUnits } from './monthly-unit.js';
 import { startAttachments } from './attachments.js';
 import { startEventSearch } from './event-providers.js';
 import { createBudgetProbe } from './budget.js';
+import { initTelemetry, readTelemetryConfig } from './telemetry.js';
 
 async function main() {
+  const telemetry = initTelemetry(
+    readTelemetryConfig(process.env),
+    resolveReleaseInfo(process.env),
+  );
   const connectionString = requireDatabaseUrl(readDatabaseConfig(process.env));
   const database = createDatabase(connectionString);
   if (![undefined, 'true', 'false'].includes(process.env.MONITORING_ENABLED))
@@ -27,7 +32,9 @@ async function main() {
   let events = { stop: async () => {}, check: () => {} };
   try {
     await assertRecoveryReviewed(database);
-    boss = await startWorker(connectionString);
+    boss = await startWorker(connectionString, 'pgboss', (error) => {
+      telemetry.captureError(error, { stage: 'queue' });
+    });
     integrations = await startIntegrations(
       database,
       boss,
@@ -38,14 +45,15 @@ async function main() {
     monthlyUnits = await startMonthlyUnits(database);
     attachments = startAttachments(database, process.env);
     events = startEventSearch(database, process.env);
-  } catch {
+  } catch (error) {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
     await events.stop();
     await boss?.stop({ graceful: false });
     await database.close();
-    throw new Error('WORKER_START_FAILED');
+    telemetry.captureError(error, { stage: 'startup' });
+    throw new Error('WORKER_START_FAILED', { cause: error });
   }
   const server = createServer((request, response) => {
     void (async () => {
@@ -74,14 +82,15 @@ async function main() {
       server.once('error', reject);
       server.listen(9091, '0.0.0.0', resolve);
     });
-  } catch {
+  } catch (error) {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
     await events.stop();
     await boss.stop({ graceful: false });
     await database.close();
-    throw new Error('WORKER_START_FAILED');
+    telemetry.captureError(error, { stage: 'startup' });
+    throw new Error('WORKER_START_FAILED', { cause: error });
   }
   let stopping = false;
   const stop = () => {
@@ -94,7 +103,10 @@ async function main() {
       .then(() => attachments.stop())
       .then(() => events.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
-      .finally(database.close)
+      .finally(async () => {
+        await telemetry.shutdown();
+        await database.close();
+      })
       .catch(() => {
         process.exitCode = 1;
       });

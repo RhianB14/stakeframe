@@ -75,6 +75,7 @@ export function assertDeploymentConfig(
       'B2_BACKUP_ACCOUNT_ID',
       'B2_BACKUP_APPLICATION_KEY',
       'MONITOR_TOKEN',
+      'BETTER_STACK_SOURCE_TOKEN',
     ])
       assert.equal(environment[key], undefined, 'PLAINTEXT_SECRET_REFUSED');
   }

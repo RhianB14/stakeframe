@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { requireDatabaseUrl, readRuntime, readDatabaseConfig } from '@stakeframe/db';
 import { resolveReleaseInfo } from '@stakeframe/shared';
 import { readAuthConfig } from './auth-config.js';
+import { readTelemetryConfig } from './telemetry.js';
 
 const environmentSchema = z.object({
   API_HOST: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
@@ -19,5 +20,6 @@ export function readConfig(environment: NodeJS.ProcessEnv) {
     databaseUrl: requireDatabaseUrl(readDatabaseConfig(environment)),
     auth: readAuthConfig(environment),
     release: resolveReleaseInfo(environment),
+    telemetry: readTelemetryConfig(environment),
   };
 }

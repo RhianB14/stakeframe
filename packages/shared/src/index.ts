@@ -7,6 +7,7 @@ export * from './decimal.js';
 export * from './finance.js';
 export * from './release.js';
 export * from './automatic-policy.js';
+export * from './telemetry.js';
 
 export const systemStatusSchema = z
   .object({
@@ -192,6 +193,21 @@ export const ownerSessionSchema = z
   })
   .meta({ id: 'OwnerSession' });
 export type OwnerSession = z.infer<typeof ownerSessionSchema>;
+
+/**
+ * STK-F1-10: configuração pública de telemetria exposta ao cliente web. Contém
+ * apenas identificadores públicos por natureza (DSN do Sentry, chave do
+ * PostHog); tokens de servidor (Better Stack) nunca aparecem aqui. `null`
+ * significa desligado — zero config = zero telemetria.
+ */
+export const telemetryPublicConfigSchema = z
+  .object({
+    sentry: z.object({ dsn: z.string().min(1), environment: z.string().min(1) }).nullable(),
+    posthog: z.object({ key: z.string().min(1) }).nullable(),
+    release: z.object({ version: z.string().min(1), commit: z.string().min(1) }),
+  })
+  .meta({ id: 'TelemetryPublicConfig' });
+export type TelemetryPublicConfig = z.infer<typeof telemetryPublicConfigSchema>;
 export * from './events.js';
 export * from './reports.js';
 export * from './automatic.js';

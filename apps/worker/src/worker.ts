@@ -1,10 +1,15 @@
 import { PgBoss } from 'pg-boss';
 import { PROBE_QUEUE, probeSchema } from '@stakeframe/shared';
 
-export async function startWorker(connectionString: string, schema = 'pgboss') {
+export async function startWorker(
+  connectionString: string,
+  schema = 'pgboss',
+  onError?: (error: unknown) => void,
+) {
   const boss = new PgBoss({ connectionString, schema, connectionTimeoutMillis: 3_000, max: 3 });
-  boss.on('error', () => {
+  boss.on('error', (error) => {
     console.error('QUEUE_CONNECTION_ERROR');
+    onError?.(error);
   });
   try {
     await boss.start();

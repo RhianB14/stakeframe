@@ -16,6 +16,7 @@ import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
 import { betFinancialDisplay } from './financial-display.js';
 import { betResultLabel, betResultQualifier, betTablePresentation } from './bet-table.js';
+import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
 const outcomeLabels: Record<string, string> = {
@@ -863,6 +864,8 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
   );
 }
 export function SettingsPage({ workspace, open }: { workspace: Workspace; open: OpenModal }) {
+  // STK-F1-10: preferências de telemetria (opt-in explícito, por dispositivo).
+  const [consent, setConsent] = useState(readConsent());
   return (
     <>
       <div className="settings-grid">
@@ -965,6 +968,46 @@ export function SettingsPage({ workspace, open }: { workspace: Workspace; open: 
         <p className="panel-footnote">
           A unidade permanece fixa durante o mês. Datas financeiras seguem o horário de São Paulo.
         </p>
+      </section>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <h2>Privacidade e análises</h2>
+            <p>
+              Telemetria é opcional e desligada por padrão. Quando ativada, usa apenas
+              identificadores pseudônimos — bilhetes, valores, prompts e imagens nunca são enviados.
+            </p>
+          </div>
+        </div>
+        <label className="consent-row">
+          <input
+            type="checkbox"
+            checked={consent.analytics}
+            onChange={(event) =>
+              setConsent(updateTelemetryConsent('analytics', event.target.checked))
+            }
+          />
+          <span>
+            <strong>Análises de uso</strong>
+            <small>
+              Métricas de navegação (PostHog Cloud EU) para melhorar o produto. Sem gravação de
+              tela.
+            </small>
+          </span>
+        </label>
+        <label className="consent-row">
+          <input
+            type="checkbox"
+            checked={consent.replay}
+            onChange={(event) => setConsent(updateTelemetryConsent('replay', event.target.checked))}
+          />
+          <span>
+            <strong>Gravação de sessão</strong>
+            <small>
+              Replay mascarado (Sentry), nunca nas telas de bilhetes, finanças ou configurações.
+            </small>
+          </span>
+        </label>
       </section>
     </>
   );

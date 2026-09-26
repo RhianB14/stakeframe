@@ -18,9 +18,11 @@ import {
   readEmailRuntimeConfig,
 } from './email.js';
 import { createOperationsService } from './operations.js';
+import { initTelemetry } from './telemetry.js';
 
 async function main() {
   const config = readConfig(process.env);
+  const telemetry = initTelemetry(config.telemetry, config.release);
   const database = createDatabase(config.databaseUrl);
   const email = readEmailRuntimeConfig(config.runtime, process.env);
   const ownerAuth = config.auth.enabled
@@ -53,10 +55,14 @@ async function main() {
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
     reports: createReportService(database),
+    telemetry,
     ...(operations ? { operations } : {}),
     ...(ownerAuth ? { ownerAuth } : {}),
   });
   app.addHook('onClose', database.close);
+  app.addHook('onClose', async () => {
+    await telemetry.shutdown();
+  });
   const stop = () => {
     void app.close().catch(() => {
       process.exitCode = 1;
@@ -67,9 +73,10 @@ async function main() {
   try {
     if (ownerAuth) await ownerAuth.auth.$context;
     await app.listen({ host: config.host, port: config.port });
-  } catch {
+  } catch (error) {
     await app.close();
-    throw new Error('API_START_FAILED');
+    telemetry.captureError(error, { stage: 'startup' });
+    throw new Error('API_START_FAILED', { cause: error });
   }
 }
 
