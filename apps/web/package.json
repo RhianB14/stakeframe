@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "1.1.23",
+    "@sentry/react": "11.0.0",
     "@stakeframe/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "posthog-js": "1.434.15",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-is": "19.2.8",

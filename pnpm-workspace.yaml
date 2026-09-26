@@ -10,6 +10,8 @@ allowBuilds:
   esbuild: true
   '@tailwindcss/oxide': true
   workerd: true
+  # core-js: postinstall apenas de funding/telemetria — não é necessário.
+  core-js: false
 
 minimumReleaseAgeExclude:
   - '@better-auth/core@1.7.3'
@@ -20,3 +22,4 @@ minimumReleaseAgeExclude:
   - '@better-auth/prisma-adapter@1.7.3'
   - '@better-auth/telemetry@1.7.3'
   - better-auth@1.7.3
+  - posthog-js@1.434.15

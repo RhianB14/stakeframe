@@ -3769,6 +3769,35 @@
         },
         "required": ["user", "organization", "expiresAt"]
       },
+      "TelemetryPublicConfigInput": {
+        "type": "object",
+        "properties": {
+          "sentry": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "dsn": { "type": "string", "minLength": 1 },
+              "environment": { "type": "string", "minLength": 1 }
+            },
+            "required": ["dsn", "environment"]
+          },
+          "posthog": {
+            "nullable": true,
+            "type": "object",
+            "properties": { "key": { "type": "string", "minLength": 1 } },
+            "required": ["key"]
+          },
+          "release": {
+            "type": "object",
+            "properties": {
+              "version": { "type": "string", "minLength": 1 },
+              "commit": { "type": "string", "minLength": 1 }
+            },
+            "required": ["version", "commit"]
+          }
+        },
+        "required": ["sentry", "posthog", "release"]
+      },
       "ReleaseInfo": {
         "type": "object",
         "properties": {
@@ -7607,6 +7636,39 @@
         },
         "required": ["user", "organization", "expiresAt"],
         "additionalProperties": false
+      },
+      "TelemetryPublicConfig": {
+        "type": "object",
+        "properties": {
+          "sentry": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "dsn": { "type": "string", "minLength": 1 },
+              "environment": { "type": "string", "minLength": 1 }
+            },
+            "required": ["dsn", "environment"],
+            "additionalProperties": false
+          },
+          "posthog": {
+            "nullable": true,
+            "type": "object",
+            "properties": { "key": { "type": "string", "minLength": 1 } },
+            "required": ["key"],
+            "additionalProperties": false
+          },
+          "release": {
+            "type": "object",
+            "properties": {
+              "version": { "type": "string", "minLength": 1 },
+              "commit": { "type": "string", "minLength": 1 }
+            },
+            "required": ["version", "commit"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["sentry", "posthog", "release"],
+        "additionalProperties": false
       }
     }
   },
@@ -7684,6 +7746,36 @@
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/SystemStatus" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/config": {
+      "get": {
+        "operationId": "getTelemetryConfig",
+        "summary": "Consultar a configuração pública de telemetria do cliente",
+        "tags": ["Operação"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelemetryPublicConfig" }
+              }
             }
           },
           "500": {

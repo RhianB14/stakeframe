@@ -10,9 +10,11 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@sentry/node": "11.0.0",
     "@stakeframe/db": "workspace:*",
     "@stakeframe/shared": "workspace:*",
     "pg-boss": "12.30.0",
+    "posthog-node": "5.54.1",
     "sharp": "0.35.4",
     "zod": "4.5.4"
   }

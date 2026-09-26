@@ -6,6 +6,7 @@ import {
   readinessSchema,
   resolveReleaseInfo,
   systemStatusSchema,
+  telemetryPublicConfigSchema,
   unavailabilitySchema,
   type ReleaseInfo,
 } from '@stakeframe/shared';
@@ -27,6 +28,8 @@ import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
 import { registerOnboardingRoutes } from './onboarding-routes.js';
+import { registerDebugRoutes } from './debug-routes.js';
+import type { TelemetryHandle } from './telemetry.js';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
@@ -40,6 +43,7 @@ export function createApp(options: {
   reports?: ReportService;
   operations?: OperationsService;
   onboarding?: OnboardingService;
+  telemetry?: TelemetryHandle;
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
@@ -121,6 +125,38 @@ export function createApp(options: {
         });
       },
     );
+    // STK-F1-10: configuração pública de telemetria do cliente (o web ativa
+    // Sentry/PostHog em runtime a partir daqui — apenas identificadores
+    // públicos; o token do Better Stack nunca sai do servidor).
+    app.get(
+      '/api/v1/telemetry/config',
+      {
+        schema: {
+          operationId: 'getTelemetryConfig',
+          tags: ['Operação'],
+          summary: 'Consultar a configuração pública de telemetria do cliente',
+          security: [],
+          response: {
+            200: telemetryPublicConfigSchema,
+            500: apiErrorSchema,
+            default: apiErrorSchema,
+          },
+        },
+      },
+      async () => {
+        const telemetry = options.telemetry;
+        const release = options.release ?? resolveReleaseInfo();
+        const sentry =
+          telemetry?.config.sentry.enabled && telemetry.config.sentry.dsn
+            ? { dsn: telemetry.config.sentry.dsn, environment: telemetry.config.sentry.environment }
+            : null;
+        const posthog =
+          telemetry?.config.posthog.enabled && telemetry.config.posthog.key
+            ? { key: telemetry.config.posthog.key }
+            : null;
+        return { sentry, posthog, release: { version: release.version, commit: release.commit } };
+      },
+    );
     registerAuthRoutes(app, options.ownerAuth);
     registerConsentRoutes(app, options.ownerAuth);
     registerFinanceRoutes(app, options.ownerAuth, options.finance);
@@ -129,6 +165,7 @@ export function createApp(options: {
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerReportRoutes(app, options.ownerAuth, options.reports);
     registerOperationsRoutes(app, options.operations);
+    registerDebugRoutes(app, options.ownerAuth, options.telemetry);
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));
@@ -149,6 +186,14 @@ export function createApp(options: {
         : status === 400 && actionPath && !request.headers['idempotency-key']
           ? 'IDEMPOTENCY_KEY_REQUIRED'
           : 'INVALID_REQUEST';
+    // STK-F1-10: apenas falhas internas (>=500) alimentam o Sentry — o
+    // beforeSend sanitiza o evento (§4.6); 4xx nunca poluem a telemetria.
+    if (status >= 500) {
+      options.telemetry?.captureError(_error, {
+        requestId: request.id,
+        path: request.url.split('?')[0],
+      });
+    }
     app.log.warn({ code, requestId: request.id }, 'Request refused');
     return sendApiError(request, reply, status, code);
   });

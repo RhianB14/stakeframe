@@ -112,6 +112,17 @@ describe('configuration', () => {
         builtAt: 'unknown',
         environment: 'local',
       },
+      telemetry: {
+        sentry: { enabled: false, dsn: undefined, environment: 'local' },
+        posthog: { enabled: false, key: undefined },
+        betterStack: {
+          enabled: false,
+          token: undefined,
+          ingestingUrl: 'https://in.logs.betterstack.com',
+          infoSampleRate: 0,
+        },
+        debug: { enabled: false },
+      },
     });
   });
   it.each([undefined, '', 'https://private-secret@example.test/db', 'postgresql://localhost'])(

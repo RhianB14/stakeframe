@@ -23,6 +23,7 @@ import {
 } from './MiniAppSections.js';
 import { readTelegramInitData } from './miniapp-auth.js';
 import './product.css';
+import { setSensitiveSurface } from '../lib/telemetry.js';
 
 // STK-G0-19-R5 — Mini App do Telegram: a mesma fonte canônica, autenticada pelo
 // initData validado no servidor (x-telegram-init-data). Nenhum identificador
@@ -67,6 +68,11 @@ const sectionParam = (): 'status' | 'bookmaker' | 'tipster' | 'cashout' | null =
 };
 
 export function MiniAppPage() {
+  // STK-F1-10: o mini-app manipula bilhetes — superfície sensível permanente.
+  useEffect(() => {
+    setSensitiveSurface('miniapp', true);
+    return () => setSensitiveSurface('miniapp', false);
+  }, []);
   const [initData, setInitData] = useState(() => readTelegramInitData());
   const [feedback, setFeedback] = useState<'syncing' | 'success' | null>(null);
   useEffect(() => {

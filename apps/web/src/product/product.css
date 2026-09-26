@@ -2159,3 +2159,25 @@
     padding-top: 16px;
   }
 }
+
+.consent-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+.consent-row input {
+  margin-top: 2px;
+}
+
+.consent-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.consent-row small {
+  color: var(--muted, #6b7280);
+}

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { capturePageView, identifyOwner, setSensitiveSurface } from '../lib/telemetry.js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   workspaceSchema,
@@ -142,6 +143,24 @@ function ProductShell({
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
   }, []);
+  // STK-F1-10: bilhetes, finanças, configurações e qualquer modal do produto
+  // são superfícies sensíveis — nunca gravadas pelo replay (§6.1).
+  useEffect(() => {
+    setSensitiveSurface(
+      'product-app',
+      page === 'bets' || page === 'finance' || page === 'settings' || modal !== null,
+    );
+    return () => setSensitiveSurface('product-app', false);
+  }, [page, modal]);
+  // Funil (opt-in): apenas a mudança de página gera evento; telas sensíveis
+  // são excluídas dentro de capturePageView.
+  useEffect(() => {
+    capturePageView(page);
+  }, [page]);
+  // Identificação pseudônima (id interno) — nunca e-mail ou nome.
+  useEffect(() => {
+    identifyOwner(owner.id);
+  }, [owner.id]);
   const open: OpenModal = (value) => {
     actions.clearError();
     setModal(value);
