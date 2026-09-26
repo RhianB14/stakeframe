@@ -14,6 +14,10 @@ import { resticAt, secondProviderEnv } from './replicate.mjs';
 // the bundle checksums. Run manually; nothing is written outside /work and the
 // caller-owned status file.
 export const SAMPLE_TIMEOUT_MS = 30 * 60_000;
+// The daemon cycle (backup + copy + retention) holds the repository lock for
+// minutes: retry the lock well past a normal cycle instead of failing on
+// contention. Sample runs still belong outside the cycle window (runbook §3).
+export const SAMPLE_RETRY_LOCK = '15m';
 
 // Reports carry a code, never provider output or paths: anything that is not a
 // known OPS_* code is collapsed into a generic marker for the operator.
@@ -21,6 +25,16 @@ export function sampleReason(error) {
   if (error?.code === 'ERR_ASSERTION') return 'OPS_SAMPLE_VALIDATION_FAILED';
   const message = error instanceof Error ? error.message : '';
   return /^OPS_[A-Z_]{3,40}$/.test(message) ? message : 'OPS_SAMPLE_FAILED';
+}
+
+// Operator-facing detail for our own OPS_* failures only: the cause carries the
+// sanitized provider excerpt (process.mjs), bounded again here. Raw messages
+// from unknown errors are never echoed.
+export function sampleDetail(error) {
+  const message = error instanceof Error ? error.message : '';
+  if (!/^OPS_[A-Z_]{3,40}$/.test(message)) return null;
+  const cause = error?.cause instanceof Error ? error.cause.message : '';
+  return cause ? cause.slice(0, 80) : null;
 }
 
 export async function sample(config, parentSignal, dependencies = {}) {
@@ -39,7 +53,7 @@ export async function sample(config, parentSignal, dependencies = {}) {
   try {
     for (const [id, env] of sources) {
       try {
-        const invoke = resticAt(env, signal, { execute });
+        const invoke = resticAt(env, signal, { execute, retryLock: SAMPLE_RETRY_LOCK });
         const all = await snapshots(invoke, { complete: true });
         assert.ok(all.length > 0, 'OPS_BACKUP_MISSING');
         const snapshot = all[0];
@@ -82,10 +96,12 @@ export async function sample(config, parentSignal, dependencies = {}) {
           at: new Date().toISOString(),
         };
       } catch (error) {
+        const detail = sampleDetail(error);
         report.sources[id] = {
           ok: false,
           at: new Date().toISOString(),
           reason: sampleReason(error),
+          ...(detail ? { detail } : {}),
         };
       }
     }

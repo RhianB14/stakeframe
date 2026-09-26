@@ -22,13 +22,13 @@ export const CHECK_SUBSET = '10%';
 // the service credentials, the second provider adds its own key pair. The
 // read-only guard mirrors the primary wrapper so recovery-only runs can never
 // mutate either repository.
-export function resticAt(env, signal, { execute = run, readOnly = false } = {}) {
+export function resticAt(env, signal, { execute = run, readOnly = false, retryLock = '30s' } = {}) {
   return (args, options = {}) => {
     if (readOnly && !['snapshots', 'dump', 'check'].includes(args[0]))
       throw new Error('OPS_READ_ONLY_REPOSITORY');
     return execute(
       'restic',
-      ['--no-cache', ...(readOnly ? ['--no-lock'] : ['--retry-lock', '30s']), ...args],
+      ['--no-cache', ...(readOnly ? ['--no-lock'] : ['--retry-lock', retryLock]), ...args],
       { env, signal, ...options },
     );
   };

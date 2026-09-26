@@ -4,7 +4,24 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 // Commands are argument arrays, with an explicit environment and no shell. Raw
-// diagnostics can contain SQL, credentials or object names and never reach logs.
+// diagnostics can contain SQL, credentials or object names and never reach
+// logs: stderr is consumed, bounded and stripped of sensitive lines before a
+// sanitized excerpt is attached to the thrown error for operators.
+export const STDERR_CAPTURE_BYTES = 8 * 1024;
+
+// Sanitized operator-facing excerpt: bounded, whitespace-collapsed and without
+// lines that could carry credentials. Raw output is never attached verbatim.
+export function sanitizeStderr(buffer) {
+  return buffer
+    .toString('utf8')
+    .split(/\r?\n/)
+    .filter((line) => !/(password|secret|token|credential|authorization)/i.test(line))
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join(' | ')
+    .slice(0, 4096);
+}
+
 export async function run(
   binary,
   args,
@@ -34,7 +51,15 @@ export async function run(
       resolve(code);
     });
   });
-  child.stderr.resume();
+  // Consume stderr without buffering more than the capture bound; the stream
+  // must keep flowing or the child would stall on a full pipe.
+  const stderrChunks = [];
+  let stderrBytes = 0;
+  child.stderr.on('data', (chunk) => {
+    if (stderrBytes >= STDERR_CAPTURE_BYTES) return;
+    stderrChunks.push(chunk);
+    stderrBytes += chunk.length;
+  });
   let size = 0;
   const chunks = [];
   const bounded = new Transform({
@@ -62,6 +87,9 @@ export async function run(
     local.abort();
   }
   const code = await exit;
-  if (failed || combined.aborted || code !== 0) throw new Error('OPS_COMMAND_FAILED');
+  if (failed || combined.aborted || code !== 0) {
+    const detail = sanitizeStderr(Buffer.concat(stderrChunks).subarray(0, STDERR_CAPTURE_BYTES));
+    throw new Error('OPS_COMMAND_FAILED', detail ? { cause: new Error(detail) } : undefined);
+  }
   return { stdout: Buffer.concat(chunks).toString('utf8'), bytes: size };
 }

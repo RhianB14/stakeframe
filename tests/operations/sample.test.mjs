@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { snapshots } from '../../apps/ops/src/backup.mjs';
-import { sample, sampleReason } from '../../apps/ops/src/sample.mjs';
+import { sample, sampleDetail, sampleReason } from '../../apps/ops/src/sample.mjs';
 import { BUNDLE } from '../../apps/ops/src/config.mjs';
 
 // STK-F1-11 BUG 5: restic does not guarantee snapshot JSON ordering (B2
@@ -104,14 +104,22 @@ test('sample() reports a sanitized reason when a destination fails', async () =>
     const failing = async (binary, args, options = {}) => {
       const destination = options.env.RESTIC_REPOSITORY.startsWith('b2:') ? 'b2' : 'r2';
       if (args.includes('snapshots')) return { stdout: JSON.stringify([NEWER, OLDER]) };
-      if (destination === 'b2') throw new Error(`raw provider failure at ${BUNDLE}/database.dump`);
+      if (destination === 'b2')
+        throw new Error('OPS_COMMAND_FAILED', {
+          cause: new Error('Fatal: unable to create lock in backend: repository is already locked'),
+        });
       throw new Error('OPS_SAMPLE_CHECKSUM_FAILED');
     };
     const report = await sample(CONFIG, undefined, { run: failing, workdir });
     assert.equal(report.sources.r2.ok, false);
     assert.equal(report.sources.r2.reason, 'OPS_SAMPLE_CHECKSUM_FAILED');
+    assert.equal(report.sources.r2.detail, undefined);
     assert.equal(report.sources.b2.ok, false);
-    assert.equal(report.sources.b2.reason, 'OPS_SAMPLE_FAILED');
+    assert.equal(report.sources.b2.reason, 'OPS_COMMAND_FAILED');
+    assert.equal(
+      report.sources.b2.detail,
+      'Fatal: unable to create lock in backend: repository is already locked',
+    );
   } finally {
     await rm(workdir, { recursive: true, force: true });
   }
@@ -129,4 +137,12 @@ test('sampleReason() exposes known codes and collapses everything else', () => {
     'OPS_SAMPLE_FAILED',
   );
   assert.equal(sampleReason(undefined), 'OPS_SAMPLE_FAILED');
+  // Detail is only echoed for our own OPS_* failures, from the sanitized cause.
+  assert.equal(
+    sampleDetail(new Error('OPS_COMMAND_FAILED', { cause: new Error('unable to create lock') })),
+    'unable to create lock',
+  );
+  assert.equal(sampleDetail(new Error('raw provider failure')), null);
+  assert.equal(sampleDetail(new Error('OPS_COMMAND_FAILED')), null);
+  assert.equal(sampleDetail(undefined), null);
 });
