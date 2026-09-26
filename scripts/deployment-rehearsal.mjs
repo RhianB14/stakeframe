@@ -38,6 +38,8 @@ const knownFiles = [
   'recovery_key',
   'r2_backup_access_key',
   'r2_backup_secret_key',
+  'b2_backup_account_id',
+  'b2_backup_application_key',
   'monitor_token',
   'azure_vision_api_key',
   'google_vision_api_key',
