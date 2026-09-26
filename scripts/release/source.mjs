@@ -9,6 +9,7 @@ export const requiredChecks = [
   'application-arm64-check',
   'network-security-simulation',
   'recovery-check',
+  'promotion-check',
 ];
 
 export function validateSource(sha, branch, runs, jobs) {
