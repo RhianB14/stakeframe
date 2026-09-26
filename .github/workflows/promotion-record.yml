@@ -58,8 +58,8 @@ jobs:
           set -euo pipefail
           python3 -B scripts/release/promotion_record.py prepare \
             --run-json .cache/promotion/run.json \
-            --evidence-amd64 .cache/promotion/evidence/amd64/candidate.json \
-            --evidence-arm64 .cache/promotion/evidence/arm64/candidate.json \
+            --evidence-amd64 .cache/promotion/evidence/amd64 \
+            --evidence-arm64 .cache/promotion/evidence/arm64 \
             --deployment-id "${{ inputs.deployment_id }}" \
             --requested-by "${{ github.actor }}" \
             --output .cache/promotion/promotion-record.json

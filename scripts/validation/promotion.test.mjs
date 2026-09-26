@@ -119,6 +119,22 @@ test('promotion record workflow is the approval gate and never deploys', () => {
   assert.ok(!promotionRecord.includes(':latest'), 'promotion-record.yml must never use latest');
 });
 
+test('promotion record workflow points the evidence flags at the download directories', () => {
+  assert.ok(
+    promotionRecord.includes('--evidence-amd64 .cache/promotion/evidence/amd64'),
+    'promotion-record.yml must pass the amd64 evidence directory',
+  );
+  assert.ok(
+    promotionRecord.includes('--evidence-arm64 .cache/promotion/evidence/arm64'),
+    'promotion-record.yml must pass the arm64 evidence directory',
+  );
+  assert.ok(
+    !promotionRecord.includes('evidence/amd64/candidate.json') &&
+      !promotionRecord.includes('evidence/arm64/candidate.json'),
+    'promotion-record.yml must not pass a file path where the script expects a directory',
+  );
+});
+
 test('continuous integration runs the promotion composition checks', () => {
   assert.ok(ci.includes('promotion-check'), 'ci.yml must define the promotion-check job');
   assert.ok(
