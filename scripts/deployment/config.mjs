@@ -272,6 +272,8 @@ export function assertDeploymentConfig(
     const mounted = new Set((service.secrets ?? []).map((secret) => secret.source));
     for (const [key, value] of Object.entries(service.environment ?? {})) {
       if (!key.endsWith('_FILE') || typeof value !== 'string') continue;
+      // Non-secret file references (e.g. automatic-import policies) are validated separately.
+      if (!value.startsWith('/run/secrets/')) continue;
       assert.match(
         value,
         /^\/run\/secrets\/[a-z0-9_]+$/,
