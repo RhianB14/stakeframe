@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createDatabase, attachmentExpiredSql } from '@stakeframe/db';
 import { BUNDLE, SHA, UUID, MAX_DUMP_BYTES, MAX_METADATA_BYTES } from './config.mjs';
 import { restic, snapshots, readSnapshotMetadata } from './backup.mjs';
+import { resticAt, secondProviderEnv } from './replicate.mjs';
 import {
   prepareBundle,
   clearBundle,
@@ -23,7 +24,12 @@ export async function restore(config, requestedSnapshot, parentSignal) {
   if (requestedSnapshot !== undefined)
     assert.ok(SHA.test(requestedSnapshot), 'OPS_SNAPSHOT_REFUSED');
   const started = performance.now();
-  const command = restic(config, signal);
+  // STK-F1-11: recovery may read either destination; the default source stays
+  // the primary provider and the second provider is explicitly selected.
+  const command =
+    config.restoreSource === 'b2'
+      ? resticAt(secondProviderEnv(config), signal, { readOnly: config.readOnly })
+      : restic(config, signal);
   const all = await snapshots(command);
   assert.ok(all.length > 0, 'OPS_BACKUP_MISSING');
   const selected = requestedSnapshot
@@ -215,6 +221,7 @@ export async function restore(config, requestedSnapshot, parentSignal) {
     await client.query('commit');
     return {
       version: 1,
+      source: config.restoreSource,
       snapshot: selected.id,
       cutoff: manifest.cutoff,
       completedAt: new Date().toISOString(),

@@ -73,6 +73,11 @@ try {
   assert.ok(file && !extra.length && isAbsolute(file));
   assert.equal(process.platform, 'linux');
   assert.equal(process.env.RESTORE_REHEARSAL_CONFIRM, 'monthly-isolated-recovery');
+  // Recovery may be rehearsed from either destination; the primary provider is
+  // the default and the second provider is explicitly selected.
+  const restoreSource = process.env.RESTORE_SOURCE ?? 'r2';
+  assert.ok(['r2', 'b2'].includes(restoreSource));
+  report.source = restoreSource;
   const info = await lstat(file);
   assert.ok(
     info.isFile() && !info.isSymbolicLink() && info.size <= 16384 && (info.mode & 0o077) === 0,
@@ -87,6 +92,7 @@ try {
   assert.match(deployment ?? '', /^[a-z0-9][a-z0-9-]{1,80}$/);
   assert.match(privateConfig.R2_BACKUP_ACCOUNT_ID ?? '', /^[a-f0-9]{32}$/);
   assert.match(privateConfig.R2_BACKUP_BUCKET ?? '', /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/);
+  assert.match(privateConfig.B2_BACKUP_BUCKET ?? '', /^[a-z0-9][a-z0-9-]{4,61}[a-z0-9]$/);
   assert.ok(isAbsolute(privateConfig.SECRET_DIRECTORY ?? ''));
   if (process.env.DOCKER_HOST) assertLocalEndpoint(process.env.DOCKER_HOST);
   const context = (await execute('docker', ['context', 'show'])).stdout.trim();
@@ -124,6 +130,7 @@ try {
     SECRET_DIRECTORY: privateConfig.SECRET_DIRECTORY,
     R2_BACKUP_ACCOUNT_ID: privateConfig.R2_BACKUP_ACCOUNT_ID,
     R2_BACKUP_BUCKET: privateConfig.R2_BACKUP_BUCKET,
+    B2_BACKUP_BUCKET: privateConfig.B2_BACKUP_BUCKET,
   };
   compose = (args, options = {}) =>
     docker(
@@ -159,10 +166,21 @@ try {
   }, 5000).unref();
   await compose(['pull'], { timeoutMs: 600000 });
   await compose(['up', '-d', '--wait', 'restore-postgres']);
-  const result = await compose(['run', '--name', `${project}-run`, '--no-deps', '-T', 'restore'], {
-    timeoutMs: 3.75 * 3600_000,
-    allowFailure: true,
-  });
+  const result = await compose(
+    [
+      'run',
+      '--name',
+      `${project}-run`,
+      '--no-deps',
+      '-T',
+      ...(restoreSource === 'b2' ? ['-e', 'RESTORE_SOURCE=b2'] : []),
+      'restore',
+    ],
+    {
+      timeoutMs: 3.75 * 3600_000,
+      allowFailure: true,
+    },
+  );
   assert.equal(result.code, 0);
   await docker(['cp', `${project}-run:/status/restore.json`, join(directory, 'restore.json')]);
   const restored = JSON.parse(await readFile(join(directory, 'restore.json'), 'utf8'));

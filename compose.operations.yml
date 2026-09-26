@@ -31,6 +31,9 @@ services:
       R2_BACKUP_BUCKET: ${R2_BACKUP_BUCKET:?Private backups bucket required}
       R2_BACKUP_ACCESS_KEY_ID_FILE: /run/secrets/r2_backup_access_key
       R2_BACKUP_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_backup_secret_key
+      B2_BACKUP_BUCKET: ${B2_BACKUP_BUCKET:?Second-provider backup bucket required}
+      B2_BACKUP_ACCOUNT_ID_FILE: /run/secrets/b2_backup_account_id
+      B2_BACKUP_APPLICATION_KEY_FILE: /run/secrets/b2_backup_application_key
       R2_ATTACHMENTS_ENABLED: 'true'
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?Attachments R2 account required}
       R2_ATTACHMENTS_BUCKET: ${R2_ATTACHMENTS_BUCKET:?Private attachments bucket required}
@@ -41,6 +44,8 @@ services:
       - recovery_key
       - r2_backup_access_key
       - r2_backup_secret_key
+      - b2_backup_account_id
+      - b2_backup_application_key
       - r2_reader_access_key
       - r2_reader_secret_key
     networks: [backend, backup-egress]
@@ -85,3 +90,7 @@ secrets:
     file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_backup_access_key
   r2_backup_secret_key:
     file: ${SECRET_DIRECTORY:?Private secret directory required}/r2_backup_secret_key
+  b2_backup_account_id:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/b2_backup_account_id
+  b2_backup_application_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/b2_backup_application_key
