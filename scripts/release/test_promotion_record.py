@@ -101,6 +101,18 @@ class PromotionRecordTests(unittest.TestCase):
             prepare(copy.deepcopy(RUN), self.amd64, self.arm64, "stakeframe-v1", "RhianB14", self.output)
 
     @patch.dict(os.environ, ENVIRONMENT)
+    def test_evidence_path_must_be_the_download_directory_not_a_file(self):
+        with self.assertRaisesRegex(ValueError, "EVIDENCE_MISSING"):
+            prepare(
+                copy.deepcopy(RUN),
+                self.amd64 / "candidate.json",
+                self.arm64,
+                "stakeframe-v1",
+                "RhianB14",
+                self.output,
+            )
+
+    @patch.dict(os.environ, ENVIRONMENT)
     def test_invalid_deployment_id_or_requester_is_refused(self):
         with self.assertRaisesRegex(ValueError, "DEPLOYMENT_ID_REFUSED"):
             prepare(copy.deepcopy(RUN), self.amd64, self.arm64, "ab", "RhianB14", self.output)
