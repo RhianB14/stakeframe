@@ -54,7 +54,8 @@ export function readOpsConfig(env) {
     const b2Key = readSecret(env, 'B2_BACKUP_APPLICATION_KEY');
     if (
       !/^[A-Za-z0-9]{20,64}$/.test(b2Account ?? '') ||
-      !/^[A-Za-z0-9]{20,64}$/.test(b2Key ?? '') ||
+      // Official application keys may carry '/' and '+'; the keyID stays alphanumeric.
+      !/^[A-Za-z0-9/+]{20,64}$/.test(b2Key ?? '') ||
       !/^[a-z0-9][a-z0-9-]{4,61}[a-z0-9]$/.test(b2Bucket ?? '')
     )
       throw new Error('OPS_SECOND_PROVIDER_REFUSED');
