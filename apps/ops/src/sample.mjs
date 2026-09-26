@@ -15,6 +15,14 @@ import { resticAt, secondProviderEnv } from './replicate.mjs';
 // caller-owned status file.
 export const SAMPLE_TIMEOUT_MS = 30 * 60_000;
 
+// Reports carry a code, never provider output or paths: anything that is not a
+// known OPS_* code is collapsed into a generic marker for the operator.
+export function sampleReason(error) {
+  if (error?.code === 'ERR_ASSERTION') return 'OPS_SAMPLE_VALIDATION_FAILED';
+  const message = error instanceof Error ? error.message : '';
+  return /^OPS_[A-Z_]{3,40}$/.test(message) ? message : 'OPS_SAMPLE_FAILED';
+}
+
 export async function sample(config, parentSignal, dependencies = {}) {
   const execute = dependencies.run ?? run;
   const controller = new AbortController();
@@ -25,7 +33,7 @@ export async function sample(config, parentSignal, dependencies = {}) {
   ]);
   const sources = [['r2', config.resticEnv]];
   if (config.b2) sources.push(['b2', secondProviderEnv(config)]);
-  const directory = join('/work', `sample-${randomUUID()}`);
+  const directory = join(dependencies.workdir ?? '/work', `sample-${randomUUID()}`);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const report = { version: 1, at: new Date().toISOString(), sources: {} };
   try {
@@ -73,8 +81,12 @@ export async function sample(config, parentSignal, dependencies = {}) {
           bytes,
           at: new Date().toISOString(),
         };
-      } catch {
-        report.sources[id] = { ok: false, at: new Date().toISOString() };
+      } catch (error) {
+        report.sources[id] = {
+          ok: false,
+          at: new Date().toISOString(),
+          reason: sampleReason(error),
+        };
       }
     }
   } finally {
