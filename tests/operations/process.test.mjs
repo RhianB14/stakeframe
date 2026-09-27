@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run, sanitizeStderr, STDERR_CAPTURE_BYTES } from '../../apps/ops/src/process.mjs';
@@ -71,3 +71,54 @@ test('run() keeps the stdout path and byte limit unchanged', posixOnly, async ()
     },
   );
 });
+
+// STK-F1-11 sample-B2: o dump do attachment passa pelo pipeline de output e o
+// child pode falhar DEPOIS de escrever os bytes (o restic morre no cleanup e
+// ainda deixa stderr) — o erro precisa preservar o stderr sanitizado.
+test('run() captures an exit-error after the output pipeline completes', posixOnly, async () => {
+  await withShim(
+    '#!/bin/sh\nprintf abcdef\nprintf "Fatal: unable to open repository at b2\\n" >&2\nexit 1\n',
+    async (directory) => {
+      const output = join(directory, 'dump.bin');
+      await assert.rejects(
+        run('restic', ['dump', 'snap', '/bundle/attachments/x'], {
+          env: { PATH: directory },
+          output,
+        }),
+        (error) => {
+          assert.equal(error.message, 'OPS_COMMAND_FAILED');
+          assert.match(error.cause?.message ?? '', /unable to open repository at b2/);
+          return true;
+        },
+      );
+      assert.equal(await readFile(output, 'utf8'), 'abcdef');
+    },
+  );
+});
+
+// Quando o PRÓPRIO pipeline falha (ex.: O_EXCL num output repetido) o child é
+// morto antes de escrever stderr: o cause expõe o código estável do erro para o
+// operador distinguir de uma falha real do provedor (o "signal terminated" do
+// sample-B2 vinha exatamente desse caminho).
+test(
+  'run() identifies a failed output pipeline when the child wrote no stderr',
+  posixOnly,
+  async () => {
+    await withShim('#!/bin/sh\nprintf x\nexit 0\n', async (directory) => {
+      const output = join(directory, 'occupied.bin');
+      await writeFile(output, 'occupied');
+      await assert.rejects(
+        run('restic', ['dump', 'snap', '/bundle/attachments/x'], {
+          env: { PATH: directory },
+          output,
+        }),
+        (error) => {
+          assert.equal(error.message, 'OPS_COMMAND_FAILED');
+          assert.equal(error.cause?.message, 'OPS_PIPELINE_EEXIST');
+          return true;
+        },
+      );
+      assert.equal(await readFile(output, 'utf8'), 'occupied');
+    });
+  },
+);

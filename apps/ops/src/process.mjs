@@ -70,6 +70,7 @@ export async function run(
     },
   });
   let failed = false;
+  let pipelineError;
   try {
     if (output)
       await pipeline(
@@ -82,14 +83,23 @@ export async function run(
       const stream = child.stdout.pipe(bounded);
       for await (const chunk of stream) chunks.push(chunk);
     }
-  } catch {
+  } catch (error) {
     failed = true;
+    pipelineError = error;
     local.abort();
   }
   const code = await exit;
   if (failed || combined.aborted || code !== 0) {
-    const detail = sanitizeStderr(Buffer.concat(stderrChunks).subarray(0, STDERR_CAPTURE_BYTES));
-    throw new Error('OPS_COMMAND_FAILED', detail ? { cause: new Error(detail) } : undefined);
+    // When the pipeline itself fails (e.g. O_EXCL on a repeated output path)
+    // the child is killed before writing to stderr: expose the error code as a
+    // stable identifier so operators can tell it apart from provider failures.
+    const excerpt = sanitizeStderr(Buffer.concat(stderrChunks).subarray(0, STDERR_CAPTURE_BYTES));
+    const cause = excerpt
+      ? new Error(excerpt)
+      : pipelineError?.code
+        ? new Error(`OPS_PIPELINE_${String(pipelineError.code).toUpperCase()}`)
+        : undefined;
+    throw new Error('OPS_COMMAND_FAILED', cause ? { cause } : undefined);
   }
   return { stdout: Buffer.concat(chunks).toString('utf8'), bytes: size };
 }

@@ -78,7 +78,10 @@ export async function sample(config, parentSignal, dependencies = {}) {
         let bytes = 0;
         const row = metadata.find((entry) => !entry.expired);
         if (row) {
-          const path = join(directory, row.id);
+          // O attachment é baixado de CADA destino no mesmo processo: o nome do
+          // arquivo inclui o source (r2/b2) para não colidir entre si — o run()
+          // grava com O_EXCL e um path repetido falharia no segundo destino.
+          const path = join(directory, `${id}-${row.id}`);
           await invoke(['dump', snapshot.id, `${BUNDLE}/attachments/${row.id}`], {
             output: path,
             maxBytes: row.size,

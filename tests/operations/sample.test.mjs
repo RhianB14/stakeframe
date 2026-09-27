@@ -59,7 +59,7 @@ const CONFIG = {
   b2: { repository: 'b2:stakeframe-backup:stakeframe-v1', env: {} },
 };
 
-function fakeRestic({ ascending = false } = {}) {
+function fakeRestic({ ascending = false, outputs = [] } = {}) {
   return async (binary, args, options = {}) => {
     assert.equal(binary, 'restic');
     if (args.includes('snapshots'))
@@ -70,7 +70,14 @@ function fakeRestic({ ascending = false } = {}) {
       if (path === `${BUNDLE}/manifest.json`) return { stdout: JSON.stringify(MANIFEST) };
       if (path === `${BUNDLE}/attachments.json`) return { stdout: JSON.stringify([ROW]) };
       if (path === `${BUNDLE}/attachments/${ROW.id}`) {
-        await writeFile(options.output, ATTACHMENT);
+        // O run() real grava com O_EXCL (flags: 'wx'): o mock precisa ser fiel
+        // para que um output repetido falhe como em produção (sample-B2).
+        outputs.push(options.output);
+        try {
+          await writeFile(options.output, ATTACHMENT, { flag: 'wx' });
+        } catch (error) {
+          throw new Error('OPS_COMMAND_FAILED', { cause: error });
+        }
         return { stdout: '' };
       }
     }
@@ -82,8 +89,9 @@ test('sample() verifies each destination from the newest complete snapshot', asy
   const workdir = await mkdtemp(join(tmpdir(), 'stk-sample-'));
   try {
     // B2 order (oldest-first) for both destinations: selection must not depend on it.
+    const outputs = [];
     const report = await sample(CONFIG, undefined, {
-      run: fakeRestic({ ascending: true }),
+      run: fakeRestic({ ascending: true, outputs }),
       workdir,
     });
     for (const id of ['r2', 'b2']) {
@@ -93,6 +101,12 @@ test('sample() verifies each destination from the newest complete snapshot', asy
       assert.equal(report.sources[id].files, 3);
       assert.equal(report.sources[id].bytes, ATTACHMENT.length);
     }
+    // STK-F1-11 sample-B2: as duas cópias do MESMO attachment não podem dividir
+    // o mesmo output — o run() grava com O_EXCL e o segundo dump abortaria o
+    // restic no meio (o "signal terminated" observado em produção no B2).
+    // O conteúdo de cada arquivo já é validado pelo hash do próprio sample().
+    assert.equal(outputs.length, 2);
+    assert.equal(new Set(outputs).size, 2, `repeated output path: ${outputs.join(', ')}`);
   } finally {
     await rm(workdir, { recursive: true, force: true });
   }
