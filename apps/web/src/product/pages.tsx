@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   betPageSchema,
@@ -15,7 +15,16 @@ import { request, dateLabel } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
 import { betFinancialDisplay } from './financial-display.js';
-import { betResultLabel, betResultQualifier, betTablePresentation } from '@stakeframe/shared';
+import {
+  betResultLabel,
+  betResultQualifier,
+  betTableColumns,
+  betTablePresentation,
+  sortBetRows,
+  type BetTableColumnKey,
+  type BetTableRow,
+  type BetTableSortDirection,
+} from '@stakeframe/shared';
 import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
@@ -42,6 +51,139 @@ const journalLabels: Record<string, string> = {
 const catalogName = (workspace: Workspace, id: string | null) =>
   id ? (workspace.catalog.find((item) => item.id === id)?.name ?? '—') : '—';
 
+const betAccessibleTitle = (bet: Bet) =>
+  bet.selections[0]?.event?.trim() || bet.reference?.trim() || 'sem título';
+
+function selectionScheduleText(selection: Bet['selections'][number]) {
+  const label = selection.eventAt
+    ? dateLabel(selection.eventAt)
+    : selection.eventDate
+      ? `${selection.eventDate.split('-').reverse().join('/')} · horário não informado`
+      : 'Data do evento pendente';
+  return selection.dateStatus === 'estimated' ? `${label} · estimada` : label;
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [feedback, setFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const timer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+  const settle = (result: 'copied' | 'failed') => {
+    setFeedback(result);
+    timer.current = window.setTimeout(() => setFeedback('idle'), 2000);
+  };
+  const copy = async () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    try {
+      await navigator.clipboard.writeText(value);
+      settle('copied');
+    } catch {
+      settle('failed');
+    }
+  };
+  return (
+    <span className="copy-id">
+      <Button variant="ghost" size="small" aria-label={label} onClick={() => void copy()}>
+        {feedback === 'copied' ? 'Copiado' : feedback === 'failed' ? 'Falhou' : 'Copiar'}
+      </Button>
+      <span className="sr-only" role="status">
+        {feedback === 'copied'
+          ? 'ID técnico copiado'
+          : feedback === 'failed'
+            ? 'Não foi possível copiar o ID'
+            : ''}
+      </span>
+    </span>
+  );
+}
+
+function BetIdValue({ bet }: { bet: Bet }) {
+  return (
+    <span className="bet-id-value">
+      <code className="bet-id-compact" title={bet.id}>
+        {bet.id}
+      </code>
+      <CopyButton
+        value={bet.id}
+        label={`Copiar ID técnico completo da aposta ${bet.ticketNumber}`}
+      />
+    </span>
+  );
+}
+
+const columnClassNames: Partial<Record<BetTableColumnKey, string>> = {
+  ticket: 'tabular',
+  gameDate: 'tabular',
+  gameTime: 'tabular',
+  event: 'bet-event-cell',
+  selection: 'bet-description-cell',
+  stake: 'tabular',
+  odds: 'tabular',
+  id: 'bet-id-cell',
+};
+
+function BetTableCell({ row, column }: { row: BetTableRow; column: BetTableColumnKey }) {
+  const { bet, details, result, tipster, bookmaker } = row;
+  switch (column) {
+    case 'ticket':
+      return (
+        <>
+          <strong>#{bet.ticketNumber}</strong>
+          {bet.freebetId ? <small>Freebet</small> : null}
+        </>
+      );
+    case 'gameDate':
+      return (
+        <>
+          {details.gameDate}
+          {details.scheduleQualifier ? <small>{details.scheduleQualifier}</small> : null}
+        </>
+      );
+    case 'gameTime':
+      return <>{details.gameTime}</>;
+    case 'event':
+      return <>{details.event}</>;
+    case 'selection':
+      return <>{details.selection}</>;
+    case 'market':
+      return <>{details.market}</>;
+    case 'ticketKind':
+      return <>{details.ticketKind}</>;
+    case 'tipster':
+      return <>{tipster}</>;
+    case 'bookmaker':
+      return <>{bookmaker}</>;
+    case 'stake':
+      return <>{bet.stake === null ? 'A definir' : formatBRL(bet.stake)}</>;
+    case 'odds':
+      return <>{bet.odds ?? 'A definir'}</>;
+    case 'return': {
+      const financial = betFinancialDisplay(bet);
+      return (
+        <>
+          {financial.returnText}
+          {financial.qualifier !== 'Realizado' ? <small>{financial.qualifier}</small> : null}
+        </>
+      );
+    }
+    case 'result': {
+      const qualifier = betResultQualifier(bet);
+      return (
+        <>
+          <span className={`status-badge status-${bet.state}`}>{result}</span>
+          {qualifier ? <small>{qualifier}</small> : null}
+        </>
+      );
+    }
+    case 'id':
+      return <BetIdValue bet={bet} />;
+  }
+}
+
 function BetListDetails({
   bet,
   workspace,
@@ -60,26 +202,41 @@ function BetListDetails({
   const result = betResultLabel(bet);
   const resultQualifier = betResultQualifier(bet);
   const accessibleTitle = bet.selections[0]?.event?.trim() || bet.reference?.trim() || 'sem título';
-  const id = bet.id;
-  const fields = [
-    ['Data do jogo', details.gameDate],
-    ['Hora do jogo', details.gameTime],
-    ['Evento', details.event],
-    ['Status da aposta', resultQualifier ? `${result} · ${resultQualifier}` : result],
-    ['Aposta', details.selection],
-    ['Mercado', details.market],
-    ['Tipo', details.ticketKind],
-    ['Tipster', tipster],
-    ['Casa de aposta', bookmaker],
-    ['Valor apostado', bet.stake === null ? 'A definir' : formatBRL(bet.stake)],
-    ['Odd total', bet.odds ?? 'A definir'],
-    [
-      'Retorno potencial',
-      details.potentialReturn === null ? 'A definir' : formatBRL(details.potentialReturn),
-    ],
-    ['Retorno realizado', financial.returnText],
-    ['Lucro/prejuízo realizado', financial.profitText],
-    ['ID da aposta', id],
+  const fields: { label: string; wide?: boolean; value: ReactNode }[] = [
+    {
+      label: 'Nº do bilhete',
+      value: `#${bet.ticketNumber}${bet.freebetId ? ' · Freebet' : ''}`,
+    },
+    { label: 'Data do jogo', value: details.gameDate },
+    { label: 'Hora do jogo', value: details.gameTime },
+    { label: 'Evento', wide: true, value: details.event },
+    { label: 'Aposta/seleção', wide: true, value: details.selection },
+    { label: 'Mercado', value: details.market },
+    { label: 'Tipo da aposta', value: details.ticketKind },
+    { label: 'Tipster', value: tipster },
+    { label: 'Casa de aposta', value: bookmaker },
+    { label: 'Valor apostado', value: bet.stake === null ? 'A definir' : formatBRL(bet.stake) },
+    { label: 'Odd', value: bet.odds ?? 'A definir' },
+    {
+      label: 'Retorno recebido',
+      value: (
+        <>
+          <span className={financial.tone}>{financial.returnText}</span>
+          {financial.qualifier !== 'Realizado' ? <small>{financial.qualifier}</small> : null}
+        </>
+      ),
+    },
+    {
+      label: 'Resultado/status',
+      wide: true,
+      value: (
+        <>
+          <span className={`status-badge status-${bet.state}`}>{result}</span>
+          {resultQualifier ? <small>{resultQualifier}</small> : null}
+        </>
+      ),
+    },
+    { label: 'ID técnico da aposta', wide: true, value: <BetIdValue bet={bet} /> },
   ];
 
   return (
@@ -92,23 +249,33 @@ function BetListDetails({
         <span className={`status-badge status-${bet.state}`}>{result}</span>
       </div>
       <dl className="bet-list-card-fields">
-        {fields.map(([label, value]) => (
-          <div
-            className={
-              label === 'Evento' ||
-              label === 'Status da aposta' ||
-              label === 'Aposta' ||
-              label === 'ID da aposta'
-                ? 'wide'
-                : ''
-            }
-            key={label}
-          >
-            <dt>{label}</dt>
-            <dd title={label === 'ID da aposta' ? value : undefined}>{value}</dd>
+        {fields.map((field) => (
+          <div className={field.wide ? 'wide' : ''} key={field.label}>
+            <dt>{field.label}</dt>
+            <dd>{field.value}</dd>
           </div>
         ))}
       </dl>
+      {bet.selections.length > 1 ? (
+        <details className="bet-card-selections">
+          <summary>Seleções do bilhete ({bet.selections.length})</summary>
+          <ol>
+            {bet.selections.map((selection, index) => (
+              <li key={selection.id ?? `${bet.id}-${index}`}>
+                <strong>
+                  {index + 1}. {selection.event}
+                </strong>
+                <small>
+                  {selection.market} · {selection.selection}
+                </small>
+                <small className={selection.dateStatus !== 'confirmed' ? 'pending-label' : 'muted'}>
+                  {selectionScheduleText(selection)}
+                </small>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
       {details.scheduleQualifier ? (
         <p className="bet-schedule-note">{details.scheduleQualifier}</p>
       ) : null}
@@ -205,6 +372,10 @@ export function BetsPage({
   const [tipster, setTipster] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [sort, setSort] = useState<{
+    column: BetTableColumnKey;
+    direction: BetTableSortDirection;
+  } | null>(null);
   const params = new URLSearchParams({ page: String(page), pageSize: compact ? '5' : '25' });
   if (state) params.set('state', state);
   if (house) params.set('bookmakerId', house);
@@ -215,6 +386,30 @@ export function BetsPage({
     queryKey: ['product', 'bets', workspace.version, params.toString()],
     queryFn: () => request(`/api/v1/bets?${params}`, betPageSchema),
   });
+  const rows = useMemo<BetTableRow[]>(() => {
+    if (!query.data) return [];
+    return query.data.items.map((bet) => ({
+      bet,
+      details: betTablePresentation(
+        bet,
+        workspace.freebets.find((freebet) => freebet.id === bet.freebetId)?.amount ?? null,
+      ),
+      result: betResultLabel(bet),
+      tipster: catalogName(workspace, bet.tipsterId),
+      bookmaker: catalogName(workspace, bet.bookmakerId),
+    }));
+  }, [query.data, workspace]);
+  const sortedRows = useMemo(
+    () => (sort ? sortBetRows(rows, sort.column, sort.direction) : rows),
+    [rows, sort],
+  );
+  const toggleSort = (column: BetTableColumnKey) => {
+    setSort((current) =>
+      current?.column === column
+        ? { column, direction: current.direction === 'ascending' ? 'descending' : 'ascending' }
+        : { column, direction: 'ascending' },
+    );
+  };
   const change = (setter: (value: string) => void, value: string) => {
     setter(value);
     setPage(1);
@@ -302,12 +497,18 @@ export function BetsPage({
             {!compact ? (
               <p className="bet-table-scroll-hint">
                 A tabela é mais larga que a tela. Deslize horizontalmente para ver todas as colunas.
+                Use o título de uma coluna para ordenar os registros desta página.
               </p>
             ) : null}
             {!compact ? (
               <div className="bet-list-cards">
-                {query.data.items.map((bet) => (
-                  <BetListDetails key={bet.id} bet={bet} workspace={workspace} open={open} />
+                {sortedRows.map((row) => (
+                  <BetListDetails
+                    key={row.bet.id}
+                    bet={row.bet}
+                    workspace={workspace}
+                    open={open}
+                  />
                 ))}
               </div>
             ) : null}
@@ -318,6 +519,9 @@ export function BetsPage({
               tabIndex={0}
             >
               <table className={`product-table${compact ? '' : ' bet-detail-table'}`}>
+                <caption className="sr-only">
+                  Apostas com jogo, mercado, tipo, valores e resultado
+                </caption>
                 <thead>
                   <tr>
                     {compact ? (
@@ -330,24 +534,20 @@ export function BetsPage({
                         <th>Resultado realizado</th>
                       </>
                     ) : (
-                      <>
-                        <th>Bilhete</th>
-                        <th>Data do jogo</th>
-                        <th>Hora</th>
-                        <th>Evento</th>
-                        <th>Status da aposta</th>
-                        <th>Aposta</th>
-                        <th>Mercado</th>
-                        <th>Tipo</th>
-                        <th>Tipster</th>
-                        <th>Casa de aposta</th>
-                        <th>Valor apostado</th>
-                        <th>Odd total</th>
-                        <th>Retorno potencial</th>
-                        <th>Retorno realizado</th>
-                        <th>Lucro/prejuízo</th>
-                        <th>ID da aposta</th>
-                      </>
+                      betTableColumns.map((column) => (
+                        <th
+                          key={column.key}
+                          aria-sort={column.key === sort?.column ? sort.direction : 'none'}
+                        >
+                          <button
+                            type="button"
+                            className="table-sort"
+                            onClick={() => toggleSort(column.key)}
+                          >
+                            {column.label}
+                          </button>
+                        </th>
+                      ))
                     )}
                     <th>
                       <span className="sr-only">Abrir</span>
@@ -355,69 +555,30 @@ export function BetsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {query.data.items.map((bet) => {
+                  {sortedRows.map((row) => {
+                    const bet = row.bet;
+                    const details = row.details;
                     const financial = betFinancialDisplay(bet);
-                    const freebetAmount =
-                      workspace.freebets.find((freebet) => freebet.id === bet.freebetId)?.amount ??
-                      null;
-                    const details = betTablePresentation(bet, freebetAmount);
                     if (!compact) {
-                      const result = betResultLabel(bet);
-                      const resultQualifier = betResultQualifier(bet);
-                      const accessibleTitle =
-                        bet.selections[0]?.event?.trim() || bet.reference?.trim() || 'sem título';
                       return (
                         <tr key={bet.id}>
-                          <td className="tabular">
-                            <strong>#{bet.ticketNumber}</strong>
-                            {bet.freebetId ? <small>Freebet</small> : null}
-                          </td>
-                          <td className="tabular">
-                            {details.gameDate}
-                            {details.scheduleQualifier ? (
-                              <small>{details.scheduleQualifier}</small>
-                            ) : null}
-                          </td>
-                          <td className="tabular">{details.gameTime}</td>
-                          <td className="bet-event-cell">{details.event}</td>
-                          <td>
-                            <span className={`status-badge status-${bet.state}`}>{result}</span>
-                            {resultQualifier ? <small>{resultQualifier}</small> : null}
-                          </td>
-                          <td className="bet-description-cell">{details.selection}</td>
-                          <td>{details.market}</td>
-                          <td>{details.ticketKind}</td>
-                          <td>{catalogName(workspace, bet.tipsterId)}</td>
-                          <td>{catalogName(workspace, bet.bookmakerId)}</td>
-                          <td className="tabular">
-                            {bet.stake === null ? 'A definir' : formatBRL(bet.stake)}
-                          </td>
-                          <td className="tabular">{bet.odds ?? 'A definir'}</td>
-                          <td className="tabular">
-                            {details.potentialReturn === null
-                              ? 'A definir'
-                              : formatBRL(details.potentialReturn)}
-                          </td>
-                          <td className={`tabular ${financial.tone}`}>
-                            {financial.returnText}
-                            {financial.qualifier !== 'Realizado' ? (
-                              <small>{financial.qualifier}</small>
-                            ) : null}
-                          </td>
-                          <td className={`tabular ${financial.tone}`}>
-                            {financial.profitText}
-                            {financial.qualifier !== 'Realizado' ? (
-                              <small>{financial.qualifier}</small>
-                            ) : null}
-                          </td>
-                          <td className="bet-id-cell" title={bet.id}>
-                            {bet.id}
-                          </td>
+                          {betTableColumns.map((column) => (
+                            <td
+                              key={column.key}
+                              className={
+                                column.key === 'return'
+                                  ? `tabular ${financial.tone}`
+                                  : columnClassNames[column.key]
+                              }
+                            >
+                              <BetTableCell row={row} column={column.key} />
+                            </td>
+                          ))}
                           <td>
                             <Button
                               variant="ghost"
                               size="small"
-                              aria-label={`Ver aposta ${accessibleTitle}`}
+                              aria-label={`Ver aposta ${betAccessibleTitle(bet)}`}
                               onClick={() => open({ kind: 'detail', id: bet.id })}
                             >
                               Ver ↗
@@ -594,12 +755,7 @@ export function BetDetails({
             {selection.odds ? ` · Odd ${selection.odds}` : ''}
           </small>
           <p className={selection.dateStatus !== 'confirmed' ? 'pending-label' : 'muted'}>
-            {selection.eventAt
-              ? dateLabel(selection.eventAt)
-              : selection.eventDate
-                ? `${selection.eventDate.split('-').reverse().join('/')} · horário não informado`
-                : 'Data do evento pendente'}
-            {selection.dateStatus === 'estimated' ? ' · estimada' : ''}
+            {selectionScheduleText(selection)}
           </p>
           {selection.id ? (
             <Button

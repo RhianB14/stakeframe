@@ -196,7 +196,7 @@ describe('account export (STK-F1-08 §7.3/§15)', () => {
     expect(settledRow).toContain('"Ganha"');
     const multipleRow = rows.find((row) => row.includes('"Múltipla"'))!;
     expect(multipleRow).toContain('"Múltipla"');
-    expect(multipleRow).toContain('"Várias datas"');
+    expect(multipleRow).toContain('"Vários jogos/horários"');
     expect(multipleRow).toContain('"—"');
     expect(multipleRow).toContain('"Pendente"');
   });

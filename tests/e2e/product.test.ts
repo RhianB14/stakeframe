@@ -203,6 +203,7 @@ for (const scenario of [
     name: 'open without settlement',
     state: 'open' as const,
     returnAmount: '0.00',
+    returnExpected: '—',
     profit: '0.00',
     expected: '—',
     qualifier: 'Não liquidado',
@@ -212,6 +213,7 @@ for (const scenario of [
     name: 'open after positive partial cashout',
     state: 'open' as const,
     returnAmount: '65.00',
+    returnExpected: 'R$ 65,00',
     profit: '25.00',
     expected: '+R$ 25,00',
     qualifier: 'Realizado parcialmente',
@@ -221,6 +223,7 @@ for (const scenario of [
     name: 'open after negative partial cashout',
     state: 'open' as const,
     returnAmount: '25.00',
+    returnExpected: 'R$ 25,00',
     profit: '-15.00',
     expected: '−R$ 15,00',
     qualifier: 'Realizado parcialmente',
@@ -230,6 +233,7 @@ for (const scenario of [
     name: 'settled with a win',
     state: 'settled' as const,
     returnAmount: '200.00',
+    returnExpected: 'R$ 200,00',
     profit: '100.00',
     expected: '+R$ 100,00',
     qualifier: 'Realizado',
@@ -239,6 +243,7 @@ for (const scenario of [
     name: 'settled with a loss',
     state: 'settled' as const,
     returnAmount: '0.00',
+    returnExpected: 'R$ 0,00',
     profit: '-100.00',
     expected: '−R$ 100,00',
     qualifier: 'Realizado',
@@ -248,6 +253,7 @@ for (const scenario of [
     name: 'settled with zero profit',
     state: 'settled' as const,
     returnAmount: '100.00',
+    returnExpected: 'R$ 100,00',
     profit: '0.00',
     expected: 'R$ 0,00',
     qualifier: 'Realizado',
@@ -270,11 +276,11 @@ for (const scenario of [
     await enabledProduct(page, fixture(), [sample], sample);
     await page.goto('/');
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    const result = page.locator('.product-table tbody tr').first().locator('td').nth(14);
-    await expect(result).toContainText(scenario.expected);
-    await expect(result).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
+    const realizedReturn = page.locator('.product-table tbody tr').first().locator('td').nth(11);
+    await expect(realizedReturn).toContainText(scenario.returnExpected);
+    await expect(realizedReturn).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
     if (scenario.qualifier !== 'Realizado') {
-      await expect(result).toContainText(scenario.qualifier);
+      await expect(realizedReturn).toContainText(scenario.qualifier);
     }
     await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
     const detail = page.getByRole('dialog').locator('.detail-metrics');
@@ -309,63 +315,192 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       },
     ],
   };
-  await enabledProduct(page, workspace, [scheduledBet]);
+  const multipleId = '10000000-0000-4000-8000-000000000005';
+  const multipleBet: Bet = {
+    ...bet,
+    id: multipleId,
+    ticketNumber: 2,
+    ticketKind: 'multiple',
+    tipsterId,
+    selections: [
+      {
+        event: 'Bandeirantes x Litoral',
+        sport: 'Futebol',
+        market: 'Resultado final',
+        selection: 'Bandeirantes',
+        odds: null,
+        eventDate: '2026-09-21',
+        eventAt: '2026-09-21T20:00:00Z',
+        dateStatus: 'confirmed',
+      },
+      {
+        event: 'Serra x Vale',
+        sport: 'Futebol',
+        market: 'Total de gols',
+        selection: 'Mais de 1,5',
+        odds: null,
+        eventDate: '2026-09-22',
+        eventAt: '2026-09-22T22:30:00Z',
+        dateStatus: 'confirmed',
+      },
+    ],
+  };
+  await enabledProduct(page, workspace, [scheduledBet, multipleBet], scheduledBet);
+  await page.route(`**/api/v1/bets/${multipleId}`, (route) =>
+    route.fulfill({ json: { bet: multipleBet, settlements: [] } }),
+  );
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
 
   if ((page.viewportSize()?.width ?? 0) <= 900) {
     const card = page.locator('.bet-list-card').first();
     await expect(card).toBeVisible();
-    await expect(card.locator('.bet-list-card-fields')).toContainText('21/09/2026');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('17:00');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('Gols');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('Simples');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('Analista');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('Bet365');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('R$ 100,00');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('2.00');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('R$ 200,00');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('Pendente');
-    await expect(card.locator('.bet-list-card-fields')).toContainText('Status da aposta');
-    await expect(card.locator('.bet-list-card-fields')).toContainText(scheduledBet.id);
+    const fields = card.locator('.bet-list-card-fields');
+    await expect(fields.locator('dt')).toHaveText([
+      'Nº do bilhete',
+      'Data do jogo',
+      'Hora do jogo',
+      'Evento',
+      'Aposta/seleção',
+      'Mercado',
+      'Tipo da aposta',
+      'Tipster',
+      'Casa de aposta',
+      'Valor apostado',
+      'Odd',
+      'Retorno recebido',
+      'Resultado/status',
+      'ID técnico da aposta',
+    ]);
+    await expect(fields).toContainText('21/09/2026');
+    await expect(fields).toContainText('17:00');
+    await expect(fields).toContainText('Gols');
+    await expect(fields).toContainText('Simples');
+    await expect(fields).toContainText('Analista');
+    await expect(fields).toContainText('Bet365');
+    await expect(fields).toContainText('R$ 100,00');
+    await expect(fields).toContainText('2.00');
+    await expect(fields).toContainText('Não liquidado');
+    await expect(fields).toContainText('Pendente');
+    await expect(fields).toContainText(scheduledBet.id);
+    await page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }).click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(scheduledBet.id);
+    const multipleCard = page.locator('.bet-list-card').nth(1);
+    await expect(multipleCard.locator('.bet-list-card-fields')).toContainText(
+      'Vários jogos/horários',
+    );
+    await multipleCard.getByText('Seleções do bilhete (2)').click();
+    await expect(multipleCard).toContainText('Bandeirantes x Litoral');
+    await expect(multipleCard).toContainText('21/09/2026');
+    await expect(multipleCard).toContainText('17:00');
+    await expect(multipleCard).toContainText('Serra x Vale');
+    await expect(multipleCard).toContainText('22/09/2026');
+    await expect(multipleCard).toContainText('19:30');
+    await expect(
+      page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
+    ).toHaveText('Copiar');
+    await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
   } else {
     await expect(
       page.getByText('A tabela é mais larga que a tela.', { exact: false }),
     ).toBeVisible();
-    for (const heading of [
+    await expect(page.locator('.bet-detail-table thead th')).toHaveText([
+      'Nº do bilhete',
       'Data do jogo',
-      'Hora',
+      'Hora do jogo',
       'Evento',
-      'Status da aposta',
-      'Aposta',
+      'Aposta/seleção',
       'Mercado',
-      'Tipo',
+      'Tipo da aposta',
       'Tipster',
       'Casa de aposta',
       'Valor apostado',
-      'Odd total',
-      'Retorno potencial',
-      'Retorno realizado',
-      'Lucro/prejuízo',
-      'ID da aposta',
-    ]) {
-      await expect(page.getByRole('columnheader', { name: heading, exact: true })).toBeVisible();
-    }
+      'Odd',
+      'Retorno recebido',
+      'Resultado/status',
+      'ID técnico da aposta',
+      'Abrir',
+    ]);
     const row = page.locator('.bet-detail-table tbody tr').first();
-    await expect(row.locator('td').nth(4)).toContainText('Pendente');
-    await expect(row).toContainText('21/09/2026');
-    await expect(row).toContainText('17:00');
-    await expect(row).toContainText('Gols');
-    await expect(row).toContainText('Simples');
-    await expect(row).toContainText('Analista');
-    await expect(row).toContainText('Bet365');
-    await expect(row).toContainText('R$ 100,00');
-    await expect(row).toContainText('2.00');
-    await expect(row).toContainText('R$ 200,00');
-    await expect(row).toContainText('Pendente');
-    await expect(row).toContainText(scheduledBet.id);
+    await expect(row.locator('td').nth(0)).toContainText('#1');
+    await expect(row.locator('td').nth(1)).toContainText('21/09/2026');
+    await expect(row.locator('td').nth(2)).toContainText('17:00');
+    await expect(row.locator('td').nth(3)).toContainText('Aurora × Central');
+    await expect(row.locator('td').nth(4)).toContainText('Mais de 2,5');
+    await expect(row.locator('td').nth(5)).toContainText('Gols');
+    await expect(row.locator('td').nth(6)).toContainText('Simples');
+    await expect(row.locator('td').nth(7)).toContainText('Analista');
+    await expect(row.locator('td').nth(8)).toContainText('Bet365');
+    await expect(row.locator('td').nth(9)).toContainText('R$ 100,00');
+    await expect(row.locator('td').nth(10)).toContainText('2.00');
+    await expect(row.locator('td').nth(11)).toContainText('Não liquidado');
+    await expect(row.locator('td').nth(12)).toContainText('Pendente');
+    await expect(row.locator('td').nth(13)).toContainText(scheduledBet.id);
+    await page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }).click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(scheduledBet.id);
+    const multipleRow = page.locator('.bet-detail-table tbody tr').nth(1);
+    await expect(multipleRow.locator('td').nth(1)).toContainText('Vários jogos/horários');
+    await expect(multipleRow.locator('td').nth(2)).toHaveText('—');
+    await page.getByRole('button', { name: 'Ver aposta Bandeirantes x Litoral' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('Bandeirantes x Litoral');
+    await expect(dialog).toContainText('21/09/2026');
+    await expect(dialog).toContainText('17:00');
+    await expect(dialog).toContainText('Serra x Vale');
+    await expect(dialog).toContainText('19:30');
+    await page.getByRole('button', { name: 'Fechar janela' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
+    ).toHaveText('Copiar');
+    const scrollContainer = page.locator('.bet-table-desktop');
+    await scrollContainer.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
+    await scrollContainer.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page.screenshot({ path: info.outputPath('bets-list-columns-right.png'), fullPage: true });
   }
-  await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
+});
+test('bets table sorts by the proposed columns on desktop', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 0) <= 900, 'sorting belongs to the desktop table');
+  const secondId = '10000000-0000-4000-8000-000000000006';
+  const thirdId = '10000000-0000-4000-8000-000000000007';
+  const sortedBets: Bet[] = [
+    { ...bet, id: thirdId, ticketNumber: 3, stake: '300.00' },
+    { ...bet, ticketNumber: 1, stake: '100.00' },
+    { ...bet, id: secondId, ticketNumber: 2, stake: '50.00' },
+  ];
+  await enabledProduct(page, fixture(), sortedBets, sortedBets[0]!);
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+
+  const firstTicket = page.locator('.bet-detail-table tbody tr').first().locator('td').first();
+  await expect(firstTicket).toContainText('#3');
+
+  const ticketHeader = page.getByRole('columnheader', { name: 'Nº do bilhete' });
+  await expect(ticketHeader).toHaveAttribute('aria-sort', 'none');
+  await ticketHeader.getByRole('button').click();
+  await expect(ticketHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect(firstTicket).toContainText('#1');
+  await ticketHeader.getByRole('button').click();
+  await expect(ticketHeader).toHaveAttribute('aria-sort', 'descending');
+  await expect(firstTicket).toContainText('#3');
+
+  const stakeHeader = page.getByRole('columnheader', { name: 'Valor apostado' });
+  await stakeHeader.getByRole('button').click();
+  await expect(stakeHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect(ticketHeader).toHaveAttribute('aria-sort', 'none');
+  await expect(firstTicket).toContainText('#2');
+  await stakeHeader.getByRole('button').click();
+  await expect(stakeHeader).toHaveAttribute('aria-sort', 'descending');
+  await expect(firstTicket).toContainText('#3');
 });
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,
