@@ -146,9 +146,14 @@ export function createApp(options: {
       async () => {
         const telemetry = options.telemetry;
         const release = options.release ?? resolveReleaseInfo();
+        // STK-F1-10: o cliente web usa o projeto Sentry PÚBLICO (sentry_dsn_web);
+        // o DSN do servidor nunca sai daqui.
         const sentry =
-          telemetry?.config.sentry.enabled && telemetry.config.sentry.dsn
-            ? { dsn: telemetry.config.sentry.dsn, environment: telemetry.config.sentry.environment }
+          telemetry?.config.sentry.enabled && telemetry.config.sentry.publicDsn
+            ? {
+                dsn: telemetry.config.sentry.publicDsn,
+                environment: telemetry.config.sentry.environment,
+              }
             : null;
         const posthog =
           telemetry?.config.posthog.enabled && telemetry.config.posthog.key

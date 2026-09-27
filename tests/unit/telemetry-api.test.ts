@@ -20,7 +20,12 @@ afterAll(() => rmSync(directory, { recursive: true, force: true }));
 describe('readTelemetryConfig (fail-closed)', () => {
   it('zero configuração = zero telemetria', () => {
     const config = readTelemetryConfig({});
-    expect(config.sentry).toEqual({ enabled: false, dsn: undefined, environment: 'unknown' });
+    expect(config.sentry).toEqual({
+      enabled: false,
+      dsn: undefined,
+      publicDsn: undefined,
+      environment: 'unknown',
+    });
     expect(config.posthog).toEqual({ enabled: false, key: undefined });
     expect(config.betterStack.enabled).toBe(false);
     expect(config.debug.enabled).toBe(false);
@@ -88,6 +93,10 @@ describe('readTelemetryConfig (fail-closed)', () => {
     const good = join(directory, 'sentry_dsn');
     writeFileSync(good, 'https://public@example.ingest.sentry.io/2\n');
     expect(readTelemetrySecret({ SENTRY_DSN_FILE: good }, 'SENTRY_DSN')).toBe(
+      'https://public@example.ingest.sentry.io/2',
+    );
+    // O DSN público do web tem o seu próprio par de variáveis.
+    expect(readTelemetrySecret({ SENTRY_PUBLIC_DSN_FILE: good }, 'SENTRY_PUBLIC_DSN')).toBe(
       'https://public@example.ingest.sentry.io/2',
     );
 

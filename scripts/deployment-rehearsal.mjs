@@ -43,6 +43,11 @@ const knownFiles = [
   'monitor_token',
   'azure_vision_api_key',
   'google_vision_api_key',
+  'sentry_dsn_web',
+  'sentry_dsn_api',
+  'sentry_dsn_worker',
+  'posthog_project_api_key',
+  'betterstack_source_token',
   'empty.env',
   'deployment.env',
   // Public test CA copied out of the pinned Pebble image at run time.

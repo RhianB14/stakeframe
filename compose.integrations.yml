@@ -10,25 +10,21 @@ services:
       TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
       TELEGRAM_OWNER_USER_ID_FILE: /run/secrets/telegram_owner_user_id
       THESPORTSDB_ENABLED: 'true'
-      # STK-F1-10: telemetria — desligada por padrão; ativa só com configuração
-      # real na VPS (fail-closed no código quando ENABLED=true).
-      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_DSN_FILE: ${SENTRY_DSN_FILE:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
-      POSTHOG_ENABLED: ${POSTHOG_ENABLED:-false}
-      POSTHOG_KEY: ${POSTHOG_KEY:-}
-      POSTHOG_KEY_FILE: ${POSTHOG_KEY_FILE:-}
-      BETTER_STACK_ENABLED: ${BETTER_STACK_ENABLED:-false}
-      BETTER_STACK_SOURCE_TOKEN_FILE: ${BETTER_STACK_SOURCE_TOKEN_FILE:-}
-      BETTER_STACK_INGESTING_URL: ${BETTER_STACK_INGESTING_URL:-}
-      BETTER_STACK_INFO_SAMPLE_RATE: ${BETTER_STACK_INFO_SAMPLE_RATE:-}
-      TELEMETRY_DEBUG_ENABLED: ${TELEMETRY_DEBUG_ENABLED:-false}
+      # STK-F1-10: telemetria — os valores secretos vêm dos docker secrets com os
+      # nomes exatos provisionados na VPS; flags não-secretos chegam pelo runtime.
+      SENTRY_DSN_FILE: /run/secrets/sentry_dsn_api
+      SENTRY_PUBLIC_DSN_FILE: /run/secrets/sentry_dsn_web
+      POSTHOG_KEY_FILE: /run/secrets/posthog_project_api_key
+      BETTER_STACK_SOURCE_TOKEN_FILE: /run/secrets/betterstack_source_token
     secrets:
       - r2_reader_access_key
       - r2_reader_secret_key
       - telegram_bot_token
       - telegram_owner_user_id
+      - sentry_dsn_api
+      - sentry_dsn_web
+      - posthog_project_api_key
+      - betterstack_source_token
 
   worker:
     environment:
@@ -53,20 +49,11 @@ services:
       R2_ATTACHMENTS_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_writer_secret_key
       THESPORTSDB_ENABLED: 'true'
       AUTOMATIC_IMPORT_ENABLED: 'false'
-      # STK-F1-10: telemetria — desligada por padrão; ativa só com configuração
-      # real na VPS (fail-closed no código quando ENABLED=true).
-      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_DSN_FILE: ${SENTRY_DSN_FILE:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
-      POSTHOG_ENABLED: ${POSTHOG_ENABLED:-false}
-      POSTHOG_KEY: ${POSTHOG_KEY:-}
-      POSTHOG_KEY_FILE: ${POSTHOG_KEY_FILE:-}
-      BETTER_STACK_ENABLED: ${BETTER_STACK_ENABLED:-false}
-      BETTER_STACK_SOURCE_TOKEN_FILE: ${BETTER_STACK_SOURCE_TOKEN_FILE:-}
-      BETTER_STACK_INGESTING_URL: ${BETTER_STACK_INGESTING_URL:-}
-      BETTER_STACK_INFO_SAMPLE_RATE: ${BETTER_STACK_INFO_SAMPLE_RATE:-}
-      TELEMETRY_DEBUG_ENABLED: ${TELEMETRY_DEBUG_ENABLED:-false}
+      # STK-F1-10: telemetria — worker usa o seu próprio projeto Sentry; os
+      # valores secretos vêm dos docker secrets provisionados na VPS.
+      SENTRY_DSN_FILE: /run/secrets/sentry_dsn_worker
+      POSTHOG_KEY_FILE: /run/secrets/posthog_project_api_key
+      BETTER_STACK_SOURCE_TOKEN_FILE: /run/secrets/betterstack_source_token
     secrets:
       - openrouter_api_key
       - telegram_bot_token
@@ -74,6 +61,9 @@ services:
       - telegram_owner_chat_id
       - r2_writer_access_key
       - r2_writer_secret_key
+      - sentry_dsn_worker
+      - posthog_project_api_key
+      - betterstack_source_token
     networks: [provider-egress]
 
 networks:
@@ -102,3 +92,13 @@ secrets:
     file: ${SECRET_DIRECTORY:?Private secret directory required}/b2_backup_account_id
   b2_backup_application_key:
     file: ${SECRET_DIRECTORY:?Private secret directory required}/b2_backup_application_key
+  sentry_dsn_web:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/sentry_dsn_web
+  sentry_dsn_api:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/sentry_dsn_api
+  sentry_dsn_worker:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/sentry_dsn_worker
+  posthog_project_api_key:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/posthog_project_api_key
+  betterstack_source_token:
+    file: ${SECRET_DIRECTORY:?Private secret directory required}/betterstack_source_token

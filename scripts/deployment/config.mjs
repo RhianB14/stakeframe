@@ -233,6 +233,30 @@ export function assertDeploymentConfig(
       );
       expectedSecrets.api.push(secret);
     }
+    // STK-F1-10: telemetry secrets resolve to the docker secrets provisioned on
+    // the VPS with these exact names; api and worker use distinct Sentry projects.
+    for (const [service, mapping] of Object.entries({
+      api: {
+        SENTRY_DSN_FILE: 'sentry_dsn_api',
+        SENTRY_PUBLIC_DSN_FILE: 'sentry_dsn_web',
+        POSTHOG_KEY_FILE: 'posthog_project_api_key',
+        BETTER_STACK_SOURCE_TOKEN_FILE: 'betterstack_source_token',
+      },
+      worker: {
+        SENTRY_DSN_FILE: 'sentry_dsn_worker',
+        POSTHOG_KEY_FILE: 'posthog_project_api_key',
+        BETTER_STACK_SOURCE_TOKEN_FILE: 'betterstack_source_token',
+      },
+    })) {
+      for (const [key, secret] of Object.entries(mapping)) {
+        assert.equal(
+          services[service].environment[key],
+          `/run/secrets/${secret}`,
+          `TELEMETRY_SECRET_REQUIRED ${service} ${key}`,
+        );
+        expectedSecrets[service].push(secret);
+      }
+    }
     assert.equal(services.api.environment.R2_ACCOUNT_ID, worker.R2_ACCOUNT_ID);
     assert.equal(services.api.environment.R2_ATTACHMENTS_BUCKET, worker.R2_ATTACHMENTS_BUCKET);
     assert.equal(worker.AUTOMATIC_IMPORT_ENABLED, automatic ? 'true' : 'false');

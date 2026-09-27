@@ -1,8 +1,5 @@
 // STK-F1-10 — observabilidade (Plano Master §4.6, §6.1 e §12.1).
-//
-// Gêmeo de apps/api/src/telemetry.ts: os apps não compartilham runtime além de
-// @stakeframe/shared/@stakeframe/db por design (bundles isolados), e o
-// scrubber em si vive no shared — este módulo só resolve config e clientes.
+// Gêmeo de apps/api/src/telemetry.ts (apps isolados por design).
 //
 // Sentry (erros), PostHog Cloud EU (analytics e feature flags de rollout) e
 // Better Stack (logs warn/error) — TODOS desligados por padrão (zero config =
@@ -26,7 +23,12 @@ export const BETTER_STACK_DEFAULT_URL = 'https://in.logs.betterstack.com';
 export type TelemetryLevel = 'info' | 'warn' | 'error';
 
 export interface TelemetryConfig {
-  sentry: { enabled: boolean; dsn: string | undefined; environment: string };
+  sentry: {
+    enabled: boolean;
+    dsn: string | undefined;
+    publicDsn: string | undefined;
+    environment: string;
+  };
   posthog: { enabled: boolean; key: string | undefined };
   betterStack: {
     enabled: boolean;
@@ -92,6 +94,9 @@ export function readTelemetryConfig(environment: NodeJS.ProcessEnv): TelemetryCo
   const sentry = {
     enabled: readFlag(environment, 'SENTRY_ENABLED'),
     dsn: readTelemetrySecret(environment, 'SENTRY_DSN'),
+    // DSN público do projeto Sentry do cliente web: servido por
+    // /api/v1/telemetry/config — nunca é o DSN do servidor.
+    publicDsn: readTelemetrySecret(environment, 'SENTRY_PUBLIC_DSN'),
     environment: environment.SENTRY_ENVIRONMENT?.trim() || runtime || 'unknown',
   };
   if (sentry.enabled && !sentry.dsn) throw new Error('TELEMETRY_CONFIGURATION_REFUSED');
