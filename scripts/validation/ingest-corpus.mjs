@@ -12,6 +12,12 @@ import { pathToFileURL } from 'node:url';
 // artefatos fornecidos pelo proprietário; este script não capta, não
 // anonimiza e não inventa dados.
 //
+// D026-B (decisão do proprietário, 27/09/2026): os campos de evidência
+// ausente listados em DEFERRED_NULLABLE_FIELDS podem ser explicitamente
+// nulos/omitidos quando houver nota de transcrição para o campo
+// (transcriptionNotes[].field + ILEGIVEL_RECAPTURAR); qualquer null/ausente
+// SEM nota continua sendo erro, e todo campo presente segue estrito.
+//
 // Uso:
 //   node scripts/validation/ingest-corpus.mjs <dir-privado> [--init] [--manifest <arquivo>]
 
@@ -27,6 +33,17 @@ const ISO_OFFSET_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+
 const DECIMAL_PATTERN = /^\d+(\.\d+)?$/;
 const ARTIFACT_KINDS = ['screenshot', 'export', 'url'];
 const TICKET_STATUSES = ['pending', 'won', 'lost'];
+// D026-B: campos de evidência ausente que aceitam null/ausente COM nota.
+export const DEFERRED_NULLABLE_FIELDS = new Set([
+  'placedAt',
+  'event.league',
+  'event.startsAt',
+  'event.awayTeam',
+  'status',
+  'potentialReturn',
+]);
+const SELECTION_GAP_PATTERN = /^selections\[(\d{1,3})\]\.selection$/;
+const NOTE_REASON = 'ILEGIVEL_RECAPTURAR';
 const HOUSE_ALTERNATION = KNOWN_BOOKMAKERS.join('|');
 const RAW_PATH_PATTERN = new RegExp(`^raw/(${HOUSE_ALTERNATION})/\\d{3}\\.[a-z0-9]+$`);
 const SANITIZED_PATH_PATTERN = new RegExp(`^sanitized/(${HOUSE_ALTERNATION})/\\d{3}\\.[a-z0-9]+$`);
@@ -36,6 +53,7 @@ const isPlainObject = (value) =>
 const nonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const isIsoWithOffset = (value) => typeof value === 'string' && ISO_OFFSET_PATTERN.test(value);
 const isSha256 = (value) => typeof value === 'string' && SHA256_PATTERN.test(value);
+const isMissingValue = (value) => value === null || value === undefined;
 
 function isAmount(value, { min, exclusive = false }) {
   if (typeof value !== 'string' || !DECIMAL_PATTERN.test(value)) return false;
@@ -70,7 +88,7 @@ function validateManifest(manifest) {
   return { errors, tickets: Array.isArray(manifest.tickets) ? manifest.tickets : [] };
 }
 
-function validateSelections(selections, where, errors) {
+function validateSelections(selections, where, errors, notes) {
   if (!Array.isArray(selections) || selections.length === 0) {
     errors.push(`${where} selections deve ser uma lista não vazia`);
     return;
@@ -82,10 +100,68 @@ function validateSelections(selections, where, errors) {
       return;
     }
     if (!nonEmptyString(selection.market)) errors.push(`${at} market inválido`);
-    if (!nonEmptyString(selection.selection)) errors.push(`${at} selection inválido`);
+    if (isMissingValue(selection.selection)) {
+      if (!notes.has(`selections[${index}].selection`))
+        errors.push(`${at} selection ausente/nulo sem nota de transcrição (D026-B)`);
+    } else if (!nonEmptyString(selection.selection)) {
+      errors.push(`${at} selection inválido`);
+    }
     if (!isOdds(selection.oddsDecimal))
       errors.push(`${at} oddsDecimal inválido (decimal entre 1.01 e 1000)`);
   });
+}
+
+// D026-B: valida a forma das notas de transcrição e devolve o conjunto de
+// campos anotados (gap explícito aceito).
+function collectTranscriptionNotes(ticket, where, errors) {
+  const notes = new Set();
+  const value = ticket.transcriptionNotes;
+  if (isMissingValue(value)) return notes;
+  if (!Array.isArray(value)) {
+    errors.push(`${where} transcriptionNotes deve ser uma lista`);
+    return notes;
+  }
+  value.forEach((note, index) => {
+    const at = `${where} transcriptionNotes[${index}]`;
+    if (!isPlainObject(note)) {
+      errors.push(`${at} não é objeto`);
+      return;
+    }
+    if (!nonEmptyString(note.field)) {
+      errors.push(`${at} field inválido`);
+      return;
+    }
+    if (!DEFERRED_NULLABLE_FIELDS.has(note.field) && !SELECTION_GAP_PATTERN.test(note.field)) {
+      errors.push(`${at} field fora da lista D026-B`);
+      return;
+    }
+    if (note.reason !== NOTE_REASON) {
+      errors.push(`${at} reason deve ser ${NOTE_REASON}`);
+      return;
+    }
+    if (notes.has(note.field)) {
+      errors.push(`${at} nota duplicada para ${note.field}`);
+      return;
+    }
+    notes.add(note.field);
+  });
+  return notes;
+}
+
+// D026-B: valor atual do campo anotado, para conferir que o gap ainda existe.
+function noteTargetValue(body, field) {
+  if (field === 'placedAt') return body.placedAt;
+  if (field === 'status') return body.status;
+  if (field === 'potentialReturn') return body.potentialReturn;
+  if (!isPlainObject(body.event)) return undefined;
+  if (field === 'event.league') return body.event.league;
+  if (field === 'event.startsAt') return body.event.startsAt;
+  if (field === 'event.awayTeam') return body.event.awayTeam;
+  if (!Array.isArray(body.selections)) return undefined;
+  const match = SELECTION_GAP_PATTERN.exec(field);
+  if (!match) return undefined;
+  const selection = body.selections[Number(match[1])];
+  return isPlainObject(selection) ? selection.selection : undefined;
 }
 
 // Validação de estrutura do bilhete, sem tocar o disco. Não imprime nem
@@ -96,8 +172,9 @@ function validateTicket(ticket, index, seen) {
   const push = (message) => errors.push(`${where} ${message}`);
   if (!isPlainObject(ticket)) {
     push('não é objeto');
-    return errors;
+    return { errors, gapNotes: new Set() };
   }
+  const notes = collectTranscriptionNotes(ticket, where, errors);
   const id = ticket.corpusTicketId;
   if (typeof id !== 'string' || !ID_PATTERN.test(id)) push('corpusTicketId inválido');
   else if (seen.ids.has(id)) push(`corpusTicketId duplicado: ${id}`);
@@ -129,17 +206,36 @@ function validateTicket(ticket, index, seen) {
   if (!isPlainObject(body)) push('ticket ausente');
   else {
     if (body.internalId !== id) push('ticket.internalId deve igualar corpusTicketId');
-    if (!isIsoWithOffset(body.placedAt)) push('ticket.placedAt inválido (ISO-8601 com offset)');
+    if (isMissingValue(body.placedAt)) {
+      if (!notes.has('placedAt'))
+        push('ticket.placedAt ausente/nulo sem nota de transcrição (D026-B)');
+    } else if (!isIsoWithOffset(body.placedAt)) {
+      push('ticket.placedAt inválido (ISO-8601 com offset)');
+    }
     const event = body.event;
     if (!isPlainObject(event)) push('ticket.event ausente');
     else {
-      if (!nonEmptyString(event.league)) push('ticket.event.league inválido');
+      if (isMissingValue(event.league)) {
+        if (!notes.has('event.league'))
+          push('ticket.event.league ausente/nulo sem nota de transcrição (D026-B)');
+      } else if (!nonEmptyString(event.league)) {
+        push('ticket.event.league inválido');
+      }
       if (!nonEmptyString(event.homeTeam)) push('ticket.event.homeTeam inválido');
-      if (!nonEmptyString(event.awayTeam)) push('ticket.event.awayTeam inválido');
-      if (!isIsoWithOffset(event.startsAt))
+      if (isMissingValue(event.awayTeam)) {
+        if (!notes.has('event.awayTeam'))
+          push('ticket.event.awayTeam ausente/nulo sem nota de transcrição (D026-B)');
+      } else if (!nonEmptyString(event.awayTeam)) {
+        push('ticket.event.awayTeam inválido');
+      }
+      if (isMissingValue(event.startsAt)) {
+        if (!notes.has('event.startsAt'))
+          push('ticket.event.startsAt ausente/nulo sem nota de transcrição (D026-B)');
+      } else if (!isIsoWithOffset(event.startsAt)) {
         push('ticket.event.startsAt inválido (ISO-8601 com offset)');
+      }
     }
-    validateSelections(body.selections, `${where} ticket`, errors);
+    validateSelections(body.selections, `${where} ticket`, errors, notes);
     const stake = body.stake;
     if (
       !isPlainObject(stake) ||
@@ -148,13 +244,35 @@ function validateTicket(ticket, index, seen) {
     )
       push('ticket.stake inválido (BRL, decimal > 0)');
     const potentialReturn = body.potentialReturn;
-    if (
+    if (isMissingValue(potentialReturn)) {
+      if (!notes.has('potentialReturn'))
+        push('ticket.potentialReturn ausente/nulo sem nota de transcrição (D026-B)');
+    } else if (
       !isPlainObject(potentialReturn) ||
       potentialReturn.currency !== 'BRL' ||
       !isAmount(potentialReturn.amount, { min: 0 })
-    )
+    ) {
       push('ticket.potentialReturn inválido (BRL, decimal >= 0)');
-    if (!TICKET_STATUSES.includes(body.status)) push('ticket.status inválido');
+    }
+    if (isMissingValue(body.status)) {
+      if (!notes.has('status')) push('ticket.status ausente/nulo sem nota de transcrição (D026-B)');
+    } else if (!TICKET_STATUSES.includes(body.status)) {
+      push('ticket.status inválido');
+    }
+    // D026-B: toda nota precisa de um gap real — nota para campo presente é
+    // erro, assim como nota apontando seleção inexistente.
+    for (const field of notes) {
+      const match = SELECTION_GAP_PATTERN.exec(field);
+      if (
+        match &&
+        (!Array.isArray(body.selections) || Number(match[1]) >= body.selections.length)
+      ) {
+        push(`transcriptionNotes aponta seleção inexistente: ${field}`);
+        continue;
+      }
+      if (!isMissingValue(noteTargetValue(body, field)))
+        push(`transcriptionNotes para campo presente: ${field}`);
+    }
   }
   const provenance = ticket.provenance;
   if (!isPlainObject(provenance)) push('provenance ausente');
@@ -164,7 +282,7 @@ function validateTicket(ticket, index, seen) {
     if (!isIsoWithOffset(provenance.reviewedAt))
       push('provenance.reviewedAt inválido (ISO-8601 com offset)');
   }
-  return errors;
+  return { errors, gapNotes: notes };
 }
 
 // Confere convenção do caminho, contenção no diretório privado e existência do
@@ -302,10 +420,15 @@ async function main(argv) {
   const errors = [...checked.errors];
   const tickets = checked.tickets;
   const seen = { ids: new Set(), rawHashes: new Set(), sanitizedHashes: new Set() };
+  const gapFields = new Set();
+  let gapCount = 0;
   let rawFound = 0;
   let sanitizedFound = 0;
   for (const [index, ticket] of tickets.entries()) {
-    const ticketErrors = validateTicket(ticket, index, seen);
+    const checkedTicket = validateTicket(ticket, index, seen);
+    const ticketErrors = checkedTicket.errors;
+    gapCount += checkedTicket.gapNotes.size;
+    for (const field of checkedTicket.gapNotes) gapFields.add(field);
     if (isPlainObject(ticket) && isPlainObject(ticket.source) && isPlainObject(ticket.sanitized)) {
       if (KNOWN_BOOKMAKERS.includes(ticket.bookmaker)) {
         const rawPath = await checkArtifactFile(
@@ -357,6 +480,7 @@ async function main(argv) {
   if (errors.length) status = 'INVALIDO';
   else if (tickets.length === 0) status = 'VAZIO';
   else if (!compositionReady) status = 'INCOMPLETO';
+  else if (gapCount > 0) status = 'PRONTO_COM_GAP';
   console.log(
     JSON.stringify({
       ok: errors.length === 0,
@@ -366,6 +490,7 @@ async function main(argv) {
       missingPerBookmaker,
       totalMissing,
       artifacts: { rawFound, sanitizedFound, expected: tickets.length },
+      gaps: { notes: gapCount, fields: [...gapFields].sort() },
       errors,
     }),
   );

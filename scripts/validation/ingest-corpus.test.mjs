@@ -207,3 +207,120 @@ test('rejects paths outside the <raw|sanitized>/<house>/<NNN> convention', () =>
   assert.equal(summary.status, 'INVALIDO');
   assert.ok(summary.errors.some((entry) => entry.includes('fora da convenção')));
 });
+
+test('rejects a missing-value field without a transcription note (D026-B)', () => {
+  const root = freshRoot('stk-ingest-gap-missing-');
+  const tickets = [];
+  for (const house of ['bet365', 'superbet']) {
+    for (let index = 1; index <= 10; index += 1) {
+      writeTicketFiles(root, house, index);
+      tickets.push(makeTicket(house, index));
+    }
+  }
+  tickets[0].ticket.status = null;
+  writeManifest(root, makeManifest(tickets));
+  const result = run([root]);
+  assert.equal(result.status, 1);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'INVALIDO');
+  assert.ok(summary.errors.some((entry) => entry.includes('status ausente/nulo sem nota')));
+});
+
+test('rejects a transcription note for a field that is present', () => {
+  const root = freshRoot('stk-ingest-gap-present-');
+  writeTicketFiles(root, 'bet365', 1);
+  const ticket = makeTicket('bet365', 1);
+  ticket.transcriptionNotes = [{ field: 'placedAt', reason: 'ILEGIVEL_RECAPTURAR' }];
+  writeManifest(root, makeManifest([ticket]));
+  const result = run([root]);
+  assert.equal(result.status, 1);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'INVALIDO');
+  assert.ok(
+    summary.errors.some((entry) => entry.includes('transcriptionNotes para campo presente')),
+  );
+});
+
+test('rejects malformed transcription notes (field fora da lista e reason inválida)', () => {
+  const first = freshRoot('stk-ingest-gap-field-');
+  writeTicketFiles(first, 'bet365', 1);
+  const ticketA = makeTicket('bet365', 1);
+  ticketA.ticket.placedAt = null;
+  ticketA.transcriptionNotes = [{ field: 'stake', reason: 'ILEGIVEL_RECAPTURAR' }];
+  writeManifest(first, makeManifest([ticketA]));
+  const resultA = run([first]);
+  assert.equal(resultA.status, 1);
+  const summaryA = JSON.parse(resultA.stdout);
+  assert.equal(summaryA.status, 'INVALIDO');
+  assert.ok(summaryA.errors.some((entry) => entry.includes('field fora da lista D026-B')));
+  assert.ok(summaryA.errors.some((entry) => entry.includes('placedAt ausente/nulo sem nota')));
+
+  const second = freshRoot('stk-ingest-gap-reason-');
+  writeTicketFiles(second, 'bet365', 1);
+  const ticketB = makeTicket('bet365', 1);
+  ticketB.ticket.placedAt = null;
+  ticketB.transcriptionNotes = [{ field: 'placedAt', reason: 'DIVERGENTE' }];
+  writeManifest(second, makeManifest([ticketB]));
+  const resultB = run([second]);
+  assert.equal(resultB.status, 1);
+  const summaryB = JSON.parse(resultB.stdout);
+  assert.equal(summaryB.status, 'INVALIDO');
+  assert.ok(summaryB.errors.some((entry) => entry.includes('reason deve ser ILEGIVEL_RECAPTURAR')));
+});
+
+test('accepts null-proper fields with notes as PRONTO_COM_GAP (D026-B)', () => {
+  const root = freshRoot('stk-ingest-gap-ok-');
+  const tickets = [];
+  for (const house of ['bet365', 'superbet']) {
+    for (let index = 1; index <= 10; index += 1) {
+      writeTicketFiles(root, house, index);
+      tickets.push(makeTicket(house, index));
+    }
+  }
+  tickets[0].ticket.placedAt = null;
+  tickets[0].transcriptionNotes = [{ field: 'placedAt', reason: 'ILEGIVEL_RECAPTURAR' }];
+  tickets[1].ticket.status = null;
+  tickets[1].transcriptionNotes = [{ field: 'status', reason: 'ILEGIVEL_RECAPTURAR' }];
+  tickets[2].ticket.event.awayTeam = null;
+  tickets[2].transcriptionNotes = [{ field: 'event.awayTeam', reason: 'ILEGIVEL_RECAPTURAR' }];
+  delete tickets[3].ticket.potentialReturn;
+  tickets[3].transcriptionNotes = [{ field: 'potentialReturn', reason: 'ILEGIVEL_RECAPTURAR' }];
+  tickets[4].ticket.selections[0].selection = null;
+  tickets[4].transcriptionNotes = [
+    { field: 'selections[0].selection', reason: 'ILEGIVEL_RECAPTURAR' },
+  ];
+  writeManifest(root, makeManifest(tickets));
+  const result = run([root]);
+  assert.equal(result.status, 0);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.ok, true);
+  assert.equal(summary.status, 'PRONTO_COM_GAP');
+  assert.equal(summary.gaps.notes, 5);
+  assert.deepEqual(summary.gaps.fields, [
+    'event.awayTeam',
+    'placedAt',
+    'potentialReturn',
+    'selections[0].selection',
+    'status',
+  ]);
+});
+
+test('keeps INCOMPLETO ahead of PRONTO_COM_GAP when composition is short', () => {
+  const root = freshRoot('stk-ingest-gap-short-');
+  const tickets = [];
+  for (let index = 1; index <= 10; index += 1) {
+    writeTicketFiles(root, 'bet365', index);
+    tickets.push(makeTicket('bet365', index));
+  }
+  for (let index = 1; index <= 9; index += 1) {
+    writeTicketFiles(root, 'superbet', index);
+    tickets.push(makeTicket('superbet', index));
+  }
+  tickets[0].ticket.status = null;
+  tickets[0].transcriptionNotes = [{ field: 'status', reason: 'ILEGIVEL_RECAPTURAR' }];
+  writeManifest(root, makeManifest(tickets));
+  const result = run([root]);
+  assert.equal(result.status, 0);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'INCOMPLETO');
+});
