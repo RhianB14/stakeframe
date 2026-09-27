@@ -18,17 +18,15 @@ x-runtime: &runtime
   DB_PASSWORD_FILE: /run/secrets/db_password
   # STK-F1-10: telemetria — desligada por padrão (zero config = zero telemetria).
   # Com ENABLED=true o valor correspondente é obrigatório (fail-closed no código).
-  # SENTRY_DSN/POSTHOG_KEY são identificadores públicos (client-side) e aceitam o
-  # par *_FILE; o token do Better Stack só entra por BETTER_STACK_SOURCE_TOKEN_FILE.
+  # DSN/PostHog key diretos servem de fallback local; em produção os valores vêm
+  # dos docker secrets por serviço (compose.integrations.yml).
   SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
   SENTRY_DSN: ${SENTRY_DSN:-}
-  SENTRY_DSN_FILE: ${SENTRY_DSN_FILE:-}
   SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
   POSTHOG_ENABLED: ${POSTHOG_ENABLED:-false}
   POSTHOG_KEY: ${POSTHOG_KEY:-}
-  POSTHOG_KEY_FILE: ${POSTHOG_KEY_FILE:-}
+  POSTHOG_ID: ${POSTHOG_ID:-}
   BETTER_STACK_ENABLED: ${BETTER_STACK_ENABLED:-false}
-  BETTER_STACK_SOURCE_TOKEN_FILE: ${BETTER_STACK_SOURCE_TOKEN_FILE:-}
   BETTER_STACK_INGESTING_URL: ${BETTER_STACK_INGESTING_URL:-}
   BETTER_STACK_INFO_SAMPLE_RATE: ${BETTER_STACK_INFO_SAMPLE_RATE:-}
   TELEMETRY_DEBUG_ENABLED: ${TELEMETRY_DEBUG_ENABLED:-false}

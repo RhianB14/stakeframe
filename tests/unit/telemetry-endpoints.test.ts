@@ -19,8 +19,10 @@ function fakeTelemetry(flags: { debug?: boolean; sentry?: boolean; posthog?: boo
   const handle = {
     config: {
       sentry: {
-        enabled: flags.sentry ?? false,
-        dsn: flags.sentry ? 'https://public@example.ingest.sentry.io/9' : undefined,
+        enabled: flags.sentry,
+        // DSNs distintos: o endpoint público serve o DSN do web, nunca o do servidor.
+        dsn: flags.sentry ? 'https://server-key@example.ingest.sentry.io/1' : undefined,
+        publicDsn: flags.sentry ? 'https://web-key@example.ingest.sentry.io/2' : undefined,
         environment: 'local',
       },
       posthog: {
@@ -69,12 +71,21 @@ describe('GET /api/v1/telemetry/config', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json() as Record<string, unknown>;
     expect(body.sentry).toEqual({
-      dsn: 'https://public@example.ingest.sentry.io/9',
+      dsn: 'https://web-key@example.ingest.sentry.io/2',
       environment: 'local',
     });
     expect(body.posthog).toEqual({ key: 'phc_example' });
     // O token do Better Stack nunca aparece na resposta pública.
     expect(JSON.stringify(body)).not.toContain('betterstack');
+  });
+
+  it('nunca serve o DSN do servidor quando o público não está configurado', async () => {
+    const { handle } = fakeTelemetry({ sentry: true });
+    (handle.config.sentry as { publicDsn: string | undefined }).publicDsn = undefined;
+    const response = await appWith({ telemetry: handle }).inject('/api/v1/telemetry/config');
+    const body = response.json() as Record<string, unknown>;
+    expect(body.sentry).toBeNull();
+    expect(JSON.stringify(body)).not.toContain('server-key');
   });
 });
 

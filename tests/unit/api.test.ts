@@ -113,7 +113,12 @@ describe('configuration', () => {
         environment: 'local',
       },
       telemetry: {
-        sentry: { enabled: false, dsn: undefined, environment: 'local' },
+        sentry: {
+          enabled: false,
+          dsn: undefined,
+          publicDsn: undefined,
+          environment: 'local',
+        },
         posthog: { enabled: false, key: undefined },
         betterStack: {
           enabled: false,

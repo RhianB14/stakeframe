@@ -22,7 +22,12 @@ export const BETTER_STACK_DEFAULT_URL = 'https://in.logs.betterstack.com';
 export type TelemetryLevel = 'info' | 'warn' | 'error';
 
 export interface TelemetryConfig {
-  sentry: { enabled: boolean; dsn: string | undefined; environment: string };
+  sentry: {
+    enabled: boolean;
+    dsn: string | undefined;
+    publicDsn: string | undefined;
+    environment: string;
+  };
   posthog: { enabled: boolean; key: string | undefined };
   betterStack: {
     enabled: boolean;
@@ -88,6 +93,9 @@ export function readTelemetryConfig(environment: NodeJS.ProcessEnv): TelemetryCo
   const sentry = {
     enabled: readFlag(environment, 'SENTRY_ENABLED'),
     dsn: readTelemetrySecret(environment, 'SENTRY_DSN'),
+    // DSN público do projeto Sentry do cliente web: servido por
+    // /api/v1/telemetry/config — nunca é o DSN do servidor.
+    publicDsn: readTelemetrySecret(environment, 'SENTRY_PUBLIC_DSN'),
     environment: environment.SENTRY_ENVIRONMENT?.trim() || runtime || 'unknown',
   };
   if (sentry.enabled && !sentry.dsn) throw new Error('TELEMETRY_CONFIGURATION_REFUSED');
