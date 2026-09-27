@@ -24,7 +24,7 @@ import {
   reportBetSql,
 } from './report-query.js';
 import { FinanceError } from './finance-core.js';
-import { portabilityTables } from './report-export.js';
+import { exportPortabilityJson } from './report-export.js';
 
 export function csvCell(value: unknown, numeric = false) {
   let text = String(value ?? '');
@@ -227,32 +227,7 @@ export function createReportService(database: Database) {
               scope:
                 'Structured finance and import history; excludes authentication, credentials and image bytes.',
             }).slice(0, -1);
-            for (const table of portabilityTables) {
-              yield `,${JSON.stringify(table.name)}:[`;
-              let cursor: unknown[] | undefined;
-              let first = true;
-              for (;;) {
-                // The organization predicate is explicit: the app role owns the schema with
-                // NO FORCE RLS, so a table scan cannot rely on row-level security alone.
-                const organization = `where organization_id=current_setting($$app.organization_id$$, true)::uuid`;
-                const where = cursor
-                  ? `${organization} and (${table.keys.join(',')}) > (${table.keys.map((_, i) => '$' + (i + 1)).join(',')})`
-                  : organization;
-                const rows = (
-                  await client.query(
-                    `select ${table.columns} from ${table.name} ${where} order by ${table.keys.join(',')} limit 500`,
-                    cursor,
-                  )
-                ).rows;
-                for (const row of rows) {
-                  yield `${first ? '' : ','}${JSON.stringify(row)}`;
-                  first = false;
-                }
-                if (rows.length < 500) break;
-                cursor = table.keys.map((key) => rows.at(-1)![key]);
-              }
-              yield ']';
-            }
+            yield* exportPortabilityJson(client, ',');
             yield '}';
           } else {
             const columns = [

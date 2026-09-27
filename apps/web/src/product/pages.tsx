@@ -15,7 +15,7 @@ import { request, dateLabel } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
 import { betFinancialDisplay } from './financial-display.js';
-import { betResultLabel, betResultQualifier, betTablePresentation } from './bet-table.js';
+import { betResultLabel, betResultQualifier, betTablePresentation } from '@stakeframe/shared';
 import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };

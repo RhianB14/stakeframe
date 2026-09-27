@@ -2313,6 +2313,22 @@
         },
         "required": ["credits"]
       },
+      "AccountDeletionStatusInput": {
+        "type": "object",
+        "properties": {
+          "state": { "type": "string", "enum": ["pending", "cancelled", "purged"] },
+          "requestedAt": { "type": "string" },
+          "expiresAt": { "type": "string" },
+          "cancelledAt": { "nullable": true, "type": "string" },
+          "purgedAt": { "nullable": true, "type": "string" }
+        },
+        "required": ["state", "requestedAt", "expiresAt", "cancelledAt", "purgedAt"]
+      },
+      "AccountDeletionResponseInput": {
+        "type": "object",
+        "properties": { "deletion": { "$ref": "#/components/schemas/AccountDeletionStatusInput" } },
+        "required": ["deletion"]
+      },
       "CalendarPageInput": {
         "type": "object",
         "properties": {
@@ -6119,6 +6135,24 @@
           }
         },
         "required": ["credits"],
+        "additionalProperties": false
+      },
+      "AccountDeletionStatus": {
+        "type": "object",
+        "properties": {
+          "state": { "type": "string", "enum": ["pending", "cancelled", "purged"] },
+          "requestedAt": { "type": "string" },
+          "expiresAt": { "type": "string" },
+          "cancelledAt": { "nullable": true, "type": "string" },
+          "purgedAt": { "nullable": true, "type": "string" }
+        },
+        "required": ["state", "requestedAt", "expiresAt", "cancelledAt", "purgedAt"],
+        "additionalProperties": false
+      },
+      "AccountDeletionResponse": {
+        "type": "object",
+        "properties": { "deletion": { "$ref": "#/components/schemas/AccountDeletionStatus" } },
+        "required": ["deletion"],
         "additionalProperties": false
       },
       "CalendarPage": {
@@ -11699,6 +11733,230 @@
             }
           },
           "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/export.json": {
+      "get": {
+        "operationId": "exportAccountData",
+        "summary": "Exportar todos os dados da própria conta em JSON",
+        "tags": ["Conta"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/export/bets.csv": {
+      "get": {
+        "operationId": "exportAccountBets",
+        "summary": "Exportar todas as apostas da própria conta em CSV",
+        "tags": ["Conta"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/exclusion-request": {
+      "post": {
+        "operationId": "requestAccountExclusion",
+        "summary": "Solicitar exclusão da conta (bloqueio imediato, carência de 30 dias)",
+        "tags": ["Conta"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AccountDeletionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/exclusion-cancel": {
+      "post": {
+        "operationId": "cancelAccountExclusion",
+        "summary": "Cancelar a exclusão da conta dentro da carência",
+        "tags": ["Conta"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AccountDeletionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

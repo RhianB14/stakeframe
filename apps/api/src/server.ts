@@ -6,6 +6,8 @@ import {
   createEventService,
   createReportService,
   createOnboardingService,
+  createAccountDeletionService,
+  createAccountExportService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -55,6 +57,10 @@ async function main() {
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
     reports: createReportService(database),
+    account: {
+      deletion: createAccountDeletionService(database),
+      exports: createAccountExportService(database),
+    },
     telemetry,
     ...(operations ? { operations } : {}),
     ...(ownerAuth ? { ownerAuth } : {}),

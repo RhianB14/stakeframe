@@ -22,8 +22,11 @@ import type {
   EventService,
   ReportService,
   OnboardingService,
+  AccountDeletionService,
+  AccountExportService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
+import { registerAccountRoutes } from './account-routes.js';
 import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
@@ -43,6 +46,7 @@ export function createApp(options: {
   reports?: ReportService;
   operations?: OperationsService;
   onboarding?: OnboardingService;
+  account?: { deletion: AccountDeletionService; exports: AccountExportService };
   telemetry?: TelemetryHandle;
 }) {
   const app = Fastify({
@@ -169,6 +173,13 @@ export function createApp(options: {
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerReportRoutes(app, options.ownerAuth, options.reports);
+    registerAccountRoutes(
+      app,
+      options.ownerAuth,
+      options.reports,
+      options.account?.deletion,
+      options.account?.exports,
+    );
     registerOperationsRoutes(app, options.operations);
     registerDebugRoutes(app, options.ownerAuth, options.telemetry);
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());

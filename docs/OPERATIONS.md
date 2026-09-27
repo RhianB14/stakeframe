@@ -196,6 +196,14 @@ aborta abaixo de 5 GiB ou 10%, iniciando a limpeza dos recursos próprios. Esses
 limites preservam margem para a operação normal; não substituem dimensionamento
 e medição com o volume real.
 
+Contas excluídas (STK-F1-08) não são reativadas por restauração fora de
+recuperação de desastre. O purge é irreversível por decisão do titular e a
+trilha mínima (`core.account_deletion`, sem PII) viaja com o snapshot apenas
+para auditoria; um ensaio mensal ou uma recuperação operacional de rotina não
+reintroduz uma conta purgada. Somente uma recuperação de desastre autorizada
+pode reintroduzir esses dados, e a retomada pós-restore continua exigindo a
+janela própria descrita acima.
+
 O runner confere labels antes de remover apenas os recursos que criou. Guarda
 relatórios privados em `/var/lib/stakeframe/restore-reports` e o resultado mais
 recente em `/var/lib/stakeframe/operations-status/restore-latest.json`, por troca

@@ -5,6 +5,8 @@ export * from './telegram.js';
 export * from './returns.js';
 export * from './decimal.js';
 export * from './finance.js';
+export * from './bet-table.js';
+export * from './account.js';
 export * from './release.js';
 export * from './automatic-policy.js';
 export * from './telemetry.js';

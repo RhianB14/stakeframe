@@ -127,6 +127,13 @@
       "when": 1790039624173,
       "tag": "0017_striped_carlie_cooper",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790508199766,
+      "tag": "0018_account_deletion",
+      "breakpoints": true
     }
   ]
 }

@@ -91,6 +91,17 @@ export {
   type FirstBetResolution,
 } from './onboarding.js';
 export { createReportService, type ReportService } from './reports.js';
+export { createAccountExportService, type AccountExportService } from './account-export.js';
+export {
+  createAccountDeletionService,
+  AccountDeletionError,
+  ACCOUNT_DELETION_GRACE_MS,
+  ATTACHMENT_RETENTION_AFTER_PURGE_DAYS,
+  type AccountDeletionErrorCode,
+  type AccountDeletionService,
+  type AccountDeletionStatus,
+  type DuePurge,
+} from './account-deletion.js';
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
 export { assertRecoveryReviewed } from './recovery-guard.js';
