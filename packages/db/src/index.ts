@@ -91,10 +91,7 @@ export {
   type FirstBetResolution,
 } from './onboarding.js';
 export { createReportService, type ReportService } from './reports.js';
-export {
-  createAccountExportService,
-  type AccountExportService,
-} from './account-export.js';
+export { createAccountExportService, type AccountExportService } from './account-export.js';
 export {
   createAccountDeletionService,
   AccountDeletionError,
