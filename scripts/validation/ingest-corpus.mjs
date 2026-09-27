@@ -36,14 +36,31 @@ const TICKET_STATUSES = ['pending', 'won', 'lost'];
 // D026-B: campos de evidência ausente que aceitam null/ausente COM nota.
 export const DEFERRED_NULLABLE_FIELDS = new Set([
   'placedAt',
+  'event',
   'event.league',
   'event.startsAt',
   'event.awayTeam',
   'status',
   'potentialReturn',
 ]);
+// D026-B: campos do schema que podem receber nota-anotação quando presentes.
+const ANNOTATABLE_FIELDS = new Set([
+  'placedAt',
+  'event',
+  'event.league',
+  'event.homeTeam',
+  'event.awayTeam',
+  'event.startsAt',
+  'status',
+  'potentialReturn',
+  'stake',
+]);
+const SELECTION_NOTE_PATTERN = /^selections\[(\d{1,3})\]\.(market|selection|oddsDecimal)$/;
 const SELECTION_GAP_PATTERN = /^selections\[(\d{1,3})\]\.selection$/;
 const NOTE_REASON = 'ILEGIVEL_RECAPTURAR';
+// D026-B v1.2: o formato canônico do field é SEM o prefixo `ticket.`; o
+// prefixo legado é aceito e normalizado na leitura.
+const canonicalNoteField = (field) => field.replace(/^ticket\./, '');
 const HOUSE_ALTERNATION = KNOWN_BOOKMAKERS.join('|');
 const RAW_PATH_PATTERN = new RegExp(`^raw/(${HOUSE_ALTERNATION})/\\d{3}\\.[a-z0-9]+$`);
 const SANITIZED_PATH_PATTERN = new RegExp(`^sanitized/(${HOUSE_ALTERNATION})/\\d{3}\\.[a-z0-9]+$`);
@@ -131,37 +148,47 @@ function collectTranscriptionNotes(ticket, where, errors) {
       errors.push(`${at} field inválido`);
       return;
     }
-    if (!DEFERRED_NULLABLE_FIELDS.has(note.field) && !SELECTION_GAP_PATTERN.test(note.field)) {
-      errors.push(`${at} field fora da lista D026-B`);
+    const field = canonicalNoteField(note.field.trim());
+    if (!ANNOTATABLE_FIELDS.has(field) && !SELECTION_NOTE_PATTERN.test(field)) {
+      errors.push(`${at} field fora da lista D026-B: ${field}`);
       return;
     }
     if (note.reason !== NOTE_REASON) {
       errors.push(`${at} reason deve ser ${NOTE_REASON}`);
       return;
     }
-    if (notes.has(note.field)) {
-      errors.push(`${at} nota duplicada para ${note.field}`);
+    if (notes.has(field)) {
+      errors.push(`${at} nota duplicada para ${field}`);
       return;
     }
-    notes.add(note.field);
+    notes.add(field);
   });
   return notes;
 }
 
-// D026-B: valor atual do campo anotado, para conferir que o gap ainda existe.
+// D026-B: valor atual do campo anotado, para classificar gap real × anotação.
 function noteTargetValue(body, field) {
   if (field === 'placedAt') return body.placedAt;
   if (field === 'status') return body.status;
   if (field === 'potentialReturn') return body.potentialReturn;
-  if (!isPlainObject(body.event)) return undefined;
-  if (field === 'event.league') return body.event.league;
-  if (field === 'event.startsAt') return body.event.startsAt;
-  if (field === 'event.awayTeam') return body.event.awayTeam;
+  if (field === 'stake') return body.stake;
+  if (field === 'event') return body.event;
+  if (field.startsWith('event.')) {
+    if (!isPlainObject(body.event)) return undefined;
+    if (field === 'event.league') return body.event.league;
+    if (field === 'event.homeTeam') return body.event.homeTeam;
+    if (field === 'event.startsAt') return body.event.startsAt;
+    if (field === 'event.awayTeam') return body.event.awayTeam;
+    return undefined;
+  }
   if (!Array.isArray(body.selections)) return undefined;
-  const match = SELECTION_GAP_PATTERN.exec(field);
+  const match = SELECTION_NOTE_PATTERN.exec(field);
   if (!match) return undefined;
   const selection = body.selections[Number(match[1])];
-  return isPlainObject(selection) ? selection.selection : undefined;
+  if (!isPlainObject(selection)) return undefined;
+  if (match[2] === 'market') return selection.market;
+  if (match[2] === 'oddsDecimal') return selection.oddsDecimal;
+  return selection.selection;
 }
 
 // Validação de estrutura do bilhete, sem tocar o disco. Não imprime nem
@@ -175,6 +202,7 @@ function validateTicket(ticket, index, seen) {
     return { errors, gapNotes: new Set() };
   }
   const notes = collectTranscriptionNotes(ticket, where, errors);
+  const gapNotes = new Set();
   const id = ticket.corpusTicketId;
   if (typeof id !== 'string' || !ID_PATTERN.test(id)) push('corpusTicketId inválido');
   else if (seen.ids.has(id)) push(`corpusTicketId duplicado: ${id}`);
@@ -213,8 +241,11 @@ function validateTicket(ticket, index, seen) {
       push('ticket.placedAt inválido (ISO-8601 com offset)');
     }
     const event = body.event;
-    if (!isPlainObject(event)) push('ticket.event ausente');
-    else {
+    if (isMissingValue(event)) {
+      if (!notes.has('event')) push('ticket.event ausente/nulo sem nota de transcrição (D026-B)');
+    } else if (!isPlainObject(event)) {
+      push('ticket.event inválido');
+    } else {
       if (isMissingValue(event.league)) {
         if (!notes.has('event.league'))
           push('ticket.event.league ausente/nulo sem nota de transcrição (D026-B)');
@@ -259,10 +290,10 @@ function validateTicket(ticket, index, seen) {
     } else if (!TICKET_STATUSES.includes(body.status)) {
       push('ticket.status inválido');
     }
-    // D026-B: toda nota precisa de um gap real — nota para campo presente é
-    // erro, assim como nota apontando seleção inexistente.
+    // D026-B: nota em campo presente é anotação (permitida, não conta como
+    // gap); nota em campo estrito ausente e índice inexistente são erro.
     for (const field of notes) {
-      const match = SELECTION_GAP_PATTERN.exec(field);
+      const match = SELECTION_NOTE_PATTERN.exec(field);
       if (
         match &&
         (!Array.isArray(body.selections) || Number(match[1]) >= body.selections.length)
@@ -270,8 +301,12 @@ function validateTicket(ticket, index, seen) {
         push(`transcriptionNotes aponta seleção inexistente: ${field}`);
         continue;
       }
-      if (!isMissingValue(noteTargetValue(body, field)))
-        push(`transcriptionNotes para campo presente: ${field}`);
+      if (!isMissingValue(noteTargetValue(body, field))) continue;
+      if (DEFERRED_NULLABLE_FIELDS.has(field) || SELECTION_GAP_PATTERN.test(field)) {
+        gapNotes.add(field);
+      } else {
+        push(`transcriptionNotes para campo estrito ausente: ${field}`);
+      }
     }
   }
   const provenance = ticket.provenance;
@@ -282,7 +317,7 @@ function validateTicket(ticket, index, seen) {
     if (!isIsoWithOffset(provenance.reviewedAt))
       push('provenance.reviewedAt inválido (ISO-8601 com offset)');
   }
-  return { errors, gapNotes: notes };
+  return { errors, gapNotes };
 }
 
 // Confere convenção do caminho, contenção no diretório privado e existência do
