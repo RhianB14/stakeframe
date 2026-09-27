@@ -3,7 +3,10 @@ import type { Bet } from '../../packages/shared/src/index.js';
 import {
   betResultLabel,
   betResultQualifier,
+  betTableColumns,
   betTablePresentation,
+  sortBetRows,
+  type BetTableRow,
 } from '../../packages/shared/src/index.js';
 
 const baseBet = (overrides: Partial<Bet> = {}): Bet => ({
@@ -43,6 +46,18 @@ const baseBet = (overrides: Partial<Bet> = {}): Bet => ({
   ...overrides,
 });
 
+const row = (overrides: Partial<Bet> = {}, extras: Partial<BetTableRow> = {}): BetTableRow => {
+  const bet = baseBet(overrides);
+  return {
+    bet,
+    details: betTablePresentation(bet),
+    result: betResultLabel(bet),
+    tipster: '—',
+    bookmaker: 'Bet365',
+    ...extras,
+  };
+};
+
 describe('bets table presentation', () => {
   it('shows the game date and local kickoff time, not the bet placement timestamp', () => {
     expect(betTablePresentation(baseBet())).toMatchObject({
@@ -79,8 +94,8 @@ describe('bets table presentation', () => {
       selection: 'Corinthians + Mais de 2,5',
       market: 'Múltipla',
       ticketKind: 'Múltipla',
-      gameDate: 'Várias datas',
-      gameTime: 'Vários horários',
+      gameDate: 'Vários jogos/horários',
+      gameTime: '—',
     });
   });
 
@@ -163,5 +178,96 @@ describe('bets table presentation', () => {
     expect(betResultQualifier(partial)).toBe('Ainda em aberto');
     expect(betResultLabel({ state: 'open', latestOutcome: null })).toBe('Pendente');
     expect(betResultLabel({ state: 'cancelled', latestOutcome: null })).toBe('Cancelada');
+  });
+});
+
+describe('bets table columns and sorting', () => {
+  it('exposes the approved 14-column order', () => {
+    expect(betTableColumns.map((column) => column.label)).toEqual([
+      'Nº do bilhete',
+      'Data do jogo',
+      'Hora do jogo',
+      'Evento',
+      'Aposta/seleção',
+      'Mercado',
+      'Tipo da aposta',
+      'Tipster',
+      'Casa de aposta',
+      'Valor apostado',
+      'Odd',
+      'Retorno recebido',
+      'Resultado/status',
+      'ID técnico da aposta',
+    ]);
+  });
+
+  it('sorts by ticket number in both directions', () => {
+    const rows = [row({ ticketNumber: 3 }), row({ ticketNumber: 1 }), row({ ticketNumber: 2 })];
+    expect(sortBetRows(rows, 'ticket', 'ascending').map((item) => item.bet.ticketNumber)).toEqual([
+      1, 2, 3,
+    ]);
+    expect(sortBetRows(rows, 'ticket', 'descending').map((item) => item.bet.ticketNumber)).toEqual([
+      3, 2, 1,
+    ]);
+  });
+
+  it('sorts numeric columns by value and keeps undefined values last', () => {
+    const rows = [
+      row({ ticketNumber: 1, stake: null }),
+      row({ ticketNumber: 2, stake: '50.00' }),
+      row({ ticketNumber: 3, stake: '300.00' }),
+    ];
+    expect(sortBetRows(rows, 'stake', 'ascending').map((item) => item.bet.ticketNumber)).toEqual([
+      2, 3, 1,
+    ]);
+    expect(sortBetRows(rows, 'stake', 'descending').map((item) => item.bet.ticketNumber)).toEqual([
+      3, 2, 1,
+    ]);
+  });
+
+  it('sorts by the earliest game schedule and keeps pending dates last', () => {
+    const early = baseBet().selections[0]!;
+    const later = {
+      ...early,
+      event: 'Flamengo x Santos',
+      eventDate: '2026-09-30',
+      eventAt: '2026-09-30T20:00:00Z',
+    };
+    const rows = [
+      row({
+        ticketNumber: 1,
+        selections: [{ ...early, eventAt: null, eventDate: null, dateStatus: 'pending' }],
+      }),
+      row({ ticketNumber: 2, selections: [later] }),
+      row({ ticketNumber: 3, selections: [early] }),
+    ];
+    expect(sortBetRows(rows, 'gameDate', 'ascending').map((item) => item.bet.ticketNumber)).toEqual(
+      [3, 2, 1],
+    );
+    expect(
+      sortBetRows(rows, 'gameDate', 'descending').map((item) => item.bet.ticketNumber),
+    ).toEqual([2, 3, 1]);
+  });
+
+  it('sorts text columns accent-insensitively', () => {
+    const base = baseBet().selections[0]!;
+    const rows = [
+      row({ ticketNumber: 1, selections: [{ ...base, event: 'Água x Fogo' }] }),
+      row({ ticketNumber: 2, selections: [{ ...base, event: 'Zebra x Leão' }] }),
+    ];
+    expect(sortBetRows(rows, 'event', 'ascending').map((item) => item.bet.ticketNumber)).toEqual([
+      1, 2,
+    ]);
+  });
+
+  it('sorts by the canonical result label', () => {
+    const rows = [
+      row({ ticketNumber: 1, state: 'settled', latestOutcome: 'win' }),
+      row({ ticketNumber: 2, state: 'open', latestOutcome: null }),
+      row({ ticketNumber: 3, state: 'settled', latestOutcome: 'loss' }),
+    ];
+    expect(sortBetRows(rows, 'result', 'ascending').map((item) => item.bet.ticketNumber)).toEqual([
+      1, 2, 3,
+    ]);
   });
 });

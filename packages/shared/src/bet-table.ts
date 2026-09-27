@@ -1,4 +1,5 @@
 import { deriveBetOrigin, potentialReturnFor } from './returns.js';
+import { saoPauloDate } from './decimal.js';
 import type { Bet } from './finance.js';
 
 /**
@@ -7,6 +8,7 @@ import type { Bet } from './finance.js';
  * back to the ticket kind for non-simple tickets, and the result uses the canonical outcome
  * labels. Shared by the product UI and by the account export so both always agree.
  */
+
 const kindLabels: Record<Bet['ticketKind'], string> = {
   simple: 'Simples',
   multiple: 'Múltipla',
@@ -22,6 +24,30 @@ const resultLabels: Record<NonNullable<Bet['latestOutcome']>, string> = {
   cashout: 'Cashout',
   partial_cashout: 'Cashout parcial',
 };
+
+/** Colunas da tabela de apostas, na ordem aprovada pelo proprietário. */
+export const betTableColumns = [
+  { key: 'ticket', label: 'Nº do bilhete' },
+  { key: 'gameDate', label: 'Data do jogo' },
+  { key: 'gameTime', label: 'Hora do jogo' },
+  { key: 'event', label: 'Evento' },
+  { key: 'selection', label: 'Aposta/seleção' },
+  { key: 'market', label: 'Mercado' },
+  { key: 'ticketKind', label: 'Tipo da aposta' },
+  { key: 'tipster', label: 'Tipster' },
+  { key: 'bookmaker', label: 'Casa de aposta' },
+  { key: 'stake', label: 'Valor apostado' },
+  { key: 'odds', label: 'Odd' },
+  { key: 'return', label: 'Retorno recebido' },
+  { key: 'result', label: 'Resultado/status' },
+  { key: 'id', label: 'ID técnico da aposta' },
+] as const;
+
+export type BetTableColumnKey = (typeof betTableColumns)[number]['key'];
+export type BetTableSortDirection = 'ascending' | 'descending';
+
+/** Rótulo para seleções em jogos/horários distintos; nunca inventa um horário. */
+const MULTIPLE_SCHEDULES_LABEL = 'Vários jogos/horários';
 
 const normalize = (value: string) =>
   value
@@ -81,56 +107,35 @@ function uniqueEvents(bet: Bet) {
 }
 
 function scheduleLabels(bet: Bet) {
-  const groups = new Map<
-    string,
-    { schedules: Set<string>; dates: Set<string>; times: Set<string>; missing: boolean }
-  >();
-  bet.selections.forEach((selection, index) => {
-    const eventKey = normalize(selection.event ?? '') || `selection-${index}`;
-    const group = groups.get(eventKey) ?? {
-      schedules: new Set<string>(),
-      dates: new Set<string>(),
-      times: new Set<string>(),
-      missing: false,
-    };
+  const schedules = new Set<string>();
+  const dates = new Set<string>();
+  const times = new Set<string>();
+  let missing = false;
+  bet.selections.forEach((selection) => {
     const schedule = eventSchedule(selection);
-    if (!schedule) group.missing = true;
-    else {
-      group.dates.add(schedule.date);
-      if (schedule.time) group.times.add(schedule.time);
-      group.schedules.add(`${schedule.date}|${schedule.time ?? ''}`);
+    if (!schedule) {
+      missing = true;
+      return;
     }
-    groups.set(eventKey, group);
+    dates.add(schedule.date);
+    if (schedule.time) times.add(schedule.time);
+    schedules.add(`${schedule.date}|${schedule.time ?? ''}`);
   });
 
-  if (!groups.size) return { date: 'Pendente', time: 'Pendente', qualifier: '' };
-  const values = [...groups.values()];
-  const dates = new Set(values.flatMap((group) => [...group.dates]));
-  const times = new Set(values.flatMap((group) => [...group.times]));
-  const hasMissingDate = values.some((group) => group.missing || group.dates.size === 0);
-  const hasMissingTime = values.some(
-    (group) => group.missing || group.times.size === 0 || group.schedules.size > 1,
-  );
+  if (!bet.selections.length) return { date: 'Pendente', time: 'Pendente', qualifier: '' };
 
-  const date =
-    dates.size > 1
-      ? 'Várias datas'
-      : hasMissingDate
-        ? dates.size > 0
-          ? 'Algumas pendentes'
-          : 'Pendente'
-        : [...dates][0]!;
-  const time =
-    times.size > 1
-      ? 'Vários horários'
-      : hasMissingTime
-        ? times.size > 0
-          ? 'Alguns pendentes'
-          : 'Pendente'
-        : [...times][0]!;
   const qualifier = bet.selections.some((selection) => selection.dateStatus === 'estimated')
     ? 'Há data estimada'
     : '';
+
+  // Seleções em jogos/horários diferentes não podem exibir um único horário: o
+  // detalhe/expansão lista cada seleção com o próprio evento, data e hora.
+  if (schedules.size > 1) {
+    return { date: MULTIPLE_SCHEDULES_LABEL, time: '—', qualifier };
+  }
+
+  const date = dates.size === 0 ? 'Pendente' : missing ? 'Algumas pendentes' : [...dates][0]!;
+  const time = times.size === 0 ? 'Pendente' : missing ? 'Alguns pendentes' : [...times][0]!;
   return { date, time, qualifier };
 }
 
@@ -171,4 +176,119 @@ export function betResultLabel(bet: Pick<Bet, 'state' | 'latestOutcome'>) {
 
 export function betResultQualifier(bet: Pick<Bet, 'state' | 'latestOutcome'>) {
   return bet.state === 'open' && bet.latestOutcome === 'partial_cashout' ? 'Ainda em aberto' : '';
+}
+
+/** Linha já resolvida da tabela: aposta + apresentação + nomes de catálogo. */
+export type BetTableRow = {
+  bet: Bet;
+  details: ReturnType<typeof betTablePresentation>;
+  result: string;
+  tipster: string;
+  bookmaker: string;
+};
+
+type SortableValue = { missing: boolean; value: string | number };
+
+const missingValue: SortableValue = { missing: true, value: '' };
+
+const kindOrder: Record<Bet['ticketKind'], number> = { simple: 0, multiple: 1, betbuild: 2 };
+
+function textValue(value: string): SortableValue {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '—') return missingValue;
+  return { missing: false, value: normalize(trimmed) };
+}
+
+/** Primeiro jogo conhecido do bilhete (menor data; seleção sem hora vai ao fim do dia). */
+function firstKnownSchedule(bet: Bet) {
+  let best: { date: string; minute: number | null } | null = null;
+  for (const selection of bet.selections) {
+    if (selection.dateStatus === 'pending') continue;
+    let candidate: { date: string; minute: number | null } | null = null;
+    if (selection.eventAt) {
+      const instant = new Date(selection.eventAt);
+      if (!Number.isNaN(instant.valueOf())) {
+        const [hour, minute] = timeFormatter.format(instant).split(':').map(Number);
+        candidate = { date: saoPauloDate(instant), minute: (hour ?? 0) * 60 + (minute ?? 0) };
+      }
+    } else if (selection.eventDate) {
+      candidate = { date: selection.eventDate, minute: null };
+    }
+    if (!candidate) continue;
+    const afterBest =
+      best !== null &&
+      (candidate.date > best.date ||
+        (candidate.date === best.date &&
+          (candidate.minute ?? 24 * 60) >= (best.minute ?? 24 * 60)));
+    if (!afterBest) best = candidate;
+  }
+  return best;
+}
+
+function sortValue(row: BetTableRow, column: BetTableColumnKey): SortableValue {
+  const { bet } = row;
+  switch (column) {
+    case 'ticket':
+      return { missing: false, value: bet.ticketNumber };
+    case 'gameDate': {
+      const schedule = firstKnownSchedule(bet);
+      return schedule ? { missing: false, value: schedule.date } : missingValue;
+    }
+    case 'gameTime': {
+      const schedule = firstKnownSchedule(bet);
+      return schedule && schedule.minute !== null
+        ? { missing: false, value: schedule.minute }
+        : missingValue;
+    }
+    case 'event':
+      return textValue(row.details.event);
+    case 'selection':
+      return textValue(row.details.selection);
+    case 'market':
+      return textValue(row.details.market);
+    case 'ticketKind':
+      return { missing: false, value: kindOrder[bet.ticketKind] };
+    case 'tipster':
+      return textValue(row.tipster);
+    case 'bookmaker':
+      return textValue(row.bookmaker);
+    case 'stake':
+      return bet.stake === null ? missingValue : { missing: false, value: Number(bet.stake) };
+    case 'odds':
+      return bet.odds === null ? missingValue : { missing: false, value: Number(bet.odds) };
+    case 'return':
+      return { missing: false, value: Number(bet.returnAmount) };
+    case 'result':
+      return textValue(row.result);
+    case 'id':
+      return { missing: false, value: bet.id };
+  }
+}
+
+function compareValues(left: string | number, right: string | number) {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left === right ? 0 : left < right ? -1 : 1;
+  }
+  const a = String(left);
+  const b = String(right);
+  return a === b ? 0 : a < b ? -1 : 1;
+}
+
+/**
+ * Ordena as linhas exibidas na página atual. A ordenação é local (nenhuma
+ * chamada nova de API); registros sem o dado (data pendente, valor a definir,
+ * catálogo ausente) ficam no fim em qualquer direção.
+ */
+export function sortBetRows(
+  rows: BetTableRow[],
+  column: BetTableColumnKey,
+  direction: BetTableSortDirection,
+): BetTableRow[] {
+  const factor = direction === 'ascending' ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const a = sortValue(left, column);
+    const b = sortValue(right, column);
+    if (a.missing !== b.missing) return a.missing ? 1 : -1;
+    return compareValues(a.value, b.value) * factor;
+  });
 }

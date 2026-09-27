@@ -948,7 +948,7 @@
   font-size: 12px;
 }
 .bet-detail-table {
-  min-width: 1840px;
+  min-width: 1640px;
   table-layout: auto;
 }
 .bet-detail-table th,
@@ -976,12 +976,66 @@
   overflow-wrap: anywhere;
 }
 .bet-detail-table .bet-id-cell {
-  max-width: 120px;
-  overflow: hidden;
+  min-width: 146px;
+  max-width: 178px;
+}
+.bet-id-compact {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
+  color: #9aa7bd;
+}
+.bet-detail-table .bet-id-cell .bet-id-compact {
+  display: block;
+  max-width: 132px;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.bet-id-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.copy-id {
+  display: inline-flex;
+  align-items: center;
+}
+.bet-id-cell .copy-id {
+  margin-top: 5px;
+}
+.copy-id .ui-button {
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.table-sort:hover {
+  color: #cbd5e7;
+}
+.table-sort:focus-visible {
+  outline: 2px solid #7c98d5;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.bet-detail-table th[aria-sort='ascending'] .table-sort::after {
+  content: '▲';
+  font-size: 8px;
+}
+.bet-detail-table th[aria-sort='descending'] .table-sort::after {
+  content: '▼';
+  font-size: 8px;
 }
 .bet-list-cards {
   display: none;
@@ -1035,9 +1089,45 @@
   overflow-wrap: anywhere;
   font-size: 13px;
 }
-.bet-list-card-fields dd[title] {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.bet-list-card-fields .bet-id-compact {
   font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.bet-card-selections {
+  border: 1px solid #2c3648;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.bet-card-selections summary {
+  cursor: pointer;
+  color: #cbd5e7;
+  font-size: 12px;
+}
+.bet-card-selections summary:focus-visible {
+  outline: 2px solid #7c98d5;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.bet-card-selections ol {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.bet-card-selections li {
+  display: grid;
+  gap: 3px;
+}
+.bet-card-selections li strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.bet-card-selections li small {
+  color: #8e9bb1;
+  font-size: 11px;
+}
+.bet-card-selections li .pending-label {
+  color: #d5bc8e;
 }
 .bet-list-card .ui-button {
   justify-self: start;
