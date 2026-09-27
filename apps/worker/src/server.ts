@@ -10,6 +10,7 @@ import { startWorker } from './worker.js';
 import { startIntegrations } from './integrations.js';
 import { startMonthlyUnits } from './monthly-unit.js';
 import { startAttachments } from './attachments.js';
+import { startAccountPurge } from './account-purge.js';
 import { startEventSearch } from './event-providers.js';
 import { createBudgetProbe } from './budget.js';
 import { initTelemetry, readTelemetryConfig } from './telemetry.js';
@@ -29,6 +30,7 @@ async function main() {
   let integrations = { stop: async () => {}, check: () => {} };
   let monthlyUnits = { stop: async () => {}, check: () => {} };
   let attachments = { stop: async () => {}, check: () => {} };
+  let accountPurge = { stop: async () => {}, check: () => {} };
   let events = { stop: async () => {}, check: () => {} };
   try {
     await assertRecoveryReviewed(database);
@@ -44,11 +46,13 @@ async function main() {
     );
     monthlyUnits = await startMonthlyUnits(database);
     attachments = startAttachments(database, process.env);
+    accountPurge = startAccountPurge(database);
     events = startEventSearch(database, process.env);
   } catch (error) {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
+    await accountPurge.stop();
     await events.stop();
     await boss?.stop({ graceful: false });
     await database.close();
@@ -86,6 +90,7 @@ async function main() {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
+    await accountPurge.stop();
     await events.stop();
     await boss.stop({ graceful: false });
     await database.close();
@@ -101,6 +106,7 @@ async function main() {
       .stop()
       .then(() => monthlyUnits.stop())
       .then(() => attachments.stop())
+      .then(() => accountPurge.stop())
       .then(() => events.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(async () => {

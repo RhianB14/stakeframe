@@ -2,22 +2,36 @@
 // The correlation is always through the attachment's own organization (`a.organization_id`):
 // results are identical inside a tenant transaction and in the global backup/restore scans,
 // and no subquery can ever match a row from another organization.
+//
+// STK-F1-08 (Plano §7.3/§15): a purged account keeps its private attachments for 90 days
+// after the purge. The purge deletes the inbox rows, so those attachments become orphans —
+// the second branch expires them only once the 90-day post-purge retention has passed
+// ("salvo exclusão anterior": anything already deleted before stays deleted, and the
+// regular 30-day-after-references rule still governs attachments of live accounts).
 import type { PoolClient } from 'pg';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
 import type { Database } from './index.js';
 
 export const attachmentExpiredSql = `
-  exists(select 1 from integration.inbox i where i.organization_id=a.organization_id and i.attachment_id=a.id)
-  and not exists(
-    select 1 from integration.inbox i
-    left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
-    where i.organization_id=a.organization_id and i.attachment_id=a.id and (
-      i.state not in ('discarded','imported') or i.updated_at>now()-interval '30 days'
-      or (i.state='imported' and (b.id is null or b.state='open'
-        or exists(select 1 from finance.settlement s where s.organization_id=i.organization_id and s.bet_id=b.id and greatest(s.created_at,s.settled_at)>now()-interval '30 days')
-        or exists(select 1 from finance.audit audit where audit.organization_id=i.organization_id and audit.entity_id=b.id::text and audit.created_at>now()-interval '30 days')
-      ))
+  (
+    exists(select 1 from integration.inbox i where i.organization_id=a.organization_id and i.attachment_id=a.id)
+    and not exists(
+      select 1 from integration.inbox i
+      left join finance.bet b on b.id=i.imported_bet_id and b.organization_id=i.organization_id
+      where i.organization_id=a.organization_id and i.attachment_id=a.id and (
+        i.state not in ('discarded','imported') or i.updated_at>now()-interval '30 days'
+        or (i.state='imported' and (b.id is null or b.state='open'
+          or exists(select 1 from finance.settlement s where s.organization_id=i.organization_id and s.bet_id=b.id and greatest(s.created_at,s.settled_at)>now()-interval '30 days')
+          or exists(select 1 from finance.audit audit where audit.organization_id=i.organization_id and audit.entity_id=b.id::text and audit.created_at>now()-interval '30 days')
+        ))
+      )
     )
+  )
+  or (
+    not exists(select 1 from integration.inbox i where i.organization_id=a.organization_id and i.attachment_id=a.id)
+    and exists(select 1 from core.account_deletion d
+      where d.organization_id=a.organization_id and d.state='purged'
+        and d.purged_at<=now()-interval '90 days')
   )`;
 
 // Caller owns the attachment session lock (782341095) and the organization context. Mark before

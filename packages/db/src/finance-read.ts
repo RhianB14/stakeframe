@@ -104,7 +104,7 @@ export async function readWorkspace(client: PoolClient) {
   });
 }
 
-async function betDtos(client: PoolClient, rows: BetRow[]) {
+export async function betDtos(client: PoolClient, rows: BetRow[]) {
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const selections = (

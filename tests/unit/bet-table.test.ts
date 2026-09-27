@@ -4,7 +4,7 @@ import {
   betResultLabel,
   betResultQualifier,
   betTablePresentation,
-} from '../../apps/web/src/product/bet-table.js';
+} from '../../packages/shared/src/index.js';
 
 const baseBet = (overrides: Partial<Bet> = {}): Bet => ({
   id: '10000000-0000-4000-8000-000000000004',

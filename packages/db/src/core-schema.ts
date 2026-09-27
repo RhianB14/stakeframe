@@ -44,6 +44,14 @@ export type LegalDocumentType = (typeof legalDocumentType.enumValues)[number];
 export const legalDocumentStatus = core.enum('legal_document_status', ['current', 'superseded']);
 export type LegalDocumentStatus = (typeof legalDocumentStatus.enumValues)[number];
 
+/** STK-F1-08: `pending` blocks access and schedules the purge; `cancelled` restores it. */
+export const accountDeletionState = core.enum('account_deletion_state', [
+  'pending',
+  'cancelled',
+  'purged',
+]);
+export type AccountDeletionState = (typeof accountDeletionState.enumValues)[number];
+
 export const organization = core.table(
   'organization',
   {
@@ -184,6 +192,35 @@ export const onboardingState = core.table(
   ],
 );
 
+/**
+ * STK-F1-08 account-deletion state machine. One row per user: `pending` blocks every
+ * login immediately and schedules the irreversible purge for `expires_at` (requested_at +
+ * 30 days); `cancelled` restores normal access inside the grace window; `purged` is the
+ * minimal trail that survives the purge itself. `organization_id` is deliberately NOT a
+ * foreign key: the purge deletes the organization, and this row must remain as the
+ * sanitized evidence that the account was erased (no FK would survive that deletion).
+ */
+export const accountDeletion = core.table(
+  'account_deletion',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id').notNull(),
+    state: accountDeletionState('state').default('pending').notNull(),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    purgedAt: timestamp('purged_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index('account_deletion_organization_idx').on(table.organizationId),
+    index('account_deletion_due_idx').on(table.state, table.expiresAt),
+  ],
+);
+
 export const coreSchema = {
   organization,
   membership,
@@ -191,4 +228,5 @@ export const coreSchema = {
   legalDocument,
   consentRecord,
   onboardingState,
+  accountDeletion,
 };

@@ -390,6 +390,9 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query('drop table integration.import_action_receipt');
     // A receipt é criada na 0013 e alterada na 0014; a 0015 também é removida
     // para que o migrador replaye uma sequência contígua a partir da 0013.
+    // A 0018 (account_deletion) entra no replay: os objetos dela também são removidos.
+    await database.pool.query('drop table if exists core.account_deletion');
+    await database.pool.query('drop type if exists core.account_deletion_state');
     await database.pool.query(
       'alter table finance.bet drop constraint if exists bet_organization_id_ticket_number_idx, drop constraint if exists bet_ticket_number_positive',
     );
@@ -402,7 +405,7 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
       'alter table finance.settings drop column if exists next_ticket_number',
     );
     await database.pool.query(
-      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 5)',
+      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 6)',
     );
     await migrateLocalDatabase(database);
     const exists = (

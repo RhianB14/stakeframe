@@ -4,6 +4,8 @@
 // alone would not contain a cross-tenant read. Global infrastructure tables
 // (integration.cursor, integration.ai_usage_day) are deliberately excluded: they are not
 // part of a user's private file.
+import type { PoolClient } from 'pg';
+
 export const portabilityTables = [
   {
     name: 'finance.settings',
@@ -89,3 +91,42 @@ export const portabilityTables = [
       'id,actor,selection_id,provider,query,event_fingerprint,date_hint,state,candidates,error_code,cached_from,created_at,started_at,completed_at',
   },
 ];
+
+/**
+ * Streams the JSON body of every portability table as `"name":[...]` members. Callers own
+ * the surrounding braces: the report export prepends `,` (flat object), while the account
+ * export opens a `"history"` member with no separator. The organization predicate is
+ * explicit on every page: the app role owns the schema with NO FORCE RLS, so a table scan
+ * cannot rely on row-level security alone.
+ */
+export async function* exportPortabilityJson(
+  client: PoolClient,
+  firstSeparator: string,
+): AsyncGenerator<string> {
+  let index = 0;
+  for (const table of portabilityTables) {
+    yield `${index === 0 ? firstSeparator : ','}${JSON.stringify(table.name)}:[`;
+    index++;
+    let cursor: unknown[] | undefined;
+    let first = true;
+    for (;;) {
+      const organization = `where organization_id=current_setting($$app.organization_id$$, true)::uuid`;
+      const where = cursor
+        ? `${organization} and (${table.keys.join(',')}) > (${table.keys.map((_, i) => '$' + (i + 1)).join(',')})`
+        : organization;
+      const rows = (
+        await client.query(
+          `select ${table.columns} from ${table.name} ${where} order by ${table.keys.join(',')} limit 500`,
+          cursor,
+        )
+      ).rows;
+      for (const row of rows) {
+        yield `${first ? '' : ','}${JSON.stringify(row)}`;
+        first = false;
+      }
+      if (rows.length < 500) break;
+      cursor = table.keys.map((key) => rows.at(-1)![key]);
+    }
+    yield ']';
+  }
+}

@@ -1,5 +1,12 @@
-import { deriveBetOrigin, potentialReturnFor, type Bet } from '@stakeframe/shared';
+import { deriveBetOrigin, potentialReturnFor } from './returns.js';
+import type { Bet } from './finance.js';
 
+/**
+ * Canonical presentation of a bet's list columns (STK-BETS-02 semantics, owner-approved):
+ * game date/time come from the selections (never `placedAt`/`createdAt`), the market falls
+ * back to the ticket kind for non-simple tickets, and the result uses the canonical outcome
+ * labels. Shared by the product UI and by the account export so both always agree.
+ */
 const kindLabels: Record<Bet['ticketKind'], string> = {
   simple: 'Simples',
   multiple: 'Múltipla',

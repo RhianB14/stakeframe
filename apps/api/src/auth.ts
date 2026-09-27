@@ -7,6 +7,7 @@ import { and, eq } from 'drizzle-orm';
 import {
   authSchema,
   captureTransactions,
+  createAccountDeletionService,
   createBetaInvitation,
   createConsentsService,
   createTenantContext,
@@ -40,6 +41,8 @@ export function createOwnerAuth(
   const tenant = createTenantContext(database);
   const invitations = createBetaInvitation(database);
   const consents = createConsentsService(database);
+  // STK-F1-08: pending/purged deletions block every login and every live session check.
+  const deletions = createAccountDeletionService(database);
   const emailService = options.emailService;
   const emailPasswordEnabled = Boolean(emailService);
   // Bounded in-process guard against duplicate new-login alerts for the same session.
@@ -416,6 +419,8 @@ export function createOwnerAuth(
       session: {
         create: {
           before: async (session, ctx) => {
+            // Deletion gate first: a pending or purged account can never start a session.
+            if (await deletions.isBlocked(session.userId)) throw accessDenied();
             if (await isOwner(session.userId)) return { data: session };
             const identity = await loadIdentity(ctx, session.userId);
             if (
@@ -498,6 +503,8 @@ export function createOwnerAuth(
         query: { disableCookieCache: true, disableRefresh: true },
       });
       if (!session) return null;
+      // Deletion gate: an existing cookie stops working the moment the request is recorded.
+      if (await deletions.isBlocked(session.user.id)) return null;
       if (!(await isOwner(session.user.id))) {
         // Beta user admitted by an accepted invitation (single organization per user).
         const admitted = await invitations.findAcceptedInvitationForUser(session.user.id);
