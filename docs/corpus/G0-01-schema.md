@@ -12,6 +12,15 @@
 > "D026-B — evidência ausente com nota"); o validador ganha o status
 > `PRONTO_COM_GAP` e mantém estritos os campos presentes e as regras de PII.
 > `schemaVersion` do manifesto permanece `1` (extensão retrocompatível).
+>
+> **Revisão v1.2 (27/09/2026) — harmonização de formato D026-B:** o `field`
+> canônico da nota é **sem o prefixo `ticket.`** (ex.: `placedAt`,
+> `event.league`, `selections[i].selection`); o prefixo legado `ticket.`
+> continua aceito e é normalizado na leitura. `event` (bilhete inteiro, caso
+> dos bilhetes múltiplos) entra na lista de evidência ausente. Notas em campos
+> **presentes** são anotações permitidas (não contam como gap); `gaps` conta
+> apenas campos ausentes cobertos por nota. O campo `detail` das notas é
+> preservado (texto informativo, não validado).
 
 ## Objetivo
 
@@ -55,37 +64,44 @@ paths, moeda etc.) e para PII.
 
 Campos que aceitam `null`/ausente **com nota** (e só estes):
 
-| Campo                     | Onde                   |
-| ------------------------- | ---------------------- |
-| `placedAt`                | bilhete                |
-| `event.league`            | evento                 |
-| `event.startsAt`          | evento                 |
-| `event.awayTeam`          | evento                 |
-| `status`                  | bilhete                |
-| `potentialReturn`         | bilhete                |
-| `selections[i].selection` | seleção `i` do bilhete |
+| Campo                     | Onde                                                   |
+| ------------------------- | ------------------------------------------------------ |
+| `placedAt`                | bilhete                                                |
+| `event`                   | bilhete (bilhete múltiplo — eventos em `selections[]`) |
+| `event.league`            | evento                                                 |
+| `event.startsAt`          | evento                                                 |
+| `event.awayTeam`          | evento                                                 |
+| `status`                  | bilhete                                                |
+| `potentialReturn`         | bilhete                                                |
+| `selections[i].selection` | seleção `i` do bilhete                                 |
 
-Contrato da nota (por bilhete):
+Contrato da nota (por bilhete) — `field` canônico **sem o prefixo `ticket.`**
+(o prefixo legado `ticket.` é aceito e normalizado na leitura):
 
 ```text
 CorpusTicket.transcriptionNotes: [
-  { field: '<campo acima>', reason: 'ILEGIVEL_RECAPTURAR' }
+  { field: '<campo canônico acima>', reason: 'ILEGIVEL_RECAPTURAR', detail?: '<texto livre>' }
 ]
 ```
 
 - Todo `null`/ausente na lista exige a nota do campo correspondente; a única
   razão aceita é `ILEGIVEL_RECAPTURAR`.
-- Nota para campo presente é erro; nota duplicada é erro; `field` fora da
-  lista é erro; `reason` diferente é erro; nota apontando seleção inexistente
-  é erro.
+- Notas podem também **anotar campos presentes** (ex.: `stake`, `event.homeTeam`,
+  `selections[i].market`, `selections[i].oddsDecimal`, ou qualquer campo da
+  lista acima): são anotações informativas para revisão, **não** contam como
+  gap e **não** são erro. O texto de `detail` é preservado e não validado.
+- Nota duplicada (mesmo campo canônico) é erro; `field` fora da lista é erro;
+  `reason` diferente é erro; nota apontando seleção inexistente é erro; nota
+  para campo **estrito ausente** (fora da cobertura D026-B) é erro.
 - Campos presentes seguem validados no formato estrito; fora da lista, `null`
   (ou ausente) continua sendo erro. As regras de "Privacidade e sanitização"
   não mudam.
 - Status do validador (`scripts/validation/ingest-corpus.mjs`): composição
-  completa (>=20 tickets; >=10 por casa) **sem erros** mas **com notas
-  abertas** resulta em `PRONTO_COM_GAP` — distinto de `INCOMPLETO` (contagens
-  abaixo do mínimo) e de `INVALIDO` (erros). Os campos com gap são reportados
-  em `gaps.fields` para acompanhar as recapturas.
+  completa (>=20 tickets; >=10 por casa) **sem erros** mas **com gaps**
+  (campos ausentes cobertos por nota) resulta em `PRONTO_COM_GAP` — distinto
+  de `INCOMPLETO` (contagens abaixo do mínimo) e de `INVALIDO` (erros). Os
+  campos com gap são reportados em `gaps.fields` para acompanhar as
+  recapturas; anotações em campos presentes não entram em `gaps`.
 
 ## Dois contratos que não podem ser confundidos
 
@@ -123,19 +139,21 @@ CorpusTicket
   ticket: {
     internalId: corpusTicketId
     placedAt: ISO-8601 com offset | null        // D026-B: null exige nota
-    event: { league: string | null, homeTeam: string, awayTeam: string | null, startsAt: ISO-8601 com offset | null }
+    event:
+      | { league: string | null, homeTeam: string, awayTeam: string | null, startsAt: ISO-8601 com offset | null }
+      | null        // D026-B: bilhete múltiplo pode ter event nulo, com nota
     selections: [{ market: string, selection: string | null, oddsDecimal: decimal string >=1.01 <=1000 }]
     stake: { currency: 'BRL', amount: decimal string >0 }
     potentialReturn: { currency: 'BRL', amount: decimal string >=0 } | null
     status: 'pending' | 'won' | 'lost' | null
   }
-  transcriptionNotes?: [{ field: string, reason: 'ILEGIVEL_RECAPTURAR' }]   // D026-B
+  transcriptionNotes?: [{ field: string, reason: 'ILEGIVEL_RECAPTURAR', detail?: string }]   // D026-B: field canônico sem prefixo `ticket.`
   provenance: { transcribedBy: opaque operator ID, reviewedBy: opaque operator ID, reviewedAt: ISO-8601 com offset }
 ```
 
 ### Regras obrigatórias
 
-- Todos os campos acima devem existir e ser parseáveis; campos **presentes continuam estritos** (tipo/formato validados). A exceção D026-B permite `null`/ausente **somente** nos campos de evidência ausente listados em "D026-B — evidência ausente com nota" e **somente** com nota de transcrição correspondente; `null`/ausente sem nota é erro, e `null`/ausente fora da lista é erro (o artefato não entra nesta amostra e deve ser recapturado/exportado).
+- Todos os campos acima devem existir e ser parseáveis; campos **presentes continuam estritos** (tipo/formato validados). A exceção D026-B permite `null`/ausente **somente** nos campos de evidência ausente listados em "D026-B — evidência ausente com nota" e **somente** com nota de transcrição correspondente; `null`/ausente sem nota é erro, e `null`/ausente fora da lista é erro.
 - `internalId` é um identificador do corpus, não ID de conta, código de aposta de casa, telefone ou nome.
 - `rawRelativePath` e `sanitized.relativePath` devem ser paths relativos, sem `..`, na convenção `raw/<bookmaker>/<NNN>.<ext>` e `sanitized/<bookmaker>/<NNN>.<ext>`; `NNN` de 001 a 010 no mínimo.
 - Não inferir data do evento, status, moeda, stake, odds, retorno ou seleção. A fonte deve evidenciar o dado; transcrição de export confiável é permitida se vinculada ao artefato.
@@ -154,7 +172,7 @@ CorpusTicket
 
 1. Confirmar a casa na evidência e atribuir `bookmaker` permitido.
 2. Capturar o artefato íntegro; calcular o SHA-256; registrar horário e origem sem expor URL/credenciais.
-3. Conferir visualmente os campos obrigatórios, incluindo liga/times, início do evento, ao menos uma seleção, odds, stake, retorno potencial e status; campo de evidência ausente da lista D026-B vira `null` **com nota** (`ILEGIVEL_RECAPTURAR`) — nunca inventar.
+3. Conferir visualmente os campos obrigatórios, incluindo liga/times, início do evento, ao menos uma seleção, odds, stake, retorno potencial e status; campo de evidência ausente da lista D026-B vira `null` **com nota** (`ILEGIVEL_RECAPTURAR`, `field` canônico sem prefixo `ticket.`) — nunca inventar.
 4. Atribuir ID `casa-NNN`, sem reutilizar ID ou hash.
 5. Remover metadados e redigir PII no derivado sanitizado; revisar visualmente blur/redactions e registrar o hash do derivado.
 6. Fazer revisão por segunda pessoa/operador e registrar apenas IDs opacos no manifesto.
@@ -211,3 +229,4 @@ Não há mudança de dados por este contrato. Se uma futura captura falhar, remo
 - Validador de ingestão `scripts/validation/ingest-corpus.mjs` disponível (somente leitura).
 - Ingestão real: artefatos fornecidos pelo proprietário em 25/09/2026 (screenshots de Bet365 e Superbet); a captura bruta roda no armazenamento privado local, sem dados de bilhete no repositório. Nenhum bilhete foi inventado ou sintetizado como corpus; as fixtures de teste existentes em `scripts/validation/corpus-fixture.mjs` não são corpus.
 - 27/09/2026 — revisão v1.1 (D026-B): `docs/corpus/G0-01-schema.md` atualizado, validador `scripts/validation/ingest-corpus.mjs` com exceção de null-próprio com nota e status `PRONTO_COM_GAP`; testes do validador ampliados para 12 casos.
+- 27/09/2026 — revisão v1.2 (D026-B): harmonização de formato — `field` canônico sem prefixo `ticket.` (prefixo legado aceito e normalizado na leitura), `event` inteiro na lista de evidência ausente (bilhete múltiplo), notas em campos presentes viram anotações permitidas (fora de `gaps`), `detail` preservado; validador com 15 casos de teste e corrida local em `PRONTO_COM_GAP` (38/38 artefatos; 111 gaps).

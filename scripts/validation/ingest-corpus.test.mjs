@@ -226,19 +226,31 @@ test('rejects a missing-value field without a transcription note (D026-B)', () =
   assert.ok(summary.errors.some((entry) => entry.includes('status ausente/nulo sem nota')));
 });
 
-test('rejects a transcription note for a field that is present', () => {
-  const root = freshRoot('stk-ingest-gap-present-');
-  writeTicketFiles(root, 'bet365', 1);
-  const ticket = makeTicket('bet365', 1);
-  ticket.transcriptionNotes = [{ field: 'placedAt', reason: 'ILEGIVEL_RECAPTURAR' }];
-  writeManifest(root, makeManifest([ticket]));
+test('accepts annotation notes on present fields without counting gaps (D026-B)', () => {
+  const root = freshRoot('stk-ingest-gap-annotation-');
+  const tickets = [];
+  for (const house of ['bet365', 'superbet']) {
+    for (let index = 1; index <= 10; index += 1) {
+      writeTicketFiles(root, house, index);
+      tickets.push(makeTicket(house, index));
+    }
+  }
+  tickets[0].transcriptionNotes = [
+    {
+      field: 'ticket.stake',
+      reason: 'ILEGIVEL_RECAPTURAR',
+      detail: 'valor não redondo — conferir na revisão',
+    },
+    { field: 'placedAt', reason: 'ILEGIVEL_RECAPTURAR' },
+  ];
+  writeManifest(root, makeManifest(tickets));
   const result = run([root]);
-  assert.equal(result.status, 1);
+  assert.equal(result.status, 0);
   const summary = JSON.parse(result.stdout);
-  assert.equal(summary.status, 'INVALIDO');
-  assert.ok(
-    summary.errors.some((entry) => entry.includes('transcriptionNotes para campo presente')),
-  );
+  assert.equal(summary.ok, true);
+  assert.equal(summary.status, 'PRONTO');
+  assert.equal(summary.gaps.notes, 0);
+  assert.deepEqual(summary.gaps.fields, []);
 });
 
 test('rejects malformed transcription notes (field fora da lista e reason inválida)', () => {
@@ -246,7 +258,7 @@ test('rejects malformed transcription notes (field fora da lista e reason invál
   writeTicketFiles(first, 'bet365', 1);
   const ticketA = makeTicket('bet365', 1);
   ticketA.ticket.placedAt = null;
-  ticketA.transcriptionNotes = [{ field: 'stake', reason: 'ILEGIVEL_RECAPTURAR' }];
+  ticketA.transcriptionNotes = [{ field: 'ticket.foo', reason: 'ILEGIVEL_RECAPTURAR' }];
   writeManifest(first, makeManifest([ticketA]));
   const resultA = run([first]);
   assert.equal(resultA.status, 1);
@@ -278,7 +290,13 @@ test('accepts null-proper fields with notes as PRONTO_COM_GAP (D026-B)', () => {
     }
   }
   tickets[0].ticket.placedAt = null;
-  tickets[0].transcriptionNotes = [{ field: 'placedAt', reason: 'ILEGIVEL_RECAPTURAR' }];
+  tickets[0].transcriptionNotes = [
+    {
+      field: 'ticket.placedAt',
+      reason: 'ILEGIVEL_RECAPTURAR',
+      detail: 'data de colocação não exibida no recorte',
+    },
+  ];
   tickets[1].ticket.status = null;
   tickets[1].transcriptionNotes = [{ field: 'status', reason: 'ILEGIVEL_RECAPTURAR' }];
   tickets[2].ticket.event.awayTeam = null;
@@ -289,6 +307,7 @@ test('accepts null-proper fields with notes as PRONTO_COM_GAP (D026-B)', () => {
   tickets[4].transcriptionNotes = [
     { field: 'selections[0].selection', reason: 'ILEGIVEL_RECAPTURAR' },
   ];
+  tickets[5].transcriptionNotes = [{ field: 'stake', reason: 'ILEGIVEL_RECAPTURAR' }];
   writeManifest(root, makeManifest(tickets));
   const result = run([root]);
   assert.equal(result.status, 0);
@@ -323,4 +342,73 @@ test('keeps INCOMPLETO ahead of PRONTO_COM_GAP when composition is short', () =>
   assert.equal(result.status, 0);
   const summary = JSON.parse(result.stdout);
   assert.equal(summary.status, 'INCOMPLETO');
+});
+
+test('resolves selection notes even when the whole event is missing (D026-B)', () => {
+  const root = freshRoot('stk-ingest-gap-eventless-');
+  const tickets = [];
+  for (const house of ['bet365', 'superbet']) {
+    for (let index = 1; index <= 10; index += 1) {
+      writeTicketFiles(root, house, index);
+      tickets.push(makeTicket(house, index));
+    }
+  }
+  tickets[2].ticket.event = null;
+  tickets[2].transcriptionNotes = [
+    { field: 'event', reason: 'ILEGIVEL_RECAPTURAR' },
+    { field: 'selections[0].market', reason: 'ILEGIVEL_RECAPTURAR' },
+  ];
+  writeManifest(root, makeManifest(tickets));
+  const result = run([root]);
+  assert.equal(result.status, 0);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.ok, true);
+  assert.equal(summary.status, 'PRONTO_COM_GAP');
+  assert.equal(summary.gaps.notes, 1);
+  assert.deepEqual(summary.gaps.fields, ['event']);
+});
+
+test('rejects a note for a strict field that is missing (D026-B)', () => {
+  const root = freshRoot('stk-ingest-gap-strict-');
+  writeTicketFiles(root, 'bet365', 1);
+  const ticket = makeTicket('bet365', 1);
+  ticket.ticket.stake = null;
+  ticket.transcriptionNotes = [{ field: 'ticket.stake', reason: 'ILEGIVEL_RECAPTURAR' }];
+  writeManifest(root, makeManifest([ticket]));
+  const result = run([root]);
+  assert.equal(result.status, 1);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'INVALIDO');
+  assert.ok(summary.errors.some((entry) => entry.includes('stake inválido')));
+  assert.ok(summary.errors.some((entry) => entry.includes('campo estrito ausente: stake')));
+});
+
+test('rejects notes for a nonexistent selection and duplicated fields (D026-B)', () => {
+  const first = freshRoot('stk-ingest-gap-index-');
+  writeTicketFiles(first, 'bet365', 1);
+  const ticketA = makeTicket('bet365', 1);
+  ticketA.transcriptionNotes = [
+    { field: 'selections[3].selection', reason: 'ILEGIVEL_RECAPTURAR' },
+  ];
+  writeManifest(first, makeManifest([ticketA]));
+  const resultA = run([first]);
+  assert.equal(resultA.status, 1);
+  const summaryA = JSON.parse(resultA.stdout);
+  assert.equal(summaryA.status, 'INVALIDO');
+  assert.ok(summaryA.errors.some((entry) => entry.includes('seleção inexistente')));
+
+  const second = freshRoot('stk-ingest-gap-duplicate-');
+  writeTicketFiles(second, 'bet365', 1);
+  const ticketB = makeTicket('bet365', 1);
+  ticketB.ticket.placedAt = null;
+  ticketB.transcriptionNotes = [
+    { field: 'ticket.placedAt', reason: 'ILEGIVEL_RECAPTURAR' },
+    { field: 'placedAt', reason: 'ILEGIVEL_RECAPTURAR' },
+  ];
+  writeManifest(second, makeManifest([ticketB]));
+  const resultB = run([second]);
+  assert.equal(resultB.status, 1);
+  const summaryB = JSON.parse(resultB.stdout);
+  assert.equal(summaryB.status, 'INVALIDO');
+  assert.ok(summaryB.errors.some((entry) => entry.includes('nota duplicada para placedAt')));
 });
