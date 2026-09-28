@@ -83,6 +83,23 @@ export {
   type EventSearchConfig,
 } from './events.js';
 export {
+  createFreebetService,
+  FreebetError,
+  expiresAtFor,
+  statusOf,
+  DEFAULT_TIMEZONE,
+  DEFAULT_TOPIC_FLAGS,
+  FREEBET_EXPIRY_WINDOWS,
+  type FreebetErrorCode,
+  type FreebetService,
+} from './freebets.js';
+export {
+  createNotificationService,
+  outsideQuietHours,
+  type NotificationService,
+} from './notifications.js';
+export { notification, notificationPreference, notificationOutbox } from './notification-schema.js';
+export {
   createAttachmentStore,
   createR2Storage,
   validateImage,

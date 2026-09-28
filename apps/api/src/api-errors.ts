@@ -38,6 +38,11 @@ const messages: Record<ApiErrorCode, string> = {
   ALIAS_CONFLICT: 'Este nome ou alias já pertence a outro cadastro.',
   ORIGIN_REQUIRED: 'Confirme a origem da aposta (dinheiro real ou freebet) antes de registrar.',
   FREEBET_UNRESOLVED: 'Confira o crédito de freebet escolhido para esta aposta.',
+  FREEBET_NOT_FOUND: 'Esta freebet não existe na sua organização.',
+  FREEBET_ALREADY_USED: 'Esta freebet já foi utilizada e não pode ser alterada.',
+  FREEBET_REVOKED: 'Esta freebet foi revogada e não pode ser alterada.',
+  FREEBET_INVALID:
+    'Confira a freebet: casa ativa, valor, validade, fuso horário e quiet hours informados.',
   INCOMPLETE_BET: 'Preencha todos os campos obrigatórios da aposta antes de alterar o status.',
   DUPLICATE_REVIEW_REQUIRED:
     'Há uma aposta possivelmente repetida. Confira e justifique o novo registro.',

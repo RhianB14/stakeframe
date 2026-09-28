@@ -20,6 +20,8 @@ import type {
   FinanceService,
   ImportService,
   EventService,
+  FreebetService,
+  NotificationService,
   ReportService,
   OnboardingService,
   AccountDeletionService,
@@ -30,6 +32,7 @@ import { registerReportRoutes } from './report-routes.js';
 import { registerAccountRoutes } from './account-routes.js';
 import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
+import { registerFreebetRoutes } from './freebet-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
 import { registerOnboardingRoutes } from './onboarding-routes.js';
 import { registerDebugRoutes } from './debug-routes.js';
@@ -45,6 +48,8 @@ export function createApp(options: {
   finance?: FinanceService;
   imports?: ImportService;
   events?: EventService;
+  freebets?: FreebetService;
+  notifications?: NotificationService;
   reports?: ReportService;
   operations?: OperationsService;
   onboarding?: OnboardingService;
@@ -176,6 +181,7 @@ export function createApp(options: {
     registerOnboardingRoutes(app, options.ownerAuth, options.onboarding);
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
+    registerFreebetRoutes(app, options.ownerAuth, options.freebets, options.notifications);
     registerReportRoutes(app, options.ownerAuth, options.reports);
     registerAccountRoutes(
       app,
