@@ -132,7 +132,7 @@ para um papel futuro, sem FORCE.
 
 ## 4. Banco (LOCAL apenas)
 
-`packages/db/migrations/0020_freebet_notifications.sql`, forward-only e
+`packages/db/migrations/0021_freebet_notifications.sql`, forward-only e
 replay-safe (`IF NOT EXISTS` / `DROP ... IF EXISTS`), no padrão da 0010 e da 0011:
 
 - `finance.freebet` ganha `requirements` (jsonb), `updated_at` e `revoked_at`
@@ -142,6 +142,14 @@ replay-safe (`IF NOT EXISTS` / `DROP ... IF EXISTS`), no padrão da 0010 e da 00
 
 **Não executada em produção nem na VPS.** Aplicação em produção exige o fluxo
 de autorização, backup e recuperação do runbook.
+
+**Numeração 0021, e não 0020:** a 0020 do `main` é a auditoria do painel interno
+(STK-F2-11, PR #225). A branch foi criada sobre `74d22c5` e o rebase sobre
+`e9afb48` colidiu por número de versão e por `meta/_journal.json`; a renomeação
+para 0021 preserva a 0020 do outro agente e a cadeia fica contígua
+(0019 → 0020 → 0021). O replay local confirma que as duas coexistem: 22
+marcadores, segunda aplicação idempotente, `core.admin_panel_access` (da 0020)
+intacta, RLS habilitada sem FORCE.
 
 ## 5. Endpoints
 
