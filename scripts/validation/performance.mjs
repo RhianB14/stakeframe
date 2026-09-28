@@ -108,6 +108,19 @@ try {
       2250000n,
     );
   }
+  // STK-F2-03: os 12 splits reconciliam com a população (9.000 no período) e
+  // saem do cache a cada medição, para medir a agregação real e não o hit.
+  const splits = await reports.splits(context, query);
+  assert.equal(splits.dimensions.length, 12);
+  assert.equal(splits.metrics.bets, 9000);
+  assert.equal(splits.lowSample, false);
+  for (const dimension of splits.dimensions) {
+    assert.equal(
+      dimension.rows.reduce((sum, row) => sum + row.metrics.bets, 0),
+      9000,
+      `splits:${dimension.id}`,
+    );
+  }
   const balance = await finance.workspace(context);
   assert.equal(balance.bankroll, '225000.00');
   assert.equal(balance.exposure, '50000.00');
@@ -136,6 +149,11 @@ try {
   }
   await measure('workspace', 10, 500, () => finance.workspace(context));
   await measure('report', 10, 2000, () => reports.report(context, query));
+  // Cache frio de propósito: cada chamada instancia serviço novo, medindo as
+  // 13 agregações dos splits (12 dimensões + população) em vez do hit do cache.
+  await measure('splits-12-dimensions', 10, 4000, () =>
+    createReportService(database).splits(context, query),
+  );
   await measure('detail-first-page', 10, 500, () =>
     reports.bets(context, { ...query, page: 1, pageSize: 50 }),
   );

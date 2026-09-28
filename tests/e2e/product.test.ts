@@ -81,6 +81,96 @@ function dashboardFixture(metrics: ReportMetrics, lowSample = true) {
     metrics,
   };
 }
+// STK-F2-03: payload de GET /api/v1/analytics/splits (12 dimensões, N e unknown).
+function splitsFixture() {
+  const metrics: ReportMetrics = {
+    ...emptyMetrics,
+    bets: 8,
+    settledBets: 8,
+    realStake: '800.00',
+    realPrincipalClosed: '800.00',
+    realProfit: '100.00',
+    profit: '100.00',
+    profitUnits: '10.000000',
+    knownProfitUnits: '10.000000',
+    roiReal: '12.50',
+    yieldReal: '12.50',
+    hitRateReal: '50.00',
+    hitWinsReal: 4,
+    hitEligibleReal: 8,
+  };
+  const row = (key: string, label: string, bets: number, over: Partial<ReportMetrics> = {}) => ({
+    key,
+    label,
+    lowSample: bets < 30,
+    metrics: { ...metrics, bets, ...over },
+  });
+  const dim = (
+    id: string,
+    label: string,
+    source: string,
+    available: boolean,
+    note: string | null,
+    rows: unknown[],
+  ) => ({ id, label, source, available, note, rows });
+  return {
+    generatedAt: '2026-09-07T00:00:00.000Z',
+    version: 1,
+    filters: { from: '2026-09-01', to: '2026-09-30', kind: 'all', includeEstimated: 'false' },
+    minSample: 30,
+    lowSample: true,
+    metrics,
+    dimensions: [
+      dim('sport', 'Esporte', 'finance.selection.sport', true, null, [
+        row('sport:futebol', 'Futebol', 6),
+        row('unknown', 'Esporte a conferir', 2),
+      ]),
+      dim(
+        'tournament',
+        'Liga/torneio',
+        'integration.inbox.metadata.userOverrides.tournament',
+        true,
+        'Somente o torneio informado manualmente na importação.',
+        [row('unknown', 'Torneio a conferir', 7), row('copa do brasil', 'Copa do Brasil', 1)],
+      ),
+      dim('team', 'Time', 'unavailable', false, 'O modelo atual não guarda time.', [
+        row('unknown', 'Sem base', 8),
+      ]),
+      dim('player', 'Jogador', 'unavailable', false, 'O modelo atual não guarda jogador.', [
+        row('unknown', 'Sem base', 8),
+      ]),
+      dim('ticketKind', 'Tipo de aposta', 'derived:finance.selection', true, null, [
+        row('simple', 'Simples', 5),
+        row('multiple', 'Múltipla', 2),
+        row('betbuild', 'BetBuild', 1),
+      ]),
+      dim('market', 'Mercado', 'finance.selection.market', true, null, [
+        row('market:resultado', 'Resultado', 8),
+      ]),
+      dim('bookmaker', 'Casa', 'finance.bet.bookmaker_id', true, null, [row(house, 'Bet365', 8)]),
+      dim('oddsBand', 'Faixa de odd', 'derived:finance.bet.odds', true, null, [
+        row('1.50-1.99', '1,50 a 1,99', 8),
+      ]),
+      dim('weekday', 'Dia da semana', 'derived:finance.bet.placed_at', true, null, [
+        row('seg', 'Segunda-feira', 8),
+      ]),
+      dim('hour', 'Hora', 'derived:finance.bet.placed_at', true, null, [
+        row('10', '10:00–10:59', 8),
+      ]),
+      dim(
+        'live',
+        'Live/pré-jogo',
+        'unavailable',
+        false,
+        'O modelo atual não guarda se a aposta foi ao vivo.',
+        [row('unknown', 'Sem base', 8)],
+      ),
+      dim('tipster', 'Tipster', 'finance.bet.tipster_id', true, null, [
+        row('none', 'Sem tipster', 8),
+      ]),
+    ],
+  };
+}
 function fixture(): Workspace {
   return {
     version: 1,
@@ -197,6 +287,10 @@ async function enabledProduct(
   );
   await page.route('**/api/v1/workspace', (route) => route.fulfill({ json: workspace }));
   await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: reportFixture() }));
+  // STK-F2-03: os 12 splits no painel de análises (mesmos filtros do relatório).
+  await page.route('**/api/v1/analytics/splits?*', (route) =>
+    route.fulfill({ json: splitsFixture() }),
+  );
   await page.route('**/api/v1/bets?*', (route) =>
     route.fulfill({ json: { items: bets, total: bets.length, page: 1, pageSize: 25 } }),
   );
@@ -1496,9 +1590,17 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
   // STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
   // aviso de baixa amostra (N = 8 abaixo do mínimo configurado de 30).
-  await expect(page.getByText('Yield real', { exact: true })).toBeVisible();
+  await expect(page.getByText('Yield real', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('N = 8 apostas', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Baixa amostra', { exact: true })).toBeVisible();
+  await expect(page.getByText('Baixa amostra', { exact: true }).first()).toBeVisible();
+  // STK-F2-03: os 12 splits com ROI, P&L, yield e N juntos, sob os mesmos
+  // filtros, com unknown visível e aviso de baixa amostra por split.
+  await expect(page.getByRole('heading', { name: 'Comparação por dimensão' })).toBeVisible();
+  await expect(page.getByLabel('Dimensão da comparação')).toBeVisible();
+  await expect(page.locator('td', { hasText: 'N = 6 apostas' })).toBeVisible();
+  await expect(page.getByText('Esporte a conferir', { exact: true })).toBeVisible();
+  await page.getByLabel('Dimensão da comparação').selectOption('live');
+  await expect(page.locator('td', { hasText: 'Sem base' })).toBeVisible();
   await expect(page.getByText('2 apostas com datas incompletas', { exact: false })).toBeVisible();
   await expect(page.getByRole('img', { name: /Linhas dos resultados/ })).toBeVisible();
   await page.screenshot({ path: info.outputPath('analytics.png'), fullPage: true });

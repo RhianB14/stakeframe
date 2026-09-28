@@ -87,6 +87,61 @@ export const analyticsDashboardSchema = z
   })
   .meta({ id: 'AnalyticsDashboard' });
 export type AnalyticsDashboard = z.infer<typeof analyticsDashboardSchema>;
+/**
+ * STK-F2-03 — os 12 splits analíticos (Plano §8.5, §15). Cada dimensão devolve
+ * linhas com ROI, P&L, yield e `N` juntos; `lowSample` é calculado no servidor
+ * pela mesma regra do dashboard (`N < minSample`). `unknown` é preservado: a
+ * chave fica `unknown`, o rótulo diz o que falta e métricas sem base continuam
+ * `null` — nunca zero.
+ */
+export const splitDimensionIdSchema = z.enum([
+  'sport',
+  'tournament',
+  'team',
+  'player',
+  'ticketKind',
+  'market',
+  'bookmaker',
+  'oddsBand',
+  'weekday',
+  'hour',
+  'live',
+  'tipster',
+]);
+export type SplitDimensionId = z.infer<typeof splitDimensionIdSchema>;
+export const analyticsSplitRowSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  /** `N` abaixo do limiar configurado: a interface mostra só números crus. */
+  lowSample: z.boolean(),
+  metrics: reportMetricsSchema,
+});
+export type AnalyticsSplitRow = z.infer<typeof analyticsSplitRowSchema>;
+export const analyticsSplitDimensionSchema = z.object({
+  id: splitDimensionIdSchema,
+  label: z.string(),
+  /** Origem técnica do agrupamento (coluna, derivação ou `unavailable`). */
+  source: z.string(),
+  /** `false` quando o modelo atual não tem a dimensão: tudo cai em `unknown`. */
+  available: z.boolean(),
+  /** Nota factual de cobertura/derivação; `null` quando a fonte é a coluna. */
+  note: z.string().nullable(),
+  rows: z.array(analyticsSplitRowSchema),
+});
+export type AnalyticsSplitDimension = z.infer<typeof analyticsSplitDimensionSchema>;
+export const analyticsSplitsSchema = z
+  .object({
+    generatedAt: z.iso.datetime({ offset: true }),
+    version: z.number().int().positive(),
+    filters: reportQuerySchema,
+    minSample: count,
+    /** População filtrada inteira está abaixo do limiar. */
+    lowSample: z.boolean(),
+    metrics: reportMetricsSchema,
+    dimensions: z.array(analyticsSplitDimensionSchema),
+  })
+  .meta({ id: 'AnalyticsSplits' });
+export type AnalyticsSplits = z.infer<typeof analyticsSplitsSchema>;
 export const reportBetSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
