@@ -9,6 +9,7 @@ import {
   createAccountDeletionService,
   createAccountExportService,
   createAdminPanelService,
+  createTelegramLinkService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -83,6 +84,7 @@ async function main() {
           }),
         }
       : {}),
+    telegramLink: createTelegramLinkService(database),
     telemetry,
     ...(operations ? { operations } : {}),
     ...(ownerAuth ? { ownerAuth } : {}),

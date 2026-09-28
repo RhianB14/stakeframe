@@ -47,6 +47,21 @@ const messages: Record<ApiErrorCode, string> = {
     'O espaço temporário de importações está cheio. Revise os itens pendentes.',
   ATTACHMENT_UNAVAILABLE:
     'O comprovante não está disponível. O histórico da aposta permanece preservado.',
+  TELEGRAM_LINK_INVALID: 'Este link do Telegram não é válido. Gere um novo e tente novamente.',
+  TELEGRAM_LINK_EXPIRED:
+    'Este link do Telegram expirou após cinco minutos. Gere um novo para continuar.',
+  TELEGRAM_LINK_CONSUMED: 'Este link do Telegram já foi usado. Gere um novo para continuar.',
+  TELEGRAM_LINK_REVOKED:
+    'Este link do Telegram foi substituído por um novo. Gere outro para continuar.',
+  TELEGRAM_LINK_NOT_CLAIMED:
+    'Abra o link no Telegram antes de confirmar aqui. A confirmação precisa vir do próprio aplicativo.',
+  TELEGRAM_LINK_ALREADY_LINKED:
+    'Já existe uma conta do Telegram vinculada a esta conta. Revogue o vínculo anterior para trocar.',
+  TELEGRAM_LINK_IDENTITY_CONFLICT:
+    'Esta conta do Telegram já está vinculada a outro usuário do Stakeframe. Desvincule-a de lá antes de usar aqui.',
+  TELEGRAM_LINK_NOT_LINKED: 'Nenhuma conta do Telegram está vinculada a esta conta.',
+  TELEGRAM_LINK_UNAVAILABLE:
+    'A conexão com o Telegram está indisponível agora. Tente novamente em alguns instantes.',
 };
 
 export function sendApiError(

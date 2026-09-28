@@ -148,6 +148,13 @@
       "when": 1790617684494,
       "tag": "0020_admin_panel_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790626515079,
+      "tag": "0021_telegram_link",
+      "breakpoints": true
     }
   ]
 }

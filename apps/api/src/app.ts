@@ -32,9 +32,11 @@ import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
 import { registerOnboardingRoutes } from './onboarding-routes.js';
+import { registerTelegramLinkRoutes } from './telegram-link-routes.js';
 import { registerDebugRoutes } from './debug-routes.js';
 import { registerAdminPanelRoutes } from './admin-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
+import type { TelegramLinkService } from '@stakeframe/db';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
@@ -51,6 +53,8 @@ export function createApp(options: {
   account?: { deletion: AccountDeletionService; exports: AccountExportService };
   /** STK-F2-11: painel interno do superadmin (metadados); ausente = rota 404. */
   adminPanel?: AdminPanelService;
+  /** STK-F2-04: vínculo com a conta do Telegram; ausente = rotas indisponíveis. */
+  telegramLink?: TelegramLinkService;
   telemetry?: TelemetryHandle;
 }) {
   const app = Fastify({
@@ -174,6 +178,7 @@ export function createApp(options: {
     registerConsentRoutes(app, options.ownerAuth);
     registerFinanceRoutes(app, options.ownerAuth, options.finance);
     registerOnboardingRoutes(app, options.ownerAuth, options.onboarding);
+    registerTelegramLinkRoutes(app, options.ownerAuth, options.telegramLink);
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerReportRoutes(app, options.ownerAuth, options.reports);

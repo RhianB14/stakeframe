@@ -9,6 +9,7 @@ import {
 import { request, ApiFailure } from './api.js';
 import { Field, InitializeForm } from './forms.js';
 import { Button } from '../components/ui/button.js';
+import { TelegramLinkPanel } from './telegram-link.js';
 import type { OpenModal } from './ProductApp.js';
 
 /**
@@ -352,13 +353,7 @@ function FirstBetStep({ status, open }: { status: OnboardingStatus; open: OpenMo
           Conectar Telegram
         </Button>
       </div>
-      {showTelegram ? (
-        <p className="notice" role="status">
-          A vinculação do Telegram pelo site faz parte do pacote do beta (STK-F2-04) e será
-          habilitada em uma próxima etapa. Você pode registrar sua primeira aposta manualmente agora
-          e conectar depois, sem perder nada.
-        </p>
-      ) : null}
+      {showTelegram ? <TelegramLinkPanel /> : null}
       {error ? (
         <p className="form-error" role="alert" id="onboarding-first-bet-error">
           {error}

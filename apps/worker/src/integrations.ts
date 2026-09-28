@@ -20,6 +20,7 @@ import {
   type TelegramImage,
 } from './telegram.js';
 import { createTelegramCallbackHandler } from './telegram-callbacks.js';
+import { createTelegramLinkHandler, refreshBotUsername } from './telegram-link.js';
 import { IntegrationError } from './http.js';
 import { startTelegramOutbox } from './telegram-outbox.js';
 import { readAutomaticPolicy } from './automatic-config.js';
@@ -190,10 +191,14 @@ export async function startIntegrations(
       // (chat + id da mensagem); nunca por identificador no payload.
       const telegramClient = createTelegramClient(telegram, fetchImpl);
       const handleCallback = createTelegramCallbackHandler(database, telegramClient, telegram);
+      // STK-F2-04 — deep link de uso único no MESMO polling: o worker só
+      // registra a conta observada; a confirmação é no site.
+      const handleStart = createTelegramLinkHandler(database, telegramClient, telegram);
       const inbox = {
         offset: store.offset,
         advance: store.advance,
         callback: handleCallback,
+        start: handleStart,
         async accept(image: TelegramImage, download: () => Promise<Buffer>) {
           const inboxId = await store.accept(
             telegramContext,
@@ -235,6 +240,10 @@ export async function startIntegrations(
       );
       // R5: executor idempotente da outbox (mocks nos testes; zero operação real aqui).
       const stopOutbox = startTelegramOutbox(database, telegram, fetchImpl);
+      // STK-F2-04 — resolve o username público do bot para a API montar o deep
+      // link. Falha é inofensiva (a API segue sem conseguir emitir deep link), e
+      // é refeito a cada inicialização, sem estado persistido no repositório.
+      await refreshBotUsername(database, telegram, fetchImpl).catch(() => undefined);
       tasks.push(
         new Promise<void>((resolve) => {
           controller.signal.addEventListener(

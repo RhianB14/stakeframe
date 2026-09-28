@@ -58,6 +58,15 @@ export const apiErrorCodeSchema = z.enum([
   'EVENT_PROVIDER_DISABLED',
   'EVENT_QUEUE_FULL',
   'IDEMPOTENCY_KEY_REQUIRED',
+  'TELEGRAM_LINK_INVALID',
+  'TELEGRAM_LINK_EXPIRED',
+  'TELEGRAM_LINK_CONSUMED',
+  'TELEGRAM_LINK_REVOKED',
+  'TELEGRAM_LINK_NOT_CLAIMED',
+  'TELEGRAM_LINK_ALREADY_LINKED',
+  'TELEGRAM_LINK_IDENTITY_CONFLICT',
+  'TELEGRAM_LINK_NOT_LINKED',
+  'TELEGRAM_LINK_UNAVAILABLE',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z
@@ -216,3 +225,4 @@ export * from './automatic.js';
 export * from './operations.js';
 export * from './onboarding.js';
 export * from './admin.js';
+export * from './telegram-link.js';
