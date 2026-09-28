@@ -152,8 +152,15 @@
     {
       "idx": 21,
       "version": "7",
-      "when": 1790626515079,
-      "tag": "0021_telegram_link",
+      "when": 1790900000000,
+      "tag": "0021_freebet_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790900000001,
+      "tag": "0022_telegram_link",
       "breakpoints": true
     }
   ]

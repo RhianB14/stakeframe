@@ -49,6 +49,10 @@ export const apiErrorCodeSchema = z.enum([
   'ALIAS_CONFLICT',
   'ORIGIN_REQUIRED',
   'FREEBET_UNRESOLVED',
+  'FREEBET_NOT_FOUND',
+  'FREEBET_ALREADY_USED',
+  'FREEBET_REVOKED',
+  'FREEBET_INVALID',
   'INCOMPLETE_BET',
   'DUPLICATE_REVIEW_REQUIRED',
   'INVALID_INBOX_IMAGE',
@@ -220,6 +224,7 @@ export const telemetryPublicConfigSchema = z
   .meta({ id: 'TelemetryPublicConfig' });
 export type TelemetryPublicConfig = z.infer<typeof telemetryPublicConfigSchema>;
 export * from './events.js';
+export * from './freebets.js';
 export * from './reports.js';
 export * from './automatic.js';
 export * from './operations.js';

@@ -200,14 +200,28 @@ export const freebet = finance.table(
     expiresOn: date('expires_on').notNull(),
     stakeReturned: boolean('stake_returned').notNull().default(false),
     usedBy: uuid('used_by'),
+    // STK-F2-10: revogação é soft-delete auditável; `used_by` continua sendo a
+    // fonte canônica de consumo do crédito pela máquina financeira.
+    revokedAt: instant('revoked_at'),
     note: text('note').notNull(),
+    // STK-F2-10: requisitos estruturados do bônus (odd mínima, nº de seleções,
+    // simples, restrições). Texto livre não é executado — a calculadora de
+    // valor efetivo só verifica as tipagens conhecidas.
+    requirements: jsonb('requirements')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: instant('created_at').notNull().defaultNow(),
+    updatedAt: instant('updated_at').notNull().defaultNow(),
   },
   (t) => [
     check('freebet_positive', sql`${t.amount}>0`),
     unique('freebet_organization_id_id_idx').on(t.organizationId, t.id),
     index('freebet_bookmaker_idx').on(t.bookmakerId),
     uniqueIndex('freebet_used_by_idx').on(t.organizationId, t.usedBy),
+    // Alerta de expiração varre as não usadas e não revogadas por validade.
+    index('freebet_expiry_idx')
+      .on(t.organizationId, t.expiresOn)
+      .where(sql`${t.usedBy} is null and ${t.revokedAt} is null`),
     foreignKey({
       name: 'freebet_bookmaker_fk',
       columns: [t.organizationId, t.bookmakerId],
