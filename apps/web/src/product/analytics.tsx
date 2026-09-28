@@ -20,7 +20,6 @@ import {
   formatReportBRL,
   saoPauloDate,
   type Workspace,
-  type ReportMetrics,
   type PerformanceReport,
   type ReportQuery,
 } from '@stakeframe/shared';
@@ -29,6 +28,7 @@ import { Field } from './forms.js';
 import { request } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { betFinancialDisplay } from './financial-display.js';
+import { DashboardPanel } from './dashboard.js';
 
 const dayLabel = (date: string) => date.split('-').reverse().join('/');
 const units = (value: string | null) =>
@@ -46,34 +46,6 @@ function params(query: ReportQuery) {
       (entry): entry is [string, string] => typeof entry[1] === 'string',
     ),
   ).toString();
-}
-function Summary({ metrics }: { metrics: ReportMetrics }) {
-  return (
-    <div className="metric-grid report-metrics">
-      <div className="metric-card featured">
-        <span>Resultado realizado</span>
-        <strong>{units(metrics.profitUnits)}</strong>
-        <small>{formatReportBRL(metrics.profit)} · real + freebets</small>
-      </div>
-      <div className="metric-card">
-        <span>ROI real</span>
-        <strong>{percent(metrics.roiReal)}</strong>
-        <small>Sobre {formatReportBRL(metrics.realPrincipalClosed)} de principal liquidado</small>
-      </div>
-      <div className="metric-card">
-        <span>Valor apostado real</span>
-        <strong>{formatReportBRL(metrics.realStake)}</strong>
-        <small>
-          {metrics.bets} apostas incluídas · {metrics.openBets} em aberto
-        </small>
-      </div>
-      <div className="metric-card">
-        <span>Exposição atual do período</span>
-        <strong>{formatReportBRL(metrics.exposure)}</strong>
-        <small>Principal real ainda aberto nas apostas deste filtro</small>
-      </div>
-    </div>
-  );
 }
 function Evolution({ report }: { report: PerformanceReport }) {
   let real = 0n;
@@ -411,6 +383,9 @@ export default function AnalyticsPage({
           </p>
         ) : null}
       </form>
+      {/* STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
+          aviso de baixa amostra, independentemente do relatório completo. */}
+      <DashboardPanel search={search} version={workspace.version} />
       {report.isError ? (
         <div className="notice warning" role="alert">
           Não foi possível carregar a análise.{' '}
@@ -454,7 +429,6 @@ export default function AnalyticsPage({
               {units(report.data.metrics.knownProfitUnits)}. Associe a unidade no detalhe da aposta.
             </div>
           ) : null}
-          <Summary metrics={report.data.metrics} />
           <div className="report-context">
             <p>
               Resultado anterior:{' '}
@@ -662,9 +636,11 @@ export default function AnalyticsPage({
             </p>
             <p>
               Resultado real = retornos ativos menos principal real liquidado. ROI real = resultado
-              real / principal real liquidado, incluindo anulações e cashouts. Freebets ficam
-              separadas e não entram nesse denominador. Entradas, retiradas e conciliações não
-              entram no resultado de apostas.
+              real / principal real liquidado, incluindo anulações e cashouts. Yield real =
+              resultado real / valor apostado em dinheiro real no período (inclui apostas ainda
+              abertas no denominador); quando a base é zero o indicador fica ausente, nunca zero.
+              Freebets ficam separadas e não entram nesses denominadores. Entradas, retiradas e
+              conciliações não entram no resultado de apostas.
             </p>
             <p>
               A taxa de acerto inclui apenas apostas reais totalmente liquidadas em vitória, meia

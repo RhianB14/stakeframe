@@ -104,6 +104,7 @@ describe('configuration', () => {
       runtime: 'local',
       host: '127.0.0.1',
       port: 3000,
+      dashboard: { minSample: 30, cacheTtlMs: 30_000 },
       databaseUrl: DATABASE_URL,
       auth: { enabled: false },
       release: {

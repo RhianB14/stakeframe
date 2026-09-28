@@ -38,6 +38,7 @@ const emptyMetrics: ReportMetrics = {
   missingUnitBets: 0,
   exposure: '0.00',
   roiReal: null,
+  yieldReal: null,
   hitRateReal: null,
   hitWinsReal: 0,
   hitEligibleReal: 0,

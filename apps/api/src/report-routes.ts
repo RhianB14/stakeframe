@@ -9,6 +9,7 @@ import {
   reportSchema,
   reportBetPageSchema,
   reportOptionsSchema,
+  analyticsDashboardSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { ownerSessionSecurity } from './openapi.js';
@@ -72,6 +73,25 @@ export function registerReportRoutes(
     (request, reply) =>
       execute(request, reply, () =>
         service!.report(contexts.get(request)!, reportQuerySchema.parse(request.query)),
+      ),
+  );
+  // STK-F2-02 — dashboard analítico: agregação única e curta (ROI, P&L, yield,
+  // N + aviso de baixa amostra), com cache curto em memória no serviço.
+  app.get(
+    '/api/v1/dashboard',
+    {
+      onRequest: authorize,
+      schema: {
+        ...base,
+        operationId: 'getAnalyticsDashboard',
+        summary: 'Consultar ROI, P&L, yield e N juntos com aviso de baixa amostra',
+        querystring: reportQuerySchema,
+        response: { 200: analyticsDashboardSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.dashboard(contexts.get(request)!, reportQuerySchema.parse(request.query)),
       ),
   );
   app.get(

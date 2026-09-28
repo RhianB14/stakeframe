@@ -105,7 +105,9 @@ fonte, data aproximada e `refresh` opcional; exige `Idempotency-Key`.
 Regras de fuso, cache e cotas em [EVENTS.md](EVENTS.md).
 
 Análises usam `GET /api/v1/reports`, `/api/v1/reports/bets` e
-`/api/v1/reports/options`. Intervalos `from`/`to` admitem até 36.600 dias;
+`/api/v1/reports/options`. `GET /api/v1/dashboard` devolve ROI, P&L, yield e `N`
+juntos no mesmo payload, com `minSample`/`lowSample` do aviso de baixa amostra
+(e uma agregação curta com cache interno). Intervalos `from`/`to` admitem até 36.600 dias;
 os filtros incluem `bookmakerId`, `tipsterId` (ou `none`), `sport`,
 `kind=all|real|freebet`, `state=open|settled` e `includeEstimated=true|false`.
 O detalhamento aceita `page` e `pageSize`. `/api/v1/exports/csv` usa os mesmos

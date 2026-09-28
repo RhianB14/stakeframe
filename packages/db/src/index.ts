@@ -90,7 +90,8 @@ export {
   type OnboardingErrorCode,
   type FirstBetResolution,
 } from './onboarding.js';
-export { createReportService, type ReportService } from './reports.js';
+export { createReportService, type ReportService, type ReportServiceOptions } from './reports.js';
+export { createTtlCache, type TtlCache } from './ttl-cache.js';
 export { createAccountExportService, type AccountExportService } from './account-export.js';
 export {
   createAccountDeletionService,

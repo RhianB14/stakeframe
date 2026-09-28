@@ -102,6 +102,7 @@ export const reportMetricsSql = `count(*)::int as "bets",
   ${count(missing)} as "missingUnitBets",
   ${sum("case when not freebet and state='open' then remaining else 0 end")} as "exposure",
   round(100*sum(case when not freebet then profit else 0 end)/nullif(sum(case when not freebet then principal else 0 end),0),2)::text as "roiReal",
+  round(100*sum(case when not freebet then profit else 0 end)/nullif(sum(case when not freebet then stake else 0 end),0),2)::text as "yieldReal",
   round(100.0*${count('hit_eligible and hit_win')}/nullif(${count('hit_eligible')},0),2)::text as "hitRateReal",
   ${count('hit_eligible and hit_win')} as "hitWinsReal", ${count('hit_eligible')} as "hitEligibleReal"`;
 
