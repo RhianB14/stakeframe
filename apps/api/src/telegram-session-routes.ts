@@ -116,7 +116,9 @@ export function createTelegramSessionGate(options: TelegramSessionGateOptions) {
         );
       throw error;
     }
-    const owner = await options.ownerAuth.resolveAccess(session.userId);
+    // A sessão do Mini App não tem cookie: o `expiresAt` não é publicado por
+    // rota do Mini App, e o gate de acesso só precisa da identidade e do papel.
+    const owner = await options.ownerAuth.resolveAccess(session.userId, { expiresAt: '' });
     if (!owner) return sendApiError(request, reply, 401, 'UNAUTHENTICATED');
     if (owner.status === 'consent_required')
       return sendApiError(request, reply, 403, 'CONSENT_REQUIRED');

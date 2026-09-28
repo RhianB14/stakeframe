@@ -484,6 +484,71 @@ export function createOwnerAuth(
         runWithTransaction(context.adapter, () => original(...args));
     })
     .catch(() => undefined);
+  /**
+   * STK-F2-12 — the same private-route gate for an identity that did NOT arrive
+   * through a browser session. The Mini App is authenticated by the Telegram
+   * initData, but the user behind it is decided by the F2-04 link, not by the
+   * client; once resolved, the request is admitted by EXACTLY these rules —
+   * deletion gate, beta admission, consent and membership — so a Mini App
+   * session can never be more permissive than the web one, and a revoked or
+   * purged account is refused here on every single request.
+   *
+   * Declared como função livre (e não método) porque `getOwner` a invoca e o
+   * objeto retornado é consumido desacoplado — `this` não sobrevive a esse
+   * padrão de uso.
+   */
+  async function resolveAccess(userId: string, session: { name?: string; expiresAt: string }) {
+    if (typeof userId !== 'string' || userId.length === 0) return null;
+    if (await deletions.isBlocked(userId)) return null;
+    if (!(await isOwner(userId)) && !(await invitations.findAcceptedInvitationForUser(userId)))
+      return null;
+    try {
+      const consentStatus = await consents.statusFor(userId);
+      if (!consentStatus.allAccepted) return { status: 'consent_required' as const };
+      await tenant.ensureOrganizationMembership(userId);
+      const organization = await tenant.resolveOrganizationContext(userId);
+      return {
+        status: 'ok' as const,
+        user: { id: userId, name: session.name ?? '' },
+        organization: { id: organization.organizationId, role: organization.role },
+        // A expiração vem da sessão real quando ela existe: `/api/v1/me`
+        // publica esse campo no contrato, e um placeholder quebraria a rota da
+        // web. A sessão do Mini App não tem cookie, então não publica expiry.
+        expiresAt: session.expiresAt,
+      };
+    } catch {
+      // Sanitized fail-closed behavior: membership/organization failures behave exactly like
+      // an unauthenticated session; no database detail ever reaches the caller.
+      return null;
+    }
+  }
+  /**
+   * Authentication-only identity check (session + admission). Used by the consent
+   * endpoints, which must stay reachable before the consent gate is satisfied; it never
+   * resolves or provisions any organization context.
+   *
+   * Free function (not a method): the returned object is consumed detached in routes
+   * and tests, where `this` would be undefined.
+   */
+  async function getIdentity(headers: Headers) {
+    const session = await auth.api.getSession({
+      headers,
+      query: { disableCookieCache: true, disableRefresh: true },
+    });
+    if (!session) return null;
+    // Deletion gate: an existing cookie stops working the moment the request is recorded.
+    if (await deletions.isBlocked(session.user.id)) return null;
+    if (!(await isOwner(session.user.id))) {
+      // Beta user admitted by an accepted invitation (single organization per user).
+      const admitted = await invitations.findAcceptedInvitationForUser(session.user.id);
+      if (!admitted) return null;
+    }
+    return {
+      user: { id: session.user.id, name: session.user.name },
+      expiresAt: session.session.expiresAt.toISOString(),
+    };
+  }
+
   return {
     auth,
     origin: config.origin,
@@ -497,24 +562,7 @@ export function createOwnerAuth(
      * endpoints, which must stay reachable before the consent gate is satisfied; it never
      * resolves or provisions any organization context.
      */
-    async getIdentity(headers: Headers) {
-      const session = await auth.api.getSession({
-        headers,
-        query: { disableCookieCache: true, disableRefresh: true },
-      });
-      if (!session) return null;
-      // Deletion gate: an existing cookie stops working the moment the request is recorded.
-      if (await deletions.isBlocked(session.user.id)) return null;
-      if (!(await isOwner(session.user.id))) {
-        // Beta user admitted by an accepted invitation (single organization per user).
-        const admitted = await invitations.findAcceptedInvitationForUser(session.user.id);
-        if (!admitted) return null;
-      }
-      return {
-        user: { id: session.user.id, name: session.user.name },
-        expiresAt: session.session.expiresAt.toISOString(),
-      };
-    },
+    getIdentity,
     /**
      * Full access check used by every private route: session + admission + the versioned
      * consent gate. Without a current acceptance for every required document the caller
@@ -522,9 +570,15 @@ export function createOwnerAuth(
      * no private context is exposed before consent.
      */
     async getOwner(headers: Headers) {
-      const identity = await this.getIdentity(headers);
+      const identity = await getIdentity(headers);
       if (!identity) return null;
-      return this.resolveAccess(identity.user.id);
+      // `resolveAccess` é chamado como função livre (nunca `this.`): este
+      // objeto é consumido desacoplado em rotas e em testes, e `this` seria
+      // `undefined` nesse padrão — o que faria TODA rota privada responder 500.
+      return resolveAccess(identity.user.id, {
+        name: identity.user.name,
+        expiresAt: identity.expiresAt,
+      });
     },
     /**
      * STK-F2-12 — the same private-route gate for an identity that did NOT arrive
@@ -535,28 +589,7 @@ export function createOwnerAuth(
      * session can never be more permissive than the web one, and a revoked or
      * purged account is refused here on every single request.
      */
-    async resolveAccess(userId: string) {
-      if (typeof userId !== 'string' || userId.length === 0) return null;
-      if (await deletions.isBlocked(userId)) return null;
-      if (!(await isOwner(userId)) && !(await invitations.findAcceptedInvitationForUser(userId)))
-        return null;
-      try {
-        const consentStatus = await consents.statusFor(userId);
-        if (!consentStatus.allAccepted) return { status: 'consent_required' as const };
-        await tenant.ensureOrganizationMembership(userId);
-        const organization = await tenant.resolveOrganizationContext(userId);
-        return {
-          status: 'ok' as const,
-          user: { id: userId, name: '' },
-          organization: { id: organization.organizationId, role: organization.role },
-          expiresAt: '',
-        };
-      } catch {
-        // Sanitized fail-closed behavior: membership/organization failures behave exactly like
-        // an unauthenticated session; no database detail ever reaches the caller.
-        return null;
-      }
-    },
+    resolveAccess,
   };
 }
 export type OwnerAuth = ReturnType<typeof createOwnerAuth>;
