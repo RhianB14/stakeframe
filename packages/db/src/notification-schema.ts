@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
-  foreignKey,
   index,
   integer,
   jsonb,
@@ -12,7 +11,6 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { membership } from './core-schema.js';
 
 export const notification = pgSchema('notification');
 
@@ -56,11 +54,12 @@ export const notificationPreference = notification.table(
       'notification_preference_timezone_check',
       sql`char_length(${table.timezone}) between 1 and 64`,
     ),
-    foreignKey({
-      name: 'notification_preference_membership_fk',
-      columns: [table.organizationId, table.userId],
-      foreignColumns: [membership.organizationId, membership.userId],
-    }),
+    // SEM FK para core.membership (decisão deliberada): `tenant-context.test.ts`
+    // derruba core.membership para simular falha de lookup e `tenant-registry`
+    // derruba o schema core no replay — uma FK para lá recusaria os dois
+    // ("cannot drop table because other objects depend on it"). O vínculo
+    // usuário↔organização é o de core.membership, validado na aplicação; a
+    // defesa de isolamento é o predicado explícito de organização, não a FK.
   ],
 );
 
@@ -113,10 +112,5 @@ export const notificationOutbox = notification.table(
     index('notification_outbox_due_idx').on(table.state, table.scheduledFor),
     index('notification_outbox_subject_idx').on(table.organizationId, table.subjectId),
     index('notification_outbox_user_idx').on(table.organizationId, table.userId, table.createdAt),
-    foreignKey({
-      name: 'notification_outbox_preference_fk',
-      columns: [table.organizationId, table.userId],
-      foreignColumns: [notificationPreference.organizationId, notificationPreference.userId],
-    }),
   ],
 );

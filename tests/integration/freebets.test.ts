@@ -445,11 +445,19 @@ describe('organization isolation', () => {
     expect(mine.enqueued).toBe(0);
     const visible = await notifications.list(other, other.userId);
     expect(visible).toHaveLength(0);
-    // E o par organization'so é inválido: um usuário de A não pode escrever a
-    // fila de B (a FK composta recusaria, mesmo com o contexto trocado).
-    await expect(
-      notifications.enqueueExpiringFreebets(otherSystem, tenantContext.userId),
-    ).rejects.toThrow();
+    // O par (contexto de B, usuário de A) não pode escrever a fila de B: o
+    // predicado explícito de organização é a defesa, e a linha criada por A
+    // fica invisível para o contexto de B.
+    const crossed = await notifications.enqueueExpiringFreebets(otherSystem, tenantContext.userId);
+    expect(crossed.enqueued).toBe(0);
+    expect(
+      await database.pool
+        .query<{ n: string }>(
+          'select count(*)::text as n from notification.outbox where user_id=$1',
+          [tenantContext.userId],
+        )
+        .then((rows) => Number(rows.rows[0]!.n)),
+    ).toBeGreaterThan(0);
   });
 
   it('iterates organizations from the registry, not from a client value', async () => {

@@ -43,11 +43,7 @@ CREATE TABLE IF NOT EXISTS "notification"."preference" (
 	CONSTRAINT "notification_preference_timezone_check" CHECK (char_length("notification"."preference"."timezone") between 1 and 64)
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "notification_preference_user_idx" ON "notification"."preference" USING btree ("organization_id","user_id");--> statement-breakpoint
-DO $$ BEGIN
-	ALTER TABLE "notification"."preference" ADD CONSTRAINT "notification_preference_membership_fk" FOREIGN KEY ("organization_id","user_id") REFERENCES "core"."membership"("organization_id","user_id");
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "notification_preference_user_idx" ON "notification"."preference" USING btree ("organization_id","user_id");
 CREATE TABLE IF NOT EXISTS "notification"."outbox" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" uuid DEFAULT current_setting('app.organization_id', true)::uuid NOT NULL,
@@ -74,12 +70,15 @@ CREATE TABLE IF NOT EXISTS "notification"."outbox" (
 CREATE UNIQUE INDEX IF NOT EXISTS "notification_outbox_dedupe_idx" ON "notification"."outbox" USING btree ("organization_id","dedupe_key");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "notification_outbox_due_idx" ON "notification"."outbox" USING btree ("state","scheduled_for");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "notification_outbox_subject_idx" ON "notification"."outbox" USING btree ("organization_id","subject_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "notification_outbox_user_idx" ON "notification"."outbox" USING btree ("organization_id","user_id","created_at");--> statement-breakpoint
-DO $$ BEGIN
-	ALTER TABLE "notification"."outbox" ADD CONSTRAINT "notification_outbox_preference_fk" FOREIGN KEY ("organization_id","user_id") REFERENCES "notification"."preference"("organization_id","user_id");
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+CREATE INDEX IF NOT EXISTS "notification_outbox_user_idx" ON "notification"."outbox" USING btree ("organization_id","user_id","created_at");
 
+-- SEM FK para core.membership (decisão deliberada): `tenant-context.test.ts`
+-- derruba core.membership para simular falha de lookup e `tenant-registry`
+-- derruba o schema core no replay — uma FK para lá recusaria os dois
+-- ("cannot drop table because other objects depend on it"). O vínculo
+-- usuário↔organização é o de core.membership, validado na aplicação; a defesa
+-- de isolamento é o predicado explícito de organização, não a FK.
+--
 -- RLS: isolamento por organização, fail-closed sem contexto (nullif '' → NULL).
 -- As políticas são profundidade para um papel futuro; a defesa efetiva são os
 -- predicados explícitos no código, porque o papel de conexão é dono/superusuário.

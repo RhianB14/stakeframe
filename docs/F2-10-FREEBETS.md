@@ -115,8 +115,15 @@ dentro de `withOrganizationTransaction`. O RLS **não** é a defesa (o papel de
 conexão é dono/superusuário e o ignora) — as policies ficam como profundidade
 para um papel futuro, sem FORCE.
 
-- A fila tem FK composta para `(organization_id, user_id)`: um usuário da
-  organização A não pode escrever a fila de B, mesmo com o contexto trocado.
+- A fila é escopada por `(organization_id, user_id)`: um usuário da organização
+  A nunca escreve nem lê a fila de B, mesmo com o contexto trocado.
+  **Exceção deliberada:** `notification.preference` e `notification.outbox` **não**
+  têm FK para `core.membership`. `tenant-context.test.ts` derruba
+  `core.membership` para simular falha de lookup e `tenant-registry.test.ts`
+  derruba o schema `core` no replay — uma FK para lá recusaria os dois
+  (`cannot drop table because other objects depend on it`). O vínculo
+  usuário↔organização é o de `core.membership`, validado na aplicação; a defesa
+  de isolamento é o predicado explícito de organização, não a FK.
 - O job resolve o destinatário do registry de tenancy (`recipientOf`), nunca do
   rótulo `system:worker` — que não tem preferência gravada e faria o alerta sair
   no fuso errado.
