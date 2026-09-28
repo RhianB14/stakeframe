@@ -215,3 +215,4 @@ export * from './reports.js';
 export * from './automatic.js';
 export * from './operations.js';
 export * from './onboarding.js';
+export * from './admin.js';

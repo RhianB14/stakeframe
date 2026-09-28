@@ -2271,3 +2271,52 @@
 .consent-row small {
   color: var(--muted, #6b7280);
 }
+
+/* STK-F2-11 — painel interno do superadmin. Somente leitura, sem controles de
+   escrita: cada tabela lista metadados (rótulo, papel, estado, contagem) e nada
+   de conteúdo financeiro ou de usuário. */
+.admin-panel {
+  margin-top: 18px;
+}
+
+.admin-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-panel-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #2a3040);
+  border-radius: 8px;
+}
+
+.admin-list li strong {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.admin-panel code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}

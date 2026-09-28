@@ -390,10 +390,14 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query('drop table integration.import_action_receipt');
     // A receipt é criada na 0013 e alterada na 0014; a 0015 também é removida
     // para que o migrador replaye uma sequência contígua a partir da 0013.
-    // A 0018 (account_deletion) entra no replay: os objetos dela também são removidos.
-    // A 0019 (índice dos splits) também replaya — CREATE INDEX IF NOT EXISTS é idempotente.
+    // A 0018 (account_deletion) e a 0020 (admin_panel_audit) entram no replay:
+    // os objetos delas também são removidos.
     await database.pool.query('drop table if exists core.account_deletion');
     await database.pool.query('drop type if exists core.account_deletion_state');
+    // A tabela primeiro: o trigger depende da função, então dropar a função
+    // antes deixaria a auditoria órfã e a migration 0020 não reaplicaria.
+    await database.pool.query('drop table if exists core.admin_panel_access');
+    await database.pool.query('drop function if exists core.immutable_admin_audit()');
     await database.pool.query(
       'alter table finance.bet drop constraint if exists bet_organization_id_ticket_number_idx, drop constraint if exists bet_ticket_number_positive',
     );
@@ -405,8 +409,10 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query(
       'alter table finance.settings drop column if exists next_ticket_number',
     );
+    // Uma migração a mais no replay (a 0020): o limite de marcadores removidos
+    // acompanha a contagem de entradas do journal a partir do índice 5.
     await database.pool.query(
-      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 7)',
+      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 8)',
     );
     await migrateLocalDatabase(database);
     const exists = (

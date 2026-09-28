@@ -8,6 +8,7 @@ import {
   createOnboardingService,
   createAccountDeletionService,
   createAccountExportService,
+  createAdminPanelService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -64,6 +65,24 @@ async function main() {
       deletion: createAccountDeletionService(database),
       exports: createAccountExportService(database),
     },
+    // STK-F2-11: o painel existe junto com a autenticação; sem sessão ele
+    // responde 404, então nunca é uma superfície anônima. Recebe o estado
+    // JÁ validado da telemetria (nenhum segredo, nenhum DSN sai daqui).
+    ...(ownerAuth
+      ? {
+          adminPanel: createAdminPanelService(database, {
+            telemetry: {
+              sentry: {
+                enabled: telemetry.config.sentry.enabled,
+                environment: telemetry.config.sentry.environment,
+              },
+              posthog: { enabled: telemetry.config.posthog.enabled },
+              betterStack: { enabled: telemetry.config.betterStack.enabled },
+              debug: { enabled: telemetry.config.debug.enabled },
+            },
+          }),
+        }
+      : {}),
     telemetry,
     ...(operations ? { operations } : {}),
     ...(ownerAuth ? { ownerAuth } : {}),

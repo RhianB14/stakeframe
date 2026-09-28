@@ -24,6 +24,7 @@ import type {
   OnboardingService,
   AccountDeletionService,
   AccountExportService,
+  AdminPanelService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
 import { registerAccountRoutes } from './account-routes.js';
@@ -32,6 +33,7 @@ import { registerEventRoutes } from './event-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
 import { registerOnboardingRoutes } from './onboarding-routes.js';
 import { registerDebugRoutes } from './debug-routes.js';
+import { registerAdminPanelRoutes } from './admin-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
 
 export function createApp(options: {
@@ -47,6 +49,8 @@ export function createApp(options: {
   operations?: OperationsService;
   onboarding?: OnboardingService;
   account?: { deletion: AccountDeletionService; exports: AccountExportService };
+  /** STK-F2-11: painel interno do superadmin (metadados); ausente = rota 404. */
+  adminPanel?: AdminPanelService;
   telemetry?: TelemetryHandle;
 }) {
   const app = Fastify({
@@ -182,6 +186,7 @@ export function createApp(options: {
     );
     registerOperationsRoutes(app, options.operations);
     registerDebugRoutes(app, options.ownerAuth, options.telemetry);
+    registerAdminPanelRoutes(app, options.ownerAuth, options.adminPanel);
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));

@@ -221,6 +221,40 @@ export const accountDeletion = core.table(
   ],
 );
 
+/**
+ * STK-F2-11: append-only audit of every attempt to open the internal superadmin
+ * panel — allowed AND denied, so a refused access is evidence too. Deliberately
+ * NOT organization-scoped: the panel is the one surface that crosses tenants, and
+ * its audit trail must survive (and not depend on) the tenant context. Nothing
+ * about the caller beyond the internal user id is stored: no e-mail, no IP, no
+ * user-agent, no cookie, no session, no request body and no tenant content.
+ */
+export const adminPanelAccess = core.table(
+  'admin_panel_access',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Internal user id of the caller (`auth.user.id`), never the e-mail. */
+    actorUserId: text('actor_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    view: text('view').notNull(),
+    outcome: text('outcome').notNull(),
+    /** Server-generated request id; lets an operator correlate with the app log. */
+    requestId: text('request_id'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    check(
+      'admin_panel_access_view_check',
+      sql`${table.view} in ('accounts','usage','flags','errors','audit')`,
+    ),
+    check('admin_panel_access_outcome_check', sql`${table.outcome} in ('allowed','denied')`),
+    check('admin_panel_access_actor_not_empty', sql`btrim(${table.actorUserId}) <> ''`),
+    index('admin_panel_access_created_idx').on(table.createdAt),
+    index('admin_panel_access_actor_idx').on(table.actorUserId, table.createdAt),
+  ],
+);
+
 export const coreSchema = {
   organization,
   membership,
@@ -229,4 +263,5 @@ export const coreSchema = {
   consentRecord,
   onboardingState,
   accountDeletion,
+  adminPanelAccess,
 };
