@@ -6,8 +6,10 @@ import {
   reportOptionsSchema,
   reportQuerySchema,
   reportDetailQuerySchema,
+  analyticsDashboardSchema,
   type ReportQuery,
   type ReportDetailQuery,
+  type AnalyticsDashboard,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
@@ -25,6 +27,25 @@ import {
 } from './report-query.js';
 import { FinanceError } from './finance-core.js';
 import { exportPortabilityJson } from './report-export.js';
+import { createTtlCache } from './ttl-cache.js';
+
+export type ReportServiceOptions = {
+  /** STK-F2-02: N mínimo para leitura confiável (env `DASHBOARD_MIN_SAMPLE`). */
+  dashboardMinSample?: number;
+  /** STK-F2-02: TTL do cache do dashboard; `0` desliga (env `DASHBOARD_CACHE_TTL_MS`). */
+  dashboardCacheTtlMs?: number;
+};
+const DEFAULT_DASHBOARD_MIN_SAMPLE = 30;
+const DEFAULT_DASHBOARD_CACHE_TTL_MS = 30_000;
+function readDashboardOptions(options: ReportServiceOptions) {
+  const minSample = options.dashboardMinSample ?? DEFAULT_DASHBOARD_MIN_SAMPLE;
+  const cacheTtlMs = options.dashboardCacheTtlMs ?? DEFAULT_DASHBOARD_CACHE_TTL_MS;
+  if (!Number.isInteger(minSample) || minSample < 1 || minSample > 100_000)
+    throw new Error('INVALID_DASHBOARD_MIN_SAMPLE');
+  if (!Number.isInteger(cacheTtlMs) || cacheTtlMs < 0 || cacheTtlMs > 600_000)
+    throw new Error('INVALID_DASHBOARD_CACHE_TTL');
+  return { minSample, cacheTtlMs };
+}
 
 export function csvCell(value: unknown, numeric = false) {
   let text = String(value ?? '');
@@ -34,7 +55,11 @@ export function csvCell(value: unknown, numeric = false) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-export function createReportService(database: Database) {
+export function createReportService(database: Database, options: ReportServiceOptions = {}) {
+  const dashboard = readDashboardOptions(options);
+  // STK-F2-02: cache curto por organização + versão + filtros. A versão na
+  // chave invalida o cache a cada movimentação financeira; o TTL cobre o resto.
+  const dashboardCache = createTtlCache<AnalyticsDashboard>({ ttlMs: dashboard.cacheTtlMs });
   let activeExports = 0;
   const tenant = createTenantContext(database);
   /**
@@ -138,6 +163,37 @@ export function createReportService(database: Database) {
           byTipster: await breakdown("coalesce(tipster_id::text,'none')", 'tipster'),
           bySport: await breakdown('sport_key', 'sport'),
         });
+      });
+    },
+    /**
+     * STK-F2-02 — dashboard analítico: uma única agregação sobre as mesmas
+     * consultas indexadas do relatório (sem materialized view), com cache curto
+     * em memória. `lowSample` marca N abaixo do limiar configurado; o cliente
+     * exibe apenas os números crus nesse caso (Plano §8.5 / §15).
+     */
+    async dashboard(context: OrganizationContext, input: ReportQuery): Promise<AnalyticsDashboard> {
+      const query = reportQuerySchema.parse(input);
+      reportRange(query);
+      return read(context, async (client) => {
+        const version = (
+          await client.query(
+            'select version from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+          )
+        ).rows[0].version;
+        const cacheKey = `${context.organizationId}|${version}|${JSON.stringify(query)}`;
+        const cached = dashboardCache.get(cacheKey);
+        if (cached) return cached;
+        const current = await metrics(client, query);
+        const payload = analyticsDashboardSchema.parse({
+          generatedAt: new Date().toISOString(),
+          version,
+          filters: query,
+          minSample: dashboard.minSample,
+          lowSample: current.bets < dashboard.minSample,
+          metrics: current,
+        });
+        dashboardCache.set(cacheKey, payload);
+        return payload;
       });
     },
     async bets(context: OrganizationContext, input: ReportDetailQuery) {

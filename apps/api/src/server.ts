@@ -56,7 +56,10 @@ async function main() {
     onboarding: createOnboardingService(database),
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
-    reports: createReportService(database),
+    reports: createReportService(database, {
+      dashboardMinSample: config.dashboard.minSample,
+      dashboardCacheTtlMs: config.dashboard.cacheTtlMs,
+    }),
     account: {
       deletion: createAccountDeletionService(database),
       exports: createAccountExportService(database),

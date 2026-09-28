@@ -40,6 +40,7 @@ export const reportMetricsSchema = z.object({
   missingUnitBets: count,
   exposure: reportMoneySchema,
   roiReal: percent,
+  yieldReal: percent,
   hitRateReal: percent,
   hitWinsReal: count,
   hitEligibleReal: count,
@@ -69,6 +70,23 @@ export const reportSchema = z
   })
   .meta({ id: 'PerformanceReport' });
 export type PerformanceReport = z.infer<typeof reportSchema>;
+/**
+ * STK-F2-02 — dashboard analítico: ROI, P&L, yield e N vêm juntos num payload
+ * enxuto (uma agregação indexada, cache curto no servidor). `minSample` é o
+ * limiar configurado e `lowSample` marca N abaixo dele; o cliente exibe apenas
+ * os números crus nesse caso (Plano §8.5, teste §15).
+ */
+export const analyticsDashboardSchema = z
+  .object({
+    generatedAt: z.iso.datetime({ offset: true }),
+    version: z.number().int().positive(),
+    filters: reportQuerySchema,
+    minSample: count,
+    lowSample: z.boolean(),
+    metrics: reportMetricsSchema,
+  })
+  .meta({ id: 'AnalyticsDashboard' });
+export type AnalyticsDashboard = z.infer<typeof analyticsDashboardSchema>;
 export const reportBetSchema = z.object({
   id: z.uuid(),
   reference: z.string(),

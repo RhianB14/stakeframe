@@ -49,6 +49,7 @@ const emptyMetrics: ReportMetrics = {
   missingUnitBets: 0,
   exposure: '0.00',
   roiReal: null,
+  yieldReal: null,
   hitRateReal: null,
   hitWinsReal: 0,
   hitEligibleReal: 0,
@@ -67,6 +68,17 @@ function reportFixture(): PerformanceReport {
     byBookmaker: [],
     byTipster: [],
     bySport: [],
+  };
+}
+// STK-F2-02: payload de GET /api/v1/dashboard (ROI, P&L, yield e N juntos).
+function dashboardFixture(metrics: ReportMetrics, lowSample = true) {
+  return {
+    generatedAt: '2026-09-07T00:00:00Z',
+    version: 1,
+    filters: { from: '2026-09-01', to: '2026-09-30', kind: 'all', includeEstimated: 'false' },
+    minSample: 30,
+    lowSample,
+    metrics,
   };
 }
 function fixture(): Workspace {
@@ -1422,6 +1434,7 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
     profitUnits: '10.000000',
     knownProfitUnits: '10.000000',
     roiReal: '12.50',
+    yieldReal: '12.50',
     hitRateReal: '50.00',
     hitWinsReal: 4,
     hitEligibleReal: 8,
@@ -1438,6 +1451,9 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   }));
   report.byBookmaker = [{ key: house, label: 'Bet365', metrics: report.metrics }];
   await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
   await page.route('**/api/v1/reports/options', (route) =>
     route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } }),
   );
@@ -1478,6 +1494,11 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   await page.getByLabel('Data final da análise').fill('2026-09-30');
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
+  // STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
+  // aviso de baixa amostra (N = 8 abaixo do mínimo configurado de 30).
+  await expect(page.getByText('Yield real', { exact: true })).toBeVisible();
+  await expect(page.getByText('N = 8 apostas', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Baixa amostra', { exact: true })).toBeVisible();
   await expect(page.getByText('2 apostas com datas incompletas', { exact: false })).toBeVisible();
   await expect(page.getByRole('img', { name: /Linhas dos resultados/ })).toBeVisible();
   await page.screenshot({ path: info.outputPath('analytics.png'), fullPage: true });
@@ -1512,6 +1533,9 @@ test('analytics distinguishes missing units and failed data from empty results',
     missingUnitBets: 1,
   };
   await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
   await page.route('**/api/v1/reports/options', (route) => route.fulfill({ json: { sports: [] } }));
   await page.route('**/api/v1/reports/bets?*', (route) => route.fulfill({ status: 503, json: {} }));
   await page.goto('/#analytics');

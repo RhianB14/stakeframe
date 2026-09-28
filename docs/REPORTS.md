@@ -33,6 +33,7 @@ caixa, acentos e espaços. Múltiplas de esportes distintos pertencem a
 | Resultado de freebets | Retornos promocionais creditados na banca real                                                                                              |
 | Resultado total       | Resultado real + resultado de freebets                                                                                                      |
 | ROI real              | 100 × resultado real / principal real encerrado ativo; inclui anulações e cashouts, exclui freebets; base zero retorna ausente              |
+| Yield real            | 100 × resultado real / valor apostado em dinheiro real do período (inclui apostas abertas no denominador); base zero retorna ausente        |
 | Acerto real           | Vitórias completas ou parciais / apostas reais totalmente liquidadas apenas em win/loss/half_win/half_loss; exclui qualquer void ou cashout |
 | Exposição             | Principal real ainda aberto **agora** nas apostas do período; não é saldo histórico no encerramento daquele dia                             |
 | Resultado em unidades | Soma de resultado / unidade histórica positiva da aposta, arredondada ao final para seis casas                                              |
