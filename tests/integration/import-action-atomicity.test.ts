@@ -409,10 +409,16 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query(
       'alter table finance.settings drop column if exists next_ticket_number',
     );
-    // Uma migração a mais no replay (a 0020): o limite de marcadores removidos
-    // acompanha a contagem de entradas do journal a partir do índice 5.
+    // A 0021 (freebets + notificações) também replaya: os objetos dela são
+    // removidos para que a cadeia volte a um prefixo contíguo da 0013.
+    await database.pool.query('drop schema if exists notification cascade');
+    await database.pool.query('alter table finance.freebet drop column if exists requirements');
+    await database.pool.query('alter table finance.freebet drop column if exists updated_at');
+    await database.pool.query('alter table finance.freebet drop column if exists revoked_at');
+    // Duas migrações a mais no replay (0020 e 0021): o limite de marcadores
+    // removidos acompanha a contagem de entradas do journal a partir do índice 5.
     await database.pool.query(
-      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 8)',
+      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 9)',
     );
     await migrateLocalDatabase(database);
     const exists = (

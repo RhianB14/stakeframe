@@ -12,6 +12,7 @@ import { startMonthlyUnits } from './monthly-unit.js';
 import { startAttachments } from './attachments.js';
 import { startAccountPurge } from './account-purge.js';
 import { startEventSearch } from './event-providers.js';
+import { startFreebetAlerts } from './freebet-alerts.js';
 import { createBudgetProbe } from './budget.js';
 import { initTelemetry, readTelemetryConfig } from './telemetry.js';
 
@@ -32,6 +33,7 @@ async function main() {
   let attachments = { stop: async () => {}, check: () => {} };
   let accountPurge = { stop: async () => {}, check: () => {} };
   let events = { stop: async () => {}, check: () => {} };
+  let freebets = { stop: async () => {}, check: () => {} };
   try {
     await assertRecoveryReviewed(database);
     boss = await startWorker(connectionString, 'pgboss', (error) => {
@@ -48,12 +50,14 @@ async function main() {
     attachments = startAttachments(database, process.env);
     accountPurge = startAccountPurge(database);
     events = startEventSearch(database, process.env);
+    freebets = startFreebetAlerts(database, process.env);
   } catch (error) {
     await integrations.stop();
     await monthlyUnits.stop();
     await attachments.stop();
     await accountPurge.stop();
     await events.stop();
+    await freebets.stop();
     await boss?.stop({ graceful: false });
     await database.close();
     telemetry.captureError(error, { stage: 'startup' });
@@ -74,6 +78,7 @@ async function main() {
         monthlyUnits.check();
         attachments.check();
         events.check();
+        freebets.check();
         if (!(await boss.getQueue(PROBE_QUEUE))) throw new Error('QUEUE_MISSING');
         response.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ready"}');
       } catch {
@@ -92,6 +97,7 @@ async function main() {
     await attachments.stop();
     await accountPurge.stop();
     await events.stop();
+    await freebets.stop();
     await boss.stop({ graceful: false });
     await database.close();
     telemetry.captureError(error, { stage: 'startup' });
@@ -108,6 +114,7 @@ async function main() {
       .then(() => attachments.stop())
       .then(() => accountPurge.stop())
       .then(() => events.stop())
+      .then(() => freebets.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(async () => {
         await telemetry.shutdown();

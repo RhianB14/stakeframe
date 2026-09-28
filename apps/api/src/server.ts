@@ -4,6 +4,8 @@ import {
   createImportService,
   createR2Storage,
   createEventService,
+  createFreebetService,
+  createNotificationService,
   createReportService,
   createOnboardingService,
   createAccountDeletionService,
@@ -57,6 +59,8 @@ async function main() {
     onboarding: createOnboardingService(database),
     imports: createImportService(database, createR2Storage(process.env)),
     events: createEventService(database, readEventSearchConfig(process.env)),
+    freebets: createFreebetService(database),
+    notifications: createNotificationService(database),
     reports: createReportService(database, {
       dashboardMinSample: config.dashboard.minSample,
       dashboardCacheTtlMs: config.dashboard.cacheTtlMs,
