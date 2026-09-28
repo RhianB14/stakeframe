@@ -25,6 +25,22 @@ caixa, acentos e espaços. Múltiplas de esportes distintos pertencem a
 `Múltiplos esportes`; qualquer seleção sem esporte leva o bilhete inteiro a
 `Esporte a conferir`. Cada dimensão reconcilia com o total.
 
+## Splits por dimensão (STK-F2-03)
+
+`GET /api/v1/analytics/splits` aplica os mesmos filtros acima a 12 dimensões
+descritivas — esporte, liga/torneio, time, jogador, tipo de aposta, mercado,
+casa, faixa de odd, dia da semana, hora, live/pré-jogo e tipster — e devolve
+ROI, P&L, yield e `N` juntos em cada linha, com `lowSample` calculado pelo
+mesmo limiar do dashboard. Casa, tipster e esporte usam exatamente o critério
+acima; tipo de aposta é derivado da composição do bilhete (Simples, BetBuild,
+Múltipla) com o tipo manual da importação sobrepondo o derivado; dia da semana
+e hora usam o horário da aposta em São Paulo; faixa de odd usa a odd total do
+bilhete. Liga/torneio só tem o torneio digitado na importação, e time, jogador
+e live/pré-jogo não existem no modelo — essas saem inteiras em `unknown`
+(`Sem base`), sem reprocessar histórico. Cada dimensão reconcilia com o total.
+Evidências e a migração de índice em
+[F2-03-ANALYTICS-SPLITS.md](F2-03-ANALYTICS-SPLITS.md).
+
 ## Definições
 
 | Indicador             | Cálculo                                                                                                                                     |

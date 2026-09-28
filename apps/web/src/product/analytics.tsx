@@ -29,6 +29,7 @@ import { request } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { betFinancialDisplay } from './financial-display.js';
 import { DashboardPanel } from './dashboard.js';
+import { SplitsPanel } from './splits.js';
 
 const dayLabel = (date: string) => date.split('-').reverse().join('/');
 const units = (value: string | null) =>
@@ -386,6 +387,9 @@ export default function AnalyticsPage({
       {/* STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
           aviso de baixa amostra, independentemente do relatório completo. */}
       <DashboardPanel search={search} version={workspace.version} />
+      {/* STK-F2-03: os 12 splits com ROI, P&L, yield e N juntos, filtros
+          combináveis, unknown preservado e aviso de baixa amostra por split. */}
+      <SplitsPanel search={search} version={workspace.version} />
       {report.isError ? (
         <div className="notice warning" role="alert">
           Não foi possível carregar a análise.{' '}

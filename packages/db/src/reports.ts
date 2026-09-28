@@ -7,9 +7,13 @@ import {
   reportQuerySchema,
   reportDetailQuerySchema,
   analyticsDashboardSchema,
+  analyticsSplitsSchema,
   type ReportQuery,
   type ReportDetailQuery,
   type AnalyticsDashboard,
+  type AnalyticsSplits,
+  type AnalyticsSplitRow,
+  type AnalyticsSplitDimension,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import type { Database } from './index.js';
@@ -24,6 +28,8 @@ import {
   reportValues,
   reportMetricsSql,
   reportBetSql,
+  splitDimensions,
+  splitDimensionSql,
 } from './report-query.js';
 import { FinanceError } from './finance-core.js';
 import { exportPortabilityJson } from './report-export.js';
@@ -60,6 +66,9 @@ export function createReportService(database: Database, options: ReportServiceOp
   // STK-F2-02: cache curto por organização + versão + filtros. A versão na
   // chave invalida o cache a cada movimentação financeira; o TTL cobre o resto.
   const dashboardCache = createTtlCache<AnalyticsDashboard>({ ttlMs: dashboard.cacheTtlMs });
+  // STK-F2-03: cache próprio dos splits — mesma utilidade e mesmo TTL do
+  // dashboard, chave separada para os dois payloads nunca colidirem.
+  const splitsCache = createTtlCache<AnalyticsSplits>({ ttlMs: dashboard.cacheTtlMs });
   let activeExports = 0;
   const tenant = createTenantContext(database);
   /**
@@ -193,6 +202,62 @@ export function createReportService(database: Database, options: ReportServiceOp
           metrics: current,
         });
         dashboardCache.set(cacheKey, payload);
+        return payload;
+      });
+    },
+    /**
+     * STK-F2-03 — os 12 splits analíticos: uma linha por valor de cada dimensão,
+     * com ROI, P&L, yield e `N` juntos, sobre os mesmos filtros combináveis do
+     * relatório. `lowSample` é calculado por linha pela regra do dashboard
+     * (`N < minSample`); dimensões sem coluna no modelo saem com uma única
+     * linha `unknown` (Plano §8.5 / §15). Cache curto por organização + versão
+     * + filtros, sem materialized view.
+     */
+    async splits(context: OrganizationContext, input: ReportQuery): Promise<AnalyticsSplits> {
+      const query = reportQuerySchema.parse(input);
+      reportRange(query);
+      return read(context, async (client) => {
+        const version = (
+          await client.query(
+            'select version from finance.settings where organization_id=current_setting($$app.organization_id$$, true)::uuid',
+          )
+        ).rows[0].version;
+        const cacheKey = `splits|${context.organizationId}|${version}|${JSON.stringify(query)}`;
+        const cached = splitsCache.get(cacheKey);
+        if (cached) return cached;
+        const overall = await metrics(client, query);
+        const dimensions: AnalyticsSplitDimension[] = [];
+        for (const definition of splitDimensions) {
+          const rows: AnalyticsSplitRow[] = (
+            await client.query(splitDimensionSql(definition), reportValues(query))
+          ).rows.map((row) => {
+            const parsed = reportMetricsSchema.parse(row);
+            return {
+              key: String(row.key),
+              label: String(row.label),
+              lowSample: parsed.bets < dashboard.minSample,
+              metrics: parsed,
+            };
+          });
+          dimensions.push({
+            id: definition.id,
+            label: definition.label,
+            source: definition.source,
+            available: definition.available,
+            note: definition.note,
+            rows,
+          });
+        }
+        const payload = analyticsSplitsSchema.parse({
+          generatedAt: new Date().toISOString(),
+          version,
+          filters: query,
+          minSample: dashboard.minSample,
+          lowSample: overall.bets < dashboard.minSample,
+          metrics: overall,
+          dimensions,
+        });
+        splitsCache.set(cacheKey, payload);
         return payload;
       });
     },

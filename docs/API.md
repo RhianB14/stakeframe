@@ -107,7 +107,12 @@ Regras de fuso, cache e cotas em [EVENTS.md](EVENTS.md).
 Análises usam `GET /api/v1/reports`, `/api/v1/reports/bets` e
 `/api/v1/reports/options`. `GET /api/v1/dashboard` devolve ROI, P&L, yield e `N`
 juntos no mesmo payload, com `minSample`/`lowSample` do aviso de baixa amostra
-(e uma agregação curta com cache interno). Intervalos `from`/`to` admitem até 36.600 dias;
+(e uma agregação curta com cache interno). `GET /api/v1/analytics/splits`
+devolve os 12 splits descritivos (esporte, liga/torneio, time, jogador, tipo de
+aposta, mercado, casa, faixa de odd, dia da semana, hora, live/pré-jogo e
+tipster) com ROI, P&L, yield e `N` por linha, `lowSample` por split e a origem
+de cada dimensão — ver [F2-03-ANALYTICS-SPLITS.md](F2-03-ANALYTICS-SPLITS.md).
+Intervalos `from`/`to` admitem até 36.600 dias;
 os filtros incluem `bookmakerId`, `tipsterId` (ou `none`), `sport`,
 `kind=all|real|freebet`, `state=open|settled` e `includeEstimated=true|false`.
 O detalhamento aceita `page` e `pageSize`. `/api/v1/exports/csv` usa os mesmos

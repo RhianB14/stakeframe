@@ -10,6 +10,7 @@ import {
   reportBetPageSchema,
   reportOptionsSchema,
   analyticsDashboardSchema,
+  analyticsSplitsSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
 import { ownerSessionSecurity } from './openapi.js';
@@ -92,6 +93,25 @@ export function registerReportRoutes(
     (request, reply) =>
       execute(request, reply, () =>
         service!.dashboard(contexts.get(request)!, reportQuerySchema.parse(request.query)),
+      ),
+  );
+  // STK-F2-03 — os 12 splits: mesma sessão, autorização e RLS dos relatórios,
+  // com os mesmos filtros combináveis aplicados a cada dimensão.
+  app.get(
+    '/api/v1/analytics/splits',
+    {
+      onRequest: authorize,
+      schema: {
+        ...base,
+        operationId: 'getAnalyticsSplits',
+        summary: 'Comparar ROI, P&L, yield e N nas 12 dimensões',
+        querystring: reportQuerySchema,
+        response: { 200: analyticsSplitsSchema, ...errors },
+      },
+    },
+    (request, reply) =>
+      execute(request, reply, () =>
+        service!.splits(contexts.get(request)!, reportQuerySchema.parse(request.query)),
       ),
   );
   app.get(
