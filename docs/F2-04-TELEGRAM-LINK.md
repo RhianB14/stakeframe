@@ -14,29 +14,29 @@ a confirmação é sempre no site, com sessão autenticada.
 
 ### `core.telegram_link_request` — artefato global e temporário
 
-| Coluna          | Tipo      | Notas                                                            |
-| --------------- | --------- | ---------------------------------------------------------------- |
-| `id`            | uuid      | PK                                                              |
-| `user_id`       | text (FK) | dono do pedido                                                  |
-| `token_hash`    | text      | **somente** SHA-256 hex do token bruto; índice único            |
-| `state`         | enum      | `pending` \| `claimed` \| `consumed` \| `expired` \| `revoked`   |
-| `telegram_user_id` | bigint | preenchido pelo worker quando o link é aberto no Telegram       |
-| `expires_at`    | timestamptz | expiração; CHECK `expires_at > created_at`                     |
-| `claimed_at` / `consumed_at` / `created_at` / `updated_at` | timestamptz | |
+| Coluna                                                     | Tipo        | Notas                                                          |
+| ---------------------------------------------------------- | ----------- | -------------------------------------------------------------- |
+| `id`                                                       | uuid        | PK                                                             |
+| `user_id`                                                  | text (FK)   | dono do pedido                                                 |
+| `token_hash`                                               | text        | **somente** SHA-256 hex do token bruto; índice único           |
+| `state`                                                    | enum        | `pending` \| `claimed` \| `consumed` \| `expired` \| `revoked` |
+| `telegram_user_id`                                         | bigint      | preenchido pelo worker quando o link é aberto no Telegram      |
+| `expires_at`                                               | timestamptz | expiração; CHECK `expires_at > created_at`                     |
+| `claimed_at` / `consumed_at` / `created_at` / `updated_at` | timestamptz |                                                                |
 
 Sem RLS, como `core.beta_invitation`: a resolução por hash **é** a fronteira, e a tabela
 nunca carrega nome, e-mail, organização ou conteúdo.
 
 ### `core.telegram_link` — vínculo duradouro e privado
 
-| Coluna        | Tipo      | Notas                                                          |
-| ------------- | --------- | -------------------------------------------------------------- |
-| `id`          | uuid      | PK                                                            |
-| `organization_id` | uuid (FK) | escopo de tenant; `ON DELETE cascade` (o purge da F1-08 remove) |
-| `user_id`     | text (FK) | dono                                                         |
-| `telegram_user_id` | bigint | conta do Telegram; CHECK `> 0`                             |
-| `state`       | enum      | `active` \| `revoked`                                           |
-| `linked_at` / `revoked_at` | timestamptz | CHECK de coerência entre `state` e `revoked_at`             |
+| Coluna                     | Tipo        | Notas                                                           |
+| -------------------------- | ----------- | --------------------------------------------------------------- |
+| `id`                       | uuid        | PK                                                              |
+| `organization_id`          | uuid (FK)   | escopo de tenant; `ON DELETE cascade` (o purge da F1-08 remove) |
+| `user_id`                  | text (FK)   | dono                                                            |
+| `telegram_user_id`         | bigint      | conta do Telegram; CHECK `> 0`                                  |
+| `state`                    | enum        | `active` \| `revoked`                                           |
+| `linked_at` / `revoked_at` | timestamptz | CHECK de coerência entre `state` e `revoked_at`                 |
 
 Índices que **decidem** a unicidade (nunca uma checagem de aplicação):
 
@@ -74,10 +74,10 @@ celular é uma operação só e nunca deixa duas contas ativas.
 
 ## 4. Auditoria (sanitizada)
 
-| Evento                     | `entity_id`    | `after`                                     |
-| -------------------------- | -------------- | ------------------------------------------- |
-| `telegram.link_confirmed`  | instante do link | `{"relinked": bool, "revokedLinkId": uuid\|""}` |
-| `telegram.link_revoked`    | uuid do vínculo | `{}`                                       |
+| Evento                    | `entity_id`      | `after`                                         |
+| ------------------------- | ---------------- | ----------------------------------------------- |
+| `telegram.link_confirmed` | instante do link | `{"relinked": bool, "revokedLinkId": uuid\|""}` |
+| `telegram.link_revoked`   | uuid do vínculo  | `{}`                                            |
 
 Nunca entram: token, id numérico da conta do Telegram, nome, e-mail, IP ou user-agent.
 
@@ -92,12 +92,12 @@ A mensagem é o código; nenhum SQL, tabela, host ou dado privado chega ao log o
 
 ## 6. Superfície da API
 
-| Método   | Rota                          | operationId               |
-| -------- | ----------------------------- | ------------------------- |
-| `GET`    | `/api/v1/telegram/link`       | `getTelegramLink`         |
-| `POST`   | `/api/v1/telegram/link`       | `requestTelegramLink`     |
-| `POST`   | `/api/v1/telegram/link/confirm` | `confirmTelegramLink`    |
-| `DELETE` | `/api/v1/telegram/link`       | `revokeTelegramLink`      |
+| Método   | Rota                            | operationId           |
+| -------- | ------------------------------- | --------------------- |
+| `GET`    | `/api/v1/telegram/link`         | `getTelegramLink`     |
+| `POST`   | `/api/v1/telegram/link`         | `requestTelegramLink` |
+| `POST`   | `/api/v1/telegram/link/confirm` | `confirmTelegramLink` |
+| `DELETE` | `/api/v1/telegram/link`         | `revokeTelegramLink`  |
 
 Todas exigem o mesmo gate privado do produto: sessão válida de identidade admitida
 (`getOwner`), consentimento vigente e, em escrita, `Origin` igual à origem configurada. A
