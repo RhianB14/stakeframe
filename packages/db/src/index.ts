@@ -13,11 +13,20 @@ export {
   legalDocumentType,
   legalDocumentStatus,
   consentRecord,
+  adminPanelAccess,
   type BetaInvitationStatus,
   type MembershipRole,
   type LegalDocumentType,
   type LegalDocumentStatus,
 } from './core-schema.js';
+export {
+  createAdminPanelService,
+  AdminPanelError,
+  type AdminPanelService,
+  type AdminPanelServiceOptions,
+  type AdminPanelErrorCode,
+  type TelemetryState,
+} from './admin-panel.js';
 export {
   createConsentsService,
   hashDocumentContent,

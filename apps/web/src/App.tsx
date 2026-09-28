@@ -7,6 +7,7 @@ import { PasswordResetGate } from './PasswordReset.js';
 import { ConsentScreen } from './ConsentScreen.js';
 import { ProductApp } from './product/ProductApp.js';
 import { MiniAppPage } from './product/MiniApp.js';
+import { AdminPanel } from './admin/AdminPanel.js';
 
 async function loadStatus() {
   const response = await fetch('/api/v1/system/status', { signal: AbortSignal.timeout(5_000) });
@@ -52,6 +53,11 @@ export function App() {
   // não depende da sessão web do proprietário.
   if (window.location.pathname === '/miniapp' || window.location.hash.startsWith('#miniapp'))
     return <MiniAppPage />;
+  // STK-F2-11 — o painel interno é uma superfície separada e só é montada para
+  // uma sessão `superadmin`. Qualquer outro papel segue o fluxo normal: sem tela
+  // de acesso negado, sem URLs adivinháveis que confirmem a existência do painel.
+  if (window.location.pathname === '/admin' && session?.organization.role === 'superadmin')
+    return <AdminPanel />;
   if (status.data?.productEnabled && session && !owner.isError) {
     return <ProductApp owner={session.user} release={status.data?.release} />;
   }

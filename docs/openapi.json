@@ -3904,6 +3904,314 @@
           { "$ref": "#/components/schemas/OnboardingFinishInput" }
         ]
       },
+      "AdminPanelViewInput": {
+        "type": "string",
+        "enum": ["accounts", "usage", "flags", "errors", "audit"]
+      },
+      "AdminPanelOutcomeInput": { "type": "string", "enum": ["allowed", "denied"] },
+      "AdminAccountsInput": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "truncated": { "type": "boolean" },
+          "accounts": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "organizationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "organizationName": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "organizationCreatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "userId": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "role": { "type": "string", "enum": ["owner", "superadmin"] },
+                "memberSince": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "onboardingCompletedAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "firstBetDeferredAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "consentsAccepted": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "deletionState": {
+                  "nullable": true,
+                  "type": "string",
+                  "enum": ["pending", "cancelled", "purged"]
+                },
+                "lastSessionAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "activeSessions": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+              },
+              "required": [
+                "organizationId",
+                "organizationName",
+                "organizationCreatedAt",
+                "userId",
+                "role",
+                "memberSince",
+                "onboardingCompletedAt",
+                "firstBetDeferredAt",
+                "consentsAccepted",
+                "deletionState",
+                "lastSessionAt",
+                "activeSessions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "total", "truncated", "accounts"],
+        "additionalProperties": false
+      },
+      "AdminUsageInput": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "ai": {
+            "type": "object",
+            "properties": {
+              "requestsToday": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "requestsMonth": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "dailyLimit": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "monthlyLimit": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "state": { "type": "string", "enum": ["ready", "warning", "exhausted"] }
+            },
+            "required": ["requestsToday", "requestsMonth", "dailyLimit", "monthlyLimit", "state"],
+            "additionalProperties": false
+          },
+          "organizations": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "truncated": { "type": "boolean" },
+          "queues": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "organizationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "organizationName": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "importPending": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "importProcessing": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "importFailed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "importReview": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "eventPending": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "eventProcessing": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "eventFailed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "outboxPending": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "outboxFailed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+              },
+              "required": [
+                "organizationId",
+                "organizationName",
+                "importPending",
+                "importProcessing",
+                "importFailed",
+                "importReview",
+                "eventPending",
+                "eventProcessing",
+                "eventFailed",
+                "outboxPending",
+                "outboxFailed"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "ai", "organizations", "truncated", "queues"],
+        "additionalProperties": false
+      },
+      "AdminFlagsInput": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rollout": {
+            "type": "object",
+            "properties": {
+              "source": { "type": "string", "enum": ["posthog", "none"] },
+              "keys": {
+                "maxItems": 50,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+              }
+            },
+            "required": ["source", "keys"],
+            "additionalProperties": false
+          },
+          "toggles": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "enabled": { "type": "boolean" }
+              },
+              "required": ["key", "enabled"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "rollout", "toggles"],
+        "additionalProperties": false
+      },
+      "AdminErrorsInput": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "telemetry": {
+            "type": "object",
+            "properties": {
+              "sentry": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "environment": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
+                "required": ["enabled", "environment"],
+                "additionalProperties": false
+              },
+              "posthog": {
+                "type": "object",
+                "properties": { "enabled": { "type": "boolean" } },
+                "required": ["enabled"],
+                "additionalProperties": false
+              },
+              "betterStack": {
+                "type": "object",
+                "properties": { "enabled": { "type": "boolean" } },
+                "required": ["enabled"],
+                "additionalProperties": false
+              },
+              "debug": {
+                "type": "object",
+                "properties": { "enabled": { "type": "boolean" } },
+                "required": ["enabled"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["sentry", "posthog", "betterStack", "debug"],
+            "additionalProperties": false
+          },
+          "truncated": { "type": "boolean" },
+          "kinds": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": ["import", "event_search", "telegram_outbox"]
+                },
+                "code": { "type": "string", "minLength": 1, "maxLength": 120 },
+                "occurrences": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "lastSeenAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["source", "code", "occurrences", "lastSeenAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "telemetry", "truncated", "kinds"],
+        "additionalProperties": false
+      },
+      "AdminAuditTrailInput": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "entries": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "actorUserId": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "view": { "$ref": "#/components/schemas/AdminPanelViewInput" },
+                "outcome": { "$ref": "#/components/schemas/AdminPanelOutcomeInput" },
+                "requestId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["id", "actorUserId", "view", "outcome", "requestId", "createdAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "entries"],
+        "additionalProperties": false
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -8221,6 +8529,314 @@
           { "$ref": "#/components/schemas/OnboardingProfileUpdate" },
           { "$ref": "#/components/schemas/OnboardingFinish" }
         ]
+      },
+      "AdminPanelView": {
+        "type": "string",
+        "enum": ["accounts", "usage", "flags", "errors", "audit"]
+      },
+      "AdminPanelOutcome": { "type": "string", "enum": ["allowed", "denied"] },
+      "AdminAccounts": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "truncated": { "type": "boolean" },
+          "accounts": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "organizationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "organizationName": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "organizationCreatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "userId": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "role": { "type": "string", "enum": ["owner", "superadmin"] },
+                "memberSince": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "onboardingCompletedAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "firstBetDeferredAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "consentsAccepted": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "deletionState": {
+                  "nullable": true,
+                  "type": "string",
+                  "enum": ["pending", "cancelled", "purged"]
+                },
+                "lastSessionAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "activeSessions": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+              },
+              "required": [
+                "organizationId",
+                "organizationName",
+                "organizationCreatedAt",
+                "userId",
+                "role",
+                "memberSince",
+                "onboardingCompletedAt",
+                "firstBetDeferredAt",
+                "consentsAccepted",
+                "deletionState",
+                "lastSessionAt",
+                "activeSessions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "total", "truncated", "accounts"],
+        "additionalProperties": false
+      },
+      "AdminUsage": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "ai": {
+            "type": "object",
+            "properties": {
+              "requestsToday": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "requestsMonth": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "dailyLimit": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "monthlyLimit": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "state": { "type": "string", "enum": ["ready", "warning", "exhausted"] }
+            },
+            "required": ["requestsToday", "requestsMonth", "dailyLimit", "monthlyLimit", "state"],
+            "additionalProperties": false
+          },
+          "organizations": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "truncated": { "type": "boolean" },
+          "queues": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "organizationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "organizationName": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "importPending": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "importProcessing": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "importFailed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "importReview": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "eventPending": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "eventProcessing": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "eventFailed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "outboxPending": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "outboxFailed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+              },
+              "required": [
+                "organizationId",
+                "organizationName",
+                "importPending",
+                "importProcessing",
+                "importFailed",
+                "importReview",
+                "eventPending",
+                "eventProcessing",
+                "eventFailed",
+                "outboxPending",
+                "outboxFailed"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "ai", "organizations", "truncated", "queues"],
+        "additionalProperties": false
+      },
+      "AdminFlags": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rollout": {
+            "type": "object",
+            "properties": {
+              "source": { "type": "string", "enum": ["posthog", "none"] },
+              "keys": {
+                "maxItems": 50,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+              }
+            },
+            "required": ["source", "keys"],
+            "additionalProperties": false
+          },
+          "toggles": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "enabled": { "type": "boolean" }
+              },
+              "required": ["key", "enabled"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "rollout", "toggles"],
+        "additionalProperties": false
+      },
+      "AdminErrors": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "telemetry": {
+            "type": "object",
+            "properties": {
+              "sentry": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "environment": { "type": "string", "minLength": 1, "maxLength": 64 }
+                },
+                "required": ["enabled", "environment"],
+                "additionalProperties": false
+              },
+              "posthog": {
+                "type": "object",
+                "properties": { "enabled": { "type": "boolean" } },
+                "required": ["enabled"],
+                "additionalProperties": false
+              },
+              "betterStack": {
+                "type": "object",
+                "properties": { "enabled": { "type": "boolean" } },
+                "required": ["enabled"],
+                "additionalProperties": false
+              },
+              "debug": {
+                "type": "object",
+                "properties": { "enabled": { "type": "boolean" } },
+                "required": ["enabled"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["sentry", "posthog", "betterStack", "debug"],
+            "additionalProperties": false
+          },
+          "truncated": { "type": "boolean" },
+          "kinds": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": ["import", "event_search", "telegram_outbox"]
+                },
+                "code": { "type": "string", "minLength": 1, "maxLength": 120 },
+                "occurrences": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "lastSeenAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["source", "code", "occurrences", "lastSeenAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "telemetry", "truncated", "kinds"],
+        "additionalProperties": false
+      },
+      "AdminAuditTrail": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "entries": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "actorUserId": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "view": { "$ref": "#/components/schemas/AdminPanelView" },
+                "outcome": { "$ref": "#/components/schemas/AdminPanelOutcome" },
+                "requestId": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["id", "actorUserId", "view", "outcome", "requestId", "createdAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["generatedAt", "entries"],
+        "additionalProperties": false
       },
       "SystemStatus": {
         "type": "object",
@@ -13185,6 +13801,280 @@
           }
         }
       }
+    },
+    "/api/v1/admin/accounts": {
+      "get": {
+        "operationId": "getAdminAccounts",
+        "summary": "Metadados das contas (rótulo, papel e estado), sem conteúdo de usuário",
+        "tags": ["Administração"],
+        "parameters": [
+          {
+            "schema": { "default": 50, "type": "integer", "minimum": 1, "maximum": 200 },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": { "default": 0, "type": "integer", "minimum": 0, "maximum": 100000 },
+            "in": "query",
+            "name": "offset",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AdminAccounts" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/usage": {
+      "get": {
+        "operationId": "getAdminUsage",
+        "summary": "Uso, cotas do provedor e contagens de fila por organização",
+        "tags": ["Administração"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AdminUsage" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/flags": {
+      "get": {
+        "operationId": "getAdminFlags",
+        "summary": "Feature flags de rollout e toggles operacionais configurados",
+        "tags": ["Administração"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AdminFlags" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/errors": {
+      "get": {
+        "operationId": "getAdminErrors",
+        "summary": "Erros recentes por código e origem, sem mensagem nem conteúdo",
+        "tags": ["Administração"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AdminErrors" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit": {
+      "get": {
+        "operationId": "getAdminAuditTrail",
+        "summary": "Trilha de auditoria dos acessos ao painel interno",
+        "tags": ["Administração"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AdminAuditTrail" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],
@@ -13203,6 +14093,10 @@
     {
       "name": "Autenticação",
       "description": "Fluxo de navegador Google e sessão própria. Tokens Google não autenticam chamadas da API."
+    },
+    {
+      "name": "Administração",
+      "description": "Painel interno do papel superadmin: metadados de contas, uso, flags, erros recentes e auditoria. Sem impersonação e sem acesso a conteúdo de usuário."
     }
   ]
 }

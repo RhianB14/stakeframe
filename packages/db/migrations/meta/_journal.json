@@ -141,6 +141,13 @@
       "when": 1790611381290,
       "tag": "0019_selection_rollup_index",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790617684494,
+      "tag": "0020_admin_panel_audit",
+      "breakpoints": true
     }
   ]
 }

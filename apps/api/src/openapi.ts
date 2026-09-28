@@ -52,6 +52,11 @@ export function registerApiContracts(app: FastifyInstance) {
           description:
             'Fluxo de navegador Google e sessão própria. Tokens Google não autenticam chamadas da API.',
         },
+        {
+          name: 'Administração',
+          description:
+            'Painel interno do papel superadmin: metadados de contas, uso, flags, erros recentes e auditoria. Sem impersonação e sem acesso a conteúdo de usuário.',
+        },
       ],
       components: {
         securitySchemes: {
