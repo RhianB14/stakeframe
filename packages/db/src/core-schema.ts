@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -255,6 +256,113 @@ export const adminPanelAccess = core.table(
   ],
 );
 
+/** STK-F2-04: `pending` = deep link vivo; `claimed` = o bot já falou "start"; `consumed` = vínculo confirmado no site; `expired`/`revoked` = terminais. */
+export const telegramLinkRequestState = core.enum('telegram_link_request_state', [
+  'pending',
+  'claimed',
+  'consumed',
+  'expired',
+  'revoked',
+]);
+export type TelegramLinkRequestState = (typeof telegramLinkRequestState.enumValues)[number];
+
+/** STK-F2-04: `active` = conta Telegram vinculada; `revoked` = desvinculada (a linha fica na trilha). */
+export const telegramLinkState = core.enum('telegram_link_state', ['active', 'revoked']);
+export type TelegramLinkState = (typeof telegramLinkState.enumValues)[number];
+
+/**
+ * STK-F2-04 — deep link de uso único. Artefato GLOBAL e temporário (cinco
+ * minutos, Plano §8.2): existe apenas enquanto o link está vivo, é resolvido
+ * só pelo SHA-256 do token e nunca carrega nome, e-mail, organização ou conteúdo
+ * — o mesmo papel de `core.beta_invitation`. Sem RLS: a resolução por hash é a
+ * fronteira (o usuário nunca escolhe a organização aqui).
+ */
+export const telegramLinkRequest = core.table(
+  'telegram_link_request',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    state: telegramLinkRequestState('state').default('pending').notNull(),
+    /** ID numérico do Telegram, preenchido quando o deep link é aberto pelo bot. */
+    telegramUserId: bigint('telegram_user_id', { mode: 'number' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('telegram_link_request_token_hash_key').on(table.tokenHash),
+    index('telegram_link_request_user_state_idx').on(table.userId, table.state, table.expiresAt),
+    check('telegram_link_request_ttl_check', sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+);
+
+/**
+ * STK-F2-04 — vínculo duradouro entre a conta Telegram e o usuário. Privado e
+ * escopado pela organização (RLS fail-closed) e removido em cascata quando a
+ * organização é apagada. A unicidade GLOBAL da conta Telegram é garantida por
+ * índice parcial sobre `state = 'active'`: duas linhas revogadas podem repetir o
+ * mesmo id (a trilha), mas nunca dois vínculos ativos.
+ */
+export const telegramLink = core.table(
+  'telegram_link',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    telegramUserId: bigint('telegram_user_id', { mode: 'number' }).notNull(),
+    state: telegramLinkState('state').default('active').notNull(),
+    linkedAt: timestamp('linked_at', { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('telegram_link_active_telegram_id_key')
+      .on(table.telegramUserId)
+      .where(sql`${table.state} = 'active'`),
+    uniqueIndex('telegram_link_active_user_id_key')
+      .on(table.userId)
+      .where(sql`${table.state} = 'active'`),
+    index('telegram_link_organization_idx').on(table.organizationId),
+    check('telegram_link_telegram_id_check', sql`${table.telegramUserId} > 0`),
+    check(
+      'telegram_link_revocation_check',
+      sql`(${table.state} = 'revoked') = (${table.revokedAt} is not null)`,
+    ),
+  ],
+);
+
+/**
+ * STK-F2-04: username público do bot (singleton). Não é segredo — o Telegram
+ * publica o username na URL do bot — mas fica no banco, e não no repositório:
+ * o valor é resolvido pelo worker a partir de `getMe` e nunca é digitado por
+ * ninguém. `null` = deep link indisponível; a API falha fechada.
+ */
+export const telegramBot = core.table(
+  'telegram_bot',
+  {
+    id: text('id').primaryKey().default('default'),
+    username: text('username').notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Singleton: a API sempre lê a linha 'default'.
+    check('telegram_bot_id_check', sql`${table.id} = 'default'`),
+    // Formato do Telegram: letras, dígitos e underscore. Um valor fora disso
+    // (URL, arroba, espaço) nunca vira deep link clicável.
+    check('telegram_bot_username_format', sql`${table.username} ~ '^[A-Za-z0-9_]{5,32}$'`),
+  ],
+);
+
 export const coreSchema = {
   organization,
   membership,
@@ -264,4 +372,7 @@ export const coreSchema = {
   onboardingState,
   accountDeletion,
   adminPanelAccess,
+  telegramLinkRequest,
+  telegramLink,
+  telegramBot,
 };

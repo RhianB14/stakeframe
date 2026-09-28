@@ -7,6 +7,7 @@ import {
   parseTelegramCallbackData,
 } from '@stakeframe/shared';
 import { IntegrationError, readBounded, readJson } from './http.js';
+import { authorizedStart, type TelegramStart } from './telegram-link.js';
 // Botões da resposta final (R6/G0-20 B4): somente '✏️ Editar' abre o Mini App
 // pelo botão web_app com a URL HTTPS configurada e o UUID opaco do registro
 // canônico; os demais usam callback_data sem NENHUM identificador —
@@ -214,6 +215,41 @@ export function authorizedCallback(update: unknown, config: TelegramConfig) {
   };
 }
 export type TelegramCallback = NonNullable<ReturnType<typeof authorizedCallback>>;
+
+/**
+ * STK-F2-04 — username público do bot via `getMe`. Não é segredo (o Telegram
+ * publica o username na URL do bot), mas também não é digitado nem versionado:
+ * a API do bot é a única fonte. `null` quando a resposta não é confiável, e o
+ * chamador apenas segue sem deep link.
+ */
+export async function botUsername(
+  config: TelegramConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  try {
+    const response = await fetchImpl(`https://api.telegram.org/bot${config.token}/getMe`, {
+      method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    const payload = object(await response.json());
+    const result = payload?.ok === true ? object(payload.result) : null;
+    const username = result?.username;
+    if (typeof username !== 'string' || !/^[A-Za-z0-9_]{5,32}$/.test(username)) {
+      await response.body?.cancel();
+      return null;
+    }
+    return username;
+  } catch {
+    return null;
+  }
+}
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -423,6 +459,12 @@ export interface TelegramInbox {
   accept(image: TelegramImage, download: () => Promise<Buffer>): Promise<void>;
   /** Trata callback_query autorizado; ausente = callbacks são ignorados. */
   callback?(query: TelegramCallback): Promise<void>;
+  /**
+   * STK-F2-04: trata o deep link de uso único `/start <token>` do remetente
+   * autorizado; ausente = deep links são ignorados. Mesmo transporte por
+   * polling — nenhum webhook, nenhuma rota nova.
+   */
+  start?(start: TelegramStart): Promise<void>;
   advance(nextOffset: number): Promise<void>;
 }
 
@@ -443,6 +485,11 @@ export async function pollTelegramOnce(
     else {
       const callback = authorizedCallback(update, config);
       if (callback && inbox.callback) await inbox.callback(callback);
+      else {
+        // STK-F2-04 — deep link de uso único, depois das rotas já existentes.
+        const start = authorizedStart(update, config);
+        if (start && inbox.start) await inbox.start(start);
+      }
     }
     // No sender data or content from rejected messages is persisted.
     await inbox.advance(id + 1);

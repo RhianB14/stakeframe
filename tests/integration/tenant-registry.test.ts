@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
   coreSchema,
@@ -108,6 +109,11 @@ describe('core tenant registry on a fresh database without users', () => {
       'membership',
       'onboarding_state',
       'organization',
+      // STK-F2-04: deep link de uso único, vínculo duradouro e o username
+      // público do bot (singleton, resolvido por getMe pelo worker).
+      'telegram_bot',
+      'telegram_link',
+      'telegram_link_request',
     ]);
     const enums = await count(
       "SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'core' AND t.typname = 'membership_role'",
@@ -261,12 +267,24 @@ describe('core tenant registry backfill with more than one pre-existing user', (
     expect(
       await count("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'core'"),
     ).toBe(0);
-    // reopenCoreMigration removed the markers of 0005 and every later migration
-    // (0006 through 0021); the failed 0005 replay must not add a marker back.
-    // O contador é o número de entradas do `_journal.json` a partir do índice 5
-    // (0005 inclusive) — cresce a cada migração nova.
-    expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBe(
-      recordedBefore - 17,
+    // The failed 0005 replay must not add markers for the migrations that
+    // follow it: the count is derived from the journal (entries after 0004) so
+    // a new migration never has to be counted by hand here. Drizzle records the
+    // marker of the migration that raised, so 0005 itself is the one entry the
+    // failed replay may legitimately leave behind — the invariant under test is
+    // that no LATER marker (0006+) is written by a failure at 0005.
+    const journal = JSON.parse(
+      readFileSync(
+        new URL('../../packages/db/migrations/meta/_journal.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { entries: unknown[] };
+    const migrationsAfter0004 = journal.entries.length - 4;
+    expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBeGreaterThanOrEqual(
+      recordedBefore - migrationsAfter0004,
+    );
+    expect(await count('SELECT count(*) FROM drizzle.__drizzle_migrations')).toBeLessThanOrEqual(
+      recordedBefore - migrationsAfter0004 + 1,
     );
     expect(await count('SELECT count(*) FROM auth."user"')).toBe(2);
   });

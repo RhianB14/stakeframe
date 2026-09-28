@@ -4324,6 +4324,59 @@
         "required": ["generatedAt", "entries"],
         "additionalProperties": false
       },
+      "TelegramLinkStatusInput": {
+        "type": "object",
+        "properties": {
+          "linked": { "type": "boolean" },
+          "linkedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "deepLink": { "nullable": true, "type": "string", "format": "uri" },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresInSeconds": { "nullable": true, "type": "integer", "minimum": 0, "maximum": 300 }
+        },
+        "required": ["linked", "linkedAt", "deepLink", "expiresAt", "expiresInSeconds"]
+      },
+      "TelegramLinkRequestResultInput": {
+        "type": "object",
+        "properties": {
+          "deepLink": { "type": "string", "format": "uri" },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresInSeconds": { "type": "integer", "minimum": 1, "maximum": 300 }
+        },
+        "required": ["deepLink", "expiresAt", "expiresInSeconds"]
+      },
+      "TelegramLinkConfirmInput": {
+        "type": "object",
+        "properties": { "token": { "type": "string", "minLength": 1, "maxLength": 512 } },
+        "required": ["token"],
+        "additionalProperties": false
+      },
+      "TelegramLinkStateResultInput": {
+        "type": "object",
+        "properties": {
+          "linked": { "type": "boolean" },
+          "linkedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["linked", "linkedAt"]
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -4381,7 +4434,16 @@
                   "ATTACHMENT_UNAVAILABLE",
                   "EVENT_PROVIDER_DISABLED",
                   "EVENT_QUEUE_FULL",
-                  "IDEMPOTENCY_KEY_REQUIRED"
+                  "IDEMPOTENCY_KEY_REQUIRED",
+                  "TELEGRAM_LINK_INVALID",
+                  "TELEGRAM_LINK_EXPIRED",
+                  "TELEGRAM_LINK_CONSUMED",
+                  "TELEGRAM_LINK_REVOKED",
+                  "TELEGRAM_LINK_NOT_CLAIMED",
+                  "TELEGRAM_LINK_ALREADY_LINKED",
+                  "TELEGRAM_LINK_IDENTITY_CONFLICT",
+                  "TELEGRAM_LINK_NOT_LINKED",
+                  "TELEGRAM_LINK_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -9064,6 +9126,62 @@
         "required": ["generatedAt", "entries"],
         "additionalProperties": false
       },
+      "TelegramLinkStatus": {
+        "type": "object",
+        "properties": {
+          "linked": { "type": "boolean" },
+          "linkedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "deepLink": { "nullable": true, "type": "string", "format": "uri" },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresInSeconds": { "nullable": true, "type": "integer", "minimum": 0, "maximum": 300 }
+        },
+        "required": ["linked", "linkedAt", "deepLink", "expiresAt", "expiresInSeconds"],
+        "additionalProperties": false
+      },
+      "TelegramLinkRequestResult": {
+        "type": "object",
+        "properties": {
+          "deepLink": { "type": "string", "format": "uri" },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "expiresInSeconds": { "type": "integer", "minimum": 1, "maximum": 300 }
+        },
+        "required": ["deepLink", "expiresAt", "expiresInSeconds"],
+        "additionalProperties": false
+      },
+      "TelegramLinkConfirm": {
+        "type": "object",
+        "properties": { "token": { "type": "string", "minLength": 1, "maxLength": 512 } },
+        "required": ["token"],
+        "additionalProperties": false
+      },
+      "TelegramLinkStateResult": {
+        "type": "object",
+        "properties": {
+          "linked": { "type": "boolean" },
+          "linkedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["linked", "linkedAt"],
+        "additionalProperties": false
+      },
       "SystemStatus": {
         "type": "object",
         "properties": {
@@ -9122,7 +9240,16 @@
                   "ATTACHMENT_UNAVAILABLE",
                   "EVENT_PROVIDER_DISABLED",
                   "EVENT_QUEUE_FULL",
-                  "IDEMPOTENCY_KEY_REQUIRED"
+                  "IDEMPOTENCY_KEY_REQUIRED",
+                  "TELEGRAM_LINK_INVALID",
+                  "TELEGRAM_LINK_EXPIRED",
+                  "TELEGRAM_LINK_CONSUMED",
+                  "TELEGRAM_LINK_REVOKED",
+                  "TELEGRAM_LINK_NOT_CLAIMED",
+                  "TELEGRAM_LINK_ALREADY_LINKED",
+                  "TELEGRAM_LINK_IDENTITY_CONFLICT",
+                  "TELEGRAM_LINK_NOT_LINKED",
+                  "TELEGRAM_LINK_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -11102,6 +11229,278 @@
             }
           },
           "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/link": {
+      "get": {
+        "operationId": "getTelegramLink",
+        "summary": "Consultar o estado do vínculo com a conta do Telegram",
+        "tags": ["Telegram"],
+        "description": "Estado do vínculo do próprio usuário autenticado: se há conta do Telegram vinculada e desde quando. Nunca devolve o identificador numérico da conta (dado de terceiro, desnecessário para a decisão). Exige sessão válida e consentimento vigente.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramLinkStatus" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "requestTelegramLink",
+        "summary": "Gerar um novo deep link de uso único para vincular a conta do Telegram",
+        "tags": ["Telegram"],
+        "description": "Emite um deep link de uso único válido por cinco minutos. Um pedido anterior ainda vivo do próprio usuário é invalidado no mesmo instante, de modo que existe no máximo um link utilizável por conta. O username do bot é resolvido pelo servidor a partir do Telegram; o navegador não influence. Repetir a operação é seguro: apenas o último link emitido vale. Exige Origin da aplicação, sessão válida e consentimento vigente.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramLinkRequestResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "revokeTelegramLink",
+        "summary": "Revogar o vínculo com a conta do Telegram",
+        "tags": ["Telegram"],
+        "description": "Encerra o vínculo ATIVO do próprio usuário. A linha não é apagada: fica revogada com o instante da revogação e um evento de auditoria, preservando a trilha (inclusive de um relink posterior). Revogar quando não há vínculo responde `404 TELEGRAM_LINK_NOT_LINKED`. Exige Origin da aplicação, sessão válida e consentimento vigente.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramLinkStateResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/link/confirm": {
+      "post": {
+        "operationId": "confirmTelegramLink",
+        "summary": "Confirmar no site o vínculo aberto no Telegram",
+        "tags": ["Telegram"],
+        "description": "Confirma o vínculo depois que o deep link foi aberto no Telegram. O servidor exige, nesta ordem: link existente, dentro dos cinco minutos, não consumido, pertencente a este usuário e com a conta já observada pelo bot — o navegador nunca escolhe a conta. Uma conta já ativa em outro usuário é recusada por conflito de identidade; um vínculo ativo anterior do próprio usuário é encerrado e relinkado com trilha de auditoria. Consumir o mesmo link duas vezes é idempotente. Exige Origin da aplicação, sessão válida e consentimento vigente.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TelegramLinkConfirmInput" }
+            }
+          }
+        },
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramLinkStateResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

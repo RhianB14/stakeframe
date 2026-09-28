@@ -18,6 +18,12 @@ export {
   type MembershipRole,
   type LegalDocumentType,
   type LegalDocumentStatus,
+  telegramLink,
+  telegramLinkRequest,
+  telegramLinkRequestState,
+  telegramLinkState,
+  type TelegramLinkRequestState,
+  type TelegramLinkState,
 } from './core-schema.js';
 export {
   createAdminPanelService,
@@ -138,6 +144,14 @@ export {
   type AccountDeletionStatus,
   type DuePurge,
 } from './account-deletion.js';
+export {
+  createTelegramLinkService,
+  hashTelegramLinkToken,
+  TelegramLinkError,
+  TELEGRAM_LINK_TTL_MS,
+  type TelegramLinkErrorCode,
+  type TelegramLinkService,
+} from './telegram-link.js';
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
 export { assertRecoveryReviewed } from './recovery-guard.js';

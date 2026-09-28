@@ -12,6 +12,7 @@ import {
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { request, dateLabel } from './api.js';
+import { TelegramLinkPanel } from './telegram-link.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
 import { betFinancialDisplay } from './financial-display.js';
@@ -1024,6 +1025,7 @@ export function SettingsPage({ workspace, open }: { workspace: Workspace; open: 
   const [consent, setConsent] = useState(readConsent());
   return (
     <>
+      <TelegramLinkPanel />
       <div className="settings-grid">
         {(['bookmaker', 'tipster'] as const).map((kind) => (
           <section className="panel" key={kind}>

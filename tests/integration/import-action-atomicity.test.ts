@@ -390,14 +390,29 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query('drop table integration.import_action_receipt');
     // A receipt é criada na 0013 e alterada na 0014; a 0015 também é removida
     // para que o migrador replaye uma sequência contígua a partir da 0013.
-    // A 0018 (account_deletion) e a 0020 (admin_panel_audit) entram no replay:
-    // os objetos delas também são removidos.
+    // Todas as migrations posteriores entram no replay (0018 account_deletion,
+    // 0020 admin_panel_audit, 0021 telegram_link); os objetos delas também são
+    // removidos, e a contagem de marcadores vem do journal — assim uma nova
+    // migration nunca precisa ser ajustada à mão aqui.
+    const journal = JSON.parse(
+      readFileSync(
+        new URL('../../packages/db/migrations/meta/_journal.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { entries: { tag: string }[] };
+    const after0012 = journal.entries.length - 12;
     await database.pool.query('drop table if exists core.account_deletion');
     await database.pool.query('drop type if exists core.account_deletion_state');
-    // A tabela primeiro: o trigger depende da função, então dropar a função
-    // antes deixaria a auditoria órfã e a migration 0020 não reaplicaria.
+    // STK-F2-11: a tabela primeiro, porque o trigger depende da função — dropar
+    // a função antes deixaria a auditoria órfã e a 0020 não reaplicaria.
     await database.pool.query('drop table if exists core.admin_panel_access');
     await database.pool.query('drop function if exists core.immutable_admin_audit()');
+    // STK-F2-04: as três tabelas e os dois enums do deep link/vínculo. A 0021
+    // recria exatamente este estado, então o replay a exercita de verdade.
+    for (const table of ['telegram_link_request', 'telegram_link', 'telegram_bot'])
+      await database.pool.query(`drop table if exists core.${table}`);
+    for (const type of ['telegram_link_request_state', 'telegram_link_state'])
+      await database.pool.query(`drop type if exists core.${type}`);
     await database.pool.query(
       'alter table finance.bet drop constraint if exists bet_organization_id_ticket_number_idx, drop constraint if exists bet_ticket_number_positive',
     );
@@ -415,10 +430,12 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query('alter table finance.freebet drop column if exists requirements');
     await database.pool.query('alter table finance.freebet drop column if exists updated_at');
     await database.pool.query('alter table finance.freebet drop column if exists revoked_at');
-    // Duas migrações a mais no replay (0020 e 0021): o limite de marcadores
-    // removidos acompanha a contagem de entradas do journal a partir do índice 5.
+    // O limite de marcadores removidos acompanha a contagem de entradas do
+    // journal a partir do índice 12 (migrações posteriores à 0012) — cresce a
+    // cada migração nova, sem constante escrita à mão.
     await database.pool.query(
-      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit 9)',
+      'delete from drizzle.__drizzle_migrations where created_at in (select created_at from drizzle.__drizzle_migrations order by created_at desc limit $1)',
+      [after0012],
     );
     await migrateLocalDatabase(database);
     const exists = (

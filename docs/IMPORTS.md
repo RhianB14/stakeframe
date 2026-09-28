@@ -312,3 +312,13 @@ Telegram e `AUTOMATIC_IMPORT_ENABLED=false`.
   inválida, expirada, casa não aprovada ou crédito inválido não manda o usuário
   para uma fila: mantém a aposta Pendente/incompleta, registra o motivo técnico
   e impede apenas o lançamento financeiro até a correção.
+
+## Vínculo da conta do Telegram (STK-F2-04)
+
+Uma conta Telegram por usuário, globalmente única, vinculada por deep link de
+uso único com expiração de cinco minutos e confirmação no site. O transporte
+continua sendo o polling do worker existente — nenhum webhook, nenhum serviço
+novo. O worker só registra a conta observada quando o link é aberto; a
+confirmação, a revogação e o relink acontecem no site, com sessão
+autenticada, e cada evento é auditado sem token, sem id numérico da conta e
+sem PII. Detalhes em [F2-04-TELEGRAM-LINK.md](F2-04-TELEGRAM-LINK.md).

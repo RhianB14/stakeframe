@@ -425,7 +425,7 @@ test('a finished onboarding opens the regular overview without the first-steps f
   await expect(page.getByRole('heading', { name: 'Primeiros passos' })).toHaveCount(0);
 });
 
-test('the Telegram route only explains the upcoming connector and writes nothing', async ({
+test('the Telegram step issues a single-use deep link and confirms it on the site', async ({
   page,
 }) => {
   const onboarding = pendingOnboarding();
@@ -435,13 +435,74 @@ test('the Telegram route only explains the upcoming connector and writes nothing
   const workspace = emptyWorkspace();
   workspace.initialized = true;
   const harness = await enableOnboarding(page, { onboarding, workspace });
+  const links: { method: string }[] = [];
+  let linked = false;
+  let confirmedToken: string | null = null;
+  await page.route('**/api/v1/telegram/link', async (route) => {
+    const request = route.request();
+    links.push({ method: request.method() });
+    if (request.method() === 'POST') {
+      // STK-F2-04: the server issues the deep link (five minutes, single use).
+      return route.fulfill({
+        json: {
+          deepLink: 'https://t.me/stakeframe_bot?start=fixture-token-value-000000',
+          expiresAt: new Date(Date.now() + 300_000).toISOString(),
+          expiresInSeconds: 300,
+        },
+      });
+    }
+    if (request.method() === 'DELETE') {
+      linked = false;
+      return route.fulfill({ json: { linked: false, linkedAt: null } });
+    }
+    return route.fulfill({
+      json: {
+        linked,
+        linkedAt: linked ? '2026-09-16T12:00:00.000Z' : null,
+        deepLink: null,
+        expiresAt: null,
+        expiresInSeconds: null,
+      },
+    });
+  });
+  await page.route('**/api/v1/telegram/link/confirm', async (route) => {
+    const body = route.request().postDataJSON() as { token?: string };
+    confirmedToken = body.token ?? null;
+    linked = true;
+    return route.fulfill({ json: { linked: true, linkedAt: '2026-09-16T12:05:00.000Z' } });
+  });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Conectar Telegram' }).click();
-  await expect(page.getByText(/STK-F2-04/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Telegram' })).toBeVisible();
+  // Opening the step is read-only: it asks the state but never issues a link.
+  expect(links).toEqual([{ method: 'GET' }]);
+  await page.getByRole('button', { name: 'Conectar Telegram' }).nth(1).click();
+  const open = page.getByRole('link', { name: 'Abrir no Telegram' });
+  await expect(open).toHaveAttribute('href', /^https:\/\/t\.me\/stakeframe_bot\?start=/);
+  expect(links.filter((entry) => entry.method === 'POST')).toHaveLength(1);
   expect(harness.finishPosts).toHaveLength(0);
-  expect(harness.finishChoices).toHaveLength(0);
-  expect(harness.commands).toHaveLength(0);
+
+  // Confirming on the site is what links the account; the Telegram account
+  // itself is never chosen in the browser. The Settings panel is the
+  // always-available surface for the same operation.
+  await page.goto('/#settings');
+  await page.evaluate(() => {
+    location.search = '?telegram=fixture-token-value-000000';
+  });
+  await page.goto('/?telegram=fixture-token-value-000000#settings');
+  await expect(page.getByRole('button', { name: 'Confirmar vínculo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Confirmar vínculo' }).click();
+  await expect(page.getByText(/Conta do Telegram conectada/)).toBeVisible();
+  expect(confirmedToken).toBe('fixture-token-value-000000');
+  // The consumed token leaves the browser immediately (single use).
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('stakeframe.telegram-link-token')),
+  ).toBeNull();
+  // Revocation is explicit and audited server-side.
+  await page.getByRole('button', { name: 'Revogar vínculo' }).click();
+  await expect(page.getByText(/Nenhuma conta do Telegram conectada/)).toBeVisible();
+  expect(links.filter((entry) => entry.method === 'DELETE')).toHaveLength(1);
 });
 
 test('the stepper resumes on the first incomplete step with accessible progress', async ({
