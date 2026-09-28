@@ -86,6 +86,15 @@ export const inbox = integrationNamespace.table(
     // sem necessidade (o proprietário autenticado pode ler a data de recebimento).
     telegramChatId: bigint('telegram_chat_id', { mode: 'number' }),
     telegramSourceMessageId: bigint('telegram_source_message_id', { mode: 'number' }),
+    // STK-F2-05: fila de UMA foto por vez e identidade determinística da imagem
+    // + contexto. `placedAt` é `telegramReceivedAt` (a MENSAGEM ORIGINAL) e a
+    // data do evento é `eventAt`, que nasce pendente e nunca é inferida do envio.
+    telegramIdentity: text('telegram_identity'),
+    telegramDuplicateOf: uuid('telegram_duplicate_of'),
+    telegramQueueState: text('telegram_queue_state').notNull().default('none'),
+    telegramQueuedAt: timestamp('telegram_queued_at', { withTimezone: true }),
+    telegramAdmittedAt: timestamp('telegram_admitted_at', { withTimezone: true }),
+    telegramPreviewAt: timestamp('telegram_preview_at', { withTimezone: true }),
     telegramProcessingMessageId: bigint('telegram_processing_message_id', { mode: 'number' }),
     telegramResultMessageId: bigint('telegram_result_message_id', { mode: 'number' }),
     telegramReceivedAt: timestamp('telegram_received_at', { withTimezone: true }),
@@ -122,6 +131,22 @@ export const inbox = integrationNamespace.table(
       'inbox_telegram_sync_state_check',
       sql`${table.telegramSyncState} in ('none', 'pending', 'synced', 'failed', 'deleted')`,
     ),
+    // STK-F2-05: a fila do worker é serial (uma foto por vez) e a identidade
+    // determinística decide duplicata sem depender de timestamp.
+    check(
+      'inbox_telegram_queue_state_check',
+      sql`${table.telegramQueueState} in ('none', 'queued', 'admitted', 'preview', 'duplicate', 'archived')`,
+    ),
+    check(
+      'inbox_telegram_identity_check',
+      sql`${table.telegramIdentity} is null or ${table.telegramIdentity} ~ '^[a-f0-9]{64}$'`,
+    ),
+    index('inbox_telegram_identity_idx')
+      .on(table.organizationId, table.telegramIdentity)
+      .where(sql`${table.telegramIdentity} is not null`),
+    index('inbox_telegram_queue_idx')
+      .on(table.telegramQueueState, table.telegramQueuedAt, table.id)
+      .where(sql`${table.telegramQueueState} in ('queued','admitted')`),
     index('inbox_telegram_source_idx')
       .on(table.organizationId, table.telegramSourceMessageId)
       .where(sql`${table.telegramSourceMessageId} is not null`),
@@ -219,6 +244,65 @@ export const importActionReceipt = integrationNamespace.table(
     ),
     check('import_action_receipt_hash_check', sql`${table.hash} ~ '^[a-f0-9]{64}$'`),
     check('import_action_receipt_actor_check', sql`char_length(${table.actor}) between 1 and 200`),
+  ],
+);
+// STK-F2-05 — arquivo recuperável do bilhete do Telegram. Descartar NÃO apaga:
+// a linha continua endereçável por 30 dias e pode ser restaurada nesse período.
+// Não existe `/undo` temporizado — a recuperabilidade é uma janela do REGISTRO,
+// não um prazo de resposta do bot. RLS fail-closed (migration 0023).
+export const telegramTicketArchive = integrationNamespace.table(
+  'telegram_ticket_archive',
+  {
+    id: uuid('id').primaryKey(),
+    organizationId: organizationId(),
+    inboxId: uuid('inbox_id').notNull(),
+    // Identidade determinística (imagem + contexto) do bilhete arquivado.
+    identity: text('identity').notNull(),
+    reason: text('reason').notNull(),
+    state: text('state').notNull().default('archived'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }).notNull().defaultNow(),
+    // Verdade do prazo de recuperação: a retenção do anexo nunca expira antes.
+    recoverableUntil: timestamp('recoverable_until', { withTimezone: true }).notNull(),
+    restoredAt: timestamp('restored_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('telegram_ticket_archive_organization_id_id_idx').on(table.organizationId, table.id),
+    check('telegram_ticket_archive_identity_check', sql`${table.identity} ~ '^[a-f0-9]{64}$'`),
+    check(
+      'telegram_ticket_archive_reason_check',
+      sql`${table.reason} in ('discarded','duplicate','superseded')`,
+    ),
+    check(
+      'telegram_ticket_archive_state_check',
+      sql`${table.state} in ('archived','restored','expired')`,
+    ),
+    check(
+      'telegram_ticket_archive_window_check',
+      sql`${table.recoverableUntil} > ${table.archivedAt}`,
+    ),
+    check(
+      'telegram_ticket_archive_restored_check',
+      sql`(${table.state} = 'restored') = (${table.restoredAt} is not null)`,
+    ),
+    // No máximo um arquivo VIVO por bilhete: rearquivar atualiza a linha.
+    uniqueIndex('telegram_ticket_archive_live_idx')
+      .on(table.organizationId, table.inboxId)
+      .where(sql`${table.state} = 'archived'`),
+    index('telegram_ticket_archive_identity_idx').on(
+      table.organizationId,
+      table.identity,
+      table.archivedAt,
+    ),
+    index('telegram_ticket_archive_due_idx')
+      .on(table.state, table.recoverableUntil)
+      .where(sql`${table.state} = 'archived'`),
+    foreignKey({
+      name: 'telegram_ticket_archive_inbox_fk',
+      columns: [table.organizationId, table.inboxId],
+      foreignColumns: [inbox.organizationId, inbox.id],
+    }),
   ],
 );
 export const extractionRequest = integrationNamespace.table(

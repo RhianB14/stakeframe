@@ -130,6 +130,23 @@ export function createInboxStore(
         return result.rows[0]!.id;
       });
     },
+    /**
+     * STK-F2-05: o SHA-256 dos bytes validados da foto, lido do próprio
+     * registro. É a entrada da identidade determinística do bilhete e nada
+     * mais — nenhum identificador do Telegram participa dela.
+     */
+    async imageIdentity(context: OrganizationContext, id: string) {
+      return withOrg(context, async (client) => {
+        const row = (
+          await client.query<{ sha256: string }>(
+            'select sha256 from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+            [id],
+          )
+        ).rows[0];
+        if (!row) throw new Error('INVALID_INBOX_INPUT');
+        return row.sha256;
+      });
+    },
     /** Claims one pending inbox row inside the organization it belongs to. */
     async claim(context: OrganizationContext, id: string) {
       const pending = await withOrg(context, async (client) => {

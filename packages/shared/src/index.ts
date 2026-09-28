@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { releaseInfoSchema } from './release.js';
 export * from './imports.js';
 export * from './telegram.js';
+export * from './telegram-flow.js';
 export * from './returns.js';
 export * from './decimal.js';
 export * from './finance.js';
@@ -71,6 +72,13 @@ export const apiErrorCodeSchema = z.enum([
   'TELEGRAM_LINK_IDENTITY_CONFLICT',
   'TELEGRAM_LINK_NOT_LINKED',
   'TELEGRAM_LINK_UNAVAILABLE',
+  'TELEGRAM_TICKET_NOT_FOUND',
+  'TELEGRAM_TICKET_STATE_CONFLICT',
+  'TELEGRAM_TICKET_DUPLICATE',
+  'TELEGRAM_TICKET_ARCHIVED',
+  'TELEGRAM_TICKET_EXPIRED',
+  'TELEGRAM_TICKET_NOT_RECOVERABLE',
+  'TELEGRAM_TICKET_BUSY',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z

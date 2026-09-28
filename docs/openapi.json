@@ -2313,6 +2313,241 @@
         },
         "required": ["credits"]
       },
+      "TelegramPreviewSelectionInput": {
+        "type": "object",
+        "properties": {
+          "event": { "nullable": true, "type": "string" },
+          "sport": { "nullable": true, "type": "string" },
+          "market": { "nullable": true, "type": "string" },
+          "selection": { "nullable": true, "type": "string" },
+          "odds": { "nullable": true, "type": "string" }
+        },
+        "required": ["event", "sport", "market", "selection", "odds"]
+      },
+      "TelegramPreviewDuplicateInput": {
+        "type": "object",
+        "properties": {
+          "detected": { "type": "boolean" },
+          "ofImportId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reasons": {
+            "maxItems": 3,
+            "type": "array",
+            "items": { "type": "string", "enum": ["image", "reference", "similar"] }
+          }
+        },
+        "required": ["detected", "ofImportId", "reasons"]
+      },
+      "TelegramPreviewArchiveInput": {
+        "type": "object",
+        "properties": {
+          "archived": { "type": "boolean" },
+          "reason": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["discarded", "duplicate", "superseded"]
+          },
+          "recoverableUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "restored": { "type": "boolean" }
+        },
+        "required": ["archived", "reason", "recoverableUntil", "restored"]
+      },
+      "TelegramTicketPreviewInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+          },
+          "queueState": {
+            "type": "string",
+            "enum": ["none", "queued", "admitted", "preview", "duplicate", "archived"]
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "eventAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "eventDateStatus": { "type": "string", "enum": ["pending", "confirmed"] },
+          "bookmaker": { "nullable": true, "type": "string" },
+          "tipster": { "nullable": true, "type": "string" },
+          "stake": { "nullable": true, "type": "string" },
+          "odds": { "nullable": true, "type": "string" },
+          "reference": { "nullable": true, "type": "string" },
+          "kind": { "type": "string", "enum": ["simple", "multiple", "betbuild"] },
+          "origin": { "nullable": true, "type": "string", "enum": ["real", "freebet", "hibrida"] },
+          "selections": {
+            "maxItems": 60,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TelegramPreviewSelectionInput" }
+          },
+          "potentialReturn": { "nullable": true, "type": "string" },
+          "duplicate": { "$ref": "#/components/schemas/TelegramPreviewDuplicateInput" },
+          "archive": { "$ref": "#/components/schemas/TelegramPreviewArchiveInput" },
+          "actions": {
+            "maxItems": 4,
+            "type": "array",
+            "items": { "type": "string", "enum": ["confirm", "edit", "discard", "retry"] }
+          },
+          "blockedReason": { "nullable": true, "type": "string" }
+        },
+        "required": [
+          "id",
+          "version",
+          "state",
+          "queueState",
+          "sentAt",
+          "eventAt",
+          "eventDateStatus",
+          "bookmaker",
+          "tipster",
+          "stake",
+          "odds",
+          "reference",
+          "kind",
+          "origin",
+          "selections",
+          "potentialReturn",
+          "duplicate",
+          "archive",
+          "actions",
+          "blockedReason"
+        ]
+      },
+      "TelegramPreviewActionInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "decision": { "type": "string", "enum": ["confirm", "discard", "retry"] }
+        },
+        "required": ["version", "decision"],
+        "additionalProperties": false
+      },
+      "TelegramPreviewActionResultInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+          },
+          "betId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "restored": { "type": "boolean" },
+          "recoverableUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["id", "version", "state", "betId", "restored", "recoverableUntil"]
+      },
+      "TelegramArchiveRestoreInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["version"],
+        "additionalProperties": false
+      },
+      "TelegramArchiveEntryInput": {
+        "type": "object",
+        "properties": {
+          "archiveId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "importId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "identity": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "reason": { "type": "string", "enum": ["discarded", "duplicate", "superseded"] },
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "recoverableUntil": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "archiveId",
+          "importId",
+          "identity",
+          "reason",
+          "archivedAt",
+          "recoverableUntil"
+        ]
+      },
+      "TelegramArchiveListInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TelegramArchiveEntryInput" }
+          }
+        },
+        "required": ["items"]
+      },
       "AccountDeletionStatusInput": {
         "type": "object",
         "properties": {
@@ -4443,7 +4678,14 @@
                   "TELEGRAM_LINK_ALREADY_LINKED",
                   "TELEGRAM_LINK_IDENTITY_CONFLICT",
                   "TELEGRAM_LINK_NOT_LINKED",
-                  "TELEGRAM_LINK_UNAVAILABLE"
+                  "TELEGRAM_LINK_UNAVAILABLE",
+                  "TELEGRAM_TICKET_NOT_FOUND",
+                  "TELEGRAM_TICKET_STATE_CONFLICT",
+                  "TELEGRAM_TICKET_DUPLICATE",
+                  "TELEGRAM_TICKET_ARCHIVED",
+                  "TELEGRAM_TICKET_EXPIRED",
+                  "TELEGRAM_TICKET_NOT_RECOVERABLE",
+                  "TELEGRAM_TICKET_BUSY"
                 ]
               },
               "message": { "type": "string" },
@@ -7076,6 +7318,248 @@
         "required": ["credits"],
         "additionalProperties": false
       },
+      "TelegramPreviewSelection": {
+        "type": "object",
+        "properties": {
+          "event": { "nullable": true, "type": "string" },
+          "sport": { "nullable": true, "type": "string" },
+          "market": { "nullable": true, "type": "string" },
+          "selection": { "nullable": true, "type": "string" },
+          "odds": { "nullable": true, "type": "string" }
+        },
+        "required": ["event", "sport", "market", "selection", "odds"],
+        "additionalProperties": false
+      },
+      "TelegramPreviewDuplicate": {
+        "type": "object",
+        "properties": {
+          "detected": { "type": "boolean" },
+          "ofImportId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "reasons": {
+            "maxItems": 3,
+            "type": "array",
+            "items": { "type": "string", "enum": ["image", "reference", "similar"] }
+          }
+        },
+        "required": ["detected", "ofImportId", "reasons"],
+        "additionalProperties": false
+      },
+      "TelegramPreviewArchive": {
+        "type": "object",
+        "properties": {
+          "archived": { "type": "boolean" },
+          "reason": {
+            "nullable": true,
+            "type": "string",
+            "enum": ["discarded", "duplicate", "superseded"]
+          },
+          "recoverableUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "restored": { "type": "boolean" }
+        },
+        "required": ["archived", "reason", "recoverableUntil", "restored"],
+        "additionalProperties": false
+      },
+      "TelegramTicketPreview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+          },
+          "queueState": {
+            "type": "string",
+            "enum": ["none", "queued", "admitted", "preview", "duplicate", "archived"]
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "eventAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "eventDateStatus": { "type": "string", "enum": ["pending", "confirmed"] },
+          "bookmaker": { "nullable": true, "type": "string" },
+          "tipster": { "nullable": true, "type": "string" },
+          "stake": { "nullable": true, "type": "string" },
+          "odds": { "nullable": true, "type": "string" },
+          "reference": { "nullable": true, "type": "string" },
+          "kind": { "type": "string", "enum": ["simple", "multiple", "betbuild"] },
+          "origin": { "nullable": true, "type": "string", "enum": ["real", "freebet", "hibrida"] },
+          "selections": {
+            "maxItems": 60,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TelegramPreviewSelection" }
+          },
+          "potentialReturn": { "nullable": true, "type": "string" },
+          "duplicate": { "$ref": "#/components/schemas/TelegramPreviewDuplicate" },
+          "archive": { "$ref": "#/components/schemas/TelegramPreviewArchive" },
+          "actions": {
+            "maxItems": 4,
+            "type": "array",
+            "items": { "type": "string", "enum": ["confirm", "edit", "discard", "retry"] }
+          },
+          "blockedReason": { "nullable": true, "type": "string" }
+        },
+        "required": [
+          "id",
+          "version",
+          "state",
+          "queueState",
+          "sentAt",
+          "eventAt",
+          "eventDateStatus",
+          "bookmaker",
+          "tipster",
+          "stake",
+          "odds",
+          "reference",
+          "kind",
+          "origin",
+          "selections",
+          "potentialReturn",
+          "duplicate",
+          "archive",
+          "actions",
+          "blockedReason"
+        ],
+        "additionalProperties": false
+      },
+      "TelegramPreviewAction": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "decision": { "type": "string", "enum": ["confirm", "discard", "retry"] }
+        },
+        "required": ["version", "decision"],
+        "additionalProperties": false
+      },
+      "TelegramPreviewActionResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["pending", "processing", "review", "failed", "discarded", "imported"]
+          },
+          "betId": {
+            "nullable": true,
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "restored": { "type": "boolean" },
+          "recoverableUntil": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["id", "version", "state", "betId", "restored", "recoverableUntil"],
+        "additionalProperties": false
+      },
+      "TelegramArchiveRestore": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["version"],
+        "additionalProperties": false
+      },
+      "TelegramArchiveEntry": {
+        "type": "object",
+        "properties": {
+          "archiveId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "importId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "identity": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "reason": { "type": "string", "enum": ["discarded", "duplicate", "superseded"] },
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "recoverableUntil": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "archiveId",
+          "importId",
+          "identity",
+          "reason",
+          "archivedAt",
+          "recoverableUntil"
+        ],
+        "additionalProperties": false
+      },
+      "TelegramArchiveList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TelegramArchiveEntry" }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
       "AccountDeletionStatus": {
         "type": "object",
         "properties": {
@@ -9249,7 +9733,14 @@
                   "TELEGRAM_LINK_ALREADY_LINKED",
                   "TELEGRAM_LINK_IDENTITY_CONFLICT",
                   "TELEGRAM_LINK_NOT_LINKED",
-                  "TELEGRAM_LINK_UNAVAILABLE"
+                  "TELEGRAM_LINK_UNAVAILABLE",
+                  "TELEGRAM_TICKET_NOT_FOUND",
+                  "TELEGRAM_TICKET_STATE_CONFLICT",
+                  "TELEGRAM_TICKET_DUPLICATE",
+                  "TELEGRAM_TICKET_ARCHIVED",
+                  "TELEGRAM_TICKET_EXPIRED",
+                  "TELEGRAM_TICKET_NOT_RECOVERABLE",
+                  "TELEGRAM_TICKET_BUSY"
                 ]
               },
               "message": { "type": "string" },
@@ -11479,6 +11970,326 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/TelegramLinkStateResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/tickets/{id}/preview": {
+      "get": {
+        "operationId": "getTelegramTicketPreview",
+        "summary": "Ler o preview estruturado do bilhete antes de qualquer lançamento",
+        "tags": ["Telegram"],
+        "description": "Estado do bilhete que chegou pelo Telegram, antes de qualquer decisão. Nenhuma escrita financeira acontece nesta leitura: enquanto o preview existir, a aposta e o lançamento são os de antes do recebimento. A data de envio é o instante da mensagem original e é imutável; a data do evento é um campo separado, que nasce pendente e nunca é inferida da data de envio. A duplicata é decidida pela identidade determinística da imagem e do contexto — não por horário. Exige sessão válida e consentimento vigente.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramTicketPreview" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/tickets/{id}/decision": {
+      "post": {
+        "operationId": "decideTelegramTicketPreview",
+        "summary": "Confirmar, descartar ou reprocessar o bilhete do preview",
+        "tags": ["Telegram"],
+        "description": "Decisão explícita sobre o preview. `confirm` monta o comando financeiro canônico a partir do rascunho e é o ÚNICO caminho que cria aposta e lançamento; `discard` arquiva o registro por 30 dias sem apagar nada; `retry` volta a extração para a fila. Nenhuma decisão é temporizada e não existe desfazer automático. Repetir a mesma decisão com a mesma versão é idempotente. Exige Origin da aplicação, sessão válida e consentimento vigente.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TelegramPreviewActionInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramPreviewActionResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/tickets/archive": {
+      "get": {
+        "operationId": "listTelegramTicketArchive",
+        "summary": "Listar bilhetes arquivados e ainda recuperáveis",
+        "tags": ["Telegram"],
+        "description": "Bilhetes descartados ou identificados como duplicata que ainda estão dentro da janela de recuperação de 30 dias. Nada é apagado ao descartar: o registro continua endereçável por aqui. Duplicatas aparecem para diagnóstico, mas a recuperação devolve o registro original e nunca cria um segundo lançamento.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramArchiveList" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/tickets/archive/{archiveId}/restore": {
+      "post": {
+        "operationId": "restoreTelegramTicketArchive",
+        "summary": "Recuperar um bilhete arquivado dentro dos 30 dias",
+        "tags": ["Telegram"],
+        "description": "Devolve o bilhete à fila de decisão dentro da janela de recuperação. Nenhuma aposta é criada pela recuperação: o registro volta a aparecer no preview e o usuário decide de novo. Fora da janela a resposta é expirado; arquivo já restaurado ou duplicata não é recuperável. Exige Origin da aplicação, sessão válida e consentimento vigente.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TelegramArchiveRestoreInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "archiveId",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TelegramPreviewActionResult" }
               }
             }
           },
