@@ -5,6 +5,8 @@ declare global {
         initData?: string;
         ready?: () => void;
         close?: () => void;
+        /** STK-F2-12: o Mini App ocupa a tela inteira do Telegram. */
+        expand?: () => void;
         HapticFeedback?: {
           notificationOccurred?: (type: 'success' | 'warning' | 'error') => void;
         };

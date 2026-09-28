@@ -524,16 +524,32 @@ export function createOwnerAuth(
     async getOwner(headers: Headers) {
       const identity = await this.getIdentity(headers);
       if (!identity) return null;
+      return this.resolveAccess(identity.user.id);
+    },
+    /**
+     * STK-F2-12 — the same private-route gate for an identity that did NOT arrive
+     * through a browser session. The Mini App is authenticated by the Telegram
+     * initData, but the user behind it is decided by the F2-04 link, not by the
+     * client; once resolved, the request is admitted by EXACTLY these rules —
+     * deletion gate, beta admission, consent and membership — so a Mini App
+     * session can never be more permissive than the web one, and a revoked or
+     * purged account is refused here on every single request.
+     */
+    async resolveAccess(userId: string) {
+      if (typeof userId !== 'string' || userId.length === 0) return null;
+      if (await deletions.isBlocked(userId)) return null;
+      if (!(await isOwner(userId)) && !(await invitations.findAcceptedInvitationForUser(userId)))
+        return null;
       try {
-        const consentStatus = await consents.statusFor(identity.user.id);
+        const consentStatus = await consents.statusFor(userId);
         if (!consentStatus.allAccepted) return { status: 'consent_required' as const };
-        await tenant.ensureOrganizationMembership(identity.user.id);
-        const organization = await tenant.resolveOrganizationContext(identity.user.id);
+        await tenant.ensureOrganizationMembership(userId);
+        const organization = await tenant.resolveOrganizationContext(userId);
         return {
           status: 'ok' as const,
-          user: identity.user,
+          user: { id: userId, name: '' },
           organization: { id: organization.organizationId, role: organization.role },
-          expiresAt: identity.expiresAt,
+          expiresAt: '',
         };
       } catch {
         // Sanitized fail-closed behavior: membership/organization failures behave exactly like

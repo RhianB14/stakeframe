@@ -28,6 +28,7 @@ import {
   importConfirmResultSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
+import type { TelegramSessionGate } from './telegram-session-routes.js';
 import { validateTelegramInitData } from './telegram-init-data.js';
 import { ownerSessionSecurity } from './openapi.js';
 import { sendApiError } from './api-errors.js';
@@ -36,6 +37,7 @@ export function registerImportRoutes(
   app: FastifyInstance,
   auth: OwnerAuth | undefined,
   service: ImportService | undefined,
+  miniApp?: TelegramSessionGate,
 ) {
   const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const errors = {
@@ -65,11 +67,26 @@ export function registerImportRoutes(
     contexts.set(request, await service.ensureContext(owner.user.id));
   };
   // STK-G0-19-R5 — edição canônica do rascunho por duas interfaces do MESMO
-  // registro: sessão web (cookie) ou Mini App (initData validado no servidor,
-  // vinculado ao Telegram ID do proprietário). A web nunca chama o Telegram.
+  // registro: sessão web (cookie) ou Mini App (initData validado no servidor).
+  // A web nunca chama o Telegram.
+  //
+  // STK-F2-12: a identidade do Mini App é o VÍNCULO ATIVO da F2-04, não o
+  // `TELEGRAM_OWNER_USER_ID`. Os dois caminhos NUNCA coexistem: assim que o
+  // serviço de vínculo está configurado, o atalho de ambiente é ignorado por
+  // completo — do contrário, uma conta revogada no §8.2 ainda entraria pelo
+  // caminho legado, e revogação não valeria nada. O caminho legado só sobrevive
+  // em instalações que ainda não têm o serviço (beta antigo, sem vínculo).
   const authorizeDraft = async (request: FastifyRequest, reply: FastifyReply) => {
     const initData = request.headers['x-telegram-init-data'];
     if (typeof initData === 'string' && initData.length > 0) {
+      if (miniApp?.telegramLink) {
+        // Fonte única da verdade: o gate compartilhado, o mesmo dos demais fluxos.
+        await miniApp.authorizeMiniApp(request, reply);
+        if (reply.sent) return;
+        if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
+        contexts.set(request, miniApp.contexts.get(request)!);
+        return;
+      }
       let botToken: string | undefined;
       let expectedTelegramId: string | undefined;
       try {

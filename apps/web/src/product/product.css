@@ -7,6 +7,65 @@
   line-height: 1.5;
 }
 
+/* STK-F2-12 — casca do Mini App: o MESMO produto da web dentro do Telegram.
+   Só muda o invólucro (sem barra lateral, menu inferior, espaço para a área
+   segura do aparelho). Nenhuma regra de tela é duplicada aqui. */
+.miniapp-shell {
+  flex-direction: column;
+}
+.miniapp-shell .product-content {
+  /* O menu inferior é fixo: o conteúdo cresce por baixo dele. */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  width: 100%;
+  min-width: 0;
+}
+.miniapp-shell .product-main {
+  padding-inline: 12px;
+}
+.miniapp-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 2px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  background: rgba(16, 19, 24, 0.96);
+  border-top: 1px solid #23262e;
+  backdrop-filter: blur(8px);
+}
+.miniapp-nav a {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  text-decoration: none;
+  /* Alvo de toque confortável em tela de bolso. */
+  min-height: 48px;
+  justify-content: center;
+}
+.miniapp-nav a[aria-current='page'] {
+  background: #1a1f28;
+}
+.miniapp-nav .nav-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.miniapp-nav .nav-label {
+  font-size: 11px;
+  /* Rótulo curto não pode quebrar o menu em telas estreitas. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 /* Telegram Mini App — mobile-first editor */
 .miniapp-page {
   --mini-bg: #07101f;

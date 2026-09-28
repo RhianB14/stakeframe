@@ -79,6 +79,12 @@ export const apiErrorCodeSchema = z.enum([
   'TELEGRAM_TICKET_EXPIRED',
   'TELEGRAM_TICKET_NOT_RECOVERABLE',
   'TELEGRAM_TICKET_BUSY',
+  // STK-F2-12 — sessão do Mini App: a conta do Telegram é autêntica, mas não
+  // resolve para nenhum usuário vinculado (ou foi revogada). Distinguir os três
+  // estados permite orientar a interface sem revelar nada do vínculo.
+  'TELEGRAM_SESSION_NOT_LINKED',
+  'TELEGRAM_SESSION_REVOKED',
+  'TELEGRAM_SESSION_UNAVAILABLE',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z

@@ -37,6 +37,10 @@ import { registerOperationsRoutes, type OperationsService } from './operations.j
 import { registerOnboardingRoutes } from './onboarding-routes.js';
 import { registerTelegramLinkRoutes } from './telegram-link-routes.js';
 import { registerTelegramTicketRoutes } from './telegram-ticket-routes.js';
+import {
+  createTelegramSessionGate,
+  registerTelegramSessionRoutes,
+} from './telegram-session-routes.js';
 import { registerDebugRoutes } from './debug-routes.js';
 import { registerAdminPanelRoutes } from './admin-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
@@ -80,6 +84,18 @@ export function createApp(options: {
     return payload;
   });
   registerApiContracts(app);
+  // STK-F2-12 — o gate do Mini App é construído uma vez e entregue às rotas que
+  // precisam dele. A organização do usuário autenticado é resolvida pelo mesmo
+  // serviço da web (`finance.ensureContext`), então os dois caminhos de
+  // autenticação convergem para o MESMO contexto canônico.
+  const telegramGate = createTelegramSessionGate({
+    ownerAuth: options.ownerAuth,
+    telegramLink: options.telegramLink,
+    organizationOf: async (userId: string) => {
+      if (!options.finance) throw new Error('AUTH_UNAVAILABLE');
+      return options.finance.ensureContext(userId);
+    },
+  });
   app.after(() => {
     app.get(
       '/health/live',
@@ -186,11 +202,18 @@ export function createApp(options: {
     );
     registerAuthRoutes(app, options.ownerAuth);
     registerConsentRoutes(app, options.ownerAuth);
-    registerFinanceRoutes(app, options.ownerAuth, options.finance);
+    registerTelegramSessionRoutes(app, telegramGate, options.telegramLink);
+    // STK-F2-12 — as rotas de leitura e o comando financeiro passam a aceitar a
+    // sessão do Mini App (initData validado no servidor + vínculo da F2-04),
+    // convergindo com o MESMO gate de escrita e contexto da web.
+    registerFinanceRoutes(app, options.ownerAuth, options.finance, telegramGate);
     registerOnboardingRoutes(app, options.ownerAuth, options.onboarding);
     registerTelegramLinkRoutes(app, options.ownerAuth, options.telegramLink);
     registerTelegramTicketRoutes(app, options.ownerAuth, options.telegramTickets, options.database);
-    registerImportRoutes(app, options.ownerAuth, options.imports);
+    // STK-F2-12 — o gate do Mini App é entregue também às importações, para que
+    // o editor pontual (deep link da mensagem) aceite a sessão do Telegram
+    // resolvida pelo vínculo da F2-04, e não só a sessão web por cookie.
+    registerImportRoutes(app, options.ownerAuth, options.imports, telegramGate);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerFreebetRoutes(app, options.ownerAuth, options.freebets, options.notifications);
     registerReportRoutes(app, options.ownerAuth, options.reports);
