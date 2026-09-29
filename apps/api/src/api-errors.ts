@@ -87,6 +87,15 @@ const messages: Record<ApiErrorCode, string> = {
     'Esta conta do Telegram ainda não está vinculada. Vincule pelo site para usar o aplicativo.',
   TELEGRAM_SESSION_UNAVAILABLE:
     'A conexão com o Telegram está indisponível agora. Tente novamente em alguns instantes.',
+  // STK-F2-13 — as três recusas de plano e orçamento terminam NO MESMO LUGAR:
+  // orientam o preenchimento manual. A recusa é de plano ou de orçamento, nunca
+  // defeito do bilhete, e a importação continua disponível para o usuário.
+  ENTITLEMENT_FEATURE_DENIED:
+    'Este recurso não está disponível no seu plano. Você pode continuar o preenchimento manual desta importação.',
+  ENTITLEMENT_PLAN_LIMIT_REACHED:
+    'Seu plano atingiu o limite deste recurso. A importação continua disponível para preenchimento manual.',
+  PAID_CALL_CEILING_REACHED:
+    'O limite de processamento do beta foi atingido. Esta importação segue disponível para você preencher manualmente.',
 };
 
 export function sendApiError(

@@ -29,15 +29,23 @@ import type { PoolClient } from 'pg';
 import {
   AI_DAILY_REQUEST_LIMIT,
   AI_MONTHLY_REQUEST_LIMIT,
+  GLOBAL_SPEND_CAP_MICROS,
+  GLOBAL_SPEND_WINDOW,
+  spendExhausted,
   type AdminAccount,
   type AdminAccounts,
   type AdminAuditTrail,
+  type AdminBreaker,
   type AdminErrorKind,
   type AdminErrors,
   type AdminFlags,
   type AdminPanelView,
+  type AdminPlan,
   type AdminQueue,
+  type AdminSpend,
   type AdminUsage,
+  type AiCircuitBreakerScope,
+  type PlanId,
 } from '@stakeframe/shared';
 import { createTenantContext, type Database, type OrganizationContext } from './index.js';
 
@@ -288,6 +296,161 @@ export function createAdminPanelService(
     };
   }
 
+  /**
+   * STK-F2-13 — os três breakers, em metadados de operação.
+   *
+   * O escopo por usuário entra pelo NÚMERO DE CIRCUITOS ABERTOS, e cada
+   * circuito individual aparece sem a CHAVE do usuário: o `scope_key` é o id
+   * interno, que é identificador pessoal, e o painel não o publica. O que
+   * chega é escopo, estado, contador e janela — nada que identifique quem.
+   */
+  async function readBreakers(): Promise<{ breakers: AdminBreaker[]; openUserBreakers: number }> {
+    const rows = (
+      await database.pool.query<{
+        scope: AiCircuitBreakerScope;
+        state: 'closed' | 'open';
+        consecutive_confirmed_failures: number;
+        recovers_at: Date | null;
+        spend_cap_micros: string | null;
+      }>(
+        `select b.scope, b.state, b.consecutive_confirmed_failures, b.recovers_at,
+                p.spend_cap_micros
+           from integration.ai_circuit_breaker b
+           left join integration.breaker_policy p on p.scope = b.scope
+          where b.scope in ('global','daily')
+          order by b.scope asc`,
+      )
+    ).rows;
+    const openUserBreakers = Number(
+      (
+        await database.pool.query<{ n: string }>(
+          `select count(*)::text as n from integration.ai_circuit_breaker
+            where scope='user' and state='open' and (recovers_at is null or recovers_at > now())`,
+        )
+      ).rows[0]!.n,
+    );
+    const isOpen = (row: { state: string; recovers_at: Date | null }) =>
+      row.state === 'open' && (!row.recovers_at || row.recovers_at.getTime() > Date.now());
+    return {
+      breakers: rows.map((row) => ({
+        scope: row.scope,
+        // Mesma regra de `breakerIsOpen`: janela vencida conta como fechado.
+        state: isOpen(row) ? 'open' : 'closed',
+        confirmedFailures: Number(row.consecutive_confirmed_failures),
+        recoversAt: iso(row.recovers_at),
+        spendCapMicros: row.spend_cap_micros === null ? null : Number(row.spend_cap_micros),
+      })),
+      openUserBreakers,
+    };
+  }
+
+  /**
+   * STK-F2-13 — gasto estimado contra o teto global de R$200/mês (Plano §4.7).
+   *
+   * É o que PAGAMOS ao fornecedor, por preço de referência. Não é receita, não
+   * é preço de venda e não existe cobrança no beta: nenhum valor de qualquer
+   * organização entra aqui, e a agregação é GLOBAL de propósito (a mesma
+   * infraestrutura é paga uma vez só).
+   */
+  async function readSpend(): Promise<AdminSpend> {
+    // A soma e a política são lidas SEPARADAS de propósito: misturar um
+    // agregado com colunas sem agregação exigiria GROUP BY e devolveria uma
+    // linha por dia, não o total do mês. Duas leituras de uma linha cada são
+    // mais simples e mais honestas que um GROUP BY sobre uma janela que só
+    // existe para justificar o agrupamento.
+    const totals = await database.pool.query<{ micros: string }>(
+      `select coalesce(sum(cost_micros) filter(where day >= to_char(now() at time zone 'UTC','YYYY-MM') || '-01'),0)::text as micros
+         from integration.ai_usage_day`,
+    );
+    const policy = await database.pool.query<{
+      cap: string | null;
+      window: 'day' | 'month' | null;
+    }>(
+      "select spend_cap_micros::text as cap, spend_window as window from integration.breaker_policy where scope='global'",
+    );
+    const row = policy.rows[0];
+    const capMicros = row?.cap === null || row?.cap === undefined ? null : Number(row.cap);
+    const micros = Number(totals.rows[0]!.micros);
+    const window = row?.window ?? GLOBAL_SPEND_WINDOW;
+    return {
+      micros,
+      capMicros: capMicros ?? GLOBAL_SPEND_CAP_MICROS,
+      window,
+      exhausted: spendExhausted({
+        micros,
+        capMicros: capMicros ?? GLOBAL_SPEND_CAP_MICROS,
+        window,
+        exhausted: false,
+      }),
+    };
+  }
+
+  /**
+   * STK-F2-13 — o plano de cada organização, exatamente como a FUNÇÃO do banco
+   * o resolve (`core.organization_entitlements`). O painel não recalcula
+   * permissão: ele lê a mesma função que a API usa para decidir, de modo que
+   * "o que o painel mostra" e "o que a API aplica" não podem divergir.
+   *
+   * O consumo (`ocrUsedMonth`) é uma CONTAGEM — quantas extrações foram
+   * apresentadas pela organização no mês, e é lido por organização dentro do
+   * próprio contexto dela. Nenhum valor financeiro, aposta ou conteúdo entra
+   * nesta linha.
+   */
+  async function readPlans(organizations: OrganizationContext[]): Promise<{
+    plans: AdminPlan[];
+    truncated: boolean;
+  }> {
+    const plans: AdminPlan[] = [];
+    let truncated = false;
+    for (const organization of organizations) {
+      if (plans.length >= maxRows) {
+        truncated = true;
+        break;
+      }
+      const row = await tenant.withOrganizationTransaction(organization, async (client) => {
+        const entitlements = await client.query<{
+          plan_id: PlanId;
+          feature: string;
+          enabled: boolean;
+          limit_value: number | null;
+        }>('select plan_id,feature,enabled,limit_value from core.organization_entitlements($1)', [
+          organization.organizationId,
+        ]);
+        const name = await client.query<{ name: string }>(
+          'select name from core.organization where id=$1',
+          [organization.organizationId],
+        );
+        // Consumo do recurso mais restritivo: extrações APRESENTADAS no mês
+        // (a mesma unidade que a quota da 0024 debita).
+        const used = await client.query<{ used: string }>(
+          `select count(*)::text as used from integration.extraction_audit
+            where organization_id = ${context} and outcome_presented
+              and presented_at >= date_trunc('month', now())`,
+        );
+        return {
+          entitlements: entitlements.rows,
+          name: name.rows[0]?.name ?? '',
+          used: used.rows[0]?.used ?? '0',
+        };
+      });
+      const ocr = row.entitlements.find((entry) => entry.feature === 'ocr_extraction');
+      const resolvedPlan = row.entitlements[0]?.plan_id ?? 'free';
+      plans.push({
+        organizationId: organization.organizationId,
+        organizationName: row.name,
+        plan: resolvedPlan,
+        ocrUsedMonth: Number(row.used),
+        ocrLimitMonth:
+          ocr?.limit_value === null || ocr === undefined ? null : Number(ocr.limit_value),
+        // STK-F2-13 §4.7: o preço é INDEFINIDO no beta. `null` é a resposta
+        // honesta; zero seria uma promessa de grátis que o produto não faz.
+        priceBRL: null,
+        pricesDefined: false,
+      });
+    }
+    return { plans, truncated };
+  }
+
   async function usage(actorUserId: string, requestId: string | null): Promise<AdminUsage> {
     await audit(actorUserId, 'usage', 'allowed', requestId);
     // Global infrastructure (no organization predicate, on purpose): the
@@ -312,10 +475,16 @@ export function createAdminPanelService(
         )
       ).rows[0]!.n,
     );
+    // STK-F2-13: gasto e breakers são globais, como a cota — são uma única
+    // infraestrutura, e escopá-los por tenant multiplicaria o teto em silêncio.
+    const spend = await readSpend();
+    const { breakers, openUserBreakers } = await readBreakers();
+    const contexts = await tenant.listOrganizations();
+    const { plans, truncated: plansTruncated } = await readPlans(contexts);
     // One transaction per organization, in that organization's own context.
     const queues: AdminQueue[] = [];
     let truncated = false;
-    for (const organization of await tenant.listOrganizations()) {
+    for (const organization of contexts) {
       if (queues.length >= maxRows) {
         truncated = true;
         break;
@@ -334,6 +503,11 @@ export function createAdminPanelService(
         monthlyLimit: AI_MONTHLY_REQUEST_LIMIT,
         state: ratio >= 1 ? 'exhausted' : ratio >= 0.8 ? 'warning' : 'ready',
       },
+      spend,
+      breakers,
+      openUserBreakers,
+      plans,
+      plansTruncated,
       organizations,
       truncated,
       queues,

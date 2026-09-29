@@ -81,7 +81,7 @@ export type ExtractionOutcomeResult =
   /** Falha confirmada: a resposta chegou e não serviu. Sem quota consumida. */
   | { kind: 'failed'; category: ExtractionErrorCategory; code: string; secondaryAllowed: boolean }
   /** Porta fechada: nenhuma chamada paga foi feita. Item fica para o usuário. */
-  | { kind: 'refused'; reason: 'quota' | 'breaker'; scope: string };
+  | { kind: 'refused'; reason: 'quota' | 'breaker' | 'spend'; scope: string };
 
 type Dependencies = {
   database: Database;

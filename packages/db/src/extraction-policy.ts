@@ -9,7 +9,12 @@ import {
   extractionQuotaStatusSchema,
   extractionOutcomePresentsForReview,
   quotaUnitForOutcome,
+  paidCallDecision,
+  spendExhausted,
+  GLOBAL_SPEND_CAP_MICROS as AI_GLOBAL_SPEND_CAP_MICROS,
+  aiCallCost,
   type AiCircuitBreakerScope,
+  type BreakerPolicy,
   type ExtractionAuditRecord,
   type ExtractionErrorCategory,
   type ExtractionOutcome,
@@ -60,11 +65,21 @@ import { createTenantContext, type OrganizationContext } from './tenant-context.
 
 const ORGANIZATION_SETTING = 'app.organization_id';
 
-/** Janela de recuperação do circuito, já contida (a STK-F2-13 ajusta a política). */
+/**
+ * STK-F2-13 — a janela de recuperação e o limiar deixaram de ser constantes de
+ * código: passaram a ser DADOS em `integration.breaker_policy`, lidos por escopo
+ * (`readPolicies`). Os valores abaixo são a política de DEGRADAÇÃO, usada só
+ * quando a tabela não pode ser lida, e são deliberadamente MAIS CONTIDOS que
+ * o default gravado pela migração: perder a tabela de política fecha a porta mais
+ * cedo, nunca a abre.
+ */
 export const AI_CIRCUIT_RECOVERY_MS = 15 * 60 * 1000;
 
 /**
- * Falhas CONFIRMADAS consecutivas que abrem o circuito.
+ * Falhas CONFIRMADAS consecutivas que abrem o circuito, por escopo, quando a
+ * política do banco está disponível. O valor canônico é o mesmo gravado pela
+ * migração; a STK-F2-13 trocou a CONSTANTE pela LINHA, e este número continua
+ * exportado porque é o default verificável do que o banco deve conter.
  *
  * Falha incerta NÃO conta: um timeout pode ter custado trabalho ao fornecedor,
  * mas não é recusa do serviço, e abrir o circuito por algo que pode ser um
@@ -126,25 +141,35 @@ const breakerIsOpen = (row: BreakerRow): boolean =>
   !!row && row.state === 'open' && (!row.recovers_at || row.recovers_at.getTime() > Date.now());
 
 /**
- * Debita a quota do dia no MESMO sinal dos demais contadores, então o painel e
- * o monitor (que leem `requests`) continuam vendo o total, e `presented` guarda
+ * Debita a quota E o custo no MESMO sinal dos demais contadores, então o painel
+ * e o monitor (que leem `requests`) continuam vendo o total, e `presented` guarda
  * a semântica nova: quantas dessas foram APRESENTADAS.
+ *
+ * STK-F2-13 acrescenta `cost_micros` na MESMA linha: nenhuma contabilidade foi
+ * duplicada, apenas uma dimensão nova sobre os mesmos dias. A DEBITADA DE
+ * QUOTA é zero na recusa (`refused_quota`, nenhuma chamada saiu) e o CUSTO
+ * também — mas o custo é debitado em todos os OUTROS desfechos, inclusive a
+ * resposta incerta, que pode ter custado dinheiro ao fornecedor (e é por isso
+ * que ela não pode ser repetida).
  */
 async function debitQuota(
   client: PoolClient,
   outcome: ExtractionOutcome,
   presented: boolean,
+  costMicros: number = 0,
 ): Promise<void> {
   const unit = quotaUnitForOutcome(outcome);
+  const spent = outcome === 'refused_quota' ? 0 : Math.max(0, Math.trunc(costMicros));
   await client.query(
-    `insert into integration.ai_usage_day(day,requests,presented,uncertain,failed,refused)
-     values($1,$2,$3,$4,$5,$6)
+    `insert into integration.ai_usage_day(day,requests,presented,uncertain,failed,refused,cost_micros)
+     values($1,$2,$3,$4,$5,$6,$7)
      on conflict(day) do update set
        requests=integration.ai_usage_day.requests+$2,
        presented=integration.ai_usage_day.presented+$3,
        uncertain=integration.ai_usage_day.uncertain+$4,
        failed=integration.ai_usage_day.failed+$5,
-       refused=integration.ai_usage_day.refused+$6`,
+       refused=integration.ai_usage_day.refused+$6,
+       cost_micros=integration.ai_usage_day.cost_micros+$7`,
     [
       day(),
       unit,
@@ -152,6 +177,7 @@ async function debitQuota(
       outcome === 'uncertain' ? 1 : 0,
       outcome === 'confirmed_failure' ? 1 : 0,
       outcome === 'refused_quota' ? 1 : 0,
+      spent,
     ],
   );
 }
@@ -192,13 +218,65 @@ export function createExtractionPolicyService(database: Database) {
   }
 
   /**
+   * A política dos três escopos, lida de `integration.breaker_policy`.
+   *
+   * STK-F2-13: o limiar e a janela passaram a ser dados por escopo. Quando a
+   * tabela não pode ser lida, a degradação é CONSERVADORA (limiar e janela mais
+   * contidos que o default) — perder a política fecha a porta mais cedo, nunca
+   * a abre. A leitura é GLOBAL, como o breaker: um escopo local que afrouxasse
+   * o limiar daria a um tenant o direito de gastar mais que a infraestrutura.
+   */
+  async function readPolicies(): Promise<Record<AiCircuitBreakerScope, BreakerPolicy>> {
+    let rows: {
+      scope: AiCircuitBreakerScope;
+      failure_threshold: number;
+      recovery_ms: number;
+      spend_cap_micros: string | null;
+      spend_window: 'day' | 'month' | null;
+    }[];
+    try {
+      rows = (
+        await database.pool.query(
+          `select scope,failure_threshold,recovery_ms,spend_cap_micros,spend_window
+             from integration.breaker_policy`,
+        )
+      ).rows;
+    } catch {
+      // Sem tabela de política (banco ainda na 0024, por exemplo): os
+      // defaults de degradação assumem, e a porta segue fechada cedo.
+      rows = [];
+    }
+    const byScope = new Map(rows.map((row) => [row.scope, row]));
+    const policy = (scope: AiCircuitBreakerScope): BreakerPolicy => {
+      const row = byScope.get(scope);
+      if (!row)
+        return {
+          scope,
+          failureThreshold: 3,
+          recoveryMs: 5 * 60_000,
+          spendCapMicros: null,
+          spendWindow: null,
+        };
+      return {
+        scope,
+        failureThreshold: Number(row.failure_threshold),
+        recoveryMs: Number(row.recovery_ms),
+        spendCapMicros: row.spend_cap_micros === null ? null : Number(row.spend_cap_micros),
+        spendWindow: row.spend_window,
+      };
+    };
+    return { global: policy('global'), daily: policy('daily'), user: policy('user') };
+  }
+
+  /**
    * Uma falha CONFIRMADA alimenta o circuito. Só elas: timeout e conexão
    * perdida são incertos e podem ter custado trabalho ao fornecedor sem que o
    * serviço esteja recusando chamadas.
    *
    * A gravação é idempotente por `ON CONFLICT`, e o incremento do contador
    * acontece dentro do mesmo statement do `state`, então duas falhas
-   * simultâneas não se perdem entre leitura e escrita.
+   * simultâneas não se perdem entre leitura e escrita. O limiar e a janela vêm
+   * da política do escopo (`readPolicies`), não de constante.
    */
   async function recordConfirmedFailure(
     category: ExtractionErrorCategory,
@@ -209,7 +287,9 @@ export function createExtractionPolicyService(database: Database) {
       { scope: 'daily', key: 'daily' },
       ...(userId ? [{ scope: 'user' as const, key: userId }] : []),
     ];
+    const policies = await readPolicies();
     for (const entry of scopes) {
+      const policy = policies[entry.scope];
       await database.pool.query(
         `insert into integration.ai_circuit_breaker
            (scope,scope_key,state,consecutive_confirmed_failures,opened_at,recovers_at,last_error_category)
@@ -226,49 +306,69 @@ export function createExtractionPolicyService(database: Database) {
                             else integration.ai_circuit_breaker.recovers_at end,
            last_error_category=$3,
            updated_at=now()`,
-        [
-          entry.scope,
-          entry.key,
-          category,
-          AI_CIRCUIT_FAILURE_THRESHOLD,
-          String(AI_CIRCUIT_RECOVERY_MS),
-        ],
+        [entry.scope, entry.key, category, policy.failureThreshold, String(policy.recoveryMs)],
       );
     }
   }
 
   /**
-   * Situação da quota e dos três breakers, lida ANTES de qualquer chamada paga.
+   * Situação da quota, do gasto e dos três breakers, lida ANTES de qualquer
+   * chamada paga.
    *
-   * `refusesPaidCalls` é a decisão única que o worker consulta: teto atingido
-   * OU qualquer breaker aberto significa que a próxima chamada é paga e não
-   * pode acontecer.
+   * `refusesPaidCalls` é a decisão única que o worker consulta: teto de quota,
+   * teto de gasto OU qualquer breaker aberto significa que a próxima chamada é
+   * paga e não pode acontecer. O teto de gasto é o de R$200/mês (§4.7), lido
+   * da MESMA soma diária que a quota usa — nenhuma contabilidade foi duplicada.
    */
   async function status(userId?: string | null): Promise<ExtractionQuotaStatus> {
-    const counts = await database.pool.query<{ daily: string; monthly: string }>(
+    const counts = await database.pool.query<{
+      daily: string;
+      monthly: string;
+      micros: string;
+    }>(
       `select coalesce(sum(presented) filter(where day=$1),0)::text as daily,
-              coalesce(sum(presented) filter(where day >= $2),0)::text as monthly
+              coalesce(sum(presented) filter(where day >= $2),0)::text as monthly,
+              coalesce(sum(cost_micros) filter(where day >= $2),0)::text as micros
          from integration.ai_usage_day`,
       [day(), `${monthPrefix()}-01`],
     );
     const breakers = await readBreakers(userId ?? null);
-    const dailyPresented = Number(counts.rows[0]?.daily ?? '0');
-    const monthlyPresented = Number(counts.rows[0]?.monthly ?? '0');
-    const globalOpen = breakerIsOpen(breakers.global);
-    const dailyOpen = breakerIsOpen(breakers.daily);
-    const userOpen = breakerIsOpen(breakers.user);
+    const policies = await readPolicies();
+    const globalPolicy = policies.global;
+    const row = counts.rows[0]!;
+    const dailyPresented = Number(row.daily);
+    const monthlyPresented = Number(row.monthly);
+    const monthlyMicros = Number(row.micros);
     const quotaReached =
       dailyPresented >= AI_QUOTA_CEILINGS.dailyPresented ||
       monthlyPresented >= AI_QUOTA_CEILINGS.monthlyPresented;
+    const globalOpen = breakerIsOpen(breakers.global);
+    const dailyOpen = breakerIsOpen(breakers.daily);
+    const userOpen = breakerIsOpen(breakers.user);
+    // O teto de gasto só existe onde a política o define. Quando existe, é
+    // comparação simples contra a MESMA agregação que a quota usa.
+    const spendReached =
+      globalPolicy.spendCapMicros !== null &&
+      spendExhausted({
+        micros: monthlyMicros,
+        capMicros: globalPolicy.spendCapMicros,
+        window: globalPolicy.spendWindow,
+        exhausted: false,
+      });
     return extractionQuotaStatusSchema.parse({
       dailyPresented,
       dailyCeiling: AI_QUOTA_CEILINGS.dailyPresented,
       monthlyPresented,
       monthlyCeiling: AI_QUOTA_CEILINGS.monthlyPresented,
+      // STK-F2-13: gasto do mês e teto global em microreais, ao lado dos
+      // números de quota. A decisão `refusesPaidCalls` abaixo é a mesma.
+      monthlySpendMicros: monthlyMicros,
+      globalSpendCapMicros: globalPolicy.spendCapMicros ?? AI_GLOBAL_SPEND_CAP_MICROS,
       globalOpen,
       dailyOpen,
       userOpen,
-      refusesPaidCalls: quotaReached || globalOpen || dailyOpen || userOpen,
+      spendExhausted: spendReached,
+      refusesPaidCalls: quotaReached || spendReached || globalOpen || dailyOpen || userOpen,
     });
   }
 
@@ -278,7 +378,8 @@ export function createExtractionPolicyService(database: Database) {
    * Com teto atingido ou breaker aberto, a função REGISTRA a recusa
    * (`refused_quota`, quota zero) e devolve o motivo. O item fica disponível
    * para preenchimento manual: a recusa é decisão de orçamento, não defeito do
-   * item, e é auditada como tal.
+   * item, e é auditada como tal. A ordem de verificação (breaker, gasto, quota)
+   * é a mesma de `paidCallDecision`, que é a função pura que expressa a regra.
    */
   async function requirePaidCall(
     context: OrganizationContext,
@@ -287,24 +388,66 @@ export function createExtractionPolicyService(database: Database) {
     userId?: string | null,
   ): Promise<
     | { allowed: true }
-    | { allowed: false; reason: 'quota' | 'breaker'; scope: AiCircuitBreakerScope }
+    | { allowed: false; reason: 'quota' | 'breaker' | 'spend'; scope: AiCircuitBreakerScope }
   > {
     const current = await status(userId);
-    if (!current.refusesPaidCalls) return { allowed: true };
-    const breakerOpen = current.globalOpen || current.dailyOpen || current.userOpen;
-    const scope: AiCircuitBreakerScope = current.globalOpen
-      ? 'global'
-      : current.userOpen
-        ? 'user'
-        : 'daily';
+    const decision = paidCallDecision(current);
+    if (decision.allowed) return { allowed: true };
     await record(context, {
       inboxId,
       imageSha256,
       outcome: 'refused_quota',
       errorCategory: 'refused_quota',
-      breakerScope: scope,
+      breakerScope: decision.scope as AiCircuitBreakerScope,
     });
-    return { allowed: false, reason: breakerOpen ? 'breaker' : 'quota', scope };
+    return {
+      allowed: false,
+      reason: decision.reason,
+      scope: decision.scope as AiCircuitBreakerScope,
+    };
+  }
+
+  /**
+   * O custo estimado de um registro, em microreais, pelo preço de REFERÊNCIA do
+   * catálogo (`integration.ai_model_price`).
+   *
+   * Três garantias, todas fechando a porta em vez de abrir:
+   *  - preço ausente NÃO é custo zero: cai no valor de fallback declarado em
+   *    `integration.ai_cost_model`, porque um fornecedor que escondesse o preço
+   *    não conseguiria escapar do teto;
+   *  - uso não declarado também não é zero (mesma regra, dentro de `aiCallCost`);
+   *  - a recusa por cota custa zero, porque nenhuma chamada saiu — a regra é
+   *    aplicada em `debitQuota`, que é quem conhece o desfecho.
+   *
+   * O preço é lido uma vez por chamada; é uma linha de catálogo por modelo, e
+   * a alternativa (cache por processo) criaria um segundo número que o banco
+   * não conhece.
+   */
+  async function costMicros(audit: ExtractionAuditRecord): Promise<number> {
+    if (audit.outcome === 'refused_quota') return 0;
+    const price = audit.model
+      ? (
+          await database.pool.query<{ input_micros_per_1k: string; output_micros_per_1k: string }>(
+            'select input_micros_per_1k,output_micros_per_1k from integration.ai_model_price where model=$1',
+            [audit.model],
+          )
+        ).rows[0]
+      : undefined;
+    const fallback = (
+      await database.pool.query<{ unpriced_call_micros: string }>(
+        "select unpriced_call_micros from integration.ai_cost_model where id='default'",
+      )
+    ).rows[0];
+    return aiCallCost({
+      model: audit.model,
+      promptTokens: audit.usage.promptTokens,
+      completionTokens: audit.usage.completionTokens,
+      inputMicrosPer1k: price ? Number(price.input_micros_per_1k) : null,
+      outputMicrosPer1k: price ? Number(price.output_micros_per_1k) : null,
+      // Sem linha de fallback (banco pré-0025), o piso declarado no shared
+      // entra: um número conhecido e não-zero é melhor do que custo zero.
+      unpricedCallMicros: Number(fallback?.unpriced_call_micros ?? 1500),
+    }).micros;
   }
 
   /**
@@ -369,7 +512,10 @@ export function createExtractionPolicyService(database: Database) {
       // `on conflict do nothing` só dispara no índice parcial de apresentação
       // (o único UNIQUE condicional da tabela): quando o item JÁ foi contado, a
       // debitada é pulada — é o banco que impede a contagem dupla.
-      if (row) await debitQuota(client, audit.outcome, presented);
+      // STK-F2-13: o custo é estimado pelo preço de referência do catálogo e
+      // debitado na MESMA transação da auditoria, para que a contabilidade de
+      // custo nunca fique atrás da de quota. A recusa não debita nada.
+      if (row) await debitQuota(client, audit.outcome, presented, await costMicros(audit));
       // As colunas do `inbox` acompanham o desfecho para que o preview (F2-05)
       // e a auditoria leiam o mesmo estado, sem depender de join.
       await client.query(
@@ -517,6 +663,10 @@ export function createExtractionPolicyService(database: Database) {
     audit,
     breakers,
     secondaryAllowedAfter,
+    // STK-F2-13: a política dos escopos é lida do banco, e a operação precisa
+    // ver o MESMO número que o serviço usa — é o que permite verificar, num
+    // teste, que mudar a tabela muda o comportamento sem deploy.
+    readPolicies,
   };
 }
 

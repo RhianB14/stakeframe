@@ -11,6 +11,7 @@
 // organização de destino, e nenhuma delas abre dados de um tenant.
 
 import { z } from 'zod';
+import { GLOBAL_SPEND_CAP_MICROS, GLOBAL_SPEND_WINDOW, planIdSchema } from './entitlements.js';
 
 export const adminPanelViewSchema = z
   .enum(['accounts', 'usage', 'flags', 'errors', 'audit'])
@@ -85,6 +86,74 @@ export const adminQueueSchema = z
   .strict();
 export type AdminQueue = z.infer<typeof adminQueueSchema>;
 
+/**
+ * STK-F2-13 — estado dos circuit breakers por escopo, exposto ao superadmin.
+ *
+ * METADADOS DE OPERAÇÃO, nunca conteúdo de usuário: escopo, estado, contador de
+ * falhas confirmadas e a janela de recuperação. O escopo `user` aparece pelo
+ * NÚMERO DE CIRCUITOS ABERTOS, e cada circuito individual traz um identificador
+ * derivado (hash) — nunca o id do usuário, que é o identificador pessoal.
+ */
+export const adminBreakerSchema = z
+  .object({
+    scope: z.enum(['global', 'daily', 'user']),
+    state: z.enum(['closed', 'open']),
+    /** Falhas CONFIRMADAS consecutivas. Incerteza não conta. */
+    confirmedFailures: z.number().int().min(0),
+    /** Fim da janela de recuperação; null quando o circuito está fechado. */
+    recoversAt: z.iso.datetime().nullable(),
+    /** Teto de gasto do escopo em microreais, ou null se não existe. */
+    spendCapMicros: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+export type AdminBreaker = z.infer<typeof adminBreakerSchema>;
+
+/**
+ * STK-F2-13 — gasto estimado contra o teto global de R$200/mês (Plano §4.7).
+ *
+ * É o que NÓS pagamos ao fornecedor, estimado por preço de referência: o beta não
+ * cobra do usuário, então não existe preço de venda aqui e nenhum valor de
+ * receita aparece nesta visão. Microreais saem como inteiros; a conversão para
+ * real é problema de exibição, não do contrato.
+ */
+export const adminSpendSchema = z
+  .object({
+    /** Gasto estimado na janela, em microreais. */
+    micros: z.number().int().nonnegative(),
+    capMicros: z.number().int().nonnegative().nullable(),
+    window: z.enum(['day', 'month']).nullable(),
+    /** Verdadeiro quando o teto foi atingido: novas chamadas pagas são recusadas. */
+    exhausted: z.boolean(),
+  })
+  .strict();
+export type AdminSpend = z.infer<typeof adminSpendSchema>;
+
+/**
+ * Plano de UMA organização, com os tetos de uso e a marca de preço indefinido.
+ *
+ * O preço é `null` de propósito (§4.7: preços indefinidos, sem cobrança no
+ * beta) — e `pricesDefined: false` diz isso explicitamente, para que a
+ * interface nunca apresente zero como se fosse gratuito.
+ */
+export const adminPlanSchema = z
+  .object({
+    organizationId: z.uuid(),
+    organizationName: z.string().min(1).max(200),
+    plan: planIdSchema,
+    /** Consumo do recurso mais restritivo, na unidade do recurso. */
+    ocrUsedMonth: z.number().int().min(0),
+    ocrLimitMonth: z.number().int().nonnegative().nullable(),
+    /** `null` = preço indefinido no beta. NUNCA zero. */
+    priceBRL: z.number().nonnegative().nullable(),
+    pricesDefined: z.literal(false),
+  })
+  .strict();
+export type AdminPlan = z.infer<typeof adminPlanSchema>;
+
+/** Teto global declarado, para a operação comparar sem consultar a política. */
+export const ADMIN_GLOBAL_SPEND_CAP_MICROS = GLOBAL_SPEND_CAP_MICROS;
+export const ADMIN_GLOBAL_SPEND_WINDOW = GLOBAL_SPEND_WINDOW;
+
 export const adminUsageSchema = z
   .object({
     generatedAt: z.iso.datetime(),
@@ -98,6 +167,13 @@ export const adminUsageSchema = z
         state: z.enum(['ready', 'warning', 'exhausted']),
       })
       .strict(),
+    // STK-F2-13: gasto estimado e teto de R$200/mês, ao lado dos breakers.
+    spend: adminSpendSchema,
+    breakers: z.array(adminBreakerSchema).max(50),
+    /** Quantos circuitos por usuário estão abertos (contagem, não identidades). */
+    openUserBreakers: z.number().int().min(0),
+    plans: z.array(adminPlanSchema).max(200),
+    plansTruncated: z.boolean(),
     organizations: z.number().int().min(0),
     truncated: z.boolean(),
     queues: z.array(adminQueueSchema).max(200),

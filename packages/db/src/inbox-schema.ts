@@ -330,6 +330,17 @@ export const aiUsageDay = integrationNamespace.table(
   {
     day: text('day').primaryKey(),
     requests: integer('requests').notNull().default(0),
+    /**
+     * STK-F2-13 — custo ESTIMADO do dia em microreais (1 BRL = 1.000.000), por
+     * preço de referência do fornecedor. É o que NÓS pagamos, nunca o que o
+     * usuário paga: o beta não cobra (Plano §4.7). Vive na MESMA linha da
+     * quota de propósito — nenhuma contabilidade foi duplicada, e o teto global
+     * de R$200/mês é lido da mesma agregação diária.
+     */
+    costMicros: bigint('cost_micros', { mode: 'number' }).notNull().default(0),
   },
-  (table) => [check('ai_usage_nonnegative', sql`${table.requests} >= 0`)],
+  (table) => [
+    check('ai_usage_nonnegative', sql`${table.requests} >= 0`),
+    check('ai_usage_cost_nonnegative', sql`${table.costMicros} >= 0`),
+  ],
 );

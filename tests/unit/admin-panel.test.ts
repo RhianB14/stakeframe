@@ -58,6 +58,13 @@ function fakeService() {
       monthlyLimit: 1500,
       state: 'ready' as const,
     },
+    // STK-F2-13: gasto estimado, breakers e planos entram no MESMO payload de
+    // uso, e continuam sendo metadados — nenhum valor de tenant, nenhum preço.
+    spend: { micros: 0, capMicros: 200_000_000, window: 'month' as const, exhausted: false },
+    breakers: [],
+    openUserBreakers: 0,
+    plans: [],
+    plansTruncated: false,
     organizations: 0,
     truncated: false,
     queues: [],

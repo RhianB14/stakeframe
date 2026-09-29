@@ -11,6 +11,7 @@ export * from './account.js';
 export * from './release.js';
 export * from './automatic-policy.js';
 export * from './telemetry.js';
+export * from './entitlements.js';
 
 export const systemStatusSchema = z
   .object({
@@ -85,6 +86,12 @@ export const apiErrorCodeSchema = z.enum([
   'TELEGRAM_SESSION_NOT_LINKED',
   'TELEGRAM_SESSION_REVOKED',
   'TELEGRAM_SESSION_UNAVAILABLE',
+  // STK-F2-13 — entitlement recusado e teto de chamada paga atingido. As três
+  // mensagens orientam o FLUXO MANUAL em vez de encerrar a conversa: a recusa
+  // é de plano ou de orçamento, nunca defeito do bilhete.
+  'ENTITLEMENT_FEATURE_DENIED',
+  'ENTITLEMENT_PLAN_LIMIT_REACHED',
+  'PAID_CALL_CEILING_REACHED',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z
