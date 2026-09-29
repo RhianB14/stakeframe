@@ -5160,6 +5160,183 @@
         },
         "required": ["linked", "linkedAt", "role", "userId"]
       },
+      "ReportSnapshotRefInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "period": { "type": "string", "enum": ["daily", "weekly", "monthly"] },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "financialVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "contentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "latest": { "type": "boolean" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "requestedBy": { "nullable": true, "type": "string" },
+          "revisionReason": { "nullable": true, "type": "string" }
+        },
+        "required": [
+          "id",
+          "version",
+          "period",
+          "from",
+          "to",
+          "financialVersion",
+          "title",
+          "contentSha256",
+          "latest",
+          "createdAt",
+          "requestedBy",
+          "revisionReason"
+        ],
+        "additionalProperties": false
+      },
+      "ReportSnapshotMetricsInput": {
+        "type": "object",
+        "properties": {
+          "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "realStake": { "type": "string" },
+          "freebetStake": { "type": "string" },
+          "realPrincipalClosed": { "type": "string" },
+          "realReturns": { "type": "string" },
+          "freebetReturns": { "type": "string" },
+          "realProfit": { "type": "string" },
+          "freebetProfit": { "type": "string" },
+          "profit": { "type": "string" },
+          "profitUnits": { "nullable": true, "type": "string" },
+          "knownProfitUnits": { "type": "string" },
+          "missingUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "exposure": { "type": "string" },
+          "roiReal": { "nullable": true, "type": "string" },
+          "yieldReal": { "nullable": true, "type": "string" },
+          "hitRateReal": { "nullable": true, "type": "string" },
+          "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "hitEligibleReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+        },
+        "required": [
+          "bets",
+          "settledBets",
+          "openBets",
+          "realStake",
+          "freebetStake",
+          "realPrincipalClosed",
+          "realReturns",
+          "freebetReturns",
+          "realProfit",
+          "freebetProfit",
+          "profit",
+          "profitUnits",
+          "knownProfitUnits",
+          "missingUnitBets",
+          "exposure",
+          "roiReal",
+          "yieldReal",
+          "hitRateReal",
+          "hitWinsReal",
+          "hitEligibleReal"
+        ],
+        "additionalProperties": false
+      },
+      "ReportSnapshotLineInput": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string", "enum": ["fact", "heuristic"] },
+          "text": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "fact": { "nullable": true, "type": "string", "maxLength": 120 }
+        },
+        "required": ["kind", "text", "fact"],
+        "additionalProperties": false
+      },
+      "ReportSnapshotInput": {
+        "type": "object",
+        "properties": {
+          "snapshot": { "$ref": "#/components/schemas/ReportSnapshotRefInput" },
+          "metrics": { "$ref": "#/components/schemas/ReportSnapshotMetricsInput" },
+          "narrative": {
+            "type": "object",
+            "properties": {
+              "lines": {
+                "maxItems": 24,
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ReportSnapshotLineInput" }
+              },
+              "lowSample": { "type": "boolean" },
+              "minSample": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+            },
+            "required": ["lines", "lowSample", "minSample"]
+          },
+          "breakdown": {
+            "maxItems": 120,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "maxLength": 40 },
+                "label": { "type": "string", "maxLength": 120 },
+                "labelKey": { "type": "string", "maxLength": 120 },
+                "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "profit": { "type": "string" },
+                "lowSample": { "type": "boolean" }
+              },
+              "required": ["id", "label", "labelKey", "bets", "profit", "lowSample"],
+              "additionalProperties": false
+            }
+          },
+          "revisions": {
+            "maxItems": 20,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReportSnapshotRefInput" }
+          },
+          "empty": { "type": "boolean" }
+        },
+        "required": ["snapshot", "metrics", "narrative", "breakdown", "revisions", "empty"]
+      },
+      "ReportSnapshotListInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReportSnapshotRefInput" }
+          }
+        },
+        "required": ["items"]
+      },
+      "ReportRevisionRequestInput": {
+        "type": "object",
+        "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "required": ["reason"],
+        "additionalProperties": false
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -5246,7 +5423,11 @@
                   "IMPORT_TEMPLATE_UNAVAILABLE",
                   "IMPORT_FILE_TOO_LARGE",
                   "IMPORT_CSV_MALFORMED",
-                  "IMPORT_MAPPING_CONFLICT"
+                  "IMPORT_MAPPING_CONFLICT",
+                  "REPORT_SNAPSHOT_NOT_FOUND",
+                  "REPORT_SNAPSHOT_NO_DATA",
+                  "REPORT_SNAPSHOT_NOT_REVISABLE",
+                  "REPORT_SERVICE_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -10800,6 +10981,186 @@
         "required": ["linked", "linkedAt", "role", "userId"],
         "additionalProperties": false
       },
+      "ReportSnapshotRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "period": { "type": "string", "enum": ["daily", "weekly", "monthly"] },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "financialVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "contentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "latest": { "type": "boolean" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "requestedBy": { "nullable": true, "type": "string" },
+          "revisionReason": { "nullable": true, "type": "string" }
+        },
+        "required": [
+          "id",
+          "version",
+          "period",
+          "from",
+          "to",
+          "financialVersion",
+          "title",
+          "contentSha256",
+          "latest",
+          "createdAt",
+          "requestedBy",
+          "revisionReason"
+        ],
+        "additionalProperties": false
+      },
+      "ReportSnapshotMetrics": {
+        "type": "object",
+        "properties": {
+          "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "settledBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "openBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "realStake": { "type": "string" },
+          "freebetStake": { "type": "string" },
+          "realPrincipalClosed": { "type": "string" },
+          "realReturns": { "type": "string" },
+          "freebetReturns": { "type": "string" },
+          "realProfit": { "type": "string" },
+          "freebetProfit": { "type": "string" },
+          "profit": { "type": "string" },
+          "profitUnits": { "nullable": true, "type": "string" },
+          "knownProfitUnits": { "type": "string" },
+          "missingUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "exposure": { "type": "string" },
+          "roiReal": { "nullable": true, "type": "string" },
+          "yieldReal": { "nullable": true, "type": "string" },
+          "hitRateReal": { "nullable": true, "type": "string" },
+          "hitWinsReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "hitEligibleReal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+        },
+        "required": [
+          "bets",
+          "settledBets",
+          "openBets",
+          "realStake",
+          "freebetStake",
+          "realPrincipalClosed",
+          "realReturns",
+          "freebetReturns",
+          "realProfit",
+          "freebetProfit",
+          "profit",
+          "profitUnits",
+          "knownProfitUnits",
+          "missingUnitBets",
+          "exposure",
+          "roiReal",
+          "yieldReal",
+          "hitRateReal",
+          "hitWinsReal",
+          "hitEligibleReal"
+        ],
+        "additionalProperties": false
+      },
+      "ReportSnapshotLine": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string", "enum": ["fact", "heuristic"] },
+          "text": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "fact": { "nullable": true, "type": "string", "maxLength": 120 }
+        },
+        "required": ["kind", "text", "fact"],
+        "additionalProperties": false
+      },
+      "ReportSnapshot": {
+        "type": "object",
+        "properties": {
+          "snapshot": { "$ref": "#/components/schemas/ReportSnapshotRef" },
+          "metrics": { "$ref": "#/components/schemas/ReportSnapshotMetrics" },
+          "narrative": {
+            "type": "object",
+            "properties": {
+              "lines": {
+                "maxItems": 24,
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ReportSnapshotLine" }
+              },
+              "lowSample": { "type": "boolean" },
+              "minSample": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+            },
+            "required": ["lines", "lowSample", "minSample"],
+            "additionalProperties": false
+          },
+          "breakdown": {
+            "maxItems": 120,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "maxLength": 40 },
+                "label": { "type": "string", "maxLength": 120 },
+                "labelKey": { "type": "string", "maxLength": 120 },
+                "bets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "profit": { "type": "string" },
+                "lowSample": { "type": "boolean" }
+              },
+              "required": ["id", "label", "labelKey", "bets", "profit", "lowSample"],
+              "additionalProperties": false
+            }
+          },
+          "revisions": {
+            "maxItems": 20,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReportSnapshotRef" }
+          },
+          "empty": { "type": "boolean" }
+        },
+        "required": ["snapshot", "metrics", "narrative", "breakdown", "revisions", "empty"],
+        "additionalProperties": false
+      },
+      "ReportSnapshotList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReportSnapshotRef" }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "ReportRevisionRequest": {
+        "type": "object",
+        "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "required": ["reason"],
+        "additionalProperties": false
+      },
       "SystemStatus": {
         "type": "object",
         "properties": {
@@ -10887,7 +11248,11 @@
                   "IMPORT_TEMPLATE_UNAVAILABLE",
                   "IMPORT_FILE_TOO_LARGE",
                   "IMPORT_CSV_MALFORMED",
-                  "IMPORT_MAPPING_CONFLICT"
+                  "IMPORT_MAPPING_CONFLICT",
+                  "REPORT_SNAPSHOT_NOT_FOUND",
+                  "REPORT_SNAPSHOT_NO_DATA",
+                  "REPORT_SNAPSHOT_NOT_REVISABLE",
+                  "REPORT_SERVICE_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -18054,6 +18419,314 @@
             }
           },
           "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report-snapshots/{id}": {
+      "get": {
+        "operationId": "getReportSnapshot",
+        "summary": "Abrir um relatório privado congelado com narrativa e versões",
+        "tags": ["Relatórios"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportSnapshot" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report-snapshots": {
+      "get": {
+        "operationId": "ensureReportSnapshot",
+        "summary": "Gerar ou ler o relatório congelado de uma janela do período",
+        "tags": ["Relatórios"],
+        "parameters": [
+          {
+            "schema": { "type": "string", "enum": ["daily", "weekly", "monthly"] },
+            "in": "query",
+            "name": "period",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportSnapshot" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report-snapshots/history": {
+      "get": {
+        "operationId": "listReportSnapshots",
+        "summary": "Consultar os relatórios congelados do período",
+        "tags": ["Relatórios"],
+        "parameters": [
+          {
+            "schema": { "type": "string", "enum": ["daily", "weekly", "monthly"] },
+            "in": "query",
+            "name": "period",
+            "required": false
+          },
+          {
+            "schema": { "default": 30, "type": "integer", "minimum": 1, "maximum": 100 },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportSnapshotList" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report-snapshots/{id}/revisions": {
+      "post": {
+        "operationId": "reviseReportSnapshot",
+        "summary": "Criar uma versão revisada do relatório mantendo a anterior intacta",
+        "tags": ["Relatórios"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReportRevisionRequestInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportSnapshot" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
