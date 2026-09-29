@@ -90,6 +90,14 @@ export function telegramPreviewButtons(miniAppUrl: string, importId: string) {
   ];
 }
 
+// STK-F2-07 — o teclado do REGISTRO POR TEXTO. É o mesmo teclado do preview da
+// F2-05 e, deliberadamente, o MESMO par de callback_data: a decisão sobre um
+// rascunho textual e a decisão sobre um rascunho de foto são a mesma decisão, e
+// tratá-las como duas ações criaria dois caminhos de escrita financeira onde o
+// produto tem um. O que muda é a FORMA do rascunho, não o que se decide sobre
+// ele.
+export const telegramTextConfirmButtons = telegramPreviewButtons;
+
 // Falha de operação Telegram classificada: transitória (retry/backoff),
 // permanente (400/403 sem loop) ou idempotente (mensagem ausente/'não
 // modificada' equivalem a sucesso). Nenhuma resposta bruta é propagada.
@@ -202,6 +210,29 @@ export function authorizedImage(update: unknown, config: TelegramConfig) {
   };
 }
 export type TelegramImage = NonNullable<ReturnType<typeof authorizedImage>>;
+
+// STK-F2-07 — mensagem de TEXTO do remetente autorizado. É a mesma fronteira
+// da foto e do callback, com as MESMAS recusas: usuário e chat precisam ser os
+// configurados, grupo/encaminhamento/bot emissor são rejeitados, e a data é o
+// instante da MENSAGEM ORIGINAL (que é o `placedAt` do bilhete textual, nunca o
+// relógio do servidor). O texto NÃO é validado aqui — ele é classificado pelo
+// `parseTelegramIntent` no roteador, e um texto fora da janela é recusado antes
+// de qualquer chamada paga.
+export function authorizedText(update: unknown, config: TelegramConfig) {
+  const parsed = telegramMessageSchema.safeParse(update);
+  if (!parsed.success) return null;
+  const { message, update_id: updateId } = parsed.data;
+  if (String(message.from.id) !== config.userId || String(message.chat.id) !== config.chatId)
+    return null;
+  if (typeof message.text !== 'string' || !message.text.trim()) return null;
+  return {
+    updateId,
+    messageId: message.message_id,
+    text: message.text,
+    receivedAt: new Date(message.date * 1000),
+  };
+}
+export type TelegramText = NonNullable<ReturnType<typeof authorizedText>>;
 
 // STK-G0-19-R6 — callback_query autorizado: usuário e chat precisam ser os
 // configurados; o payload só carrega a AÇÃO (nunca UUID/identificador) e o
@@ -478,6 +509,13 @@ export interface TelegramInbox {
   /** Trata callback_query autorizado; ausente = callbacks são ignorados. */
   callback?(query: TelegramCallback): Promise<void>;
   /**
+   * STK-F2-07: trata a mensagem de TEXTO autorizada (comandos e registro em
+   * linguagem natural). Ausente = texto é ignorado. Devolve `true` quando a
+   * mensagem foi consumida — o que importa é que ela NUNCA caia no caminho da
+   * foto: texto não tem bytes, e tratá-lo como imagem seria fabricar um anexo.
+   */
+  text?(message: TelegramText): Promise<boolean>;
+  /**
    * STK-F2-04: trata o deep link de uso único `/start <token>` do remetente
    * autorizado; ausente = deep links são ignorados. Mesmo transporte por
    * polling — nenhum webhook, nenhuma rota nova.
@@ -504,9 +542,19 @@ export async function pollTelegramOnce(
       const callback = authorizedCallback(update, config);
       if (callback && inbox.callback) await inbox.callback(callback);
       else {
-        // STK-F2-04 — deep link de uso único, depois das rotas já existentes.
-        const start = authorizedStart(update, config);
-        if (start && inbox.start) await inbox.start(start);
+        // STK-F2-07 — a mensagem de TEXTO vem DEPOIS do callback e ANTES do
+        // deep link, e essa ordem é a regra: `/start` precisa chegar intacto ao
+        // vínculo da F2-04, e o classificador de texto devolve `null` para
+        // ele justamente por isso. Texto nunca vira imagem — o `text` é
+        // tratado como update próprio e a foto já foi recusada acima.
+        const text = authorizedText(update, config);
+        if (text && inbox.text && (await inbox.text(text))) {
+          // mensagem consumida pela fronteira de texto
+        } else {
+          // STK-F2-04 — deep link de uso único, depois das rotas já existentes.
+          const start = authorizedStart(update, config);
+          if (start && inbox.start) await inbox.start(start);
+        }
       }
     }
     // No sender data or content from rejected messages is persisted.
