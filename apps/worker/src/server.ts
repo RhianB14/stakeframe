@@ -13,6 +13,8 @@ import { startAttachments } from './attachments.js';
 import { startAccountPurge } from './account-purge.js';
 import { startEventSearch } from './event-providers.js';
 import { startFreebetAlerts } from './freebet-alerts.js';
+import { startReportCadence } from './report-cadence.js';
+import { readTelegramConfig } from './telegram.js';
 import { createBudgetProbe } from './budget.js';
 import { initTelemetry, readTelemetryConfig } from './telemetry.js';
 
@@ -34,6 +36,12 @@ async function main() {
   let accountPurge = { stop: async () => {}, check: () => {} };
   let events = { stop: async () => {}, check: () => {} };
   let freebets = { stop: async () => {}, check: () => {} };
+  // STK-F2-08: a cadência do relatório só existe quando o Telegram existe — o
+  // canal é o ÚNICO destino do relatório (o card exclui e-mail, PDF e PNG). Sem
+  // Telegram configurado, o job é um no-op declarado, e o relatório continua
+  // disponível na página privada da conta.
+  const telegram = readTelegramConfig(process.env);
+  const reports = telegram ? startReportCadence(database, telegram) : undefined;
   try {
     await assertRecoveryReviewed(database);
     boss = await startWorker(connectionString, 'pgboss', (error) => {
@@ -58,6 +66,7 @@ async function main() {
     await accountPurge.stop();
     await events.stop();
     await freebets.stop();
+    await reports?.stop();
     await boss?.stop({ graceful: false });
     await database.close();
     telemetry.captureError(error, { stage: 'startup' });
@@ -79,6 +88,7 @@ async function main() {
         attachments.check();
         events.check();
         freebets.check();
+        reports?.check();
         if (!(await boss.getQueue(PROBE_QUEUE))) throw new Error('QUEUE_MISSING');
         response.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ready"}');
       } catch {
@@ -115,6 +125,7 @@ async function main() {
       .then(() => accountPurge.stop())
       .then(() => events.stop())
       .then(() => freebets.stop())
+      .then(() => reports?.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(async () => {
         await telemetry.shutdown();

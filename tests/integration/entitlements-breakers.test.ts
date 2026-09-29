@@ -818,16 +818,23 @@ describe('STK-F2-13 §15 — a API respeita os entitlements calculados no banco'
 });
 
 describe('STK-F2-13 §15 — replay-safe e forward-only', () => {
-  it('a migração 0025 está no journal como a última entrada', () => {
+  it('a migração 0025 está no journal, na posição que o idx declara', () => {
     const journal = JSON.parse(
       readFileSync(
         new URL('../../packages/db/migrations/meta/_journal.json', import.meta.url),
         'utf8',
       ),
     ) as { entries: { idx: number; tag: string }[] };
-    const last = journal.entries[journal.entries.length - 1]!;
-    expect(last.tag).toBe('0025_entitlements_breakers');
-    expect(last.idx).toBe(journal.entries.length - 1);
+    // A 0025 foi a última até a STK-F2-08 adicionar a 0027 (número reservado:
+    // a 0026 pertence à F2-09, branch paralela). O que este teste continua
+    // provando é que a 0025 está no journal e que o `idx` bate com a posição —
+    // não que ela é a última entrada, o que deixou de ser verdade por
+    // arquitetura, e fixar aqui exigiria desfazer a 0027.
+    const index = journal.entries.findIndex((entry) => entry.tag === '0025_entitlements_breakers');
+    expect(index).toBeGreaterThan(0);
+    expect(journal.entries[index]!.idx).toBe(index);
+    // E a entrada seguinte é a 0027 desta branch, com o número reservado.
+    expect(journal.entries[index + 1]!.tag).toBe('0027_report_snapshots');
   });
 
   it('todos os objetos da 0025 existem e são coerentes', async () => {

@@ -92,6 +92,14 @@ export const apiErrorCodeSchema = z.enum([
   'ENTITLEMENT_FEATURE_DENIED',
   'ENTITLEMENT_PLAN_LIMIT_REACHED',
   'PAID_CALL_CEILING_REACHED',
+  // STK-F2-08 — relatório privado. As quatro mensagens são de ACESSO ou de
+  // ESTADO, nunca de conteúdo: quem recebe `REPORT_SNAPSHOT_NOT_FOUND` não
+  // consegue distinguir "não existe" de "é de outra conta", e é essa
+  // indistinção que impede sondar a existência de um relatório alheio.
+  'REPORT_SNAPSHOT_NOT_FOUND',
+  'REPORT_SNAPSHOT_NO_DATA',
+  'REPORT_SNAPSHOT_NOT_REVISABLE',
+  'REPORT_SERVICE_UNAVAILABLE',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z
@@ -255,3 +263,5 @@ export * from './telegram-link.js';
 export * from './extraction-policy.js';
 export * from './telegram-commands.js';
 export * from './telegram-text.js';
+export * from './report-snapshots.js';
+export * from './report-snapshot-contract.js';

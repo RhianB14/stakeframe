@@ -28,8 +28,10 @@ import type {
   AccountExportService,
   AdminPanelService,
   EntitlementService,
+  ReportSnapshotService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
+import { registerReportSnapshotRoutes } from './report-snapshot-routes.js';
 import { registerAccountRoutes } from './account-routes.js';
 import { registerImportRoutes } from './import-routes.js';
 import { registerEventRoutes } from './event-routes.js';
@@ -59,6 +61,14 @@ export function createApp(options: {
   freebets?: FreebetService;
   notifications?: NotificationService;
   reports?: ReportService;
+  /**
+   * STK-F2-08: snapshots congelados, revisão versionada e a página HTML
+   * PRIVADA do relatório. Ausente = as rotas de snapshot respondem 503
+   * (fail-closed): sem o banco de snapshot não se pode afirmar que o
+   * relatório é auditável, e um relatório "privado" sem verificação de sessão
+   * seria exatamente a URL pública que o card rejeita.
+   */
+  reportSnapshots?: ReportSnapshotService;
   operations?: OperationsService;
   onboarding?: OnboardingService;
   account?: { deletion: AccountDeletionService; exports: AccountExportService };
@@ -230,6 +240,11 @@ export function createApp(options: {
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerFreebetRoutes(app, options.ownerAuth, options.freebets, options.notifications);
     registerReportRoutes(app, options.ownerAuth, options.reports);
+    // STK-F2-08 — a página HTML PRIVADA do relatório. Fica ao lado das rotas de
+    // relatório de propósito: as duas leem o mesmo serviço e o mesmo contexto,
+    // e uma delas ler o snapshot enquanto a outra recomputaria criaria
+    // exatamente a divergência que o snapshot existe para evitar.
+    registerReportSnapshotRoutes(app, options.ownerAuth, options.reportSnapshots, options.reports);
     registerAccountRoutes(
       app,
       options.ownerAuth,

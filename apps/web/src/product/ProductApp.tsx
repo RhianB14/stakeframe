@@ -31,6 +31,7 @@ import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
 import { ImportsPage, ImportReview, UploadForm } from './imports.js';
 import { savePendingUpload } from './upload-storage.js';
 import { CalendarPage, EventReview } from './events.js';
+import { ReportsPage } from './reports.js';
 import { OverviewReport } from './overview-report.js';
 import { OnboardingPage } from './onboarding.js';
 import './product.css';
@@ -57,6 +58,7 @@ const navigation = [
   { id: 'bets', title: 'Apostas', icon: '▤' },
   { id: 'calendar', title: 'Calendário', icon: '▦' },
   { id: 'analytics', title: 'Análises', icon: '↗' },
+  { id: 'reports', title: 'Relatórios', icon: '▥' },
   { id: 'finance', title: 'Financeiro', icon: '⇄' },
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
@@ -164,9 +166,18 @@ function ProductShell({
   // STK-F1-10: bilhetes, finanças, configurações e qualquer modal do produto
   // são superfícies sensíveis — nunca gravadas pelo replay (§6.1).
   useEffect(() => {
+    // STK-F2-08: `reports` entrou na lista porque a página mostra resultado,
+    // ROI e exposição — é uma superfície financeira como `bets` e `finance`,
+    // e o replay (§6.1) não pode gravá-la. Uma tela de número que escapasse
+    // daqui seria a mesma falha que motivou a marcação das outras três.
     setSensitiveSurface(
       'product-app',
-      page === 'bets' || page === 'finance' || page === 'settings' || modal !== null,
+      page === 'bets' ||
+        page === 'finance' ||
+        page === 'reports' ||
+        page === 'analytics' ||
+        page === 'settings' ||
+        modal !== null,
     );
     return () => setSensitiveSurface('product-app', false);
   }, [page, modal]);
@@ -324,6 +335,12 @@ function ProductShell({
             <Suspense fallback={<p role="status">Carregando análises…</p>}>
               <AnalyticsPage workspace={workspace} open={open} />
             </Suspense>
+          ) : page === 'reports' ? (
+            // STK-F2-08: a página do relatório privado. Ela não recebe o
+            // `workspace` porque é a ÚNICA tela do produto que lê o SNAPSHOT
+            // congelado em vez do estado atual — e é autenticada pelo mesmo
+            // caminho das demais.
+            <ReportsPage />
           ) : (
             <SettingsPage workspace={workspace} open={open} />
           )}
