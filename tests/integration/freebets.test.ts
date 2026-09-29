@@ -50,20 +50,49 @@ function localDateIn(days: number, from = new Date()): string {
 }
 
 /**
- * Meio-dia em São Paulo, no dia de hoje, como INSTANTE (UTC).
+ * Instante de referência FIXO no passado: 2020-01-01, meio-dia de São Paulo.
  *
- * Existe para tornar a fila de alertas determinística: o agendamento usa
- * `expiresAt − lead` e o quiet hours padrão (22h–6h) empurra o alerta para as
- * 6h da manhã. Ao meio-dia o alerta da janela de 1 dia JÁ está vencido, então
- * `claimDue` tem o que devolver em qualquer fuso e a qualquer hora em que o
- * teste rodar — sem fixar data (aí a freebet nasceria no passado) e sem tocar
- * na política de silêncio, que é comportamento de produto.
+ * Por que um instante fixo e não "hoje": a fila agenda o alerta em
+ * `expiresAt − lead` e o claim só pega o que já está vencido
+ * (`scheduled_for <= now()`). Com um instante derivado de `Date.now()`, basta a
+ * execução cruzar a meia-noite de São Paulo para o alvo cair no FUTURO e
+ * `claimDue` devolver `null` por desenho. Uma data fixa no passado tem o alvo
+ * sempre vencido, em qualquer dia, hora ou fuso em que o teste rodar.
+ *
+ * 2020-01-01 não é uma data arbitrária: a query de candidatos exige
+ * `expires_on >= (now() at time zone tz)::date`, então a freebet precisa ter
+ * EXPIRAÇÃO futura. A data do ALERTO pode ser antiga sem problema — o que
+ * importa é a expiração, e por isso o teste usa `localDateIn(0)` (hoje) para
+ * ela, com a janela de 3 dias garantindo `expiresAt − 3d` bem no passado.
  */
-function noonInSaoPaulo(): Date {
-  const today = localDateIn(0);
-  // −03:00 é o deslocamento de São Paulo; o país não observa horário de
-  // verão desde 2019, então a data é sempre reconstruível assim.
-  return new Date(`${today}T12:00:00-03:00`);
+function atInThePast(): Date {
+  return new Date('2020-01-01T12:00:00-03:00');
+}
+
+/**
+ * Preferência SEM quiet hours (22:00–24:00 e 00:00–00:00 não existem como
+ * silêncio: janela vazia).
+ *
+ * Por que o teste precisa disso: `enqueueExpiringFreebets` adia o alerta para o
+ * primeiro instante fora do silêncio (`outsideQuietHours`). Com a janela padrão
+ * 22h–6h, um alerta agendado durante a noite fica com `scheduled_for` às 06:00
+ * do dia seguinte — e, se o relógio da máquina também for noturno, NADA está
+ * vencido e `claimDue` devolve `null` **por desenho**. Isso quebrou a CI duas
+ * vezes: a #228 às 01:30 UTC e a F2-12 às 03:07 UTC, enquanto passava de dia.
+ *
+ * Desligar o silêncio aqui é uma escolha de TESTE, não de produto: o
+ * comportamento de "não acordar o usuário às 3h" tem testes próprios
+ * (`defers the alert outside quiet hours`), e esta asserção é sobre a
+ * RESTAURAÇÃO do alerta quando a entrega falha — que nada tem a ver com horário.
+ */
+async function withoutQuietHours() {
+  await freebets.savePreferences(tenantContext, tenantContext.userId, {
+    timezone: 'America/Sao_Paulo',
+    // Janela vazia: `isQuietHour` nunca casa, então não há adiamento.
+    quietHoursStart: 0,
+    quietHoursEnd: 0,
+    topics: { bet_settled: true, review_pending: true, freebet_expiring: true },
+  });
 }
 
 async function bookmakerId(context: OrganizationContext = tenantContext) {
@@ -400,15 +429,17 @@ describe('expiry alert queue', () => {
   });
 
   it('returns the alert to the queue when the channel is unavailable', async () => {
-    // STK-F2-10 (correção de robustez do TESTE, não da lógica): o instante de
-    // referência é FIXADO no meio-dia de São Paulo. A fila agenda o alerta em
-    // `expiresAt − lead` e o quiet hours padrão (22h–6h) o adia para as 6h;
-    // com `now` = horário real da máquina, o teste passava de dia e falhava
-    // de noite — `claimDue` devolvia null por DESENHO (nada vencido), não por
-    // defeito. Fixar o instante tira a dependência do relógio sem tocar em
-    // `enqueueExpiringFreebets`, `claimDue` ou `restore`.
-    const at = noonInSaoPaulo();
-    await makeFreebet({ expiresOn: localDateIn(1, at) });
+    // STK-F2-10 (correção de robustez do TESTE, não da lógica): a asserção é
+    // sobre a restauração do alerta, não sobre horário. Por isso o teste
+    // desliga os quiet hours e fixa o instante de referência — ver
+    // `withoutQuietHours` e `noonInSaoPaulo` para o porquê das duas coisas.
+    // Sem isso, `claimDue` devolve `null` por desenho sempre que a CI roda de
+    // noite (já aconteceu às 01:30 UTC na #228 e às 03:07 UTC aqui).
+    await withoutQuietHours();
+    const at = atInThePast();
+    // Expira HOJE: com a janela de 3 dias, `expiresAt − 3d` cai bem antes do
+    // `at` de referência, então o alerta já nasce vencido.
+    await makeFreebet({ expiresOn: localDateIn(0) });
     await notifications.enqueueExpiringFreebets(systemContext, tenantContext.userId, at);
     const context = systemOrganizationContext(tenantContext.organizationId);
     const due = await notifications.claimDue(context);
