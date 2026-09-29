@@ -803,17 +803,25 @@ describe('STK-F2-09 §15 — o banco recusa incoerência e o estado é o do job'
   });
 });
 
-describe('STK-F2-09 §15 — a 0026 é a última do journal e é replay-safe', () => {
-  it('a 0026 é a última entrada do journal', () => {
+describe('STK-F2-09 §15 — a 0026 está no journal e é replay-safe', () => {
+  it('a 0026 está no journal, em ordem e com índice contíguo', () => {
     const journal = JSON.parse(
       readFileSync(
         new URL('../../packages/db/migrations/meta/_journal.json', import.meta.url),
         'utf8',
       ),
     ) as { entries: { idx: number; tag: string }[] };
-    const last = journal.entries[journal.entries.length - 1]!;
-    expect(last.tag).toBe('0026_import_batches');
-    expect(last.idx).toBe(journal.entries.length - 1);
+    // A 0026 NÃO é mais a última: a STK-F2-08 acrescenta a 0027 depois dela.
+    // "Última entrada do journal" é um relógio, não uma propriedade do
+    // arquivo — fixá-la aqui quebraria com a PR de migração seguinte. O que a
+    // 0026 pediu continua garantido: ela está no journal, com índice
+    // contíguo, e o que veio depois não a desordena.
+    const index = journal.entries.findIndex((entry) => entry.tag === '0026_import_batches');
+    expect(index).toBe(26);
+    expect(journal.entries[index]!.idx).toBe(index);
+    // Nenhuma entrada fora da sua posição: é o que torna confiável o replay de
+    // prefixo do migrador.
+    expect(journal.entries.every((entry, position) => entry.idx === position)).toBe(true);
   });
 
   it('os objetos da 0026 existem e a RLS é fail-closed sem contexto', async () => {
