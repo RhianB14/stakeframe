@@ -49,6 +49,23 @@ function localDateIn(days: number, from = new Date()): string {
   return `${pick('year')}-${pick('month')}-${pick('day')}`;
 }
 
+/**
+ * Meio-dia em São Paulo, no dia de hoje, como INSTANTE (UTC).
+ *
+ * Existe para tornar a fila de alertas determinística: o agendamento usa
+ * `expiresAt − lead` e o quiet hours padrão (22h–6h) empurra o alerta para as
+ * 6h da manhã. Ao meio-dia o alerta da janela de 1 dia JÁ está vencido, então
+ * `claimDue` tem o que devolver em qualquer fuso e a qualquer hora em que o
+ * teste rodar — sem fixar data (aí a freebet nasceria no passado) e sem tocar
+ * na política de silêncio, que é comportamento de produto.
+ */
+function noonInSaoPaulo(): Date {
+  const today = localDateIn(0);
+  // −03:00 é o deslocamento de São Paulo; o país não observa horário de
+  // verão desde 2019, então a data é sempre reconstruível assim.
+  return new Date(`${today}T12:00:00-03:00`);
+}
+
 async function bookmakerId(context: OrganizationContext = tenantContext) {
   return (await finance.workspace(context)).catalog.find((row) => row.name === 'Bet365')!.id;
 }
@@ -383,8 +400,16 @@ describe('expiry alert queue', () => {
   });
 
   it('returns the alert to the queue when the channel is unavailable', async () => {
-    await makeFreebet({ expiresOn: localDateIn(1) });
-    await notifications.enqueueExpiringFreebets(systemContext, tenantContext.userId);
+    // STK-F2-10 (correção de robustez do TESTE, não da lógica): o instante de
+    // referência é FIXADO no meio-dia de São Paulo. A fila agenda o alerta em
+    // `expiresAt − lead` e o quiet hours padrão (22h–6h) o adia para as 6h;
+    // com `now` = horário real da máquina, o teste passava de dia e falhava
+    // de noite — `claimDue` devolvia null por DESENHO (nada vencido), não por
+    // defeito. Fixar o instante tira a dependência do relógio sem tocar em
+    // `enqueueExpiringFreebets`, `claimDue` ou `restore`.
+    const at = noonInSaoPaulo();
+    await makeFreebet({ expiresOn: localDateIn(1, at) });
+    await notifications.enqueueExpiringFreebets(systemContext, tenantContext.userId, at);
     const context = systemOrganizationContext(tenantContext.organizationId);
     const due = await notifications.claimDue(context);
     expect(due).not.toBeNull();
