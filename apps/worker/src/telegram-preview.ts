@@ -120,9 +120,23 @@ export function createTelegramPreviewFlow(
     const chatId = row.chatId ?? Number(config.chatId);
     const text = buildPreviewMessage({ ...row, preview });
     try {
-      await client.sendMessage(chatId, text, {
+      const sent = await client.sendMessage(chatId, text, {
         ...(row.sourceMessageId === null ? {} : { replyToMessageId: Number(row.sourceMessageId) }),
         buttons: telegramPreviewButtons(config.miniAppUrl, inboxId),
+      });
+      // STK-F2-07 — o botão Confirmar/Descartar do preview só é decidível se o
+      // servidor souber qual mensagem o carrega. Esse id mora em `metadata`
+      // (jsonb) e NÃO em `telegram_result_message_id`: aquela coluna é a da
+      // mensagem de resultado, e a outbox a usa para decidir se já entregou —
+      // gravá-la aqui faria a outbox pular a resposta final após a importação.
+      await tenant.withOrganizationTransaction(context, async (db) => {
+        await db.query(
+          `update integration.inbox
+              set metadata=jsonb_set(metadata,'{telegramPreviewMessageId}',to_jsonb($3::bigint),true),
+                  updated_at=now()
+            where organization_id=current_setting($1, true)::uuid and id=$2`,
+          ['app.organization_id', inboxId, String(sent.messageId)],
+        );
       });
     } catch (error) {
       if (!(error instanceof TelegramOperationError)) throw error;

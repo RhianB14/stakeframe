@@ -23,6 +23,7 @@ import {
 import { createTelegramCallbackHandler } from './telegram-callbacks.js';
 import { createTelegramLinkHandler, refreshBotUsername } from './telegram-link.js';
 import { createTelegramPreviewFlow } from './telegram-preview.js';
+import { createTelegramTextHandler } from './telegram-text-handler.js';
 import { IntegrationError } from './http.js';
 import { startTelegramOutbox } from './telegram-outbox.js';
 import { readAutomaticPolicy } from './automatic-config.js';
@@ -192,7 +193,9 @@ export async function startIntegrations(
       // R6: callbacks dos botões são resolvidos pelo vínculo canônico
       // (chat + id da mensagem); nunca por identificador no payload.
       const telegramClient = createTelegramClient(telegram, fetchImpl);
-      const handleCallback = createTelegramCallbackHandler(database, telegramClient, telegram);
+      const handleCallback = createTelegramCallbackHandler(database, telegramClient, telegram, {
+        apiKey: ai?.apiKey ?? null,
+      });
       // STK-F2-04 — deep link de uso único no MESMO polling: o worker só
       // registra a conta observada; a confirmação é no site.
       const handleStart = createTelegramLinkHandler(database, telegramClient, telegram);
@@ -201,11 +204,21 @@ export async function startIntegrations(
       // extração e a publicação do preview acontecem depois, em série.
       const tickets = createTelegramTicketService(database);
       const previewFlow = createTelegramPreviewFlow(database, telegramClient, telegram, tickets);
+      // STK-F2-07 — a fronteira de TEXTO no MESMO polling: os onze comandos e o
+      // registro em linguagem natural, que publica preview e NUNCA escreve. A
+      // chave de IA é a mesma do extrator de foto; sem ela, os comandos
+      // continuam funcionando e o texto cai para ação manual — que é
+      // exatamente o comportamento fail-closed exigido.
+      const textHandler = createTelegramTextHandler(database, telegramClient, telegram, {
+        apiKey: ai?.apiKey ?? null,
+        fetchImpl,
+      });
       const inbox = {
         offset: store.offset,
         advance: store.advance,
         callback: handleCallback,
         start: handleStart,
+        text: textHandler,
         async accept(image: TelegramImage, download: () => Promise<Buffer>) {
           const inboxId = await store.accept(
             telegramContext,

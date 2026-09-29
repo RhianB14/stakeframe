@@ -15,6 +15,7 @@ import {
   type TelegramCallback,
   type TelegramConfig,
 } from './telegram.js';
+import { createTelegramPreviewDecisionHandler } from './telegram-preview-decisions.js';
 
 // STK-G0-19-R6/R7 / STK-G0-20 B3/B4 — tratamento de callback_query dos botões
 // da mensagem final: Casa/Tipster (teclados de cadastros ATIVOS), Alterar
@@ -57,11 +58,38 @@ export function createTelegramCallbackHandler(
   database: Database,
   client: Client,
   config: TelegramConfig,
+  deps: { apiKey?: string | null } = {},
 ) {
   const tenant = createTenantContext(database);
   const finance = createFinanceService(database);
   const imports = createImportService(database);
+  // STK-F2-07 — a decisão sobre o PREVIEW é um caminho SEPARADO do vínculo por
+  // `telegram_result_message_id`: o preview é publicado ANTES da importação, e
+  // a coluna de resultado só é gravada depois. Resolver os dois pela mesma
+  // coluna faria o botão do preview apontar para a importação — ou, pior, faria
+  // a outbox pular a resposta final. O preview tem o seu próprio vínculo.
+  const previewDecisions = createTelegramPreviewDecisionHandler(database, client, config, {
+    apiKey: deps.apiKey ?? null,
+  });
   return async function handle(query: TelegramCallback): Promise<void> {
+    if (
+      query.action === 'preview' ||
+      query.action === 'preview_confirm' ||
+      query.action === 'preview_discard'
+    ) {
+      if (query.action === 'preview') {
+        await client.answerCallbackQuery(query.callbackId, {
+          text: 'Use Confirmar para registrar, Editar para corrigir ou Descartar para arquivar.',
+        });
+        return;
+      }
+      await previewDecisions({
+        callbackId: query.callbackId,
+        messageId: query.messageId,
+        action: query.action,
+      });
+      return;
+    }
     const founder = await tenant.founderOrganizationId();
     if (!founder) return;
     const context = systemOrganizationContext(founder);

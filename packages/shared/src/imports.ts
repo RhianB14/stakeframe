@@ -560,6 +560,11 @@ export const telegramMessageSchema = telegramUpdateIdSchema.extend({
     via_bot: z.never().optional(),
     forward_origin: z.never().optional(),
     caption: z.string().max(1024).optional(),
+    // STK-F2-07 — mensagem de TEXTO. `caption` é a legenda de uma foto; este é
+    // o corpo de uma mensagem sem anexo, e é por ele que chegam os comandos e
+    // o registro em linguagem natural. `photo` e `document` continuam
+    // opcionais, então a mesma mensagem de foto continua válida.
+    text: z.string().max(4096).optional(),
     photo: z.array(telegramFileSchema).min(1).max(20).optional(),
     document: z
       .object({

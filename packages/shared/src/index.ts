@@ -246,3 +246,5 @@ export * from './onboarding.js';
 export * from './admin.js';
 export * from './telegram-link.js';
 export * from './extraction-policy.js';
+export * from './telegram-commands.js';
+export * from './telegram-text.js';

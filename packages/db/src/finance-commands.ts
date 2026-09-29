@@ -201,14 +201,25 @@ export async function applyFinanceCommand(
       }
       return { id: row.id, before: row };
     }
-    const attachment = (
-      await client.query<{ state: string }>(
-        'select state from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
-        [row.attachment_id],
-      )
-    ).rows[0];
-    if (!attachment || ['deleting', 'deleted'].includes(attachment.state))
-      throw new FinanceError('STATE_CONFLICT');
+    // STK-F2-07 — a checagem de anexo vale para o que TEM anexo. Um registro
+    // textual chega pelo mesmo `integration.inbox` mas sem imagem: `image` e
+    // `attachment_id` são nulos e não há o que apagar, reter ou exportar. Sem
+    // este desvio, `attachment_id` nulo buscaria uma linha inexistente e TODO
+    // registro textual seria recusado com STATE_CONFLICT na confirmação — um
+    // item que o bot enfileirou, mostrou em preview e que o usuário não
+    // conseguiria confirmar nunca. A garantia que o desvio preserva é a que
+    // importa: um anexo em `deleting` ou `deleted` continua bloqueando a
+    // confirmação, então a foto não pode sumir entre a leitura e o lançamento.
+    if (row.attachment_id) {
+      const attachment = (
+        await client.query<{ state: string }>(
+          'select state from integration.attachment where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          [row.attachment_id],
+        )
+      ).rows[0];
+      if (!attachment || ['deleting', 'deleted'].includes(attachment.state))
+        throw new FinanceError('STATE_CONFLICT');
+    }
     if (type === 'import.retry') {
       if (row.state === 'pending') throw new FinanceError('STATE_CONFLICT');
       await client.query(
