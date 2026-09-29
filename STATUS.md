@@ -15,12 +15,12 @@
 
 ## Placar
 
-| Fase | Progresso | Observação |
-|---|---|---|
-| Gate 0 | G0-01, 03, 04 done · G0-02 em curso (dia 4/7) | G0-05/06/07 exigem autorização do dono |
-| Fase 1 | 13/13 done | fechada; define o baseline operacional |
-| Fase 2 | 12/18 done | em andamento |
-| Fases 3–5 | não iniciadas | dependem de gate e decisão de produto |
+| Fase      | Progresso                                     | Observação                             |
+| --------- | --------------------------------------------- | -------------------------------------- |
+| Gate 0    | G0-01, 03, 04 done · G0-02 em curso (dia 4/7) | G0-05/06/07 exigem autorização do dono |
+| Fase 1    | 13/13 done                                    | fechada; define o baseline operacional |
+| Fase 2    | 12/18 done                                    | em andamento                           |
+| Fases 3–5 | não iniciadas                                 | dependem de gate e decisão de produto  |
 
 ## Em andamento
 
