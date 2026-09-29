@@ -163,6 +163,16 @@ export {
   type TelegramTicketErrorCode,
   type TelegramTicketService,
 } from './telegram-ticket.js';
+export {
+  createExtractionPolicyService,
+  categoryForErrorCode,
+  secondaryAllowedAfter,
+  sha256Hex,
+  AI_CIRCUIT_FAILURE_THRESHOLD,
+  AI_CIRCUIT_RECOVERY_MS,
+  type ExtractionPolicyService,
+} from './extraction-policy.js';
+
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
 export { assertRecoveryReviewed } from './recovery-guard.js';

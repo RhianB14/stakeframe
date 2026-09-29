@@ -123,7 +123,7 @@ describe('durable extraction inbox', () => {
       ).rowCount,
     ).toBe(0);
   });
-  it('claims once under concurrency and does not release a consumed quota after failure', async () => {
+  it('claims once under concurrency and does not retry a failed claim', async () => {
     const store = integrationStore(database, boss);
     const id = await store.accept(tenantContext, input(), async () => image);
     const results = await Promise.all([
@@ -131,6 +131,9 @@ describe('durable extraction inbox', () => {
       store.claim(tenantContext, id),
     ]);
     expect(results.filter(Boolean)).toHaveLength(1);
+    // A falha não volta a fila por conta própria: a repetição da chamada paga
+    // é sempre EXPLÍCITA (STK-F2-06 — a cota passa a ser contada na
+    // apresentação, e falha técnica não consome unidade nenhuma).
     await store.fail(tenantContext, id, results.find(Boolean)!.attempt, 'AI_CONNECTION_FAILED');
     expect(await store.claim(tenantContext, id)).toBeNull();
     expect(
@@ -189,8 +192,11 @@ describe('durable extraction inbox', () => {
   });
   it('blocks the daily quota before dispatch', async () => {
     const store = integrationStore(database, boss);
+    // STK-F2-06: a cota conta extrações APRESENTADAS, então o teto é em
+    // `presented` — e o teste precisa zerar `presented` ao final, porque a
+    // contagem agora é feita pela apresentação, não pela reserva da tentativa.
     await database.pool.query(
-      "insert into integration.ai_usage_day(day,requests) values(to_char(now() at time zone 'UTC','YYYY-MM-DD'),60) on conflict(day) do update set requests=60",
+      "insert into integration.ai_usage_day(day,requests,presented) values(to_char(now() at time zone 'UTC','YYYY-MM-DD'),60,60) on conflict(day) do update set requests=60, presented=60",
     );
     const id = await store.accept(tenantContext, input(), async () => image);
     expect(await store.claim(tenantContext, id)).toBeNull();
@@ -201,7 +207,7 @@ describe('durable extraction inbox', () => {
         ])
       ).rows[0],
     ).toEqual({ attempts: 0, error_code: 'AI_LOCAL_QUOTA_REACHED' });
-    await database.pool.query('update integration.ai_usage_day set requests=0');
+    await database.pool.query('update integration.ai_usage_day set requests=0, presented=0');
   });
   it('consumes a queued extraction through the runtime and stores reviewable output', async () => {
     // Other fixtures are intentionally not processed by this test's consumer.

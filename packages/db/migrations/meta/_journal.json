@@ -169,6 +169,13 @@
       "when": 1790900000002,
       "tag": "0023_telegram_ticket_flow",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790900000003,
+      "tag": "0024_extraction_fail_closed",
+      "breakpoints": true
     }
   ]
 }

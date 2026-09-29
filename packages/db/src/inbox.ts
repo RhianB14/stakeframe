@@ -180,13 +180,18 @@ export function createInboxStore(
           [id],
         );
         if (!item.rows[0]) return null;
-        // Counts include uncertain/failed calls. Retrying requires a new explicit request.
+        // STK-F2-06: a cota conta EXTRAÇÕES APRESENTADAS, não requisições feitas.
+        // A verificação aqui é só a PORTA (teto já atingido ⇒ não há nova chamada
+        // paga) e a contagem NÃO acontece neste ponto — ela é debitada em
+        // `extraction_audit`, na mesma transação que grava a apresentação. Um
+        // timeout, uma conexão perdida ou uma recusa por cota não consomem
+        // unidade, e foi exatamente o que esta tabela fazia antes.
         const period = await client.query<{ day: string; month: string }>(
           "select to_char(now() at time zone 'UTC','YYYY-MM-DD') as day, to_char(now() at time zone 'UTC','YYYY-MM') as month",
         );
         const { day, month } = period.rows[0]!;
         const usage = await client.query<{ daily: string; monthly: string }>(
-          'select coalesce(sum(requests) filter(where day=$1),0) as daily, coalesce(sum(requests),0) as monthly from integration.ai_usage_day where day >= $2 and day < $3',
+          'select coalesce(sum(presented) filter(where day=$1),0) as daily, coalesce(sum(presented),0) as monthly from integration.ai_usage_day where day >= $2 and day < $3',
           [day, `${month}-01`, `${month}-32`],
         );
         if (Number(usage.rows[0]?.daily) >= 60 || Number(usage.rows[0]?.monthly) >= 1500) {
@@ -196,10 +201,6 @@ export function createInboxStore(
           );
           return null;
         }
-        await client.query(
-          'insert into integration.ai_usage_day(day,requests) values($1,1) on conflict(day) do update set requests=integration.ai_usage_day.requests+1',
-          [day],
-        );
         const claimed = await client.query<{ attempts: number }>(
           "update integration.inbox set state='processing',attempts=attempts+1,version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning attempts",
           [id],
