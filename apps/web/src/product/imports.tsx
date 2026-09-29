@@ -17,6 +17,7 @@ import { CommandForm, useFinanceActions } from './actions.js';
 import { ApiFailure, patchImportDraft, request, dateLabel } from './api.js';
 import { DraftControls } from './drafts.js';
 import { readPendingUpload, savePendingUpload, type PendingUpload } from './upload-storage.js';
+import { ImportBatchList } from './import-batch.js';
 import type { OpenModal } from './ProductApp.js';
 
 const states = {
@@ -80,7 +81,14 @@ export function ImportsPage({ workspace, open }: { workspace: Workspace; open: O
           <h2>Comprovantes e revisão</h2>
           <p>Acompanhe os registros e confira os comprovantes que precisam de revisão.</p>
         </div>
-        <Button onClick={() => open({ kind: 'upload' })}>Enviar comprovante</Button>
+        <div className="button-row">
+          <Button onClick={() => open({ kind: 'upload' })}>Enviar comprovante</Button>
+          {/* STK-F2-09 — o segundo caminho de importação: arquivo CSV, com
+              mapeamento visual e preview linha a linha antes de registrar. */}
+          <Button variant="secondary" onClick={() => open({ kind: 'import-batch' })}>
+            Importar arquivo
+          </Button>
+        </div>
       </div>
       <div className="filter-bar">
         <Field label="Situação da importação">
@@ -175,6 +183,9 @@ export function ImportsPage({ workspace, open }: { workspace: Workspace; open: O
           </div>
         </div>
       ) : null}
+      {/* STK-F2-09 — o estado dos lotes de arquivo, lido por recurso. É o
+          progresso do job, e não um canal de eventos. */}
+      <ImportBatchList />
     </div>
   );
 }

@@ -73,6 +73,15 @@ export {
 export { createInboxStore, type EnqueueExtraction, type InboxInput } from './inbox.js';
 export { createImportService, type ImportService } from './import-review.js';
 export {
+  createImportBatchService,
+  buildImportTemplate,
+  importBatchIdentity,
+  ImportBatchError,
+  IMPORT_BATCH_ERROR_CODES,
+  type ImportBatchErrorCode,
+  type ImportBatchService,
+} from './import-batch.js';
+export {
   createImportDraftService,
   enqueueOutbox,
   enqueueBetSync,

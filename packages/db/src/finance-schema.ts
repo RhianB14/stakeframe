@@ -251,6 +251,12 @@ export const bet = finance.table(
     unitAmount: money('unit_amount'),
     stakeJournalId: uuid('stake_journal_id'),
     completionState: text('completion_state').notNull().default('complete'),
+    // STK-F2-09 — a marcação de origem do LANÇAMENTO. `import_batch_id` é o
+    // que torna o rollback do lote possível, e `import_origin` é a origem
+    // PERMANENTE do registro: responde "de onde veio esta aposta" mesmo depois
+    // que o arquivo foi descartado e o lote apagado (ON DELETE SET NULL).
+    importBatchId: uuid('import_batch_id'),
+    importOrigin: text('import_origin'),
   },
   (t) => [
     unique('bet_organization_id_id_idx').on(t.organizationId, t.id),
@@ -268,6 +274,19 @@ export const bet = finance.table(
     ),
     check('bet_state', sql`${t.state} in ('open','settled','cancelled')`),
     check('bet_ticket_number_positive', sql`${t.ticketNumber}>0`),
+    // STK-F2-09: origem e lote NASCEM juntos, mas o lote pode ser apagado
+    // depois (ON DELETE SET NULL) e o CHECK não pode recusar a própria
+    // desvinculação. O que continua recusado é o inverso — origem sem lote
+    // nascida — e a origem fora do vocabulário fechado.
+    check(
+      'bet_import_origin_check',
+      sql`${t.importOrigin} is null or ${t.importOrigin} in ('stakeframe_template','csv_generic')`,
+    ),
+    check(
+      'bet_import_origin_pair_check',
+      sql`(${t.importOrigin} is null and ${t.importBatchId} is null) or ${t.importBatchId} is not null or ${t.state} = 'cancelled'`,
+    ),
+    index('bet_import_batch_idx').on(t.organizationId, t.importBatchId),
     foreignKey({
       name: 'bet_bookmaker_fk',
       columns: [t.organizationId, t.bookmakerId],

@@ -96,6 +96,17 @@ const messages: Record<ApiErrorCode, string> = {
     'Seu plano atingiu o limite deste recurso. A importação continua disponível para preenchimento manual.',
   PAID_CALL_CEILING_REACHED:
     'O limite de processamento do beta foi atingido. Esta importação segue disponível para você preencher manualmente.',
+  // STK-F2-09 — a orientação da importação por arquivo sempre diz o QUE FAZER:
+  // corrigir o mapeamento, dividir o arquivo, ou conferir o resultado do lote.
+  IMPORT_BATCH_NOT_FOUND: 'Este lote não existe nesta organização.',
+  IMPORT_BATCH_STATE_CONFLICT:
+    'Este lote mudou de estado. Confira o resultado antes de tentar de novo.',
+  IMPORT_BATCH_ALREADY_COMMITTED:
+    'A confirmação deste lote já foi registrada. Reenvie com a mesma chave para ver o mesmo resultado.',
+  IMPORT_TEMPLATE_UNAVAILABLE: 'O modelo de importação está indisponível agora. Tente novamente.',
+  IMPORT_FILE_TOO_LARGE: 'O arquivo excede o tamanho aceito. Divida-o em lotes menores.',
+  IMPORT_CSV_MALFORMED: 'O arquivo não pôde ser lido. Confira a codificação e o separador.',
+  IMPORT_MAPPING_CONFLICT: 'Duas colunas do arquivo foram mapeadas para o mesmo campo.',
 };
 
 export function sendApiError(

@@ -28,10 +28,12 @@ import type {
   AccountExportService,
   AdminPanelService,
   EntitlementService,
+  ImportBatchService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
 import { registerAccountRoutes } from './account-routes.js';
 import { registerImportRoutes } from './import-routes.js';
+import { registerImportBatchRoutes } from './import-batch-routes.js';
 import { registerEventRoutes } from './event-routes.js';
 import { registerFreebetRoutes } from './freebet-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
@@ -55,6 +57,8 @@ export function createApp(options: {
   release?: ReleaseInfo;
   finance?: FinanceService;
   imports?: ImportService;
+  /** STK-F2-09: importação por arquivo (template + CSV genérico); ausente = 503. */
+  importBatches?: ImportBatchService;
   events?: EventService;
   freebets?: FreebetService;
   notifications?: NotificationService;
@@ -227,6 +231,10 @@ export function createApp(options: {
       telegramGate,
       options.entitlements,
     );
+    // STK-F2-09 — a importação por arquivo é registrada junto das demais para
+    // que o gate de recurso da F2-13 seja o MESMO: um recurso desligado no
+    // plano recusa o CSV com o mesmo código que recusa a foto.
+    registerImportBatchRoutes(app, options.ownerAuth, options.importBatches, options.entitlements);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerFreebetRoutes(app, options.ownerAuth, options.freebets, options.notifications);
     registerReportRoutes(app, options.ownerAuth, options.reports);
