@@ -29,16 +29,21 @@ import { oddsSchema, positiveMoneySchema } from './finance.js';
  * referência e as seleções.
  */
 
-/** Uma seleção lida do texto. Mesma forma da extração de imagem, sem casas. */
-export const textBetSelectionSchema = z
-  .strictObject({
-    event: z.string().trim().min(1).max(300).nullable(),
-    sport: z.string().trim().min(1).max(100).nullable(),
-    market: z.string().trim().min(1).max(300).nullable(),
-    selection: z.string().trim().min(1).max(300).nullable(),
-    odds: oddsSchema.nullable(),
-  })
-  .meta({ id: 'TextBetSelection' });
+/**
+ * Uma seleção lida do texto. Mesma forma da extração de imagem, sem casas.
+ *
+ * SEM `meta({id})` de propósito: o repo só nomeia no OpenAPI os schemas que uma
+ * rota expõe, e este é um contrato interno de worker — nomeá-lo colocaria um
+ * componente órfão no `docs/openapi.json`, que o `api:spec:check` reprova.
+ * É o mesmo motivo declarado em `extractionUsageSchema` (F2-06).
+ */
+export const textBetSelectionSchema = z.strictObject({
+  event: z.string().trim().min(1).max(300).nullable(),
+  sport: z.string().trim().min(1).max(100).nullable(),
+  market: z.string().trim().min(1).max(300).nullable(),
+  selection: z.string().trim().min(1).max(300).nullable(),
+  odds: oddsSchema.nullable(),
+});
 export type TextBetSelection = z.infer<typeof textBetSelectionSchema>;
 
 /**
@@ -47,23 +52,21 @@ export type TextBetSelection = z.infer<typeof textBetSelectionSchema>;
  * REJEITADO, e o banco nunca viu a resposta do fornecedor porque não existe
  * coluna onde ela caberia.
  */
-export const textBetDraftSchema = z
-  .strictObject({
-    reference: z.string().trim().max(150).nullable(),
-    stake: positiveMoneySchema.nullable(),
-    odds: oddsSchema.nullable(),
-    /**
-     * Nomes declarados no texto, resolvidos por alias contra o catálogo ATIVO da
-     * organização. São NOME, não id: o servidor decide a qual cadastro pertence e
-     * um nome desconhecido vira `null` (recusa), nunca cadastro novo.
-     */
-    bookmakerName: z.string().trim().min(1).max(100).nullable(),
-    tipsterName: z.string().trim().min(1).max(100).nullable(),
-    selections: z.array(textBetSelectionSchema).min(1).max(40),
-    /** Apenas "não deu para ler com segurança". Nunca recomendação. */
-    warnings: z.array(z.string().trim().min(1).max(200)).max(20),
-  })
-  .meta({ id: 'TextBetDraft' });
+export const textBetDraftSchema = z.strictObject({
+  reference: z.string().trim().max(150).nullable(),
+  stake: positiveMoneySchema.nullable(),
+  odds: oddsSchema.nullable(),
+  /**
+   * Nomes declarados no texto, resolvidos por alias contra o catálogo ATIVO da
+   * organização. São NOME, não id: o servidor decide a qual cadastro pertence e
+   * um nome desconhecido vira `null` (recusa), nunca cadastro novo.
+   */
+  bookmakerName: z.string().trim().min(1).max(100).nullable(),
+  tipsterName: z.string().trim().min(1).max(100).nullable(),
+  selections: z.array(textBetSelectionSchema).min(1).max(40),
+  /** Apenas "não deu para ler com segurança". Nunca recomendação. */
+  warnings: z.array(z.string().trim().min(1).max(200)).max(20),
+});
 export type TextBetDraft = z.infer<typeof textBetDraftSchema>;
 
 /**
