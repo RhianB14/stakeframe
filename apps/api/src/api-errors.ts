@@ -67,6 +67,17 @@ const messages: Record<ApiErrorCode, string> = {
   TELEGRAM_LINK_NOT_LINKED: 'Nenhuma conta do Telegram está vinculada a esta conta.',
   TELEGRAM_LINK_UNAVAILABLE:
     'A conexão com o Telegram está indisponível agora. Tente novamente em alguns instantes.',
+  TELEGRAM_TICKET_NOT_FOUND: 'Este bilhete não existe nesta organização.',
+  TELEGRAM_TICKET_STATE_CONFLICT:
+    'Este bilhete já foi decidido ou mudou de estado. Confira o preview novamente.',
+  TELEGRAM_TICKET_DUPLICATE:
+    'Esta imagem e contexto já chegaram antes. Abrimos o bilhete original.',
+  TELEGRAM_TICKET_ARCHIVED:
+    'Este bilhete está arquivado. Você pode recuperá-lo durante a janela de 30 dias.',
+  TELEGRAM_TICKET_EXPIRED: 'A janela de recuperação de 30 dias deste bilhete terminou.',
+  TELEGRAM_TICKET_NOT_RECOVERABLE:
+    'Este arquivo não pode ser recuperado: ele já foi restaurado ou é uma duplicata.',
+  TELEGRAM_TICKET_BUSY: 'Há um bilhete em processamento. Envie a próxima foto em instantes.',
 };
 
 export function sendApiError(

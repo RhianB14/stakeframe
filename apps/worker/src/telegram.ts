@@ -72,6 +72,24 @@ export function telegramDeleteConfirmButtons() {
   ];
 }
 
+// STK-F2-05 — teclado do PREVIEW. É a superfície da decisão antes de qualquer
+// escrita financeira: Confirmar e Descartar são callbacks próprios (sem
+// identificador no payload — a importação é resolvida pelo chat + id da
+// mensagem, como toda a STK-G0-20), e Editar abre o Mini App pela URL HTTPS
+// validada com o UUID opaco do registro.
+//
+// Não existe botão de "desfazer": o descarte ARQUIVA por 30 dias e a
+// recuperação é uma operação explícita, não um prazo de resposta do bot.
+export function telegramPreviewButtons(miniAppUrl: string, importId: string) {
+  const base = miniAppUrl.replace(/#.*$/, '').replace(/\/+$/, '');
+  const miniApp = () => `${base}/miniapp#miniapp?import=${importId}`;
+  return [
+    [{ text: '✅ Confirmar', callback_data: 'sf:v1:preview:confirm' }],
+    [{ text: '✏️ Editar', web_app: { url: miniApp() } }],
+    [{ text: '🗑️ Descartar', callback_data: 'sf:v1:preview:discard' }],
+  ];
+}
+
 // Falha de operação Telegram classificada: transitória (retry/backoff),
 // permanente (400/403 sem loop) ou idempotente (mensagem ausente/'não
 // modificada' equivalem a sucesso). Nenhuma resposta bruta é propagada.

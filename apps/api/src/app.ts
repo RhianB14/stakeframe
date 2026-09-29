@@ -36,10 +36,11 @@ import { registerFreebetRoutes } from './freebet-routes.js';
 import { registerOperationsRoutes, type OperationsService } from './operations.js';
 import { registerOnboardingRoutes } from './onboarding-routes.js';
 import { registerTelegramLinkRoutes } from './telegram-link-routes.js';
+import { registerTelegramTicketRoutes } from './telegram-ticket-routes.js';
 import { registerDebugRoutes } from './debug-routes.js';
 import { registerAdminPanelRoutes } from './admin-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
-import type { TelegramLinkService } from '@stakeframe/db';
+import type { TelegramLinkService, TelegramTicketService, Database } from '@stakeframe/db';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
@@ -60,6 +61,10 @@ export function createApp(options: {
   adminPanel?: AdminPanelService;
   /** STK-F2-04: vínculo com a conta do Telegram; ausente = rotas indisponíveis. */
   telegramLink?: TelegramLinkService;
+  /** STK-F2-05: fila/preview/decisão do bilhete; ausente = rotas indisponíveis. */
+  telegramTickets?: TelegramTicketService;
+  /** Handle do banco: a confirmação do preview precisa do serviço de importação. */
+  database?: Database;
   telemetry?: TelemetryHandle;
 }) {
   const app = Fastify({
@@ -184,6 +189,7 @@ export function createApp(options: {
     registerFinanceRoutes(app, options.ownerAuth, options.finance);
     registerOnboardingRoutes(app, options.ownerAuth, options.onboarding);
     registerTelegramLinkRoutes(app, options.ownerAuth, options.telegramLink);
+    registerTelegramTicketRoutes(app, options.ownerAuth, options.telegramTickets, options.database);
     registerImportRoutes(app, options.ownerAuth, options.imports);
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerFreebetRoutes(app, options.ownerAuth, options.freebets, options.notifications);

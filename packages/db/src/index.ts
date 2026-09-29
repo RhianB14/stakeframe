@@ -152,6 +152,15 @@ export {
   type TelegramLinkErrorCode,
   type TelegramLinkService,
 } from './telegram-link.js';
+export {
+  createTelegramTicketService,
+  telegramTicketContext,
+  telegramTicketIdentity,
+  TelegramTicketError,
+  TELEGRAM_ARCHIVE_RECOVERY_DAYS,
+  type TelegramTicketErrorCode,
+  type TelegramTicketService,
+} from './telegram-ticket.js';
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
 export { assertRecoveryReviewed } from './recovery-guard.js';

@@ -34,6 +34,13 @@ export const TELEGRAM_CALLBACK_ACTIONS = [
   'status',
   'cashout',
   'back',
+  // STK-F2-05: a decisão sobre o PREVIEW. `preview` abre o teclado (nunca
+  // sozinho), `preview_confirm` registra a aposta pelo comando financeiro
+  // canônico e `preview_discard` arquiva por 30 dias. Nenhuma delas é
+  // temporizada — não existe `/undo`.
+  'preview',
+  'preview_confirm',
+  'preview_discard',
 ] as const;
 export type TelegramCallbackAction = (typeof TELEGRAM_CALLBACK_ACTIONS)[number];
 
@@ -59,11 +66,13 @@ export function parseTelegramCallbackData(value: string): TelegramCallbackPayloa
   if (status)
     return { action: 'status', catalogId: null, statusAction: status[1] as TelegramStatusAction };
   const match =
-    /^sf:v1:(delete|delete:confirm|delete:cancel|bookmaker|tipster|status|cashout|back)$/.exec(
+    /^sf:v1:(delete|delete:confirm|delete:cancel|bookmaker|tipster|status|cashout|back|preview|preview:confirm|preview:discard)$/.exec(
       value,
     );
   if (!match || match[1] === undefined) return null;
-  const action = match[1].replace('delete:', 'delete_') as TelegramCallbackAction;
+  const action = match[1]
+    .replace('delete:', 'delete_')
+    .replace('preview:', 'preview_') as TelegramCallbackAction;
   return action === 'status'
     ? { action, catalogId: null, statusAction: null }
     : { action, catalogId: null };

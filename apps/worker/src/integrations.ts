@@ -5,6 +5,7 @@ import {
   createImportDraftService,
   createR2Storage,
   createAutomaticImportService,
+  createTelegramTicketService,
   createTenantContext,
   assertRecoveryReviewed,
   systemOrganizationContext,
@@ -21,6 +22,7 @@ import {
 } from './telegram.js';
 import { createTelegramCallbackHandler } from './telegram-callbacks.js';
 import { createTelegramLinkHandler, refreshBotUsername } from './telegram-link.js';
+import { createTelegramPreviewFlow } from './telegram-preview.js';
 import { IntegrationError } from './http.js';
 import { startTelegramOutbox } from './telegram-outbox.js';
 import { readAutomaticPolicy } from './automatic-config.js';
@@ -194,6 +196,11 @@ export async function startIntegrations(
       // STK-F2-04 — deep link de uso único no MESMO polling: o worker só
       // registra a conta observada; a confirmação é no site.
       const handleStart = createTelegramLinkHandler(database, telegramClient, telegram);
+      // STK-F2-05 — fila de UMA foto por vez + preview obrigatório. O
+      // recebimento grava a identidade determinística e enfileira; a
+      // extração e a publicação do preview acontecem depois, em série.
+      const tickets = createTelegramTicketService(database);
+      const previewFlow = createTelegramPreviewFlow(database, telegramClient, telegram, tickets);
       const inbox = {
         offset: store.offset,
         advance: store.advance,
@@ -223,6 +230,18 @@ export async function startIntegrations(
             sourceMessageId: image.messageId,
             receivedAt: image.receivedAt,
           });
+          // STK-F2-05: a fila assume aqui. `placedAt` é o instante da MENSAGEM
+          // ORIGINAL (nunca o relógio do servidor), e a identidade determinística
+          // — SHA-256 dos bytes + contexto — decide duplicata no RECEBIMENTO,
+          // antes de qualquer extração. O sha256 lido é o que `store.accept`
+          // gravou dos bytes validados, não um identificador do Telegram.
+          const stored = await store.imageIdentity(telegramContext, inboxId);
+          await tickets.enqueue(telegramContext, {
+            inboxId,
+            imageSha256: stored,
+            caption: image.caption,
+            receivedAt: image.receivedAt,
+          });
         },
       };
       tasks.push(
@@ -234,6 +253,28 @@ export async function startIntegrations(
               if (controller.signal.aborted) break;
               console.warn('TELEGRAM_POLL_FAILED');
               await delay(15_000, undefined, { signal: controller.signal }).catch(() => undefined);
+            }
+          }
+        })(),
+      );
+      // STK-F2-05 — drenagem da fila de bilhetes: estritamente UMA foto por
+      // vez. `drainOnce` só admite a próxima quando a anterior deixou a vaga,
+      // e publica o PREVIEW (sem nenhuma escrita financeira) antes de qualquer
+      // decisão do usuário. Nenhum conteúdo de bilhete é registrado: só códigos.
+      tasks.push(
+        (async () => {
+          while (!controller.signal.aborted) {
+            try {
+              let progressed = await previewFlow.drainOnce(telegramContext);
+              while (progressed && !controller.signal.aborted)
+                progressed = await previewFlow.drainOnce(telegramContext);
+              await tickets.expireRecoveries(telegramContext);
+              if (!controller.signal.aborted)
+                await delay(2_000, undefined, { signal: controller.signal }).catch(() => undefined);
+            } catch {
+              if (controller.signal.aborted) break;
+              console.warn('TELEGRAM_TICKET_QUEUE_FAILED');
+              await delay(5_000, undefined, { signal: controller.signal }).catch(() => undefined);
             }
           }
         })(),

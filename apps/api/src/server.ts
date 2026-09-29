@@ -12,6 +12,7 @@ import {
   createAccountExportService,
   createAdminPanelService,
   createTelegramLinkService,
+  createTelegramTicketService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -89,6 +90,11 @@ async function main() {
         }
       : {}),
     telegramLink: createTelegramLinkService(database),
+    // STK-F2-05: fila de uma foto por vez, preview obrigatório e arquivo
+    // recuperável por 30 dias. A confirmação usa o serviço de importação, então
+    // o handle do banco é entregue à app.
+    telegramTickets: createTelegramTicketService(database),
+    database,
     telemetry,
     ...(operations ? { operations } : {}),
     ...(ownerAuth ? { ownerAuth } : {}),
