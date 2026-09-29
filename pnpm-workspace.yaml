@@ -5,6 +5,10 @@ packages:
 overrides:
   '@esbuild-kit/core-utils>esbuild': '0.25.12'
   'miniflare>sharp': '0.35.4'
+  # GHSA-3wwx-pv8p-q78v / CVE-2026-85024 (moderate): DoS via unhandled error in
+  # WebSocket permessage-deflate decompression. Transitiva de miniflare>undici
+  # (devDep do ecossistema wrangler); 7.29.0 afetada, 7.29.1 corrigida.
+  undici: '7.29.1'
 
 allowBuilds:
   esbuild: true

@@ -7,6 +7,7 @@ settings:
 overrides:
   '@esbuild-kit/core-utils>esbuild': 0.25.12
   miniflare>sharp: 0.35.4
+  undici: 7.29.1
 
 pnpmfileChecksum: sha256-ZeT1npkyFcFneLgTL5x3A0i6F6Yf18TBb8NkwiVVct0=
 
@@ -3398,8 +3399,8 @@ packages:
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
-  undici@7.29.0:
-    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
     engines: {node: '>=20.18.1'}
 
   unenv@2.0.0-rc.24:
@@ -5857,7 +5858,7 @@ snapshots:
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.4(@types/node@24.10.13)
-      undici: 7.29.0
+      undici: 7.29.1
       workerd: 1.20260903.1
       ws: 8.21.0
       youch: 4.1.0-beta.10
@@ -6338,7 +6339,7 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  undici@7.29.0: {}
+  undici@7.29.1: {}
 
   unenv@2.0.0-rc.24:
     dependencies:
