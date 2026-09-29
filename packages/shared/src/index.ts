@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { releaseInfoSchema } from './release.js';
 export * from './imports.js';
+export * from './import-csv.js';
 export * from './telegram.js';
 export * from './telegram-flow.js';
 export * from './returns.js';
@@ -92,6 +93,16 @@ export const apiErrorCodeSchema = z.enum([
   'ENTITLEMENT_FEATURE_DENIED',
   'ENTITLEMENT_PLAN_LIMIT_REACHED',
   'PAID_CALL_CEILING_REACHED',
+  // STK-F2-09 — importação por arquivo. As recusas de MAPEAMENTO orientam o
+  // usuário a corrigir a tela de mapeamento, e as de ESTADO a consultar o
+  // resultado do lote; nenhuma delas diz que o dado do arquivo está errado.
+  'IMPORT_BATCH_NOT_FOUND',
+  'IMPORT_BATCH_STATE_CONFLICT',
+  'IMPORT_BATCH_ALREADY_COMMITTED',
+  'IMPORT_TEMPLATE_UNAVAILABLE',
+  'IMPORT_FILE_TOO_LARGE',
+  'IMPORT_CSV_MALFORMED',
+  'IMPORT_MAPPING_CONFLICT',
 ]);
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;
 export const apiErrorSchema = z

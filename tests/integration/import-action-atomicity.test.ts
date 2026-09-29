@@ -430,6 +430,17 @@ describe('schema, migration e upgrade da 0013 (R10)', () => {
     await database.pool.query('alter table finance.freebet drop column if exists requirements');
     await database.pool.query('alter table finance.freebet drop column if exists updated_at');
     await database.pool.query('alter table finance.freebet drop column if exists revoked_at');
+    // STK-F2-09: a 0026 cria o lote e o seu recibo, e os dois são removidos
+    // para que o replay a exercite de verdade. A FK de `finance.bet` é
+    // removida antes (é o que segura o drop), e as COLUNAS ficam: removê-las
+    // exigiria a aposta que as referencia, e o replay precisa provar que
+    // `ADD COLUMN IF NOT EXISTS` sobre uma tabela já povoada é inofensivo —
+    // que é exatamente o que a migração promete.
+    await database.pool.query(
+      'alter table finance.bet drop constraint if exists bet_import_batch_id_fk',
+    );
+    await database.pool.query('drop table if exists integration.import_batch_receipt');
+    await database.pool.query('drop table if exists integration.import_batch');
     // O limite de marcadores removidos acompanha a contagem de entradas do
     // journal a partir do índice 12 (migrações posteriores à 0012) — cresce a
     // cada migração nova, sem constante escrita à mão.

@@ -29,6 +29,7 @@ import {
 } from './forms.js';
 import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
 import { ImportsPage, ImportReview, UploadForm } from './imports.js';
+import { ImportBatchForm } from './import-batch.js';
 import { savePendingUpload } from './upload-storage.js';
 import { CalendarPage, EventReview } from './events.js';
 import { OverviewReport } from './overview-report.js';
@@ -37,7 +38,7 @@ import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
 
 export type Modal =
-  | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' | 'upload' }
+  | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' | 'upload' | 'import-batch' }
   | { kind: 'import'; id: string }
   | { kind: 'event'; id: string }
   | {
@@ -468,6 +469,10 @@ function ModalContent({
     case 'upload':
       title = 'Enviar comprovante';
       content = <UploadForm owner={owner} onDone={close} open={open} />;
+      break;
+    case 'import-batch':
+      title = 'Importar arquivo';
+      content = <ImportBatchForm onDone={close} />;
       break;
     case 'import':
       title = 'Revisar importação';

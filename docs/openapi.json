@@ -2313,6 +2313,446 @@
         },
         "required": ["credits"]
       },
+      "ImportRowPreviewInput": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "status": { "type": "string", "enum": ["valid", "invalid", "duplicate"] },
+          "bet": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "bookmaker": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "tipster": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 100 },
+              "stake": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+              "odds": { "type": "string", "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$" },
+              "placedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "reference": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 150 },
+              "sport": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 100 },
+              "event": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "market": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "betOrigin": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
+              "freebetId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "bookmaker",
+              "tipster",
+              "stake",
+              "odds",
+              "placedAt",
+              "reference",
+              "sport",
+              "event",
+              "market",
+              "selection",
+              "betOrigin",
+              "freebetId"
+            ],
+            "additionalProperties": false
+          },
+          "errors": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IMPORT_ROW_EMPTY",
+                "IMPORT_STAKE_INVALID",
+                "IMPORT_ODDS_INVALID",
+                "IMPORT_PLACED_AT_INVALID",
+                "IMPORT_PLACED_AT_FUTURE",
+                "IMPORT_BOOKMAKER_UNRESOLVED",
+                "IMPORT_TIPSTER_UNRESOLVED",
+                "IMPORT_SELECTION_MISSING",
+                "IMPORT_ORIGIN_INVALID",
+                "IMPORT_FREEBET_REQUIRED",
+                "IMPORT_FREEBET_UNRESOLVED",
+                "IMPORT_ROW_INCOMPATIBLE",
+                "IMPORT_DUPLICATE",
+                "IMPORT_ROW_LIMIT_REACHED"
+              ]
+            }
+          }
+        },
+        "required": ["line", "status", "bet", "errors"]
+      },
+      "ImportPreviewInput": {
+        "type": "object",
+        "properties": {
+          "headers": {
+            "maxItems": 64,
+            "type": "array",
+            "items": { "type": "string", "maxLength": 200 }
+          },
+          "source": { "type": "string", "enum": ["stakeframe_template", "csv_generic"] },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "valid": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "invalid": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "duplicates": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "rows": {
+            "maxItems": 200,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ImportRowPreviewInput" }
+          },
+          "missing": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "reference",
+                "bookmaker",
+                "tipster",
+                "stake",
+                "odds",
+                "placed_at",
+                "sport",
+                "event",
+                "market",
+                "selection",
+                "bet_origin",
+                "freebet_id"
+              ]
+            }
+          },
+          "groups": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "confirmable": { "type": "boolean" }
+        },
+        "required": [
+          "headers",
+          "source",
+          "total",
+          "valid",
+          "invalid",
+          "duplicates",
+          "rows",
+          "missing",
+          "groups",
+          "confirmable"
+        ]
+      },
+      "ImportPreviewRequestInput": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1, "maxLength": 4000000 },
+          "filename": { "type": "string", "maxLength": 200 },
+          "mapping": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "headers": {
+                "minItems": 1,
+                "maxItems": 64,
+                "type": "array",
+                "items": { "type": "string", "maxLength": 200 }
+              },
+              "mapping": {
+                "minItems": 1,
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "header": { "type": "string", "maxLength": 200 },
+                    "column": {
+                      "type": "string",
+                      "enum": [
+                        "reference",
+                        "bookmaker",
+                        "tipster",
+                        "stake",
+                        "odds",
+                        "placed_at",
+                        "sport",
+                        "event",
+                        "market",
+                        "selection",
+                        "bet_origin",
+                        "freebet_id"
+                      ]
+                    }
+                  },
+                  "required": ["header", "column"],
+                  "additionalProperties": false
+                }
+              },
+              "defaultBookmaker": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "defaultTipster": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "defaultBetOrigin": {
+                "nullable": true,
+                "type": "string",
+                "enum": ["real", "freebet", "hibrida"]
+              }
+            },
+            "required": [
+              "headers",
+              "mapping",
+              "defaultBookmaker",
+              "defaultTipster",
+              "defaultBetOrigin"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["content", "filename", "mapping"],
+        "additionalProperties": false
+      },
+      "ImportBatchResultInput": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["preview", "committed", "partially_committed", "rolled_back"]
+          },
+          "origin": { "type": "string", "enum": ["stakeframe_template", "csv_generic"] },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "committed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "skipped": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "skippedRows": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "IMPORT_ROW_EMPTY",
+                    "IMPORT_STAKE_INVALID",
+                    "IMPORT_ODDS_INVALID",
+                    "IMPORT_PLACED_AT_INVALID",
+                    "IMPORT_PLACED_AT_FUTURE",
+                    "IMPORT_BOOKMAKER_UNRESOLVED",
+                    "IMPORT_TIPSTER_UNRESOLVED",
+                    "IMPORT_SELECTION_MISSING",
+                    "IMPORT_ORIGIN_INVALID",
+                    "IMPORT_FREEBET_REQUIRED",
+                    "IMPORT_FREEBET_UNRESOLVED",
+                    "IMPORT_ROW_INCOMPATIBLE",
+                    "IMPORT_DUPLICATE",
+                    "IMPORT_ROW_LIMIT_REACHED"
+                  ]
+                }
+              },
+              "required": ["line", "code"],
+              "additionalProperties": false
+            }
+          },
+          "bets": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lines": {
+                  "minItems": 1,
+                  "maxItems": 500,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "betId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": ["lines", "betId"],
+              "additionalProperties": false
+            }
+          },
+          "partial": { "type": "boolean" },
+          "committedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "rolledBackAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "batchId",
+          "version",
+          "state",
+          "origin",
+          "total",
+          "committed",
+          "skipped",
+          "skippedRows",
+          "bets",
+          "partial",
+          "committedAt",
+          "rolledBackAt"
+        ]
+      },
+      "ImportBatchCommitInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "lines": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "maximum": 9007199254740991
+            }
+          },
+          "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+        },
+        "required": ["version", "reason"],
+        "additionalProperties": false
+      },
+      "ImportBatchRollbackInput": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["version"],
+        "additionalProperties": false
+      },
+      "ImportBatchEntryInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["preview", "committed", "partially_committed", "rolled_back"]
+          },
+          "origin": { "type": "string", "enum": ["stakeframe_template", "csv_generic"] },
+          "filename": { "type": "string", "maxLength": 200 },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "committed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "skipped": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "state",
+          "origin",
+          "filename",
+          "total",
+          "committed",
+          "skipped",
+          "createdAt"
+        ]
+      },
+      "ImportBatchListInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ImportBatchEntryInput" }
+          }
+        },
+        "required": ["items"]
+      },
+      "ImportTemplateInput": {
+        "type": "object",
+        "properties": {
+          "filename": { "type": "string", "maxLength": 200 },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "reference",
+                "bookmaker",
+                "tipster",
+                "stake",
+                "odds",
+                "placed_at",
+                "sport",
+                "event",
+                "market",
+                "selection",
+                "bet_origin",
+                "freebet_id"
+              ]
+            }
+          },
+          "sample": { "type": "string", "maxLength": 2000 }
+        },
+        "required": ["filename", "headers", "sample"]
+      },
       "TelegramPreviewSelectionInput": {
         "type": "object",
         "properties": {
@@ -4799,7 +5239,14 @@
                   "TELEGRAM_SESSION_UNAVAILABLE",
                   "ENTITLEMENT_FEATURE_DENIED",
                   "ENTITLEMENT_PLAN_LIMIT_REACHED",
-                  "PAID_CALL_CEILING_REACHED"
+                  "PAID_CALL_CEILING_REACHED",
+                  "IMPORT_BATCH_NOT_FOUND",
+                  "IMPORT_BATCH_STATE_CONFLICT",
+                  "IMPORT_BATCH_ALREADY_COMMITTED",
+                  "IMPORT_TEMPLATE_UNAVAILABLE",
+                  "IMPORT_FILE_TOO_LARGE",
+                  "IMPORT_CSV_MALFORMED",
+                  "IMPORT_MAPPING_CONFLICT"
                 ]
               },
               "message": { "type": "string" },
@@ -5108,6 +5555,24 @@
           }
         },
         "required": ["sentry", "posthog", "release"]
+      },
+      "ImportPreviewResponseInput": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "preview": { "$ref": "#/components/schemas/ImportPreviewInput" }
+        },
+        "required": ["batchId", "version", "preview"]
       },
       "ReleaseInfo": {
         "type": "object",
@@ -7430,6 +7895,452 @@
           }
         },
         "required": ["credits"],
+        "additionalProperties": false
+      },
+      "ImportRowPreview": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "status": { "type": "string", "enum": ["valid", "invalid", "duplicate"] },
+          "bet": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "bookmaker": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "tipster": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 100 },
+              "stake": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+              "odds": { "type": "string", "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$" },
+              "placedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "reference": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 150 },
+              "sport": { "nullable": true, "type": "string", "minLength": 1, "maxLength": 100 },
+              "event": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "market": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
+              "betOrigin": { "type": "string", "enum": ["real", "freebet", "hibrida"] },
+              "freebetId": {
+                "nullable": true,
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "bookmaker",
+              "tipster",
+              "stake",
+              "odds",
+              "placedAt",
+              "reference",
+              "sport",
+              "event",
+              "market",
+              "selection",
+              "betOrigin",
+              "freebetId"
+            ],
+            "additionalProperties": false
+          },
+          "errors": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IMPORT_ROW_EMPTY",
+                "IMPORT_STAKE_INVALID",
+                "IMPORT_ODDS_INVALID",
+                "IMPORT_PLACED_AT_INVALID",
+                "IMPORT_PLACED_AT_FUTURE",
+                "IMPORT_BOOKMAKER_UNRESOLVED",
+                "IMPORT_TIPSTER_UNRESOLVED",
+                "IMPORT_SELECTION_MISSING",
+                "IMPORT_ORIGIN_INVALID",
+                "IMPORT_FREEBET_REQUIRED",
+                "IMPORT_FREEBET_UNRESOLVED",
+                "IMPORT_ROW_INCOMPATIBLE",
+                "IMPORT_DUPLICATE",
+                "IMPORT_ROW_LIMIT_REACHED"
+              ]
+            }
+          }
+        },
+        "required": ["line", "status", "bet", "errors"],
+        "additionalProperties": false
+      },
+      "ImportPreview": {
+        "type": "object",
+        "properties": {
+          "headers": {
+            "maxItems": 64,
+            "type": "array",
+            "items": { "type": "string", "maxLength": 200 }
+          },
+          "source": { "type": "string", "enum": ["stakeframe_template", "csv_generic"] },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "valid": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "invalid": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "duplicates": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "rows": {
+            "maxItems": 200,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ImportRowPreview" }
+          },
+          "missing": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "reference",
+                "bookmaker",
+                "tipster",
+                "stake",
+                "odds",
+                "placed_at",
+                "sport",
+                "event",
+                "market",
+                "selection",
+                "bet_origin",
+                "freebet_id"
+              ]
+            }
+          },
+          "groups": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "confirmable": { "type": "boolean" }
+        },
+        "required": [
+          "headers",
+          "source",
+          "total",
+          "valid",
+          "invalid",
+          "duplicates",
+          "rows",
+          "missing",
+          "groups",
+          "confirmable"
+        ],
+        "additionalProperties": false
+      },
+      "ImportPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1, "maxLength": 4000000 },
+          "filename": { "type": "string", "maxLength": 200 },
+          "mapping": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "headers": {
+                "minItems": 1,
+                "maxItems": 64,
+                "type": "array",
+                "items": { "type": "string", "maxLength": 200 }
+              },
+              "mapping": {
+                "minItems": 1,
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "header": { "type": "string", "maxLength": 200 },
+                    "column": {
+                      "type": "string",
+                      "enum": [
+                        "reference",
+                        "bookmaker",
+                        "tipster",
+                        "stake",
+                        "odds",
+                        "placed_at",
+                        "sport",
+                        "event",
+                        "market",
+                        "selection",
+                        "bet_origin",
+                        "freebet_id"
+                      ]
+                    }
+                  },
+                  "required": ["header", "column"],
+                  "additionalProperties": false
+                }
+              },
+              "defaultBookmaker": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "defaultTipster": {
+                "nullable": true,
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "defaultBetOrigin": {
+                "nullable": true,
+                "type": "string",
+                "enum": ["real", "freebet", "hibrida"]
+              }
+            },
+            "required": [
+              "headers",
+              "mapping",
+              "defaultBookmaker",
+              "defaultTipster",
+              "defaultBetOrigin"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["content", "filename", "mapping"],
+        "additionalProperties": false
+      },
+      "ImportBatchResult": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["preview", "committed", "partially_committed", "rolled_back"]
+          },
+          "origin": { "type": "string", "enum": ["stakeframe_template", "csv_generic"] },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "committed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "skipped": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "skippedRows": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "IMPORT_ROW_EMPTY",
+                    "IMPORT_STAKE_INVALID",
+                    "IMPORT_ODDS_INVALID",
+                    "IMPORT_PLACED_AT_INVALID",
+                    "IMPORT_PLACED_AT_FUTURE",
+                    "IMPORT_BOOKMAKER_UNRESOLVED",
+                    "IMPORT_TIPSTER_UNRESOLVED",
+                    "IMPORT_SELECTION_MISSING",
+                    "IMPORT_ORIGIN_INVALID",
+                    "IMPORT_FREEBET_REQUIRED",
+                    "IMPORT_FREEBET_UNRESOLVED",
+                    "IMPORT_ROW_INCOMPATIBLE",
+                    "IMPORT_DUPLICATE",
+                    "IMPORT_ROW_LIMIT_REACHED"
+                  ]
+                }
+              },
+              "required": ["line", "code"],
+              "additionalProperties": false
+            }
+          },
+          "bets": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lines": {
+                  "minItems": 1,
+                  "maxItems": 500,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "betId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": ["lines", "betId"],
+              "additionalProperties": false
+            }
+          },
+          "partial": { "type": "boolean" },
+          "committedAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "rolledBackAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "batchId",
+          "version",
+          "state",
+          "origin",
+          "total",
+          "committed",
+          "skipped",
+          "skippedRows",
+          "bets",
+          "partial",
+          "committedAt",
+          "rolledBackAt"
+        ],
+        "additionalProperties": false
+      },
+      "ImportBatchCommit": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "lines": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "maximum": 9007199254740991
+            }
+          },
+          "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+        },
+        "required": ["version", "reason"],
+        "additionalProperties": false
+      },
+      "ImportBatchRollback": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["version"],
+        "additionalProperties": false
+      },
+      "ImportBatchEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": ["preview", "committed", "partially_committed", "rolled_back"]
+          },
+          "origin": { "type": "string", "enum": ["stakeframe_template", "csv_generic"] },
+          "filename": { "type": "string", "maxLength": 200 },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "committed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "skipped": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "state",
+          "origin",
+          "filename",
+          "total",
+          "committed",
+          "skipped",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ImportBatchList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ImportBatchEntry" }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "ImportTemplate": {
+        "type": "object",
+        "properties": {
+          "filename": { "type": "string", "maxLength": 200 },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "reference",
+                "bookmaker",
+                "tipster",
+                "stake",
+                "odds",
+                "placed_at",
+                "sport",
+                "event",
+                "market",
+                "selection",
+                "bet_origin",
+                "freebet_id"
+              ]
+            }
+          },
+          "sample": { "type": "string", "maxLength": 2000 }
+        },
+        "required": ["filename", "headers", "sample"],
         "additionalProperties": false
       },
       "TelegramPreviewSelection": {
@@ -9969,7 +10880,14 @@
                   "TELEGRAM_SESSION_UNAVAILABLE",
                   "ENTITLEMENT_FEATURE_DENIED",
                   "ENTITLEMENT_PLAN_LIMIT_REACHED",
-                  "PAID_CALL_CEILING_REACHED"
+                  "PAID_CALL_CEILING_REACHED",
+                  "IMPORT_BATCH_NOT_FOUND",
+                  "IMPORT_BATCH_STATE_CONFLICT",
+                  "IMPORT_BATCH_ALREADY_COMMITTED",
+                  "IMPORT_TEMPLATE_UNAVAILABLE",
+                  "IMPORT_FILE_TOO_LARGE",
+                  "IMPORT_CSV_MALFORMED",
+                  "IMPORT_MAPPING_CONFLICT"
                 ]
               },
               "message": { "type": "string" },
@@ -10310,6 +11228,25 @@
           }
         },
         "required": ["sentry", "posthog", "release"],
+        "additionalProperties": false
+      },
+      "ImportPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991
+          },
+          "preview": { "$ref": "#/components/schemas/ImportPreview" }
+        },
+        "required": ["batchId", "version", "preview"],
         "additionalProperties": false
       }
     }
@@ -13810,6 +14747,508 @@
             "content": {
               "image/png": { "schema": { "type": "string", "format": "binary" } },
               "image/jpeg": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/template": {
+      "get": {
+        "operationId": "getImportTemplate",
+        "summary": "Baixar o modelo de importação do Stakeframe",
+        "tags": ["Importação por arquivo"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportTemplate" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/preview": {
+      "post": {
+        "operationId": "previewImportBatch",
+        "summary": "Validar um arquivo linha a linha antes de registrar qualquer aposta",
+        "tags": ["Importação por arquivo"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImportPreviewRequestInput" }
+            }
+          }
+        },
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImportPreviewResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches": {
+      "get": {
+        "operationId": "listImportBatches",
+        "summary": "Consultar os lotes de importação e o estado do job",
+        "tags": ["Importação por arquivo"],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportBatchList" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}": {
+      "get": {
+        "operationId": "getImportBatch",
+        "summary": "Consultar o resultado de um lote de importação",
+        "tags": ["Importação por arquivo"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportBatchResult" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}/commit": {
+      "post": {
+        "operationId": "commitImportBatch",
+        "summary": "Registrar as apostas do lote aprovado",
+        "tags": ["Importação por arquivo"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImportBatchCommitInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportBatchResult" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "413": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}/rollback": {
+      "post": {
+        "operationId": "rollbackImportBatch",
+        "summary": "Reverter as apostas registradas por um lote de importação",
+        "tags": ["Importação por arquivo"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImportBatchRollbackInput" }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ImportBatchResult" } }
             }
           },
           "400": {

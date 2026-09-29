@@ -325,6 +325,94 @@ export const integrationCursor = integrationNamespace.table('cursor', {
   name: text('name').primaryKey(),
   nextOffset: bigint('next_offset', { mode: 'number' }).notNull().default(0),
 });
+// STK-F2-09 — o LOTE de importação por arquivo. Uma linha por upload; a
+// identidade é `content_sha256` (conteúdo + mapeamento efetivo), então
+// reenviar o MESMO arquivo devolve o MESMO lote. As LINHAS do preview e o
+// RESULTADO do commit vivem em jsonb, sanitizados: o arquivo em si nunca é
+// gravado. RLS fail-closed (migration 0026).
+export const importBatch = integrationNamespace.table(
+  'import_batch',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: organizationId(),
+    version: integer('version').notNull().default(1),
+    state: text('state').notNull(),
+    origin: text('origin').notNull(),
+    filename: text('filename').notNull(),
+    contentSha256: text('content_sha256').notNull(),
+    mapping: jsonb('mapping'),
+    total: integer('total').notNull().default(0),
+    valid: integer('valid').notNull().default(0),
+    invalid: integer('invalid').notNull().default(0),
+    duplicates: integer('duplicates').notNull().default(0),
+    // Linhas GRAVADAS e linhas PULADAS do commit. Somados, fecham com `total`.
+    committed: integer('committed').notNull().default(0),
+    skippedCount: integer('skipped').notNull().default(0),
+    rows: jsonb('rows')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    skippedRows: jsonb('skipped_rows')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    result: jsonb('result'),
+    committedAt: timestamp('committed_at', { withTimezone: true }),
+    rolledBackAt: timestamp('rolled_back_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('import_batch_organization_id_id_idx').on(table.organizationId, table.id),
+    unique('import_batch_organization_id_content_sha256_idx').on(
+      table.organizationId,
+      table.contentSha256,
+    ),
+    check(
+      'import_batch_state_check',
+      sql`${table.state} in ('preview','committed','partially_committed','rolled_back')`,
+    ),
+    check(
+      'import_batch_origin_check',
+      sql`${table.origin} in ('stakeframe_template','csv_generic')`,
+    ),
+    check('import_batch_sha256_check', sql`${table.contentSha256} ~ '^[a-f0-9]{64}$'`),
+    check('import_batch_filename_check', sql`char_length(${table.filename}) between 1 and 200`),
+    check(
+      'import_batch_counts_check',
+      sql`${table.valid} >= 0 and ${table.invalid} >= 0 and ${table.duplicates} >= 0 and ${table.total} >= 0`,
+    ),
+    // committed + skipped fecha com total: nunca há linha que desapareça entre
+    // o que o usuário leu e o que foi gravado.
+    check(
+      'import_batch_partition_check',
+      sql`${table.state} in ('preview','rolled_back') or ${table.committed} + ${table.skippedCount} = ${table.total}`,
+    ),
+  ],
+);
+// STK-F2-09 — recibo idempotente da CONFIRMAÇÃO do lote, mesma forma de
+// `finance.command_receipt` e da 0013. RLS fail-closed (migration 0026).
+export const importBatchReceipt = integrationNamespace.table(
+  'import_batch_receipt',
+  {
+    organizationId: organizationId(),
+    key: uuid('key').notNull(),
+    batchId: uuid('batch_id').notNull(),
+    hash: text('hash').notNull(),
+    result: jsonb('result').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'import_batch_receipt_pk',
+      columns: [table.organizationId, table.key],
+    }),
+    check('import_batch_receipt_hash_check', sql`${table.hash} ~ '^[a-f0-9]{64}$'`),
+    foreignKey({
+      name: 'import_batch_receipt_batch_fk',
+      columns: [table.organizationId, table.batchId],
+      foreignColumns: [importBatch.organizationId, importBatch.id],
+    }),
+  ],
+);
 export const aiUsageDay = integrationNamespace.table(
   'ai_usage_day',
   {

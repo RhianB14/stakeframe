@@ -818,16 +818,24 @@ describe('STK-F2-13 §15 — a API respeita os entitlements calculados no banco'
 });
 
 describe('STK-F2-13 §15 — replay-safe e forward-only', () => {
-  it('a migração 0025 está no journal como a última entrada', () => {
+  it('a migração 0025 está no journal, em ordem e com índice contíguo', () => {
     const journal = JSON.parse(
       readFileSync(
         new URL('../../packages/db/migrations/meta/_journal.json', import.meta.url),
         'utf8',
       ),
     ) as { entries: { idx: number; tag: string }[] };
-    const last = journal.entries[journal.entries.length - 1]!;
-    expect(last.tag).toBe('0025_entitlements_breakers');
-    expect(last.idx).toBe(journal.entries.length - 1);
+    // A 0025 NÃO é mais a última: a STK-F2-09 acrescenta a 0026 depois dela. O
+    // que esta asserção garante é o que a 0025 pediu — ela está no journal, com
+    // índice contíguo, e o que veio depois não a desordena.
+    const entry = journal.entries.find(
+      (candidate) => candidate.tag === '0025_entitlements_breakers',
+    )!;
+    expect(entry).toBeDefined();
+    expect(entry.idx).toBe(25);
+    // Nenhuma entrada pode ter índice fora da sua posição: é o que faz o
+    // replay de prefixo do migrador ser confiável.
+    expect(journal.entries.every((candidate, index) => candidate.idx === index)).toBe(true);
   });
 
   it('todos os objetos da 0025 existem e são coerentes', async () => {

@@ -12,6 +12,7 @@ import {
   createAccountExportService,
   createAdminPanelService,
   createEntitlementService,
+  createImportBatchService,
   createTelegramLinkService,
   createTelegramTicketService,
   readEventSearchConfig,
@@ -61,6 +62,11 @@ async function main() {
     finance: createFinanceService(database),
     onboarding: createOnboardingService(database),
     imports: createImportService(database, createR2Storage(process.env)),
+    // STK-F2-09: importação por arquivo (template Stakeframe + CSV genérico com
+    // mapeamento declarado), com preview linha a linha, commit idempotente e
+    // rollback pelo caminho financeiro canônico. Sem chamada paga: o arquivo já
+    // está escrito, e a porta de recurso é a mesma da foto (F2-13).
+    importBatches: createImportBatchService(database),
     // STK-F2-13: porta de entitlement e custo antes de qualquer chamada paga.
     // Sem este serviço o upload recusa em 503 — fail-closed, porque um produto
     // sem o banco de entitlement não pode afirmar que respeita plano.
