@@ -27,6 +27,7 @@ import type {
   AccountDeletionService,
   AccountExportService,
   AdminPanelService,
+  EntitlementService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
 import { registerAccountRoutes } from './account-routes.js';
@@ -63,6 +64,12 @@ export function createApp(options: {
   account?: { deletion: AccountDeletionService; exports: AccountExportService };
   /** STK-F2-11: painel interno do superadmin (metadados); ausente = rota 404. */
   adminPanel?: AdminPanelService;
+  /**
+   * STK-F2-13: porta de entitlement e custo antes de chamada paga. Ausente =
+   * upload recusa em 503 (fail-closed), porque um produto sem o banco de
+   * entitlement não pode afirmar que respeita plano.
+   */
+  entitlements?: EntitlementService;
   /** STK-F2-04: vínculo com a conta do Telegram; ausente = rotas indisponíveis. */
   telegramLink?: TelegramLinkService;
   /** STK-F2-05: fila/preview/decisão do bilhete; ausente = rotas indisponíveis. */
@@ -213,7 +220,13 @@ export function createApp(options: {
     // STK-F2-12 — o gate do Mini App é entregue também às importações, para que
     // o editor pontual (deep link da mensagem) aceite a sessão do Telegram
     // resolvida pelo vínculo da F2-04, e não só a sessão web por cookie.
-    registerImportRoutes(app, options.ownerAuth, options.imports, telegramGate);
+    registerImportRoutes(
+      app,
+      options.ownerAuth,
+      options.imports,
+      telegramGate,
+      options.entitlements,
+    );
     registerEventRoutes(app, options.ownerAuth, options.events);
     registerFreebetRoutes(app, options.ownerAuth, options.freebets, options.notifications);
     registerReportRoutes(app, options.ownerAuth, options.reports);

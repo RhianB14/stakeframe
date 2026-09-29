@@ -210,12 +210,22 @@ export const extractionQuotaStatusSchema = z.object({
   dailyCeiling: z.number().int().positive(),
   monthlyPresented: z.number().int().nonnegative(),
   monthlyCeiling: z.number().int().positive(),
+  /**
+   * STK-F2-13 — gasto ESTIMADO do mês em microreais (1 BRL = 1.000.000), por
+   * preço de referência do fornecedor. É o que nós pagamos, não o que o usuário
+   * paga: o beta não cobra (Plano §4.7). Inteiro, nunca float.
+   */
+  monthlySpendMicros: z.number().int().nonnegative(),
+  /** Teto global de gasto (R$200/mês na política gravada pela 0025). */
+  globalSpendCapMicros: z.number().int().nonnegative(),
   /** Breaker global aberto: nenhuma chamada paga em nenhuma organização. */
   globalOpen: z.boolean(),
   /** Breaker do dia aberto. */
   dailyOpen: z.boolean(),
   /** Breaker do usuário aberto (`false` sem usuário identificado). */
   userOpen: z.boolean(),
+  /** Verdadeiro quando o gasto do mês atingiu o teto global. */
+  spendExhausted: z.boolean(),
   /** Verdadeiro quando alguma fronteira impede nova chamada paga. */
   refusesPaidCalls: z.boolean(),
 });

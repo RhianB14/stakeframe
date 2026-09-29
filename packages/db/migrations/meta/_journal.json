@@ -176,6 +176,13 @@
       "when": 1790900000003,
       "tag": "0024_extraction_fail_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790900000004,
+      "tag": "0025_entitlements_breakers",
+      "breakpoints": true
     }
   ]
 }

@@ -50,6 +50,18 @@ const stateLabels: Record<string, string> = {
   cancelled: 'Exclusão cancelada',
   purged: 'Conta eliminada',
 };
+/**
+ * STK-F2-13 — o gasto é um inteiro em microreais; a conversão para real é
+ * problema de EXIBIÇÃO, não do contrato. `Intl.NumberFormat` formata o valor
+ * já convertido, sem arredondar no banco.
+ */
+const brl = (micros: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(micros / 1_000_000);
+const planLabels: Record<string, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  pro: 'Pro',
+};
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -141,12 +153,78 @@ function Usage() {
     );
   if (!usage.data) return <p role="status">Carregando uso…</p>;
   const ai = usage.data.ai;
+  const spend = usage.data.spend;
   return (
     <>
       <p className="muted">
         Cota de IA: {ai.requestsToday}/{ai.dailyLimit} hoje · {ai.requestsMonth}/{ai.monthlyLimit}{' '}
         no mês · {stateLabels[ai.state]} · {usage.data.organizations} organização(ões)
       </p>
+      {/* STK-F2-13 — gasto estimado é o que NÓS pagamos ao fornecedor, não
+          receita: o beta não cobra, e nenhum valor de tenant aparece aqui. O
+          teto é global (R$200/mês) porque a infraestrutura é paga uma vez só. */}
+      <p className="muted">
+        Custo estimado do mês: {brl(spend.micros)}
+        {spend.capMicros === null ? ' · sem teto' : ` de ${brl(spend.capMicros)}`}
+        {spend.exhausted ? ' · TETO ATINGIDO (chamadas pagas recusadas)' : ''}
+        {spend.window ? ` · janela: ${spend.window === 'month' ? 'mensal' : 'diária'}` : ''}
+      </p>
+      <ul className="admin-list">
+        {usage.data.breakers.map((breaker) => (
+          <li key={breaker.scope}>
+            <span>
+              Circuito{' '}
+              {breaker.scope === 'global'
+                ? 'global'
+                : breaker.scope === 'daily'
+                  ? 'diário'
+                  : 'por usuário'}
+            </span>
+            <strong>
+              {breaker.state === 'open' ? 'ABERTO' : 'fechado'} · {breaker.confirmedFailures}{' '}
+              falha(s) confirmada(s)
+              {breaker.recoversAt ? ` · recupera ${instant(breaker.recoversAt)}` : ''}
+            </strong>
+          </li>
+        ))}
+        <li>
+          <span>Circuitos por usuário abertos</span>
+          <strong>{usage.data.openUserBreakers}</strong>
+        </li>
+      </ul>
+      {usage.data.plans.length === 0 ? (
+        <p className="muted">Nenhuma conta com plano atribuído.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="product-table">
+            <caption className="sr-only">
+              Planos por organização, sem preço e sem conteúdo de usuário
+            </caption>
+            <thead>
+              <tr>
+                <th>Organização</th>
+                <th>Plano</th>
+                <th>Extrações no mês</th>
+                <th>Limite do plano</th>
+                <th>Preço</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usage.data.plans.map((plan) => (
+                <tr key={plan.organizationId}>
+                  <td>{plan.organizationName}</td>
+                  <td>{planLabels[plan.plan] ?? plan.plan}</td>
+                  <td>{plan.ocrUsedMonth}</td>
+                  <td>{plan.ocrLimitMonth === null ? 'Sem teto próprio' : plan.ocrLimitMonth}</td>
+                  {/* O preço é INDEFINIDO no beta (Plano §4.7): a interface diz
+                      isso explicitamente em vez de mostrar 0 como se fosse grátis. */}
+                  <td>A definir</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {usage.data.queues.length === 0 ? (
         <p className="muted">Nenhuma fila ativa.</p>
       ) : (

@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   pgSchema,
   primaryKey,
   text,
@@ -363,6 +364,94 @@ export const telegramBot = core.table(
   ],
 );
 
+/**
+ * STK-F2-13: catálogo GLOBAL de planos, como `legal_document` — não é dado
+ * privado de organização e não leva RLS.
+ *
+ * `billable` é false e o CHECK recusa `true`: no beta o produto não cobra
+ * (Plano §4.7; cobrança é Fase 4 e está fora do escopo). A coluna existe para
+ * que a AUSÊNCIA de cobrança seja uma invariante do banco e não um
+ * esquecimento — ligar a cobrança passa a exigir migração nova e explícita,
+ * nunca um UPDATE acidental. Não há coluna de preço: os preços são
+ * INDEFINIDOS de propósito.
+ */
+export const plan = core.table(
+  'plan',
+  {
+    id: text('id').primaryKey(),
+    label: text('label').notNull(),
+    /** Ordem de classificação (free < starter < pro); nunca valor financeiro. */
+    rank: integer('rank').notNull(),
+    billable: boolean('billable').default(false).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check('plan_id_check', sql`${table.id} in ('free','starter','pro')`),
+    check('plan_rank_check', sql`${table.rank} >= 0`),
+    check('plan_not_billable_check', sql`${table.billable} = false`),
+    check('plan_label_not_empty', sql`btrim(${table.label}) <> ''`),
+  ],
+);
+
+/**
+ * STK-F2-13: permissões do plano. `limitValue` é TETO DE USO (unidades do
+ * recurso por mês), não preço: `null` = sem teto próprio, e acima dele
+ * continuam valendo o teto global de quota e o teto global de R$200/mês,
+ * porque plano nunca amplia a capacidade da infraestrutura.
+ */
+export const planEntitlement = core.table(
+  'plan_entitlement',
+  {
+    planId: text('plan_id')
+      .notNull()
+      .references(() => plan.id, { onDelete: 'cascade' }),
+    feature: text('feature').notNull(),
+    enabled: boolean('enabled').notNull(),
+    limitValue: integer('limit_value'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.planId, table.feature] }),
+    check(
+      'plan_entitlement_feature_check',
+      sql`${table.feature} in ('ocr_extraction','telegram_ticket_flow','event_search','freebet_alerts','advanced_dashboards')`,
+    ),
+    check(
+      'plan_entitlement_limit_check',
+      sql`${table.limitValue} is null or ${table.limitValue} >= 0`,
+    ),
+  ],
+);
+
+/**
+ * STK-F2-13: plano efetivo da organização — a única atribuição que existe, e a
+ * linha que muda quando um plano muda. Privada e escopada pela organização
+ * (RLS fail-closed, como `telegram_link` da 0022), e removida em cascata quando
+ * a organização é apagada.
+ *
+ * A RESOLUÇÃO não mora aqui: mora em `core.organization_entitlements(org_id)`,
+ * a função que o banco calcula. Sem atribuição, ela devolve o plano `free` (o
+ * mais restritivo) — um tenant novo nunca nasce com mais permissão do que o
+ * mínimo.
+ */
+export const organizationEntitlement = core.table(
+  'organization_entitlement',
+  {
+    organizationId: uuid('organization_id')
+      .primaryKey()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    planId: text('plan_id')
+      .notNull()
+      .references(() => plan.id, { onDelete: 'restrict' }),
+    assignedAt: createdAt(),
+    /** Id interno de quem atribuiu (nunca e-mail); null = seed. */
+    assignedBy: text('assigned_by'),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index('organization_entitlement_plan_idx').on(table.planId)],
+);
+
 export const coreSchema = {
   organization,
   membership,
@@ -375,4 +464,7 @@ export const coreSchema = {
   telegramLinkRequest,
   telegramLink,
   telegramBot,
+  plan,
+  planEntitlement,
+  organizationEntitlement,
 };

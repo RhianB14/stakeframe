@@ -5,6 +5,7 @@ import {
   createDatabase,
   createFinanceService,
   createImportService,
+  createEntitlementService,
   createAttachmentStore,
   requireDatabaseUrl,
   type Database,
@@ -503,7 +504,15 @@ describe('private import review', () => {
   it('authenticates upload before parsing and serves private image bytes without a public URL', async () => {
     const getOwner = vi.fn().mockResolvedValue(null);
     const auth = { origin: 'http://localhost:8088', getOwner } as unknown as OwnerAuth;
-    const app = createApp({ checkDatabase: database.check, ownerAuth: auth, finance, imports });
+    // STK-F2-13: o upload só existe com a porta de entitlement ligada, e ela é
+    // real (mesmo banco, mesma função do banco que a API usa para decidir).
+    const app = createApp({
+      checkDatabase: database.check,
+      ownerAuth: auth,
+      finance,
+      imports,
+      entitlements: createEntitlementService(database),
+    });
     try {
       const denied = await app.inject({
         method: 'POST',

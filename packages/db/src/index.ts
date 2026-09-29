@@ -173,6 +173,8 @@ export {
   type ExtractionPolicyService,
 } from './extraction-policy.js';
 
+export { createEntitlementService, type EntitlementService } from './entitlements.js';
+
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
 export { assertRecoveryReviewed } from './recovery-guard.js';

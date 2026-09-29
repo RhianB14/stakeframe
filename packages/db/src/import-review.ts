@@ -313,6 +313,29 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       );
       return { id };
     },
+    /**
+     * STK-F2-13 — quantas extrações APRESENTADAS esta organização já consumiu
+     * no mês corrente (UTC).
+     *
+     * É a MESMA unidade que a quota da F2-06 debita (`outcome_presented`), e a
+     * mesmo que o painel interno publica por organização: o teto de plano e a
+     * contagem de uso não podem ser medidos por critérios diferentes, ou o
+     * plano recusaria um tenant que ainda tem folga (ou o contrário).
+     *
+     * Uma CONTAGEM e nada mais: nenhum texto, valor, aposta ou imagem sai
+     * daqui. A leitura é escopada pela organização, dentro do contexto dela.
+     */
+    async ocrUsedThisMonth(context: OrganizationContext): Promise<number> {
+      return read(context, async (client) => {
+        const row = await client.query<{ used: string }>(
+          `select count(*)::text as used from integration.extraction_audit
+            where organization_id=current_setting($$app.organization_id$$, true)::uuid
+              and outcome_presented
+              and presented_at >= date_trunc('month', now())`,
+        );
+        return Number(row.rows[0]?.used ?? 0);
+      });
+    },
     async list(
       context: OrganizationContext,
       query: {

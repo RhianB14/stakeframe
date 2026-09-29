@@ -2,9 +2,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { FinanceError, readSecret, type ImportService } from '@stakeframe/db';
-import type { OrganizationContext } from '@stakeframe/db';
+import type { OrganizationContext, EntitlementService } from '@stakeframe/db';
 import {
   apiErrorSchema,
+  entitlementAllows,
+  entitlementWithinLimit,
   importPageSchema,
   importQuerySchema,
   importDetailSchema,
@@ -38,6 +40,13 @@ export function registerImportRoutes(
   auth: OwnerAuth | undefined,
   service: ImportService | undefined,
   miniApp?: TelegramSessionGate,
+  /**
+   * STK-F2-13 — porta de entitlement e custo antes de qualquer chamada paga.
+   * Ausente = a rota de upload não é publicada (503), porque um produto sem
+   * banco de entitlement não pode afirmar que respeita plano: silenciar a
+   * checagem seria aceitar chamadas pagas sem teto.
+   */
+  entitlements?: EntitlementService,
 ) {
   const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const errors = {
@@ -154,10 +163,41 @@ export function registerImportRoutes(
         service!.list(contexts.get(request)!, importQuerySchema.parse(request.query)),
       ),
   );
+  /**
+   * STK-F2-13 — o gate do upload, consultado ANTES de a imagem virar item.
+   *
+   * Três recusas, três códigos, e as três ORIENTAM O FLUXO MANUAL: o item não
+   * é criado e o usuário continua com o preenchimento à mão. Nenhuma delas é
+   * defeito do bilhete, e nenhuma delas é terminal.
+   *
+   * A ordem é: entitlement do recurso (o banco já decidiu o plano), depois teto
+   * de plano, depois teto de chamada paga (quota/gasto/breaker). Todas fail-
+   * closed: serviço ausente recusa em 503, lista vazia nega o recurso, e um
+   * breaker aberto recusa.
+   */
+  const paidCallGate = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!entitlements) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
+    const context = contexts.get(request)!;
+    const list = await entitlements.entitlements(context.organizationId);
+    // Recurso ausente da lista = negado: a ausência é a forma fail-closed.
+    if (!entitlementAllows(list, 'ocr_extraction'))
+      return sendApiError(request, reply, 403, 'ENTITLEMENT_FEATURE_DENIED');
+    const used = await service!.ocrUsedThisMonth(context);
+    if (!entitlementWithinLimit(list, 'ocr_extraction', used))
+      return sendApiError(request, reply, 403, 'ENTITLEMENT_PLAN_LIMIT_REACHED');
+    const gate = await entitlements.gate(context.userId);
+    if (gate.refusesPaidCalls)
+      return sendApiError(request, reply, 429, 'PAID_CALL_CEILING_REACHED');
+  };
+
   app.post(
     '/api/v1/imports',
     {
-      onRequest: authorize,
+      onRequest: async (request, reply) => {
+        await authorize(request, reply);
+        if (reply.sent) return;
+        await paidCallGate(request, reply);
+      },
       bodyLimit: 11_200_000,
       schema: {
         ...common,

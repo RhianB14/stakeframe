@@ -4361,6 +4361,89 @@
             "required": ["requestsToday", "requestsMonth", "dailyLimit", "monthlyLimit", "state"],
             "additionalProperties": false
           },
+          "spend": {
+            "type": "object",
+            "properties": {
+              "micros": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "capMicros": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "window": { "nullable": true, "type": "string", "enum": ["day", "month"] },
+              "exhausted": { "type": "boolean" }
+            },
+            "required": ["micros", "capMicros", "window", "exhausted"],
+            "additionalProperties": false
+          },
+          "breakers": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scope": { "type": "string", "enum": ["global", "daily", "user"] },
+                "state": { "type": "string", "enum": ["closed", "open"] },
+                "confirmedFailures": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "recoversAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "spendCapMicros": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["scope", "state", "confirmedFailures", "recoversAt", "spendCapMicros"],
+              "additionalProperties": false
+            }
+          },
+          "openUserBreakers": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "plans": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "organizationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "organizationName": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "plan": { "type": "string", "enum": ["free", "starter", "pro"] },
+                "ocrUsedMonth": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "ocrLimitMonth": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "priceBRL": { "nullable": true, "type": "number", "minimum": 0 },
+                "pricesDefined": { "type": "boolean", "enum": [false] }
+              },
+              "required": [
+                "organizationId",
+                "organizationName",
+                "plan",
+                "ocrUsedMonth",
+                "ocrLimitMonth",
+                "priceBRL",
+                "pricesDefined"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "plansTruncated": { "type": "boolean" },
           "organizations": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "truncated": { "type": "boolean" },
           "queues": {
@@ -4406,7 +4489,18 @@
             }
           }
         },
-        "required": ["generatedAt", "ai", "organizations", "truncated", "queues"],
+        "required": [
+          "generatedAt",
+          "ai",
+          "spend",
+          "breakers",
+          "openUserBreakers",
+          "plans",
+          "plansTruncated",
+          "organizations",
+          "truncated",
+          "queues"
+        ],
         "additionalProperties": false
       },
       "AdminFlagsInput": {
@@ -4702,7 +4796,10 @@
                   "TELEGRAM_TICKET_BUSY",
                   "TELEGRAM_SESSION_NOT_LINKED",
                   "TELEGRAM_SESSION_REVOKED",
-                  "TELEGRAM_SESSION_UNAVAILABLE"
+                  "TELEGRAM_SESSION_UNAVAILABLE",
+                  "ENTITLEMENT_FEATURE_DENIED",
+                  "ENTITLEMENT_PLAN_LIMIT_REACHED",
+                  "PAID_CALL_CEILING_REACHED"
                 ]
               },
               "message": { "type": "string" },
@@ -9429,6 +9526,89 @@
             "required": ["requestsToday", "requestsMonth", "dailyLimit", "monthlyLimit", "state"],
             "additionalProperties": false
           },
+          "spend": {
+            "type": "object",
+            "properties": {
+              "micros": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "capMicros": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "window": { "nullable": true, "type": "string", "enum": ["day", "month"] },
+              "exhausted": { "type": "boolean" }
+            },
+            "required": ["micros", "capMicros", "window", "exhausted"],
+            "additionalProperties": false
+          },
+          "breakers": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scope": { "type": "string", "enum": ["global", "daily", "user"] },
+                "state": { "type": "string", "enum": ["closed", "open"] },
+                "confirmedFailures": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "recoversAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "spendCapMicros": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["scope", "state", "confirmedFailures", "recoversAt", "spendCapMicros"],
+              "additionalProperties": false
+            }
+          },
+          "openUserBreakers": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "plans": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "organizationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "organizationName": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "plan": { "type": "string", "enum": ["free", "starter", "pro"] },
+                "ocrUsedMonth": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "ocrLimitMonth": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "priceBRL": { "nullable": true, "type": "number", "minimum": 0 },
+                "pricesDefined": { "type": "boolean", "enum": [false] }
+              },
+              "required": [
+                "organizationId",
+                "organizationName",
+                "plan",
+                "ocrUsedMonth",
+                "ocrLimitMonth",
+                "priceBRL",
+                "pricesDefined"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "plansTruncated": { "type": "boolean" },
           "organizations": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "truncated": { "type": "boolean" },
           "queues": {
@@ -9474,7 +9654,18 @@
             }
           }
         },
-        "required": ["generatedAt", "ai", "organizations", "truncated", "queues"],
+        "required": [
+          "generatedAt",
+          "ai",
+          "spend",
+          "breakers",
+          "openUserBreakers",
+          "plans",
+          "plansTruncated",
+          "organizations",
+          "truncated",
+          "queues"
+        ],
         "additionalProperties": false
       },
       "AdminFlags": {
@@ -9775,7 +9966,10 @@
                   "TELEGRAM_TICKET_BUSY",
                   "TELEGRAM_SESSION_NOT_LINKED",
                   "TELEGRAM_SESSION_REVOKED",
-                  "TELEGRAM_SESSION_UNAVAILABLE"
+                  "TELEGRAM_SESSION_UNAVAILABLE",
+                  "ENTITLEMENT_FEATURE_DENIED",
+                  "ENTITLEMENT_PLAN_LIMIT_REACHED",
+                  "PAID_CALL_CEILING_REACHED"
                 ]
               },
               "message": { "type": "string" },

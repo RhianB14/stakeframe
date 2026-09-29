@@ -11,6 +11,7 @@ import {
   createAccountDeletionService,
   createAccountExportService,
   createAdminPanelService,
+  createEntitlementService,
   createTelegramLinkService,
   createTelegramTicketService,
   readEventSearchConfig,
@@ -60,6 +61,10 @@ async function main() {
     finance: createFinanceService(database),
     onboarding: createOnboardingService(database),
     imports: createImportService(database, createR2Storage(process.env)),
+    // STK-F2-13: porta de entitlement e custo antes de qualquer chamada paga.
+    // Sem este serviço o upload recusa em 503 — fail-closed, porque um produto
+    // sem o banco de entitlement não pode afirmar que respeita plano.
+    entitlements: createEntitlementService(database),
     events: createEventService(database, readEventSearchConfig(process.env)),
     freebets: createFreebetService(database),
     notifications: createNotificationService(database),

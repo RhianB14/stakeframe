@@ -109,6 +109,11 @@ describe('core tenant registry on a fresh database without users', () => {
       'membership',
       'onboarding_state',
       'organization',
+      // STK-F2-13: catálogo de planos, permissões por plano e a atribuição do
+      // plano à organização. A resolução é a função `core.organization_entitlements`.
+      'organization_entitlement',
+      'plan',
+      'plan_entitlement',
       // STK-F2-04: deep link de uso único, vínculo duradouro e o username
       // público do bot (singleton, resolvido por getMe pelo worker).
       'telegram_bot',

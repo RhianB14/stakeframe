@@ -94,10 +94,20 @@ export const telegramTextDecisionKey = (inboxId: string, version: number) => {
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
 };
 
+/**
+ * STK-F2-13: `spend` entrou na união porque a porta agora considera também o
+ * TETO DE GASTO (R$200/mês), e não só a cota por apresentação. O destino é o
+ * mesmo de `quota` e `breaker` — recusa de orçamento, não de conteúdo — então
+ * o handler já cai no ramo "pausada, registre pelo Mini App" sem mudança.
+ */
 export type TextRegistration =
   | { kind: 'presented'; inboxId: string; chatId: number; messageId: number; delivered: boolean }
   | { kind: 'duplicate'; inboxId: string; duplicateOf: string }
-  | { kind: 'refused'; reason: 'quota' | 'breaker' | 'bounds'; scope?: string }
+  | {
+      kind: 'refused';
+      reason: 'quota' | 'breaker' | 'spend' | 'bounds';
+      scope?: string;
+    }
   | { kind: 'uncertain'; category: ExtractionErrorCategory; code: string }
   | { kind: 'failed'; category: ExtractionErrorCategory; code: string };
 
