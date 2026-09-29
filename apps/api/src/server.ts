@@ -7,6 +7,7 @@ import {
   createFreebetService,
   createNotificationService,
   createReportService,
+  createReportSnapshotService,
   createOnboardingService,
   createAccountDeletionService,
   createAccountExportService,
@@ -78,6 +79,11 @@ async function main() {
       dashboardMinSample: config.dashboard.minSample,
       dashboardCacheTtlMs: config.dashboard.cacheTtlMs,
     }),
+    // STK-F2-08: a página HTML PRIVADA do relatório. O serviço é construído
+    // sobre o MESMO `createReportService` interno — os números vêm da mesma
+    // agregação da tela de análises, e o que o snapshot acrescenta é a
+    // imutabilidade e a versão, não uma segunda conta.
+    reportSnapshots: createReportSnapshotService(database),
     account: {
       deletion: createAccountDeletionService(database),
       exports: createAccountExportService(database),

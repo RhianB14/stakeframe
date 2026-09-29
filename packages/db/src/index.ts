@@ -184,6 +184,18 @@ export {
 
 export { createEntitlementService, type EntitlementService } from './entitlements.js';
 
+export {
+  createReportSnapshotService,
+  reportTimezoneOf,
+  sanitizeReportDeliveryError,
+  snapshotContentHash,
+  ReportSnapshotError,
+  type ReportSnapshotErrorCode,
+  type ReportSnapshotRecord,
+  type ReportSnapshotService,
+} from './report-snapshots.js';
+export { reportSnapshot, reportDelivery } from './report-snapshot-schema.js';
+
 export { layoutDigest } from './automatic-policy.js';
 export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attachment-policy.js';
 export { assertRecoveryReviewed } from './recovery-guard.js';

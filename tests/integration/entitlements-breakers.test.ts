@@ -825,9 +825,9 @@ describe('STK-F2-13 §15 — replay-safe e forward-only', () => {
         'utf8',
       ),
     ) as { entries: { idx: number; tag: string }[] };
-    // A 0025 NÃO é mais a última: a STK-F2-09 acrescenta a 0026 depois dela. O
-    // que esta asserção garante é o que a 0025 pediu — ela está no journal, com
-    // índice contíguo, e o que veio depois não a desordena.
+    // A 0025 NÃO é mais a última: a STK-F2-09 acrescenta a 0026 e a STK-F2-08 a
+    // 0027 depois dela. O que esta asserção garante é o que a 0025 pediu — ela
+    // está no journal, com índice contíguo, e o que veio depois não a desordena.
     const entry = journal.entries.find(
       (candidate) => candidate.tag === '0025_entitlements_breakers',
     )!;

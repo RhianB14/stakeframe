@@ -107,6 +107,16 @@ const messages: Record<ApiErrorCode, string> = {
   IMPORT_FILE_TOO_LARGE: 'O arquivo excede o tamanho aceito. Divida-o em lotes menores.',
   IMPORT_CSV_MALFORMED: 'O arquivo não pôde ser lido. Confira a codificação e o separador.',
   IMPORT_MAPPING_CONFLICT: 'Duas colunas do arquivo foram mapeadas para o mesmo campo.',
+  // STK-F2-08 — relatório privado. A mensagem de "não encontrado" é a MESMA
+  // para id inexistente e id de outra organização: essa indistinção é o que
+  // impede sondar a existência de um relatório alheio pelo código de erro.
+  REPORT_SNAPSHOT_NOT_FOUND: 'Este relatório não está disponível na sua conta.',
+  REPORT_SNAPSHOT_NO_DATA:
+    'Não há apostas no período deste relatório. Registre uma aposta para que ele possa ser gerado.',
+  REPORT_SNAPSHOT_NOT_REVISABLE:
+    'Só a versão mais recente deste relatório pode ser revisada. Abra a versão atual.',
+  REPORT_SERVICE_UNAVAILABLE:
+    'Os relatórios não estão disponíveis agora. Tente novamente em alguns instantes.',
 };
 
 export function sendApiError(

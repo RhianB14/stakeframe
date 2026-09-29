@@ -10,6 +10,7 @@ import {
   cents,
   formatReportBRL,
   money,
+  reportPrivateLink,
   saoPauloDate,
   telegramPeriod,
   type AnalyticsDashboard,
@@ -374,17 +375,22 @@ export function createTelegramCommands(
     }
 
     if (command === 'relatorio')
-      // O relatório é PÁGINA HTML PRIVADA (F2-08), não PDF e não e-mail — o
-      // card exclui ambos. O bot entrega o caminho e nunca o conteúdo:
-      // relatório em texto no chat seria transformar a conversa em um canal de
-      // exportação de dado financeiro que ninguém pediu.
+      // STK-F2-08 — o relatório passou a ser uma PÁGINA PRIVADA com snapshot
+      // imutável, e este comando é o caminho até ela. O card exclui PDF,
+      // e-mail e PNG, e o resumo em texto no chat seria transformar a conversa
+      // em um canal de exportação de dado financeiro que ninguém pediu: o bot
+      // entrega o endereço autenticado, nunca o conteúdo.
+      //
+      // O COMANDO NÃO GERA NADA. Ele não é a cadência automática (que é o job, e
+      // depende do plano): é o caminho para o relatório que já está na conta.
       return [
         '📄 RELATÓRIO',
         '',
         'O relatório completo fica na sua conta, em página privada:',
-        base,
+        reportPrivateLink(config.miniAppUrl),
         '',
-        'Exportações em CSV e JSON ficam na mesma página.',
+        'É uma página congelada no momento da emissão, com narrativa e histórico de versões.',
+        'Exportações em CSV e JSON ficam na mesma conta.',
       ].join('\n');
 
     if (command === 'exportar')
