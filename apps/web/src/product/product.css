@@ -1744,12 +1744,13 @@
   .product-sidebar nav a .nav-label {
     max-width: 100%;
     white-space: normal;
-    overflow-wrap: normal;
-  }
-  @media (max-width: 360px) {
-    .product-sidebar nav a .nav-label {
-      overflow-wrap: anywhere;
-    }
+    /* STK-F2-08: com SETE destinos na barra, `overflow-wrap: normal` deixa o
+       "Configurações" (13 caracteres) mais largo que a coluna e a barra passa
+       a ter 683px de conteúdo em 400px de largura — o teste de navegador exige
+       que a barra NÃO role. `anywhere` deixa a quebra de palavra (e o `<wbr>`
+       que o próprio componente já traz) fazer o trabalho, e a altura mínima de
+       44px continua valendo porque o alvo cresce, não encolhe. */
+    overflow-wrap: anywhere;
   }
   .product-content {
     margin-left: 0;
