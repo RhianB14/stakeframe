@@ -47,8 +47,17 @@ backfill 180d, completude nunca inferida).
 
 ## Produção
 
-- Fonte em produção: `891ffa53` (janela FULL pós-BETS-02) — **18 commits atrás
-  do main**, com 9 migrações não aplicadas (0019→0027).
+- Fonte em produção: `891ffa53` (janela FULL pós-BETS-02) — **19 commits atrás
+  do main**, com 10 migrações não aplicadas (0019→0028).
+- **Domínio de produção: `stakeframe.com.br`** (`APP_DOMAIN` do container web).
+  `stakeframe.app` **não** é o domínio do produto — o DNS o resolve para um IP
+  sem relação com a VPS.
+- **IP público da VPS: `129.146.113.111`.** O `129.146.113.29` que aparecia em
+  material antigo é o IP anterior da Oracle; a VM nunca foi reiniciada (uptime
+  contínuo de 2+ semanas). Se a Oracle trocar o IP de novo, atualizar aqui.
+- **Health check:** o Docker healthcheck é o autoritativo (`Status=healthy`,
+  `FailingStreak=0`). No HTTP, `/health`, `/healthz` e `/readyz` respondem 200
+  (servem o shell do SPA); `/api/health` responde 404 porque a rota não existe.
 - Decisão do proprietário (29/09/2026): **não promover** até fechar a Fase 2.
   O deploy será único e coeso, com plano de migração testado e janela de
   rollback, precedido de auditoria de produção (digests, conectividade).
