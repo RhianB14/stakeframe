@@ -7,6 +7,7 @@ import { PasswordResetGate } from './PasswordReset.js';
 import { ConsentScreen } from './ConsentScreen.js';
 import { ProductApp } from './product/ProductApp.js';
 import { MiniAppPage } from './product/MiniApp.js';
+import { MiniApp } from './product/MiniAppEntry.js';
 import { AdminPanel } from './admin/AdminPanel.js';
 
 async function loadStatus() {
@@ -30,10 +31,15 @@ export function App() {
     refetchInterval: 15_000,
   });
   const online = !status.isError && status.data?.database === 'available';
+  // STK-F2-12 — o Mini App é autenticado pelo initData, não por cookie: a
+  // consulta de sessão do navegador não tem o que resolver ali e só geraria
+  // um 401 a cada 30 s. Fica desligada nessa superfície.
+  const miniApp =
+    window.location.pathname === '/miniapp' || window.location.hash.startsWith('#miniapp');
   const owner = useQuery({
     queryKey: ['owner-session'],
     queryFn: loadOwner,
-    enabled: status.data?.authentication === 'google',
+    enabled: !miniApp && status.data?.authentication === 'google',
     retry: false,
     refetchInterval: 30_000,
   });
@@ -45,14 +51,30 @@ export function App() {
     window.addEventListener('stakeframe:session-expired', expired);
     return () => window.removeEventListener('stakeframe:session-expired', expired);
   }, [client]);
+  // STK-F2-12 — e o cache do produto nunca é descartado por causa da sessão do
+  // navegador nessa tela: a identidade vem do vínculo do Telegram, e um 401 de
+  // cookie (que não existe ali) não significa sessão de produto perdida.
   useEffect(() => {
+    if (miniApp) return;
     if (owner.isError || owner.data === null) client.removeQueries({ queryKey: ['product'] });
-  }, [client, owner.isError, owner.data]);
+  }, [client, miniApp, owner.isError, owner.data]);
   const session = owner.data && owner.data !== 'consent-required' ? owner.data : null;
-  // STK-G0-19-R5 — o Mini App autentica por initData validado no servidor e
-  // não depende da sessão web do proprietário.
-  if (window.location.pathname === '/miniapp' || window.location.hash.startsWith('#miniapp'))
-    return <MiniAppPage />;
+  // STK-G0-19-R5 — o editor de importação continua no seu endereço: o botão da
+  // mensagem do Telegram abre `#miniapp?import=<uuid>`, e essa tela é a de UMA
+  // importação específica.
+  // STK-F2-12 — o Mini App em si (painel, apostas, pendentes e ajustes) é a web
+  // responsiva dentro do Telegram, em `/miniapp`. Os dois cohabitam: o deep link
+  // da mensagem continua abrindo o editor pontual, e o menu do bot abre o
+  // produto completo.
+  //
+  // A distinção é feita pelo PARÂMETRO `import`, não pelo prefixo do hash: a
+  // rota `/miniapp` sem hash é o produto de bolso, e `#miniapp` sem `import`
+  // também — só o deep link da mensagem (que sempre traz `import`) é o editor.
+  const deepLink = window.location.hash;
+  if (window.location.pathname === '/miniapp' || deepLink.startsWith('#miniapp')) {
+    if (deepLink.includes('import=')) return <MiniAppPage />;
+    return <MiniApp />;
+  }
   // STK-F2-11 — o painel interno é uma superfície separada e só é montada para
   // uma sessão `superadmin`. Qualquer outro papel segue o fluxo normal: sem tela
   // de acesso negado, sem URLs adivinháveis que confirmem a existência do painel.

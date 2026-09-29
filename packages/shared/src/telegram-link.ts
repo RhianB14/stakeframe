@@ -57,6 +57,26 @@ export const telegramLinkStateResultSchema = z
   .meta({ id: 'TelegramLinkStateResult' });
 export type TelegramLinkStateResult = z.infer<typeof telegramLinkStateResultSchema>;
 
+/**
+ * STK-F2-12 — estado da sessão do Mini App.
+ *
+ * `userId` é o identificador interno pseudônimo do titular da conta do
+ * Telegram, resolvido pelo vínculo ATIVO. É o mesmo valor que a web já entrega
+ * ao navegador do próprio usuário (`loadOwner`), e existe para que a
+ * identificação de telemetria e a chave da operação financeira pendente sejam
+ * as mesmas nas duas superfícies. Sem ele, todo usuário do Mini App
+ * compartilharia uma única identidade.
+ */
+export const telegramSessionSchema = z
+  .object({
+    linked: z.literal(true),
+    linkedAt: z.iso.datetime(),
+    role: z.enum(['owner', 'member', 'superadmin']),
+    userId: z.string().min(1).max(255),
+  })
+  .meta({ id: 'TelegramSession' });
+export type TelegramSession = z.infer<typeof telegramSessionSchema>;
+
 /** Códigos sanitizados que a API pode devolver nesta fronteira. */
 export const TELEGRAM_LINK_ERROR_CODES = [
   'TELEGRAM_LINK_INVALID',
@@ -68,6 +88,12 @@ export const TELEGRAM_LINK_ERROR_CODES = [
   'TELEGRAM_LINK_IDENTITY_CONFLICT',
   'TELEGRAM_LINK_NOT_LINKED',
   'TELEGRAM_LINK_UNAVAILABLE',
+  // STK-F2-12 — codes da sessão do Mini App. `NOT_LINKED` é "nunca vinculado"
+  // e `REVOKED` é "vinculado e depois revogado": a interface orienta para
+  // vincular no site nos dois casos, sem nunca expor de quem é a conta.
+  'TELEGRAM_SESSION_NOT_LINKED',
+  'TELEGRAM_SESSION_REVOKED',
+  'TELEGRAM_SESSION_UNAVAILABLE',
 ] as const;
 export const telegramLinkErrorCodeSchema = z.enum(TELEGRAM_LINK_ERROR_CODES);
 export type TelegramLinkErrorCode = z.infer<typeof telegramLinkErrorCodeSchema>;

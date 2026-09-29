@@ -28,21 +28,7 @@ import { setSensitiveSurface } from '../lib/telemetry.js';
 // STK-G0-19-R5 — Mini App do Telegram: a mesma fonte canônica, autenticada pelo
 // initData validado no servidor (x-telegram-init-data). Nenhum identificador
 // Telegram é exibido; a edição viaja pelo backend, nunca direto entre Telegram e web.
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initData?: string;
-        ready?: () => void;
-        close?: () => void;
-        HapticFeedback?: {
-          notificationOccurred?: (type: 'success' | 'error' | 'warning') => void;
-        };
-      };
-    };
-  }
-}
+// A tipagem de `window.Telegram` é a canônica, em ./miniapp-auth.ts (STK-F2-12).
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));

@@ -4612,6 +4612,20 @@
         },
         "required": ["linked", "linkedAt"]
       },
+      "TelegramSessionInput": {
+        "type": "object",
+        "properties": {
+          "linked": { "type": "boolean", "enum": [true] },
+          "linkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "role": { "type": "string", "enum": ["owner", "member", "superadmin"] },
+          "userId": { "type": "string", "minLength": 1, "maxLength": 255 }
+        },
+        "required": ["linked", "linkedAt", "role", "userId"]
+      },
       "SystemStatusInput": {
         "type": "object",
         "properties": {
@@ -4685,7 +4699,10 @@
                   "TELEGRAM_TICKET_ARCHIVED",
                   "TELEGRAM_TICKET_EXPIRED",
                   "TELEGRAM_TICKET_NOT_RECOVERABLE",
-                  "TELEGRAM_TICKET_BUSY"
+                  "TELEGRAM_TICKET_BUSY",
+                  "TELEGRAM_SESSION_NOT_LINKED",
+                  "TELEGRAM_SESSION_REVOKED",
+                  "TELEGRAM_SESSION_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -9666,6 +9683,21 @@
         "required": ["linked", "linkedAt"],
         "additionalProperties": false
       },
+      "TelegramSession": {
+        "type": "object",
+        "properties": {
+          "linked": { "type": "boolean", "enum": [true] },
+          "linkedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "role": { "type": "string", "enum": ["owner", "member", "superadmin"] },
+          "userId": { "type": "string", "minLength": 1, "maxLength": 255 }
+        },
+        "required": ["linked", "linkedAt", "role", "userId"],
+        "additionalProperties": false
+      },
       "SystemStatus": {
         "type": "object",
         "properties": {
@@ -9740,7 +9772,10 @@
                   "TELEGRAM_TICKET_ARCHIVED",
                   "TELEGRAM_TICKET_EXPIRED",
                   "TELEGRAM_TICKET_NOT_RECOVERABLE",
-                  "TELEGRAM_TICKET_BUSY"
+                  "TELEGRAM_TICKET_BUSY",
+                  "TELEGRAM_SESSION_NOT_LINKED",
+                  "TELEGRAM_SESSION_REVOKED",
+                  "TELEGRAM_SESSION_UNAVAILABLE"
                 ]
               },
               "message": { "type": "string" },
@@ -11190,6 +11225,67 @@
             }
           },
           "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/session": {
+      "post": {
+        "operationId": "createTelegramSession",
+        "summary": "Conferir a sessão do usuário vinculado ao Telegram",
+        "tags": ["Telegram"],
+        "description": "Endpoint de diagnóstico do Mini App: valida o initData no servidor pelo HMAC do Telegram e responde o estado do vínculo do usuário resolvido. NÃO emite cookie, NÃO cria sessão e NÃO abre organização — a autorização real de cada rota acontece no autorizador da própria rota, sempre. Existe para que o Mini App distinga \"conta sem vínculo\" (orientação para vincular no site) de conta revogada e de erro de transporte, sem expor nada além do próprio estado do vínculo. Nunca devolve o identificador numérico do Telegram, a organização ou qualquer dado financeiro; o `userId` é o identificador interno pseudônimo do próprio titular, o mesmo que a web já entrega ao navegador dele.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "initData": { "type": "string", "minLength": 1, "maxLength": 8192 }
+                },
+                "required": ["initData"]
+              }
+            }
+          }
+        },
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TelegramSession" } }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
             "description": "Default Response",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }

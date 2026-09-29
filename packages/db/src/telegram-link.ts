@@ -1,7 +1,7 @@
 /**
  * STK-F2-04 — vínculo entre a conta Telegram e o usuário do produto.
  *
- * Plano Master §8.2: uma conta Telegram por usuário, globalmente única;
+ * Plano Master §8.2: uma conta Telegram por usuário, globalmente único;
  * vinculação por deep link de uso único com expiração de cinco minutos,
  * confirmação no site, revogação e relink auditados. O transporte continua
  * sendo o polling do worker existente (nenhum webhook, nenhum serviço novo).
@@ -29,7 +29,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { ORGANIZATION_CONTEXT_SETTING } from './tenant-context.js';
+import { ORGANIZATION_CONTEXT_SETTING, createTenantContext } from './tenant-context.js';
 import type { Database } from './index.js';
 
 export type TelegramLinkErrorCode =
@@ -43,11 +43,28 @@ export type TelegramLinkErrorCode =
   | 'TELEGRAM_LINK_NOT_LINKED'
   | 'TELEGRAM_LINK_UNAVAILABLE';
 
+export type TelegramSessionErrorCode =
+  'TELEGRAM_SESSION_NOT_LINKED' | 'TELEGRAM_SESSION_REVOKED' | 'TELEGRAM_SESSION_UNAVAILABLE';
+
 /** Erro estável e sanitizado: a mensagem É o código, então nenhum dado privado escapa. */
 export class TelegramLinkError extends Error {
   constructor(public readonly code: TelegramLinkErrorCode) {
     super(code);
     this.name = 'TelegramLinkError';
+  }
+}
+
+/**
+ * STK-F2-12 — falha ao resolver a sessão do Mini App. Separada de
+ * `TelegramLinkError` de propósito: a segunda responde 403 (conta do Telegram
+ * observada, mas sem vínculo ativo) e a primeira 401 (initData ausente ou
+ * inválido). As duas classes nunca carregam dado de terceiro: o nome do
+ * código é a única informação que sai daqui.
+ */
+export class TelegramSessionError extends Error {
+  constructor(public readonly code: TelegramSessionErrorCode) {
+    super(code);
+    this.name = 'TelegramSessionError';
   }
 }
 
@@ -68,6 +85,13 @@ type LinkRequestRow = {
   expires_at: Date | string;
 };
 
+type ResolvedLink = {
+  user_id: string;
+  organization_id: string;
+  role: string;
+  linked_at: Date | string;
+};
+
 /** SHA-256 hexadecimal do token bruto; é a única forma persistida do segredo. */
 export function hashTelegramLinkToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
@@ -85,6 +109,17 @@ function assertUserId(userId: unknown): asserts userId is string {
 
 function assertTelegramId(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[1-9]\d{0,15}$/.test(value))
+    throw new TelegramLinkError('TELEGRAM_LINK_INVALID');
+}
+
+/** Identidade do Telegram observada no initData já validado: inteira, positiva, <= 2^53. */
+function assertTelegramUserId(value: unknown): asserts value is number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value <= 0 ||
+    value > Number.MAX_SAFE_INTEGER
+  )
     throw new TelegramLinkError('TELEGRAM_LINK_INVALID');
 }
 
@@ -131,6 +166,7 @@ async function rollback(client: PoolClient) {
 type ActiveLink = { id: string; telegram_user_id: string; linked_at: Date | string };
 
 export function createTelegramLinkService(database: Database) {
+  const tenant = createTenantContext(database);
   /**
    * Transação própria com o contexto de organização já aplicado. Toda operação
    * que toca `core.telegram_link` ou `finance.audit` (ambas com RLS) passa por
@@ -397,6 +433,86 @@ export function createTelegramLinkService(database: Database) {
   }
 
   /**
+   * STK-F2-12 — resolve a sessão do Mini App a partir de uma conta Telegram
+   * JÁ autenticada pelo initData (o HMAC já foi conferido antes de chegar
+   * aqui). O vínculo ativo do §8.2 é a única ponte entre a conta observada no
+   * Telegram e o usuário do produto: nada é escolhido pelo cliente, nada é
+   * comparado com um identificador fixo de ambiente.
+   *
+   * A consulta é feita SEM contexto de organização de propósito — é o
+   * caminho de descoberta, não de tenant: ainda não se sabe qual organização
+   * será a do usuário. Por isso ela roda com a conexão do pool, que é a
+   * proprietária das tabelas (as políticas de RLS são aplicadas, mas o
+   *proprietário não é restringido por elas — a fronteira real de isolamento
+   * continua sendo o contexto aplicado em toda transação de produto). Assim
+   * que a organização é descoberta, `resolveOrganizationContext` reabre o
+   * contexto no mesmo padrão do restante do produto e a partir daí NENHUMA
+   * linha de outra organização é alcançável.
+   *
+   * Estados devolvidos, todos sanitizados:
+   *  - nenhum registro para a conta ⇒ `TELEGRAM_SESSION_NOT_LINKED` (403);
+   *  - existe registro, mas só revogado ⇒ `TELEGRAM_SESSION_REVOKED` (403);
+   *  - vínculo ativo, porém sem membership ⇒ `TELEGRAM_SESSION_NOT_LINKED`.
+   *
+   * Uma conta revogada NUNCA é reativada por aqui: a reativação é do
+   * §8.2, pelo deep link, auditada.
+   */
+  async function resolveSession(
+    telegramUserId: number,
+  ): Promise<{ organizationId: string; userId: string; role: string; linkedAt: string }> {
+    assertTelegramUserId(telegramUserId);
+    let rows: ResolvedLink[];
+    try {
+      rows = (
+        await database.pool.query<ResolvedLink>(
+          `select l.user_id, l.organization_id, m.role, l.linked_at
+             from core.telegram_link l
+             join core.membership m
+               on m.organization_id = l.organization_id and m.user_id = l.user_id
+            where l.telegram_user_id = $1 and l.state = 'active'
+            limit 1`,
+          [String(telegramUserId)],
+        )
+      ).rows;
+    } catch {
+      throw new TelegramSessionError('TELEGRAM_SESSION_UNAVAILABLE');
+    }
+    if (rows.length === 0) {
+      // Distingue "nunca vinculou" de "vinculou e revogou" para que a interface
+      // possa orientar o usuário — sem revelar de quem é a conta.
+      let seen: boolean;
+      try {
+        const revoked = await database.pool.query(
+          `select 1 from core.telegram_link where telegram_user_id = $1 limit 1`,
+          [String(telegramUserId)],
+        );
+        seen = (revoked.rowCount ?? 0) > 0;
+      } catch {
+        throw new TelegramSessionError('TELEGRAM_SESSION_UNAVAILABLE');
+      }
+      throw new TelegramSessionError(
+        seen ? 'TELEGRAM_SESSION_REVOKED' : 'TELEGRAM_SESSION_NOT_LINKED',
+      );
+    }
+    const row = rows[0]!;
+    if (rows.length > 1) throw new TelegramSessionError('TELEGRAM_SESSION_UNAVAILABLE');
+    if (!UUID_PATTERN.test(row.organization_id) || typeof row.user_id !== 'string')
+      throw new TelegramSessionError('TELEGRAM_SESSION_UNAVAILABLE');
+    // Reabre o contexto pelo MESMO caminho do produto (membership do usuário);
+    // `resolveOrganizationContext` falha fechada se a linha sumiu ou ficou
+    // inconsistente entre a descoberta e a resolução.
+    const context = await tenant.resolveOrganizationContext(row.user_id);
+    if (context.organizationId !== row.organization_id)
+      throw new TelegramSessionError('TELEGRAM_SESSION_UNAVAILABLE');
+    return {
+      organizationId: context.organizationId,
+      userId: context.userId,
+      role: context.role,
+      linkedAt: toInstant(row.linked_at).toISOString(),
+    };
+  }
+
+  /**
    * Username público do bot, gravado pelo worker a partir de `getMe`. Só o
    * formato do Telegram é aceito: nada de URL, nada de arroba, nada que possa
    * virar link trick no site. Sem valor válido, o estado anterior é preservado.
@@ -430,6 +546,7 @@ export function createTelegramLinkService(database: Database) {
     claimTelegramAccount,
     revokeLink,
     linkStatus,
+    resolveSession,
     recordBotUsername,
     botUsername,
   };

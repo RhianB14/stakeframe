@@ -148,8 +148,10 @@ export {
   createTelegramLinkService,
   hashTelegramLinkToken,
   TelegramLinkError,
+  TelegramSessionError,
   TELEGRAM_LINK_TTL_MS,
   type TelegramLinkErrorCode,
+  type TelegramSessionErrorCode,
   type TelegramLinkService,
 } from './telegram-link.js';
 export {

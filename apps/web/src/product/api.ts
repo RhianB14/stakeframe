@@ -15,6 +15,7 @@ import {
   type TicketKind,
   type FinanceCommand,
 } from '@stakeframe/shared';
+import { miniAppHeaders } from './miniapp-session.js';
 
 export type CommandInput = FinanceCommand extends infer C
   ? C extends FinanceCommand
@@ -41,6 +42,13 @@ export async function request<T>(
       credentials: 'same-origin',
       signal: AbortSignal.timeout(20_000),
       ...init,
+      // STK-F2-12 — a sessão do Mini App (initData validado no servidor) entra
+      // AQUI, e não em cada chamada: os componentes da web são reutilizados
+      // sem alteração e não podem esquecer a credencial ao trocar de tela. O
+      // header explícito do chamador continua valendo (a importação do G0-19
+      // já passa o initData por parâmetro), então a ordem do spread é
+      // intencional: vem DEPOIS de `...init` e o que a chamada nomeia vence.
+      headers: { ...miniAppHeaders(), ...(init.headers as Record<string, string> | undefined) },
     });
   } catch {
     throw new ApiFailure(

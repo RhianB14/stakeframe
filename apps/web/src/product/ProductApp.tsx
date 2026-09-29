@@ -61,6 +61,19 @@ const navigation = [
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
 type Page = (typeof navigation)[number]['id'] | 'imports';
+/**
+ * STK-F2-12 — os MESMOS quatro destinos dentro do Mini App, sobre as mesmas
+ * telas e os mesmos modais. O Telegram entrega um menu inferior, não uma
+ * barra lateral, e não faz sentido oferecer calendário/análises/financeiro
+ * numa tela de bolso: as quatro rotas escolhidas são as do escopo (painel,
+ * apostas, pendentes e ajustes).
+ */
+const miniAppNavigation = [
+  { id: 'overview', title: 'Painel', icon: '◫' },
+  { id: 'bets', title: 'Apostas', icon: '▤' },
+  { id: 'imports', title: 'Pendentes', icon: '⇢' },
+  { id: 'settings', title: 'Ajustes', icon: '⚙' },
+] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: string }>;
 function currentPage(): Page {
   const id = location.hash.slice(1);
   if (id === 'imports') return 'imports';
@@ -70,9 +83,12 @@ function currentPage(): Page {
 export function ProductApp({
   owner,
   release,
+  variant = 'web',
 }: {
   owner: Owner;
   release?: ReleaseInfo | undefined;
+  /** STK-F2-12: `mini` é o mesmo produto dentro do Telegram, com navegação própria. */
+  variant?: 'web' | 'mini';
 }) {
   const workspace = useQuery({
     queryKey: ['product', 'workspace'],
@@ -101,7 +117,7 @@ export function ProductApp({
     );
   return (
     <ActionProvider key={owner.id} owner={owner.id} version={workspace.data.version}>
-      <ProductShell owner={owner} workspace={workspace.data} release={release} />
+      <ProductShell owner={owner} workspace={workspace.data} release={release} variant={variant} />
     </ActionProvider>
   );
 }
@@ -109,10 +125,12 @@ function ProductShell({
   owner,
   workspace,
   release,
+  variant,
 }: {
   owner: Owner;
   workspace: Workspace;
   release?: ReleaseInfo | undefined;
+  variant: 'web' | 'mini';
 }) {
   const releaseLabel = release && release.version !== 'unversioned' ? ` · v${release.version}` : '';
   const [page, setPage] = useState(currentPage);
@@ -166,56 +184,74 @@ function ProductShell({
     setModal(value);
   };
   const close = () => setModal(null);
+  // STK-F2-12 — a casca do Mini App: sem barra lateral, sem "sair da conta" e
+  // com um menu inferior de quatro destinos. Tudo abaixo do menu (telas,
+  // modais, formulários e o caminho financeiro com confirmação) é o MESMO
+  // componente da web — por isso a troca não pode duplicar regra nenhuma.
+  const items = variant === 'mini' ? miniAppNavigation : navigation;
   return (
-    <div className="product-shell">
-      <aside className="product-sidebar">
-        <a href="#overview" className="product-brand">
-          stakeframe<span>.</span>
-        </a>
-        <p className="sidebar-caption">SEU ESPAÇO PESSOAL</p>
-        <nav aria-label="Navegação principal">
-          {navigation.map((item) => (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              aria-current={page === item.id ? 'page' : undefined}
-            >
-              <span className="nav-icon" aria-hidden="true">
-                {item.icon}
-              </span>
-              <span className="nav-label">
-                {item.id === 'settings' ? (
-                  <>
-                    Configura
-                    <wbr />
-                    ções
-                  </>
-                ) : (
-                  item.title
-                )}
-              </span>
-            </a>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <span className="private-dot" /> Acesso privado<p>Horário de São Paulo</p>
-        </div>
-      </aside>
+    <div className={variant === 'mini' ? 'product-shell miniapp-shell' : 'product-shell'}>
+      {variant === 'web' ? (
+        <aside className="product-sidebar">
+          <a href="#overview" className="product-brand">
+            stakeframe<span>.</span>
+          </a>
+          <p className="sidebar-caption">SEU ESPAÇO PESSOAL</p>
+          <nav aria-label="Navegação principal">
+            {navigation.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                aria-current={page === item.id ? 'page' : undefined}
+              >
+                <span className="nav-icon" aria-hidden="true">
+                  {item.icon}
+                </span>
+                <span className="nav-label">
+                  {item.id === 'settings' ? (
+                    <>
+                      Configura
+                      <wbr />
+                      ções
+                    </>
+                  ) : (
+                    item.title
+                  )}
+                </span>
+              </a>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <span className="private-dot" /> Acesso privado<p>Horário de São Paulo</p>
+          </div>
+        </aside>
+      ) : null}
       <div className="product-content">
         <header className="product-topbar">
           <span>
-            Olá, {owner.name.split(' ')[0]}
-            <span className="greeting-dot">.</span>
+            {variant === 'mini' ? (
+              'stakeframe'
+            ) : (
+              <>
+                Olá, {owner.name.split(' ')[0]}
+                <span className="greeting-dot">.</span>
+              </>
+            )}
           </span>
           <div className="button-row">
-            <Button
-              variant="ghost"
-              size="small"
-              onClick={() => logout.mutate()}
-              disabled={logout.isPending}
-            >
-              Sair da conta
-            </Button>
+            {/* STK-F2-12: dentro do Telegram não existe "conta" do navegador para
+                encerrar — o vínculo é desfeito no site (F2-04), e a seção
+                "Ajustes" aponta para lá. */}
+            {variant === 'web' ? (
+              <Button
+                variant="ghost"
+                size="small"
+                onClick={() => logout.mutate()}
+                disabled={logout.isPending}
+              >
+                Sair da conta
+              </Button>
+            ) : null}
             <Button
               disabled={!workspace.initialized || !!actions.pending}
               onClick={() => open({ kind: 'bet' })}
@@ -240,7 +276,7 @@ function ProductShell({
                   ? 'Primeiros passos'
                   : page === 'imports'
                     ? 'Recebimentos técnicos'
-                    : navigation.find((item) => item.id === page)!.title}
+                    : items.find((item) => item.id === page)!.title}
               </h1>
             </div>
             <span className="live-label">
@@ -297,6 +333,26 @@ function ProductShell({
           <span>BRL · America/Sao_Paulo{releaseLabel}</span>
         </div>
       </div>
+      {variant === 'mini' ? (
+        // STK-F2-12 — menu inferior do Telegram. Usa `open`/hashchange em vez de
+        // `button` para que o fluxo Continue sendo uma ROTA: o botão do menu do
+        // bot pode abrir uma rota específica, o botão de voltar do Telegram
+        // funciona, e o mesmo endereço abre o mesmo fluxo.
+        <nav className="miniapp-nav" aria-label="Navegação do aplicativo">
+          {items.map((item) => (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              aria-current={page === item.id ? 'page' : undefined}
+            >
+              <span className="nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span className="nav-label">{item.title}</span>
+            </a>
+          ))}
+        </nav>
+      ) : null}
       {modal ? (
         <ModalContent
           key={JSON.stringify(modal, (key, value: unknown) => (key === 'build' ? null : value))}

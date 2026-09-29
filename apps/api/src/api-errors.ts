@@ -78,6 +78,15 @@ const messages: Record<ApiErrorCode, string> = {
   TELEGRAM_TICKET_NOT_RECOVERABLE:
     'Este arquivo não pode ser recuperado: ele já foi restaurado ou é uma duplicata.',
   TELEGRAM_TICKET_BUSY: 'Há um bilhete em processamento. Envie a próxima foto em instantes.',
+  // STK-F2-12 — a mensagem é idêntica para "nunca vinculado" e "revogado" de
+  // propósito: ela orienta o caminho (vincular no site) sem confirmar a
+  // existência de um vínculo anterior, o que seria um vazamento sobre a conta.
+  TELEGRAM_SESSION_NOT_LINKED:
+    'Esta conta do Telegram ainda não está vinculada. Vincule pelo site para usar o aplicativo.',
+  TELEGRAM_SESSION_REVOKED:
+    'Esta conta do Telegram ainda não está vinculada. Vincule pelo site para usar o aplicativo.',
+  TELEGRAM_SESSION_UNAVAILABLE:
+    'A conexão com o Telegram está indisponível agora. Tente novamente em alguns instantes.',
 };
 
 export function sendApiError(

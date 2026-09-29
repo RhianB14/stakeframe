@@ -16,6 +16,7 @@ import {
   journalPageSchema,
 } from '@stakeframe/shared';
 import type { OwnerAuth } from './auth.js';
+import type { TelegramSessionGate } from './telegram-session-routes.js';
 import { ownerSessionSecurity } from './openapi.js';
 import { sendApiError } from './api-errors.js';
 
@@ -23,6 +24,7 @@ export function registerFinanceRoutes(
   app: FastifyInstance,
   ownerAuth: OwnerAuth | undefined,
   service: FinanceService | undefined,
+  miniApp?: TelegramSessionGate,
 ) {
   const contexts = new WeakMap<FastifyRequest, OrganizationContext>();
   const errors = {
@@ -37,6 +39,16 @@ export function registerFinanceRoutes(
   };
   const authorize = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!ownerAuth) return sendApiError(request, reply, 503, 'AUTH_NOT_CONFIGURED');
+    // STK-F2-12 — quando a requisição traz o initData do Telegram, o gate do
+    // Mini App publica a organização resolvida pelo vínculo da F2-04; nos demais
+    // casos vale o caminho da web, idêntico ao que já existia.
+    if (miniApp && typeof request.headers['x-telegram-init-data'] === 'string') {
+      await miniApp.authorizeMiniApp(request, reply);
+      if (reply.sent) return;
+      if (!service) return sendApiError(request, reply, 503, 'AUTH_UNAVAILABLE');
+      contexts.set(request, miniApp.contexts.get(request)!);
+      return;
+    }
     if (
       request.method !== 'GET' &&
       (request.headers.origin !== ownerAuth.origin ||
