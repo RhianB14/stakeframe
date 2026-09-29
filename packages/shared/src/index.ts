@@ -13,6 +13,7 @@ export * from './release.js';
 export * from './automatic-policy.js';
 export * from './telemetry.js';
 export * from './entitlements.js';
+export * from './polymarket.js';
 
 export const systemStatusSchema = z
   .object({

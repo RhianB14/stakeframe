@@ -54,9 +54,14 @@ describe('STK-F2-08 — replay da 0027', () => {
     // a 0026 e o journal ficava NÃO CONTÍGUO; com a 0026 mergeada, as duas
     // coexistem em ordem. Este teste fixa a situação CONVERGIDA, que é a que
     // a main vai ter.
-    const last = journal.entries[journal.entries.length - 1]!;
-    expect(last.tag).toBe('0027_report_snapshots');
-    expect(last.idx).toBe(journal.entries.length - 1);
+    //
+    // A 0027 NÃO é mais a última: a STK-F2-14 acrescenta a 0028 depois dela.
+    // Por isso a asserção é sobre a POSIÇÃO declarada no `idx`, e não sobre
+    // "é a última entrada" — que quebraria a cada migração seguinte e
+    // obrigaria a editar este teste a cada card novo.
+    const snapshots = journal.entries.findIndex((e) => e.tag === '0027_report_snapshots');
+    expect(snapshots).toBeGreaterThan(0);
+    expect(journal.entries[snapshots]!.idx).toBe(snapshots);
     // Nenhuma entrada fora da sua posição: é o que torna confiável o replay de
     // prefixo do migrador.
     expect(journal.entries.every((entry, index) => entry.idx === index)).toBe(true);

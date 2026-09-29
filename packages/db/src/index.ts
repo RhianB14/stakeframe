@@ -201,6 +201,7 @@ export { attachmentExpiredSql, claimExpiredAttachmentsForBackup } from './attach
 export { assertRecoveryReviewed } from './recovery-guard.js';
 export { createAutomaticImportService } from './automatic-import.js';
 export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
+export { createPolymarketStore, type PolymarketStore } from './polymarket.js';
 
 export function createDatabase(
   connectionString: string,
