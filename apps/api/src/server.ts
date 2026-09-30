@@ -17,6 +17,7 @@ import {
   createTelegramLinkService,
   createTelegramTicketService,
   createPolymarketRankingStore,
+  createPolymarketAlertsService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -118,6 +119,12 @@ async function main() {
     // aqui: ela existe para pagar por uma chamada, e esta rota não paga por
     // nenhuma. O limiar de amostra é o mesmo do dashboard analítico.
     polymarketRanking: createPolymarketRankingStore(database),
+    // STK-F2-16: favoritos (teto de dez) e a configuração do alerta de
+    // atividade. O serviço é montado aqui, mas o job de avaliação do score
+    // NÃO é registrado na API: ele vive no worker, é silencioso e nenhuma rota
+    // o invoca. Se a API o montasse, existiria um caminho de leitura que o
+    // card proíbe.
+    polymarketAlerts: createPolymarketAlertsService(database),
     dashboardMinSample: config.dashboard.minSample,
     database,
     telemetry,

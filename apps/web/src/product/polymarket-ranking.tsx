@@ -9,6 +9,7 @@ import {
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { request } from './api.js';
+import { PolymarketFavoritesSection, FavoriteButton } from './polymarket-favorites.js';
 import {
   rankingCategoryOptions,
   rankingOrderOptions,
@@ -112,6 +113,12 @@ export function PolymarketRankingPage() {
         </div>
       ) : null}
       {query.data ? <RankingTable ranking={query.data} /> : null}
+      {/* STK-F2-16: favoritos e alerta de atividade, na MESMA tela do ranking.
+          A carteira que o usuário está olhando é a carteira que ele favorita, e
+          o teto de dez é visível sem sair da lista. A seção vem DEPOIS da
+          tabela de propósito: a leitura do ranking oficial vem primeiro, e o
+          que o usuário configurou vem depois. */}
+      <PolymarketFavoritesSection />
     </section>
   );
 }
@@ -177,6 +184,7 @@ function RankingTable({ ranking }: { ranking: PolymarketRanking }) {
                   <th>Carteira pública</th>
                   <th>P&amp;L</th>
                   <th>Volume</th>
+                  <th>Favoritar</th>
                 </tr>
               </thead>
               <tbody>
@@ -191,6 +199,13 @@ function RankingTable({ ranking }: { ranking: PolymarketRanking }) {
                     </td>
                     <td className={`tabular ${row.negative ? 'negative' : ''}`}>{row.pnl}</td>
                     <td className="tabular">{row.vol}</td>
+                    {/* STK-F2-16: o botão fica na LINHA, ao lado da carteira que
+                        o usuário está olhando. A coluna é a ÚNICA coisa que a
+                        F2-16 acrescenta ao ranking, e ela não recebe pontuação,
+                        selo nem recomendação — só a ação de guardar. */}
+                    <td>
+                      <FavoriteButton proxyWallet={row.wallet} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -13,6 +13,7 @@ import { startAttachments } from './attachments.js';
 import { startAccountPurge } from './account-purge.js';
 import { startEventSearch } from './event-providers.js';
 import { startFreebetAlerts } from './freebet-alerts.js';
+import { startPolymarketAlerts } from './polymarket-alerts.js';
 import { startReportCadence } from './report-cadence.js';
 import { readTelegramConfig } from './telegram.js';
 import { createBudgetProbe } from './budget.js';
@@ -36,6 +37,11 @@ async function main() {
   let accountPurge = { stop: async () => {}, check: () => {} };
   let events = { stop: async () => {}, check: () => {} };
   let freebets = { stop: async () => {}, check: () => {} };
+  // STK-F2-16: o job de alerta de atividade Polymarket e a avaliação SILENCIOSA
+  // do Composite Score. Nasce desligado quando o canal de notificação não
+  // existe — o mesmo fail-closed do job de freebet (F2-10), e o mesmo motivo:
+  // nada se perde na fila, e nada é entregue sem canal.
+  let polymarketAlerts = { stop: async () => {}, check: () => {} };
   // STK-F2-08: a cadência do relatório só existe quando o Telegram existe — o
   // canal é o ÚNICO destino do relatório (o card exclui e-mail, PDF e PNG). Sem
   // Telegram configurado, o job é um no-op declarado, e o relatório continua
@@ -59,6 +65,7 @@ async function main() {
     accountPurge = startAccountPurge(database);
     events = startEventSearch(database, process.env);
     freebets = startFreebetAlerts(database, process.env);
+    polymarketAlerts = startPolymarketAlerts(database, process.env);
   } catch (error) {
     await integrations.stop();
     await monthlyUnits.stop();
@@ -66,6 +73,7 @@ async function main() {
     await accountPurge.stop();
     await events.stop();
     await freebets.stop();
+    await polymarketAlerts.stop();
     await reports?.stop();
     await boss?.stop({ graceful: false });
     await database.close();
@@ -88,6 +96,7 @@ async function main() {
         attachments.check();
         events.check();
         freebets.check();
+        polymarketAlerts.check();
         reports?.check();
         if (!(await boss.getQueue(PROBE_QUEUE))) throw new Error('QUEUE_MISSING');
         response.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ready"}');
@@ -108,6 +117,7 @@ async function main() {
     await accountPurge.stop();
     await events.stop();
     await freebets.stop();
+    await polymarketAlerts.stop();
     await boss.stop({ graceful: false });
     await database.close();
     telemetry.captureError(error, { stage: 'startup' });
@@ -125,6 +135,7 @@ async function main() {
       .then(() => accountPurge.stop())
       .then(() => events.stop())
       .then(() => freebets.stop())
+      .then(() => polymarketAlerts.stop())
       .then(() => reports?.stop())
       .then(() => boss.stop({ graceful: true, timeout: 10_000 }))
       .finally(async () => {

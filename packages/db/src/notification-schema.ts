@@ -99,7 +99,14 @@ export const notificationOutbox = notification.table(
     unique('notification_outbox_organization_id_id_idx').on(table.organizationId, table.id),
     check(
       'notification_outbox_topic_check',
-      sql`${table.topic} in ('bet_settled','review_pending','freebet_expiring')`,
+      /**
+       * STK-F2-16: a etiqueta nova entra aqui porque o valor gravado é recusado
+       * pelo CHECK do banco, e este objeto é o esquema drizzle que descreve a
+       * mesma tabela. A lista de TOPICS de preferência (acima) NÃO muda: a
+       * ativação do alerta Polymarket é a coluna `enabled` da configuração
+       * própria, e duplicar o interruptor criaria divergência.
+       */
+      sql`${table.topic} in ('bet_settled','review_pending','freebet_expiring','polymarket_activity')`,
     ),
     check(
       'notification_outbox_state_check',

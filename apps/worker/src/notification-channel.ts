@@ -15,7 +15,14 @@
 // chamada de rede. Isso pertence à STK-F2-04.
 
 export type NotificationDelivery = {
-  topic: 'bet_settled' | 'review_pending' | 'freebet_expiring';
+  /**
+   * A etiqueta da entrega. STK-F2-16 acrescenta `polymarket_activity`: a
+   * entrega usa a MESMA union da fila (`notificationOutboxTopicSchema` no
+   * shared), e não uma lista própria. Duas listas de etiquetas divergiriam no
+   * primeiro alerta gravado, e a falha apareceria como um `deliver` que não
+   * compila — o que é melhor do que um envio com a etiqueta errada.
+   */
+  topic: 'bet_settled' | 'review_pending' | 'freebet_expiring' | 'polymarket_activity';
   subjectId: string | null;
   title: string;
   body: string;

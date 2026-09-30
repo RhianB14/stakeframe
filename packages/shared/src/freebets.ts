@@ -229,9 +229,24 @@ export const notificationPreferencesInputSchema = z
   .meta({ id: 'NotificationPreferencesRequest' });
 export type NotificationPreferencesInput = z.infer<typeof notificationPreferencesInputSchema>;
 
+/** A etiqueta de `EVERY` tipo que pode entrar na fila, sistema incluído. */
+export const notificationOutboxTopicSchema = z.enum([
+  'bet_settled',
+  'review_pending',
+  'freebet_expiring',
+  'polymarket_activity',
+]);
+export type NotificationOutboxTopic = z.infer<typeof notificationOutboxTopicSchema>;
 export const notificationRecordSchema = z.object({
   id: z.uuid(),
-  topic: notificationTopicSchema,
+  /**
+   * A etiqueta da fila é MAIS larga que a preferência: `polymarket_activity`
+   * é enfileirada pelo job da F2-16, que tem a SUA própria ativação
+   * (`polymarket_alert_config.enabled`). Se esta lista fosse igual à dos
+   * tópicos de preferência, o registro de um alerta Polymarket não parsearia
+   * aqui e a listagem de notificações quebraria no primeiro alerta gravado.
+   */
+  topic: notificationOutboxTopicSchema,
   subjectId: z.uuid().nullable(),
   /** Janela do alerta (ex.: '24h', '4h') — parte da chave de deduplicação. */
   window: z.string().max(16),

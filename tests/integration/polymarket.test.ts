@@ -501,10 +501,21 @@ describe('STK-F2-14 §15 — ingestao Polymarket no banco', () => {
             where table_schema='integration' and table_name like 'polymarket%' order by table_name`,
         )
       ).rows.map((row) => row.table_name);
+      // A lista inclui as tabelas da F2-16 (0029), que Vivem no mesmo schema
+      // `integration` porque apontam para o mesmo dado público. As quatro são
+      // CONFIGURAÇÃO DO USUÁRIO (favorito, limiar, cota), histórico de
+      // observação e a versão do Composite Score — nenhuma delas é ordem,
+      // aposta, posição ou contrato, que é o que o escopo excluído (§9.1)
+      // proíbe. E nenhuma delas é lida pela interface: o score é gravado por um
+      // job silencioso e não tem rota de leitura.
       expect(tables).toEqual([
+        'polymarket_activity_window',
         'polymarket_aggregate',
+        'polymarket_alert_config',
+        'polymarket_favorite',
         'polymarket_page',
         'polymarket_retention',
+        'polymarket_score_run',
         'polymarket_series',
         'polymarket_trader',
       ]);
