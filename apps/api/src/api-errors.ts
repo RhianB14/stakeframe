@@ -43,6 +43,14 @@ const messages: Record<ApiErrorCode, string> = {
   FREEBET_REVOKED: 'Esta freebet foi revogada e não pode ser alterada.',
   FREEBET_INVALID:
     'Confira a freebet: casa ativa, valor, validade, fuso horário e quiet hours informados.',
+  // STK-F2-16 — favoritos e alerta de atividade. As quatro mensagens dizem o
+  // que fazer, não apenas o que deu errado: o limite de dez é uma regra do
+  // produto e a orientação correta é REMOVER UM favorito, não tentar de novo.
+  FAVORITE_NOT_FOUND: 'Este trader não está nos seus favoritos.',
+  FAVORITES_LIMIT_REACHED: 'Você já tem dez favoritos. Remova um para adicionar outro trader.',
+  FAVORITE_INVALID: 'Confira a carteira pública informada.',
+  ALERT_CONFIG_INVALID:
+    'Confira o alerta: limiar positivo e cota de um a duzentos alertas por dia.',
   INCOMPLETE_BET: 'Preencha todos os campos obrigatórios da aposta antes de alterar o status.',
   DUPLICATE_REVIEW_REQUIRED:
     'Há uma aposta possivelmente repetida. Confira e justifique o novo registro.',

@@ -31,6 +31,7 @@ import type {
   ImportBatchService,
   ReportSnapshotService,
   PolymarketRankingStore,
+  PolymarketAlertsService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
 import { registerReportSnapshotRoutes } from './report-snapshot-routes.js';
@@ -50,6 +51,7 @@ import {
 import { registerDebugRoutes } from './debug-routes.js';
 import { registerAdminPanelRoutes } from './admin-routes.js';
 import { registerPolymarketRankingRoutes } from './polymarket-ranking-routes.js';
+import { registerPolymarketAlertsRoutes } from './polymarket-alerts-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
 import type { TelegramLinkService, TelegramTicketService, Database } from '@stakeframe/db';
 
@@ -103,6 +105,14 @@ export function createApp(options: {
    * completude é exatamente a cobertura parcial apresentada como total.
    */
   polymarketRanking?: PolymarketRankingStore;
+  /**
+   * STK-F2-16: favoritos (teto de dez) e a configuração do alerta de atividade
+   * Polymarket. Ausente = as rotas respondem 503 (fail-closed): sem a
+   * configuração gravada não há como saber se o alerta está ativo, e um
+   * produto que respondesse "nenhum alerta ativo" sem tabela seria uma
+   * resposta inventada.
+   */
+  polymarketAlerts?: PolymarketAlertsService;
   /** Handle do banco: a confirmação do preview precisa do serviço de importação. */
   database?: Database;
   telemetry?: TelemetryHandle;
@@ -288,6 +298,19 @@ export function createApp(options: {
       // configurado — nenhuma tela decide sozinha o que é amostra pequena.
       minSample: options.dashboardMinSample ?? 30,
     });
+    // STK-F2-16 — favoritos e alerta de atividade. Fica ao lado das rotas de
+    // ranking porque o nome gravado no favorito tem de ser o MESMO que a tela de
+    // ranking mostra: os dois leem a mesma observação da F2-14, então o leitor
+    // é o store de ranking, injetado em vez de duplicado aqui.
+    registerPolymarketAlertsRoutes(
+      app,
+      options.ownerAuth,
+      options.polymarketAlerts,
+      options.freebets,
+      options.polymarketRanking
+        ? (proxyWallet: string) => options.polymarketRanking!.traderNameOf(proxyWallet)
+        : undefined,
+    );
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));

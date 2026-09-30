@@ -207,5 +207,27 @@ export function createPolymarketRankingStore(database: Database) {
     };
   }
 
-  return { seriesOf, topOf, ranking };
+  /**
+   * O nome publicado pela origem para UMA carteira, ou `''` quando ela não
+   * está na janela ingerida.
+   *
+   * A ausência é uma RESPOSTA, não um erro: um trader pode ter saído da janela
+   * entre a tela e o clique, e a F2-16 grava o favorito com o nome vazio em vez
+   * de recusar. É o mesmo nome que a F2-14 gravou, e o mesmo que a tela de
+   * ranking mostra — os dois leem a MESMA observação, então favoritar e
+   * procurar nunca divergem sobre quem é o trader.
+   */
+  async function traderNameOf(proxyWallet: string): Promise<string> {
+    const row = (
+      await database.pool.query<{ user_name: string }>(
+        `select user_name from integration.polymarket_trader
+          where proxy_wallet=$1
+          order by observed_at desc, id desc limit 1`,
+        [proxyWallet.toLowerCase()],
+      )
+    ).rows[0];
+    return row?.user_name ?? '';
+  }
+
+  return { seriesOf, topOf, ranking, traderNameOf };
 }

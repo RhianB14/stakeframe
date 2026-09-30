@@ -5,8 +5,8 @@ import {
   parseFreebetRequirements,
   parseNotificationTopics,
   type FreebetRequirement,
+  type NotificationOutboxTopic,
   type NotificationPreferences,
-  type NotificationTopic,
 } from '@stakeframe/shared';
 import type { PoolClient } from 'pg';
 import { createTenantContext, type OrganizationContext } from './tenant-context.js';
@@ -319,7 +319,16 @@ export function createNotificationService(database: Database) {
       });
     },
 
-    /** Lista as notificações do usuário (auditoria de quiet hours e dedupe). */
+    /**
+     * Lista as notificações do usuário (auditoria de quiet hours e dedupe).
+     *
+     * A etiqueta da fila é a de `notificationOutboxTopicSchema` e NÃO a
+     * `notificationTopicSchema` da preferência: `polymarket_activity` (STK-F2-16)
+     * é enfileirada pelo job próprio, com a ativação na configuração do
+     * usuário. Usar a lista estreita aqui faria o `list` recusar o primeiro
+     * alerta Polymarket gravado, e a auditoria de dedupe pararia de funcionar
+     * no dia em que o primeiro alerta saísse.
+     */
     async list(
       context: OrganizationContext,
       userId: string,
@@ -327,7 +336,7 @@ export function createNotificationService(database: Database) {
     ): Promise<
       {
         id: string;
-        topic: NotificationTopic;
+        topic: NotificationOutboxTopic;
         subjectId: string | null;
         state: string;
         scheduledFor: string;
