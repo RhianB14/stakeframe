@@ -35,6 +35,7 @@ import { CalendarPage, EventReview } from './events.js';
 import { ReportsPage } from './reports.js';
 import { OverviewReport } from './overview-report.js';
 import { OnboardingPage } from './onboarding.js';
+import { PolymarketRankingPage } from './polymarket-ranking.js';
 import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
 
@@ -60,6 +61,12 @@ const navigation = [
   { id: 'calendar', title: 'Calendário', icon: '▦' },
   { id: 'analytics', title: 'Análises', icon: '↗' },
   { id: 'reports', title: 'Relatórios', icon: '▥' },
+  // STK-F2-15: o ranking oficial Polymarket. Entra na navegação da web (não do
+  // Mini App), e a coluna da barra inferior no mobile é explícita por causa
+  // dele — o teste de navegador exige que a barra não role e que cada destino
+  // mantenha 44px de altura, e um `auto-fit` faria a contagem depender da
+  // largura em vez de ser verificada.
+  { id: 'ranking', title: 'Ranking', icon: '⇧' },
   { id: 'finance', title: 'Financeiro', icon: '⇄' },
   { id: 'settings', title: 'Configurações', icon: '⚙' },
 ] as const;
@@ -177,6 +184,11 @@ function ProductShell({
         page === 'finance' ||
         page === 'reports' ||
         page === 'analytics' ||
+        // STK-F2-15: o ranking também é uma tela de número externo — posição,
+        // P&L e volume de terceiros. Uma sessão gravada aqui registrararia
+        // a carteira pública que o dono estava consultando, e isso é dado de
+        // interesse, não ruído de navegação.
+        page === 'ranking' ||
         page === 'settings' ||
         modal !== null,
     );
@@ -336,6 +348,14 @@ function ProductShell({
             <Suspense fallback={<p role="status">Carregando análises…</p>}>
               <AnalyticsPage workspace={workspace} open={open} />
             </Suspense>
+          ) : page === 'ranking' ? (
+            // STK-F2-15: o ranking oficial Polymarket. Não recebe `workspace`
+            // porque é a única tela que NÃO lê dado da organização: o ranking
+            // é público e idêntico para qualquer conta, e passar o workspace
+            // aqui abriria espaço para alguém ligar a lista pública a um
+            // tenant — que é impersonação, e a rota não aceita nem usuário nem
+            // organização justamente por isso.
+            <PolymarketRankingPage />
           ) : page === 'reports' ? (
             // STK-F2-08: a página do relatório privado. Ela não recebe o
             // `workspace` porque é a ÚNICA tela do produto que lê o SNAPSHOT

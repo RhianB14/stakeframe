@@ -16,6 +16,7 @@ import {
   createImportBatchService,
   createTelegramLinkService,
   createTelegramTicketService,
+  createPolymarketRankingStore,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -111,6 +112,13 @@ async function main() {
     // recuperável por 30 dias. A confirmação usa o serviço de importação, então
     // o handle do banco é entregue à app.
     telegramTickets: createTelegramTicketService(database),
+    // STK-F2-15: o ranking oficial Polymarket é LEITURA das tabelas que a
+    // F2-14 gravou. Nenhuma chamada externa nova, nenhum custo, nenhuma
+    // gravação — por isso a porta de entitlement da F2-13 não é consultada
+    // aqui: ela existe para pagar por uma chamada, e esta rota não paga por
+    // nenhuma. O limiar de amostra é o mesmo do dashboard analítico.
+    polymarketRanking: createPolymarketRankingStore(database),
+    dashboardMinSample: config.dashboard.minSample,
     database,
     telemetry,
     ...(operations ? { operations } : {}),

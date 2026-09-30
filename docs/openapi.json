@@ -19284,6 +19284,377 @@
           }
         }
       }
+    },
+    "/api/v1/polymarket/ranking": {
+      "get": {
+        "operationId": "getPolymarketRanking",
+        "summary": "Ranking oficial de traders da Polymarket com P&L, volume, amostra e completude da série",
+        "tags": ["Integrações"],
+        "description": "Lê o leaderboard oficial já ingerido pela F2-14. A completude exibida é o status gravado pela ingestão, nunca inferida da contagem de linhas. A resposta traz exclusivamente as métricas publicadas pela origem.",
+        "parameters": [
+          {
+            "schema": {
+              "default": "MONTH",
+              "type": "string",
+              "enum": ["DAY", "WEEK", "MONTH", "ALL"]
+            },
+            "in": "query",
+            "name": "timePeriod",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "OVERALL",
+              "type": "string",
+              "enum": [
+                "OVERALL",
+                "POLITICS",
+                "SPORTS",
+                "ESPORTS",
+                "CRYPTO",
+                "CULTURE",
+                "MENTIONS",
+                "WEATHER",
+                "ECONOMICS",
+                "TECH",
+                "FINANCE"
+              ]
+            },
+            "in": "query",
+            "name": "category",
+            "required": false
+          },
+          {
+            "schema": { "default": "PNL", "type": "string", "enum": ["PNL", "VOL"] },
+            "in": "query",
+            "name": "orderBy",
+            "required": false
+          },
+          {
+            "schema": { "default": 100, "type": "integer", "minimum": 1, "maximum": 100 },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "window": {
+                      "type": "object",
+                      "properties": {
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "OVERALL",
+                            "POLITICS",
+                            "SPORTS",
+                            "ESPORTS",
+                            "CRYPTO",
+                            "CULTURE",
+                            "MENTIONS",
+                            "WEATHER",
+                            "ECONOMICS",
+                            "TECH",
+                            "FINANCE"
+                          ]
+                        },
+                        "timePeriod": { "type": "string", "enum": ["DAY", "WEEK", "MONTH", "ALL"] },
+                        "orderBy": { "type": "string", "enum": ["PNL", "VOL"] }
+                      },
+                      "required": ["category", "timePeriod", "orderBy"],
+                      "additionalProperties": false
+                    },
+                    "series": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["complete", "truncated", "partial", "unknown"]
+                        },
+                        "available": { "type": "boolean" },
+                        "ingested": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "backfillFrom": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                        "pages": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                        "failedPages": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "available",
+                        "ingested",
+                        "backfillFrom",
+                        "pages",
+                        "failedPages"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "completeness": {
+                      "type": "object",
+                      "properties": {
+                        "truncated": { "type": "boolean" },
+                        "label": { "type": "string", "minLength": 1 },
+                        "detail": { "type": "string", "minLength": 1 }
+                      },
+                      "required": ["truncated", "label", "detail"],
+                      "additionalProperties": false
+                    },
+                    "sample": {
+                      "type": "object",
+                      "properties": {
+                        "n": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                        "minSample": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "lowSample": { "type": "boolean" }
+                      },
+                      "required": ["n", "minSample", "lowSample"],
+                      "additionalProperties": false
+                    },
+                    "aggregate": {
+                      "type": "object",
+                      "properties": {
+                        "blocked": { "type": "boolean" },
+                        "reason": { "nullable": true, "type": "string", "minLength": 1 }
+                      },
+                      "required": ["blocked", "reason"],
+                      "additionalProperties": false
+                    },
+                    "requested": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "returned": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rank": { "type": "string", "pattern": "^\\d{1,9}$" },
+                          "proxyWallet": { "type": "string", "pattern": "^0x[0-9a-f]{40}$" },
+                          "userName": { "type": "string", "maxLength": 200 },
+                          "pnl": {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,18})?$"
+                          },
+                          "vol": {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,18})?$"
+                          }
+                        },
+                        "required": ["rank", "proxyWallet", "userName", "pnl", "vol"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "window",
+                    "series",
+                    "completeness",
+                    "sample",
+                    "aggregate",
+                    "requested",
+                    "returned",
+                    "rows"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/polymarket/ranking/filters": {
+      "get": {
+        "operationId": "getPolymarketRankingFilters",
+        "summary": "Períodos, categorias e ordenações aceitos pela API oficial do leaderboard",
+        "tags": ["Integrações"],
+        "description": "Enums verificados por probe contra a origem: um rótulo fora da lista oficial devolve 400. A lista de categorias é maior do que a ingerida hoje; as categorias ainda não coletadas respondem com a série ausente, não vazia.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string",
+                            "enum": [
+                              "OVERALL",
+                              "POLITICS",
+                              "SPORTS",
+                              "ESPORTS",
+                              "CRYPTO",
+                              "CULTURE",
+                              "MENTIONS",
+                              "WEATHER",
+                              "ECONOMICS",
+                              "TECH",
+                              "FINANCE"
+                            ]
+                          },
+                          "label": { "type": "string" }
+                        },
+                        "required": ["value", "label"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "timePeriods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": { "type": "string" },
+                          "label": { "type": "string" }
+                        },
+                        "required": ["value", "label"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "orderBy": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": { "type": "string" },
+                          "label": { "type": "string" }
+                        },
+                        "required": ["value", "label"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "defaultWindow": {
+                      "type": "object",
+                      "properties": {
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "OVERALL",
+                            "POLITICS",
+                            "SPORTS",
+                            "ESPORTS",
+                            "CRYPTO",
+                            "CULTURE",
+                            "MENTIONS",
+                            "WEATHER",
+                            "ECONOMICS",
+                            "TECH",
+                            "FINANCE"
+                          ]
+                        },
+                        "timePeriod": { "type": "string" },
+                        "orderBy": { "type": "string" }
+                      },
+                      "required": ["category", "timePeriod", "orderBy"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["categories", "timePeriods", "orderBy", "defaultWindow"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],
@@ -19306,6 +19677,10 @@
     {
       "name": "Administração",
       "description": "Painel interno do papel superadmin: metadados de contas, uso, flags, erros recentes e auditoria. Sem impersonação e sem acesso a conteúdo de usuário."
+    },
+    {
+      "name": "Integrações",
+      "description": "Dados públicos de integração externa. Ranking oficial de traders com métricas da origem, completude declarada e amostra visível."
     }
   ]
 }

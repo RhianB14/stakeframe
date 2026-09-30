@@ -66,11 +66,44 @@ import { z } from 'zod';
  * opcional, inteiro sem zeros à esquerda desnecessários, fração com 1..N
  * dígitos. `NaN`, `Infinity`, `1e5` e `null` NÃO são decimais e são recusados —
  * um agregador que devolvesse notação científica perderia o valor.
+ *
+ * STK-F2-15: este schema passou a ser usado TAMBÉM na LEITURA (a tela exibe
+ * o valor que volta do banco), e a leitura devolve o `numeric(38, 18)` do
+ * Postgres com a ESCALA CHEIA: `792578.3948993701` volta como
+ * `792578.394899370100000000`. Zeros à direita não são perda de precisão —
+ * o valor é idêntico — mas o schema acima (máx. 18 decimais, sem padding)
+ * recusaria a linha inteira. Por isso a leitura passa por
+ * `canonicalDecimalToken`, que remove o padding preservando o valor.
  */
 export const decimalTokenSchema = z
   .string()
   .regex(/^-?(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, 'NOT_A_DECIMAL_TOKEN');
 export type DecimalToken = z.infer<typeof decimalTokenSchema>;
+
+/**
+ * Normaliza o decimal que o BANCO devolve para o mesmo formato que a origem
+ * publica, removendo os zeros à direita do padding da escala.
+ *
+ * A função é pura e é a ponte entre as duas pontas: a escrita recebe o literal
+ * da origem e a leitura recebe o `numeric` com escala 18. Os dois descrevem o
+ * MESMO número, e sem esta normalização a tela recusaria — ou, pior,
+ * exibiria um texto diferente do que a origem publicou.
+ *
+ * "Idêntico" aqui significa IGUAL COMO NÚMERO, com a grafia mais curta que o
+ * representa: `792578.394899370100000000` vira `792578.3948993701`, e
+ * `100.000000000000000000` vira `100`. Nenhum dígito significativo é alterado:
+ * remover zeros à direita de uma fração decimal nunca muda o valor.
+ */
+export function canonicalDecimalToken(token: string): string {
+  if (!/^-?(?:0|[1-9]\d{0,17})(?:\.\d{1,36})?$/.test(token)) throw new Error('NOT_A_DECIMAL_TOKEN');
+  const negative = token.startsWith('-');
+  const [whole = '0', fraction] = token.replace(/^-/, '').split('.');
+  if (fraction === undefined) return `${negative ? '-' : ''}${whole}`;
+  const trimmed = fraction.replace(/0+$/, '');
+  return trimmed === ''
+    ? `${negative ? '-' : ''}${whole}`
+    : `${negative ? '-' : ''}${whole}.${trimmed}`;
+}
 
 /** Uma linha do leaderboard, com os números como LITERAL de texto. */
 export const leaderboardEntrySchema = z.strictObject({

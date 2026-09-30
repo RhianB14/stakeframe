@@ -202,6 +202,13 @@ export { assertRecoveryReviewed } from './recovery-guard.js';
 export { createAutomaticImportService } from './automatic-import.js';
 export { readRuntime, readSecret, readDatabaseConfig } from './runtime-config.js';
 export { createPolymarketStore, type PolymarketStore } from './polymarket.js';
+// STK-F2-15: a LEITURA do ranking oficial. Somente leitura sobre as tabelas da
+// F2-14 — nenhuma migração, nenhuma escrita, nenhuma coluna nova.
+export {
+  createPolymarketRankingStore,
+  PolymarketRankingError,
+  type PolymarketRankingStore,
+} from './polymarket-ranking.js';
 
 export function createDatabase(
   connectionString: string,
