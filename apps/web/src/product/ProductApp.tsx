@@ -36,6 +36,8 @@ import { ReportsPage } from './reports.js';
 import { OverviewReport } from './overview-report.js';
 import { OnboardingPage } from './onboarding.js';
 import { PolymarketRankingPage } from './polymarket-ranking.js';
+import { NavGlyph, type NavIcon } from './nav-icons.js';
+import './tokens.css';
 import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
 
@@ -55,22 +57,42 @@ export type Modal =
   | { kind: 'correction'; title: string; build: (reason: string, at: string) => CommandInput };
 export type OpenModal = (modal: Modal) => void;
 type Owner = { id: string; name: string };
+/**
+ * STK-F2-18: `Page` é declarado explicitamente, não derivado de
+ * `navigation`. Derivar quebrava: `navigation` satisfaz `Page`, e `Page`
+ * dependia de `navigation` — referência circular, que o compilador recusa.
+ * A lista abaixo e a constante precisam concordar; o teste
+ * tests/unit/design-tokens.test.ts confere as duas.
+ */
+type Page =
+  | 'overview'
+  | 'bets'
+  | 'calendar'
+  | 'analytics'
+  | 'reports'
+  | 'ranking'
+  | 'finance'
+  | 'settings'
+  | 'imports';
+// STK-F2-18: `icon` é um identificador do traçado em nav-icons.tsx, não um
+// glifo. Um caractere Unicode como ícone varia entre plataformas, não aceita
+// `currentColor` e some em algumas fontes — e o desenho passava a ser a única
+// pista visual do destino quando o rótulo é truncado.
 const navigation = [
-  { id: 'overview', title: 'Visão geral', icon: '◫' },
-  { id: 'bets', title: 'Apostas', icon: '▤' },
-  { id: 'calendar', title: 'Calendário', icon: '▦' },
-  { id: 'analytics', title: 'Análises', icon: '↗' },
-  { id: 'reports', title: 'Relatórios', icon: '▥' },
+  { id: 'overview', title: 'Visão geral', icon: 'overview' },
+  { id: 'bets', title: 'Apostas', icon: 'bets' },
+  { id: 'calendar', title: 'Calendário', icon: 'calendar' },
+  { id: 'analytics', title: 'Análises', icon: 'analytics' },
+  { id: 'reports', title: 'Relatórios', icon: 'reports' },
   // STK-F2-15: o ranking oficial Polymarket. Entra na navegação da web (não do
   // Mini App), e a coluna da barra inferior no mobile é explícita por causa
   // dele — o teste de navegador exige que a barra não role e que cada destino
   // mantenha 44px de altura, e um `auto-fit` faria a contagem depender da
   // largura em vez de ser verificada.
-  { id: 'ranking', title: 'Ranking', icon: '⇧' },
-  { id: 'finance', title: 'Financeiro', icon: '⇄' },
-  { id: 'settings', title: 'Configurações', icon: '⚙' },
-] as const;
-type Page = (typeof navigation)[number]['id'] | 'imports';
+  { id: 'ranking', title: 'Ranking', icon: 'ranking' },
+  { id: 'finance', title: 'Financeiro', icon: 'finance' },
+  { id: 'settings', title: 'Configurações', icon: 'settings' },
+] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: NavIcon }>;
 /**
  * STK-F2-12 — os MESMOS quatro destinos dentro do Mini App, sobre as mesmas
  * telas e os mesmos modais. O Telegram entrega um menu inferior, não uma
@@ -79,11 +101,11 @@ type Page = (typeof navigation)[number]['id'] | 'imports';
  * apostas, pendentes e ajustes).
  */
 const miniAppNavigation = [
-  { id: 'overview', title: 'Painel', icon: '◫' },
-  { id: 'bets', title: 'Apostas', icon: '▤' },
-  { id: 'imports', title: 'Pendentes', icon: '⇢' },
-  { id: 'settings', title: 'Ajustes', icon: '⚙' },
-] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: string }>;
+  { id: 'overview', title: 'Painel', icon: 'overview' },
+  { id: 'bets', title: 'Apostas', icon: 'bets' },
+  { id: 'imports', title: 'Pendentes', icon: 'inbox' },
+  { id: 'settings', title: 'Ajustes', icon: 'settings' },
+] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: NavIcon }>;
 function currentPage(): Page {
   const id = location.hash.slice(1);
   if (id === 'imports') return 'imports';
@@ -215,6 +237,16 @@ function ProductShell({
   const items = variant === 'mini' ? miniAppNavigation : navigation;
   return (
     <div className={variant === 'mini' ? 'product-shell miniapp-shell' : 'product-shell'}>
+      {/*
+        STK-F2-18: skip link. O alvo (`#product-main`) já existia no código
+        desde antes desta fase e nada apontava para ele — a navegação por
+        teclado passava por 8 links de menu antes de chegar ao conteúdo, em
+        todas as telas do produto. Fica oculto até receber foco e some de
+        novo ao perder.
+      */}
+      <a className="skip-link" href="#product-main">
+        Pular para o conteúdo
+      </a>
       {variant === 'web' ? (
         <aside className="product-sidebar">
           <a href="#overview" className="product-brand">
@@ -228,20 +260,10 @@ function ProductShell({
                 href={`#${item.id}`}
                 aria-current={page === item.id ? 'page' : undefined}
               >
-                <span className="nav-icon" aria-hidden="true">
-                  {item.icon}
+                <span className="nav-icon">
+                  <NavGlyph icon={item.icon} />
                 </span>
-                <span className="nav-label">
-                  {item.id === 'settings' ? (
-                    <>
-                      Configura
-                      <wbr />
-                      ções
-                    </>
-                  ) : (
-                    item.title
-                  )}
-                </span>
+                <span className="nav-label">{item.title}</span>
               </a>
             ))}
           </nav>
@@ -284,7 +306,7 @@ function ProductShell({
             </Button>
           </div>
         </header>
-        <main className="product-main" id="product-main">
+        <main className="product-main" id="product-main" tabIndex={-1}>
           <div className="page-heading">
             <div>
               <p className="product-eyebrow">
@@ -383,8 +405,8 @@ function ProductShell({
               href={`#${item.id}`}
               aria-current={page === item.id ? 'page' : undefined}
             >
-              <span className="nav-icon" aria-hidden="true">
-                {item.icon}
+              <span className="nav-icon">
+                <NavGlyph icon={item.icon} size={18} />
               </span>
               <span className="nav-label">{item.title}</span>
             </a>
