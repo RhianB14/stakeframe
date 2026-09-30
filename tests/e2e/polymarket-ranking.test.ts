@@ -65,7 +65,12 @@ async function openRanking(page: Page, body: PolymarketRanking) {
         release: {
           version: '0.1.0-beta.1',
           commit: 'a'.repeat(40),
-          builtAt: '2026-09-14T12:00:00.000Z',
+          // O schema de `builtAt` aceita SEGUNDOS, sem fração: `Z` puro. Uma
+          // data com milissegundos é recusada e o `status.data` fica undefined,
+          // o que impede a casca do produto de montar — a tela cairia na
+          // apresentação inicial e o erro apontaria o elemento que nunca
+          // existiu, em vez da fixture inválida que o causou.
+          builtAt: '2026-09-14T12:00:00Z',
           environment: 'production',
         },
       },
@@ -94,8 +99,26 @@ async function openRanking(page: Page, body: PolymarketRanking) {
       },
     }),
   );
+  // O workspace precisa ser um payload COMPLETO e válido: a tela só renderiza
+  // depois que `workspaceSchema` aceita o objeto, e uma fixture pela metade
+  // derrubaria a casca inteira — o teste falharia procurando um filtro que
+  // nunca existiu, com um erro que aponta para o sintoma e não para a causa.
   await page.route('**/api/v1/workspace', (route) =>
-    route.fulfill({ json: { version: 1, initialized: true, warnings: [] } }),
+    route.fulfill({
+      json: {
+        version: 1,
+        initialized: true,
+        unitPercent: '1.00',
+        bankroll: '1000.00',
+        available: '900.00',
+        exposure: '0.00',
+        accounts: [],
+        catalog: [],
+        units: [],
+        freebets: [],
+        warnings: [],
+      },
+    }),
   );
   await page.route('**/api/v1/polymarket/ranking?*', (route) => route.fulfill({ json: body }));
   await page.goto('/#ranking');
@@ -115,8 +138,13 @@ test('o ranking oficial mostra P&L, volume, amostra e o aviso de série truncada
   await expect(notice).toContainText('Métrica bloqueada');
   await expect(notice).toContainText('bloqueados');
 
-  // A amostra é a que o usuário pode conferir: as 100 linhas exibidas.
-  await expect(page.getByText('N = 100 traders')).toBeVisible();
+  // A amostra é a que o usuário pode conferir: as 100 linhas exibidas. A
+  // etiqueta `live-label` é escondida por CSS no mobile, então a asserção usa
+  // o texto que aparece nos DOIS tamanhos de tela — a faixa de baixa amostra
+  // some com 100 traders, mas o rodapé de contagem não some, e é ele que o
+  // usuário confere. O valor é o mesmo nos dois lugares.
+  await expect(page.getByText('100 de 100 posições exibidas')).toBeVisible();
+  await expect(page.getByText('N = 100 traders')).toHaveCount(1);
 
   // Os números vêm da origem, com o decimal exato e o agrupamento pt-BR.
   const table = page.getByRole('region', { name: 'Ranking oficial Polymarket' });
@@ -191,8 +219,16 @@ test('a janela ainda não coletada é explicada, e não aparece como lista vazia
   // A distinção que importa: "não coletado" NÃO é "zero trader". A tela diz o
   // que aconteceu, e a lista vazia carrega a explicação.
   await expect(page.getByRole('heading', { name: 'Janela ainda não coletada' })).toBeVisible();
-  await expect(page.getByText(/ainda não publicizou/)).toBeVisible();
-  await expect(page.getByText('N = 0 traders')).toBeVisible();
+  // A explicação aparece em DOIS lugares por desenho: na faixa de completude e
+  // no estado vazio da lista. A asserção usa `first()` porque as duas são
+  // intencionais — exigir uma só deixaria a tela sem metade do que ela
+  // precisa dizer.
+  await expect(page.getByText(/ainda não publicizou/).first()).toBeVisible();
+  // Com N = 0 o texto de N aparece na faixa de baixa amostra E na etiqueta. As
+  // duas são intencionais; o que o teste exige é que o valor apareça, e é por
+  // isso que a busca é exata sobre a etiqueta.
+  await expect(page.getByText('N = 0 traders', { exact: true })).toHaveCount(1);
+  await expect(page.getByText(/Baixa amostra: N = 0 traders/)).toBeVisible();
 });
 
 test('os filtros usam os ENUMS OFICIAIS e uma categoria não ingerida é explicada', async ({
