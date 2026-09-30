@@ -16,6 +16,10 @@ export * from './entitlements.js';
 export * from './polymarket.js';
 export * from './polymarket-ranking.js';
 export * from './polymarket-simulation.js';
+// STK-F2-16: favoritos, configuração de alertas de atividade e o job SILENCIOSO
+// do Composite Score. Nenhuma exportação daqui devolve o score: o serviço
+// grava a versão e só isso, e é essa ausência que mantém a avaliação paralela.
+export * from './polymarket-alerts.js';
 
 export const systemStatusSchema = z
   .object({
@@ -59,6 +63,13 @@ export const apiErrorCodeSchema = z.enum([
   'FREEBET_ALREADY_USED',
   'FREEBET_REVOKED',
   'FREEBET_INVALID',
+  // STK-F2-16 — favoritos e alerta de atividade. A recusa do limite de dez é
+  // de CONFLITO com uma regra do produto, não de requisição inválida: o pedido
+  // é bem formado e o que falta é vaga na lista.
+  'FAVORITE_NOT_FOUND',
+  'FAVORITES_LIMIT_REACHED',
+  'FAVORITE_INVALID',
+  'ALERT_CONFIG_INVALID',
   'INCOMPLETE_BET',
   'DUPLICATE_REVIEW_REQUIRED',
   'INVALID_INBOX_IMAGE',

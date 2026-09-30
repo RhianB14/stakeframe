@@ -19,6 +19,7 @@ import {
   createPolymarketRankingStore,
   createPolymarketSimulationStore,
   createTenantContext,
+  createPolymarketAlertsService,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -129,6 +130,12 @@ async function main() {
     polymarketSimulation: createPolymarketSimulationStore(database),
     ensureOrganization: (userId: string) =>
       createTenantContext(database).ensureOrganizationMembership(userId),
+    // STK-F2-16: favoritos (teto de dez) e a configuração do alerta de
+    // atividade. O serviço é montado aqui, mas o job de avaliação do score
+    // NÃO é registrado na API: ele vive no worker, é silencioso e nenhuma rota
+    // o invoca. Se a API o montasse, existiria um caminho de leitura que o
+    // card proíbe.
+    polymarketAlerts: createPolymarketAlertsService(database),
     dashboardMinSample: config.dashboard.minSample,
     database,
     telemetry,

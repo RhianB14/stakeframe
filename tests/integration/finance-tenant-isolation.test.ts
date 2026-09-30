@@ -306,15 +306,19 @@ describe('financial multi-tenant isolation (STK-F1-13)', () => {
     // STK-F2-09 (0026) soma DUAS — o lote e o seu recibo idempotente;
     // STK-F2-08 (0027) soma DUAS — report_snapshot e report_delivery, cada
     // uma com sua própria policy de isolamento por organização;
+    // STK-F2-16 (0029) soma TRÊS — polymarket_favorite, polymarket_alert_config
+    // e polymarket_activity_window. As três são PRIVADAS: mesmo apontando para
+    // dado público da Polymarket, favorito, limiar e cota são configuração DO
+    // USUÁRIO, e configuração de usuário não é dado público de integração.
     // STK-F2-17 (0030) soma UMA — polymarket_simulation, que também é por
     // organização porque a stake e as premissas são escolhas do dono.
-    expect(policies.rows[0].count).toBe('26');
+    expect(policies.rows[0].count).toBe('29');
     // Policies exist (fail-closed for non-owner roles). FORCE is deliberately absent so the
     // owner-run backup/restore cycle keeps working with a single database role.
     const enabled = await database.pool.query(
       "select count(*) from pg_class where relnamespace in ('finance'::regnamespace,'integration'::regnamespace) and relkind='r' and relrowsecurity",
     );
-    expect(enabled.rows[0].count).toBe('26');
+    expect(enabled.rows[0].count).toBe('29');
     // The isolation proven in this suite runs as the database owner, which the enabled policies
     // do not reach (no FORCE anywhere): the explicit predicates are the effective guard.
     const forced = await database.pool.query(

@@ -221,6 +221,15 @@ export {
   type PolymarketSimulationStore,
   type SimulationOptions,
 } from './polymarket-simulation.js';
+// STK-F2-16: favoritos, alerta de atividade e Composite Score silencioso.
+// NENHUMA função pública deste serviço devolve o score: `runScore` grava a
+// versão e nada mais, e essa ausência é o que mantém a avaliação paralela.
+export {
+  createPolymarketAlertsService,
+  PolymarketAlertsError,
+  type PolymarketAlertsErrorCode,
+  type PolymarketAlertsService,
+} from './polymarket-alerts.js';
 
 export function createDatabase(
   connectionString: string,

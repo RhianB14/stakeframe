@@ -501,25 +501,33 @@ describe('STK-F2-14 §15 — ingestao Polymarket no banco', () => {
             where table_schema='integration' and table_name like 'polymarket%' order by table_name`,
         )
       ).rows.map((row) => row.table_name);
-      // A F2-14 gravou estas CINCO e o teste as fixava como lista EXATA. A
-      // STK-F2-17 acrescenta `polymarket_simulation` (o registro das
-      // simulacoes indicativas), entao a lista deixa de ser "tudo que existe"
-      // e passa a ser "as tabelas que a F2-14 gravou". A razao e a mesma que
-      // fez a 0025 e a 0027 deixarem de exigir a ultima entrada do journal:
-      // fixar a lista completa obriga cada card novo a editar este teste, e
-      // a edicao e o ponto em que a garantia se perde.
-      for (const expected of [
+      // A lista inclui as tabelas da F2-16 (0029), que Vivem no mesmo schema
+      // `integration` porque apontam para o mesmo dado público. As quatro são
+      // CONFIGURAÇÃO DO USUÁRIO (favorito, limiar, cota), histórico de
+      // observação e a versão do Composite Score — nenhuma delas é ordem,
+      // aposta, posição ou contrato, que é o que o escopo excluído (§9.1)
+      // proíbe. E nenhuma delas é lida pela interface: o score é gravado por um
+      // job silencioso e não tem rota de leitura.
+      //
+      // A STK-F2-17 acrescenta `polymarket_simulation` (o registro das
+      // simulações indicativas): é o PEDIDO, as PREMISSAS e o desfecho, e
+      // nunca uma ordem — a lista EXATA continua valendo, e é ela que prova
+      // que a 0030 não introduziu uma tabela de execução.
+      expect(tables).toEqual([
+        'polymarket_activity_window',
         'polymarket_aggregate',
+        'polymarket_alert_config',
+        'polymarket_favorite',
         'polymarket_page',
         'polymarket_retention',
+        'polymarket_score_run',
         'polymarket_series',
+        'polymarket_simulation',
         'polymarket_trader',
-      ])
-        expect(tables).toContain(expected);
+      ]);
       // E o que a F2-17 NAO pode ter criado: nenhuma tabela de ordem, aposta,
-      // execucao ou wallet. A simulacao grava o PEDIDO e o desfecho, nunca
-      // uma ordem — e `polymarket_simulation` nao contem nenhum dos termos
-      // proibidos, como as outras.
+      // execucao ou wallet — `execute` entrou na lista de termos proibidos
+      // exatamente por causa da 0030.
       for (const table of tables) {
         for (const forbidden of [
           'order',

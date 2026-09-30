@@ -181,8 +181,10 @@ test('Composite Score, badge e recomendação NÃO aparecem na tela do ranking',
   ])
     expect(rendered, `a tela não pode exibir "${forbidden}"`).not.toContain(forbidden);
 
-  // E o cabeçalho da tabela traz só as colunas da origem: nenhuma coluna de
-  // pontuação, nenhuma de avaliação.
+  // E o cabeçalho da tabela traz só as colunas da origem — mais a coluna de
+  // FAVORITAR, que é a única coisa que a F2-16 acrescenta ao ranking, e ela
+  // não recebe pontuação, selo nem recomendação. Sem esta linha, o
+  // cabeçalho da F2-15 quebraria por causa de uma coluna legítima.
   const headers = await table.locator('th').allInnerTexts();
   expect(headers.map((text) => text.trim())).toEqual([
     'Posição',
@@ -190,6 +192,7 @@ test('Composite Score, badge e recomendação NÃO aparecem na tela do ranking',
     'Carteira pública',
     'P&L',
     'Volume',
+    'Favoritar',
   ]);
 
   // O menu de navegação também não oferece o destino como recomendação.
