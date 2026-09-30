@@ -209,6 +209,18 @@ export {
   PolymarketRankingError,
   type PolymarketRankingStore,
 } from './polymarket-ranking.js';
+// STK-F2-17: a APURAÇÃO da simulação indicativa e o seu REGISTRO. Lê o status
+// gravado pela F2-14, apura o motor puro do shared e grava o desfecho —
+// inclusive a RECUSA, que também é registro. A tabela nova é a 0030; os CHECKs
+// da 0028 (o do `category`, que aceita só 'OVERALL') NÃO foram tocados.
+export {
+  createPolymarketSimulationStore,
+  simulationDedupeKey,
+  PolymarketSimulationError,
+  FIRST_PAGE_LIMIT,
+  type PolymarketSimulationStore,
+  type SimulationOptions,
+} from './polymarket-simulation.js';
 // STK-F2-16: favoritos, alerta de atividade e Composite Score silencioso.
 // NENHUMA função pública deste serviço devolve o score: `runScore` grava a
 // versão e nada mais, e essa ausência é o que mantém a avaliação paralela.

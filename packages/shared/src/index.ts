@@ -15,6 +15,7 @@ export * from './telemetry.js';
 export * from './entitlements.js';
 export * from './polymarket.js';
 export * from './polymarket-ranking.js';
+export * from './polymarket-simulation.js';
 // STK-F2-16: favoritos, configuração de alertas de atividade e o job SILENCIOSO
 // do Composite Score. Nenhuma exportação daqui devolve o score: o serviço
 // grava a versão e só isso, e é essa ausência que mantém a avaliação paralela.

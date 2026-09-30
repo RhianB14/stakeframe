@@ -31,6 +31,7 @@ import type {
   ImportBatchService,
   ReportSnapshotService,
   PolymarketRankingStore,
+  PolymarketSimulationStore,
   PolymarketAlertsService,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
@@ -51,9 +52,15 @@ import {
 import { registerDebugRoutes } from './debug-routes.js';
 import { registerAdminPanelRoutes } from './admin-routes.js';
 import { registerPolymarketRankingRoutes } from './polymarket-ranking-routes.js';
+import { registerPolymarketSimulationRoutes } from './polymarket-simulation-routes.js';
 import { registerPolymarketAlertsRoutes } from './polymarket-alerts-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
-import type { TelegramLinkService, TelegramTicketService, Database } from '@stakeframe/db';
+import type {
+  TelegramLinkService,
+  TelegramTicketService,
+  Database,
+  OrganizationContext,
+} from '@stakeframe/db';
 
 export function createApp(options: {
   checkDatabase: () => Promise<void>;
@@ -105,6 +112,19 @@ export function createApp(options: {
    * completude é exatamente a cobertura parcial apresentada como total.
    */
   polymarketRanking?: PolymarketRankingStore;
+  /**
+   * STK-F2-17: a APURAÇÃO da simulação indicativa. Ausente = 503 (fail-closed),
+   * pela mesma razão da F2-15 e com uma a mais: sem o serviço não há como
+   * gravar o registro da tentativa, e uma recusa sem registro é uma recusa que
+   * pode ser reescrita como se nunca tivesse acontecido.
+   */
+  polymarketSimulation?: PolymarketSimulationStore;
+  /**
+   * Resolve (e provisiona, no primeiro uso) a organização do usuário
+   * autenticado. A simulação grava na organização do DONO, e ela nunca vem do
+   * corpo da requisição — um id de destino seria impersonação.
+   */
+  ensureOrganization?: (userId: string) => Promise<OrganizationContext>;
   /**
    * STK-F2-16: favoritos (teto de dez) e a configuração do alerta de atividade
    * Polymarket. Ausente = as rotas respondem 503 (fail-closed): sem a
@@ -298,6 +318,32 @@ export function createApp(options: {
       // configurado — nenhuma tela decide sozinha o que é amostra pequena.
       minSample: options.dashboardMinSample ?? 30,
     });
+    // STK-F2-17 — a simulação MERAMENTE INDICATIVA. Fica ao lado do ranking
+    // porque as duas leem o MESMO status gravado pela F2-14 e precisam dizer a
+    // mesma coisa sobre a completude: duas telas discordando sobre a mesma
+    // série seria pior do que nenhuma tela mostrar completude.
+    //
+    // A rota é registrada INCONDICIONALMENTE, como o ranking e as demais
+    // opcionais: o `authorize` dela responde 503 quando o serviço ou o
+    // resolvedor de organização não estão registrados. Registrar só quando
+    // há serviço faria a rota sumir do contrato OpenAPI sempre que o build de
+    // documentação não sobe com o banco — e um contrato que esconde a rota
+    // não é um contrato, é uma ausência.
+    //
+    // A organização nunca vem do corpo: ela é resolvida do usuário
+    // AUTENTICADO. Sem o resolvedor, 503 — jamais um tenant escolhido pelo
+    // corpo, que seria impersonação.
+    registerPolymarketSimulationRoutes(
+      app,
+      options.ownerAuth,
+      options.polymarketSimulation,
+      options.ensureOrganization,
+      {
+        // O MESMO limiar do dashboard e do ranking: "amostra pequena" tem um
+        // único significado no produto inteiro.
+        minSample: options.dashboardMinSample ?? 30,
+      },
+    );
     // STK-F2-16 — favoritos e alerta de atividade. Fica ao lado das rotas de
     // ranking porque o nome gravado no favorito tem de ser o MESMO que a tela de
     // ranking mostra: os dois leem a mesma observação da F2-14, então o leitor

@@ -508,6 +508,11 @@ describe('STK-F2-14 §15 — ingestao Polymarket no banco', () => {
       // aposta, posição ou contrato, que é o que o escopo excluído (§9.1)
       // proíbe. E nenhuma delas é lida pela interface: o score é gravado por um
       // job silencioso e não tem rota de leitura.
+      //
+      // A STK-F2-17 acrescenta `polymarket_simulation` (o registro das
+      // simulações indicativas): é o PEDIDO, as PREMISSAS e o desfecho, e
+      // nunca uma ordem — a lista EXATA continua valendo, e é ela que prova
+      // que a 0030 não introduziu uma tabela de execução.
       expect(tables).toEqual([
         'polymarket_activity_window',
         'polymarket_aggregate',
@@ -517,14 +522,22 @@ describe('STK-F2-14 §15 — ingestao Polymarket no banco', () => {
         'polymarket_retention',
         'polymarket_score_run',
         'polymarket_series',
+        'polymarket_simulation',
         'polymarket_trader',
       ]);
-      // Acomparacao por PALAVRA, nao por substring: `polymarket_trader`
-      // contem a letra de "trade" e `polymarket_page` fala de pagina. O que
-      // esta proibido e uma tabela DEDICADA a ordem, aposta, posicao ou
-      // Kalshi — o escopo excluido do §9.1.
+      // E o que a F2-17 NAO pode ter criado: nenhuma tabela de ordem, aposta,
+      // execucao ou wallet — `execute` entrou na lista de termos proibidos
+      // exatamente por causa da 0030.
       for (const table of tables) {
-        for (const forbidden of ['order', 'bet', 'trade', 'position', 'kalshi', 'wallet']) {
+        for (const forbidden of [
+          'order',
+          'bet',
+          'trade',
+          'position',
+          'kalshi',
+          'wallet',
+          'execute',
+        ]) {
           expect(table.split('_')).not.toContain(forbidden);
         }
       }
