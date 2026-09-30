@@ -28,6 +28,7 @@ import {
   SettleForm,
 } from './forms.js';
 import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
+import { BetDrawer } from './bet-drawer.js';
 import { ImportsPage, ImportReview, UploadForm } from './imports.js';
 import { ImportBatchForm } from './import-batch.js';
 import { savePendingUpload } from './upload-storage.js';
@@ -357,9 +358,9 @@ function ProductShell({
           {onboardingActive ? (
             <OnboardingPage workspace={workspace} open={open} />
           ) : page === 'overview' ? (
-            <Overview workspace={workspace} open={open} />
+            <Overview workspace={workspace} open={open} owner={owner.id} />
           ) : page === 'bets' ? (
-            <BetsPage workspace={workspace} open={open} />
+            <BetsPage workspace={workspace} open={open} owner={owner.id} />
           ) : page === 'finance' ? (
             <FinancePage workspace={workspace} open={open} />
           ) : page === 'imports' ? (
@@ -426,7 +427,15 @@ function ProductShell({
     </div>
   );
 }
-function Overview({ workspace, open }: { workspace: Workspace; open: OpenModal }) {
+function Overview({
+  workspace,
+  open,
+  owner,
+}: {
+  workspace: Workspace;
+  open: OpenModal;
+  owner: string;
+}) {
   const unit = workspace.units.find(
     (value) => value.month === saoPauloDate(new Date()).slice(0, 7),
   );
@@ -482,7 +491,7 @@ function Overview({ workspace, open }: { workspace: Workspace; open: OpenModal }
         </div>
       </div>
       <OverviewReport version={workspace.version} />
-      <BetsPage workspace={workspace} open={open} compact />
+      <BetsPage workspace={workspace} open={open} owner={owner} compact />
     </>
   );
 }
@@ -574,9 +583,14 @@ function ModalContent({
       );
       break;
     case 'detail':
-      title = 'Detalhes da aposta';
-      content = <BetDetails id={modal.id} workspace={workspace} open={open} />;
-      break;
+      // STK-F2-18 (Fase 3): o detalhe da aposta é o ÚNICO modal que virou
+      // drawer. A lista é o contexto e o detalhe é a resposta — centralizado,
+      // o diálogo cobria as linhas que a pessoa estava comparando.
+      return (
+        <BetDrawer title="Detalhes da aposta" open onClose={close}>
+          <BetDetails id={modal.id} workspace={workspace} open={open} />
+        </BetDrawer>
+      );
     case 'settle':
       title = 'Liquidar aposta';
       content = <SettleForm bet={modal.bet} onDone={close} />;

@@ -109,6 +109,16 @@
   --tap: 44px; /* alvo de toque mínimo, vale em toda superfície interativa */
 
   /* ---------------------------------------------------------------------
+     Efeitos — Alfa sobre o fundo. São tokens porque a versão anterior
+     escrevia o valor à mão no overlay do diálogo e na sombra do painel.
+     Com alfa, um hex sai da paleta registrada sem que a asserção de
+     hex a veja — por isso o teste casa 4 e 8 dígitos também.
+     --------------------------------------------------------------------- */
+  --scrim: rgb(6 9 16 / 0.72); /* overlay do diálogo; --bg sob ele é 7:1 */
+  --shadow-panel: 0 30px 100px rgb(0 0 0 / 0.47); /* elevação do diálogo */
+  --shadow-float: 0 18px 48px rgb(0 0 0 / 0.4); /* popover sobre a tabela */
+
+  /* ---------------------------------------------------------------------
      Layout da casca
      --------------------------------------------------------------------- */
   --shell-w: 248px;

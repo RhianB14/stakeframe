@@ -128,11 +128,20 @@
 
 /* Telegram Mini App — mobile-first editor */
 .miniapp-page {
-  --mini-bg: var(--text-tertiary);
-  --mini-card: var(--text-tertiary);
-  --mini-border: var(--text-tertiary);
+  /* STK-F2-18 (Fase 3): estes cinco overrides apontam TODOS para
+     `--text-tertiary`, que é token de TEXTO (rgb 152). Resultado: o Mini
+     App inteiro ficava com fundo cinza claro e texto branco por cima —
+     2,88:1, abaixo até do 3:1 de componente. A verificação da Fase 0
+     conferia pares de token e nunca estes overrides, que vivem só aqui.
+
+     O Mini App não é um tema próprio: é o MESMO produto em viewport
+     estreito, então usa as mesmas superfícies. `--mini-blue` continua
+     sendo o acento, agora com o ink para texto. */
+  --mini-bg: var(--bg);
+  --mini-card: var(--surface-1);
+  --mini-border: var(--border-strong);
   --mini-muted: var(--text-tertiary);
-  --mini-blue: var(--accent);
+  --mini-blue: var(--accent-ink);
   min-height: 100svh;
   background: var(--mini-bg);
   color: var(--text-primary);
@@ -938,8 +947,12 @@
   font-size: var(--text-sm);
 }
 .notice.warning {
-  background: var(--text-tertiary);
+  /* STK-F2-18 (Fase 3): era `var(--text-tertiary)` — token de TEXTO usado
+     como fundo. Um aviso é a única coisa da interface que precisa ter um
+     degrau de superfície próprio, porque é a única que interrompe. */
+  background: var(--warn-soft);
   color: var(--warn);
+  border: 1px solid var(--warn);
 }
 .notice p {
   margin: 5px 0 0;
@@ -982,7 +995,10 @@
   gap: 14px;
 }
 .metric-card.featured {
-  background: var(--text-tertiary);
+  /* Token de TEXTO como fundo invertia a hierarquia: a métrica principal
+     ficava mais clara que o chrome e disputava atenção com o topo. O
+     destaque é a superfície mais clara do sistema, por desenho. */
+  background: var(--surface-3);
   border-color: var(--border-strong);
 }
 .metric-card > span {
@@ -1126,7 +1142,12 @@
   font-size: var(--text-sm);
 }
 .bet-detail-table {
-  min-width: 1640px;
+  /* STK-F2-18 (Fase 3): era `min-width: 1640px` fixo, dimensionado para as
+     14 colunas. Com o painel de colunas a largura depende de quantas estão
+     visíveis, e um piso fixo forçaria rolagem horizontal mesmo com 3
+     colunas escolhidas. O piso agora é proporcional: nenhuma coluna pode
+     ser espremida abaixo de um alvo legível. */
+  min-width: min(100%, 148px * var(--bet-columns, 8));
   table-layout: auto;
 }
 .bet-detail-table th,
@@ -1221,6 +1242,181 @@
 }
 .bet-list-cards {
   display: none;
+}
+/* ==========================================================================
+   STK-F2-18 (Fase 3) — painel de colunas e drawer de detalhe
+   ========================================================================== */
+
+.columns-panel {
+  position: relative;
+  flex: none;
+}
+.columns-panel-count {
+  /* Contagem tabular: o número não deve pular de largura quando a pessoa
+     troca uma coluna. */
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.columns-panel-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: 0 18px 48px var(--shadow-float);
+}
+.columns-panel-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.columns-panel-hint {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.columns-panel-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.columns-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+/* Hover move a SUPERFÍCIE, nunca o texto: trocar a cor do texto para
+   --muted no hover baixa o contraste e é a falha de estado mais comum. */
+.columns-panel-item:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.columns-panel-item:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.columns-panel-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.columns-panel-item input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.columns-panel-item.is-required {
+  color: var(--text-primary);
+}
+.columns-panel-required {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.columns-panel-actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Drawer — ancorado à direita: a lista permanece o contexto. */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  backdrop-filter: blur(4px);
+}
+.drawer-content {
+  position: fixed;
+  z-index: 51;
+  inset: 0 0 0 auto;
+  width: min(560px, 100vw);
+  max-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 26px;
+  border-left: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 23px;
+}
+.drawer-header h2 {
+  margin: 0;
+  font-size: var(--text-h2);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.drawer-header p {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  margin: 6px 0 0;
+}
+.drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  /* 30px era o tamanho herdado do diálogo — abaixo do alvo de toque. */
+  width: var(--tap);
+  height: var(--tap);
+  cursor: pointer;
+}
+.drawer-close:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.drawer-body {
+  display: grid;
+  gap: 18px;
+}
+@media (max-width: 640px) {
+  .drawer-content {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 92svh;
+    border-left: 0;
+    border-top: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .columns-panel-popover {
+    right: auto;
+    left: 0;
+  }
 }
 .bet-schedule-note {
   color: var(--warn);
@@ -1444,7 +1640,7 @@
   gap: 7px;
 }
 .posting-list span {
-  background: var(--text-tertiary);
+  background: var(--surface-3);
   padding: 5px 8px;
   border-radius: 4px;
   font-size: var(--text-xs);
@@ -1499,7 +1695,7 @@
   cursor: pointer;
 }
 .import-row:hover {
-  background: var(--text-tertiary);
+  background: var(--surface-3);
 }
 .import-row strong {
   display: block;
@@ -1596,7 +1792,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: #060910b8;
+  background: var(--scrim);
   backdrop-filter: blur(4px);
 }
 .dialog-content {
@@ -1614,7 +1810,7 @@
   border-radius: 14px;
   background: var(--surface-2);
   color: var(--text-primary);
-  box-shadow: 0 30px 100px #0007;
+  box-shadow: var(--shadow-panel);
   font-size: var(--text-md);
   line-height: 1.5;
 }
@@ -2087,7 +2283,7 @@
   color: var(--text-primary);
 }
 .calendar-grid button:hover {
-  background: var(--text-tertiary);
+  background: var(--surface-3);
 }
 .calendar-grid button[aria-pressed='true'] {
   /* STK-F2-18: era branco sobre o azul de acento — 3,00:1, reprovado.
@@ -2172,7 +2368,7 @@
   color: var(--text-secondary);
 }
 .event-candidate {
-  background: var(--text-tertiary);
+  background: var(--surface-2);
   border: 1px solid var(--border-strong);
   padding: 16px;
   border-radius: 8px;
@@ -2337,13 +2533,12 @@
 /* STK-F2-01: tokens locais do onboarding. A paleta é a mesma do produto (tema escuro
    único); centralizada aqui para um tema claro futuro trocar apenas valores. */
 .onboarding-panel {
-  --onb-border: var(--text-tertiary);
-  --onb-surface: var(--text-tertiary);
-  --onb-accent: var(--focus);
-  --onb-accent-contrast: var(--text-tertiary);
-  --onb-done: var(--text-tertiary);
-  --onb-done-bg: var(--text-tertiary);
-  --onb-muted: var(--text-tertiary);
+  /* STK-F2-18 (Fase 3): os sete `--onb-*` que ficavam aqui eram RESTO do
+     mapeamento da Fase 0 — sete aliases com ZERO uso em toda a folha,
+     apontando quase todos para `--text-tertiary`. Eram a segunda paleta
+     coexistindo que a análise original apontava, agora morta e sem nenhum
+     `var(--onb-*)` para justificar. A regra do onboarding usa os tokens
+     do sistema diretamente. */
   max-width: 780px;
 }
 .onboarding-progress {
@@ -2394,8 +2589,10 @@
   font-size: var(--text-xs);
 }
 .onboarding-step.done .onboarding-step-number {
-  background: var(--text-tertiary);
-  color: var(--text-primary);
+  /* "Concluído" é estado semântico, não estilo: fundo positivo com texto
+     primário. Cinza de texto aqui dizia "existe" onde queria dizer "feito". */
+  background: var(--pos-soft);
+  color: var(--pos);
 }
 .onboarding-section {
   display: grid;

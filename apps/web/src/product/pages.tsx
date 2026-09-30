@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   betPageSchema,
@@ -26,6 +26,7 @@ import {
   type BetTableRow,
   type BetTableSortDirection,
 } from '@stakeframe/shared';
+import { BetColumnsPanel, loadBetColumns } from './bet-columns-panel.js';
 import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
@@ -361,10 +362,12 @@ function Pagination({
 export function BetsPage({
   workspace,
   open,
+  owner,
   compact = false,
 }: {
   workspace: Workspace;
   open: OpenModal;
+  owner: string;
   compact?: boolean;
 }) {
   const [page, setPage] = useState(1);
@@ -373,6 +376,15 @@ export function BetsPage({
   const [tipster, setTipster] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  // STK-F2-18 (Fase 3): as 14 colunas aprovadas não cabem na largura útil.
+  // O painel escolhe quais aparecem; a ordem continua sendo a do produto.
+  const [visibleColumns, setVisibleColumns] = useState<BetTableColumnKey[]>(() =>
+    loadBetColumns(owner),
+  );
+  const columns = useMemo(
+    () => betTableColumns.filter((column) => visibleColumns.includes(column.key)),
+    [visibleColumns],
+  );
   const [sort, setSort] = useState<{
     column: BetTableColumnKey;
     direction: BetTableSortDirection;
@@ -426,7 +438,9 @@ export function BetsPage({
           <a className="text-link" href="#bets">
             Ver todas ↗
           </a>
-        ) : null}
+        ) : (
+          <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
+        )}
       </div>
       {!compact ? (
         <div className="filter-grid">
@@ -496,10 +510,17 @@ export function BetsPage({
         ) : (
           <>
             {!compact ? (
-              <p className="bet-table-scroll-hint">
-                A tabela é mais larga que a tela. Deslize horizontalmente para ver todas as colunas.
-                Use o título de uma coluna para ordenar os registros desta página.
-              </p>
+              /* A dica só existe quando a tabela AINDA é mais larga que a área
+                 útil — com o painel de colunas ela não é mais a verdade em
+                 geral, e dizer o contrário de uma tabela que cabe é pior que
+                 não dizer nada. `aria-hidden` porque a região rolável já
+                 é focável e anuncia o seu próprio alcance. */
+              columns.length > 8 ? (
+                <p className="bet-table-scroll-hint">
+                  A tabela é mais larga que a tela. Deslize horizontalmente para ver as demais
+                  colunas, ou use o painel de colunas para escolher quais exibir.
+                </p>
+              ) : null
             ) : null}
             {!compact ? (
               <div className="bet-list-cards">
@@ -519,7 +540,15 @@ export function BetsPage({
               aria-label="Tabela de apostas"
               tabIndex={0}
             >
-              <table className={`product-table${compact ? '' : ' bet-detail-table'}`}>
+              <table
+                className={`product-table${compact ? '' : ' bet-detail-table'}`}
+                // O CSS dimensiona o piso da tabela a partir desta contagem.
+                style={
+                  compact
+                    ? undefined
+                    : ({ '--bet-columns': String(columns.length) } as CSSProperties)
+                }
+              >
                 <caption className="sr-only">
                   Apostas com jogo, mercado, tipo, valores e resultado
                 </caption>
@@ -535,7 +564,7 @@ export function BetsPage({
                         <th>Resultado realizado</th>
                       </>
                     ) : (
-                      betTableColumns.map((column) => (
+                      columns.map((column) => (
                         <th
                           key={column.key}
                           aria-sort={column.key === sort?.column ? sort.direction : 'none'}
@@ -563,7 +592,7 @@ export function BetsPage({
                     if (!compact) {
                       return (
                         <tr key={bet.id}>
-                          {betTableColumns.map((column) => (
+                          {columns.map((column) => (
                             <td
                               key={column.key}
                               className={
