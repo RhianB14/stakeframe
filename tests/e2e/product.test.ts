@@ -382,7 +382,15 @@ for (const scenario of [
     await enabledProduct(page, fixture(), [sample], sample);
     await page.goto('/');
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    const realizedReturn = page.locator('.product-table tbody tr').first().locator('td').nth(11);
+    // STK-F2-18: casa a célula pelo NOME da coluna, não pelo índice. A Fase 3
+    // passou a mostrar 8 das 14 colunas por padrão, o que deslocou a coluna de
+    // retorno — e o índice 11 passou a apontar para outra célula, fazendo o
+    // teste reprovar por um motivo que não tinha nada a ver com o que ele
+    // verifica. Localizar pelo `th` é o que o teste quer dizer.
+    const realizedReturn = page
+      .locator('.product-table tbody tr')
+      .first()
+      .locator('td[data-column="return"]');
     await expect(realizedReturn).toContainText(scenario.returnExpected);
     await expect(realizedReturn).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
     if (scenario.qualifier !== 'Realizado') {
@@ -1447,7 +1455,12 @@ test('source results preserve a manual date until explicitly selected and review
   });
   await page.goto('/#calendar');
   await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
-  await expect(page.getByRole('link', { name: 'Aurora vs Central ↗' })).toBeVisible();
+  // STK-F2-18: o nome acessível do link de fonte externa não leva mais o
+  // glifo `↗`. Um caractere Unicode como parte do nome é anunciado pelo
+  // leitor de tela ("Aurora vs Central seta para cima à direita") e não
+  // descreve nada — o link JÁ É a ida para fora, e é `rel` que declara isso
+  // para a tecnologia assistiva.
+  await expect(page.getByRole('link', { name: 'Aurora vs Central', exact: true })).toBeVisible();
   await expect(page.getByLabel('Data do evento', { exact: true })).toHaveValue('2026-09-05');
   expect(commands).toHaveLength(0);
   await page.getByRole('button', { name: 'Usar esta fonte na conferência' }).click();

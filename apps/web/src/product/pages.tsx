@@ -15,7 +15,7 @@ import { request, dateLabel } from './api.js';
 import { TelegramLinkPanel } from './telegram-link.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
-import { betFinancialDisplay } from './financial-display.js';
+import { betFinancialDisplay, journalNetEffect, centsLabel } from './financial-display.js';
 import {
   betResultLabel,
   betResultQualifier,
@@ -294,7 +294,7 @@ function BetListDetails({
 export function Empty({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="empty-state">
-      <span aria-hidden="true">▤</span>
+      <span aria-hidden="true" className="empty-mark" />
       <h3>{title}</h3>
       <p>{detail}</p>
     </div>
@@ -436,7 +436,7 @@ export function BetsPage({
         </div>
         {compact ? (
           <a className="text-link" href="#bets">
-            Ver todas ↗
+            Ver todas
           </a>
         ) : (
           <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
@@ -595,6 +595,14 @@ export function BetsPage({
                           {columns.map((column) => (
                             <td
                               key={column.key}
+                              // STK-F2-18: a coluna precisa de identidade no
+                              // DOM. Com o painel de colunas, a posição
+                              // deixou de ser fixa — um `td` por índice
+                              // passou a apontar para outra coluna quando
+                              // alguém esconde uma. `data-column` é o que
+                              // permite ao teste (e a quem depurar no
+                              // inspector) dizer qual coluna é qual.
+                              data-column={column.key}
                               className={
                                 column.key === 'return'
                                   ? `tabular ${financial.tone}`
@@ -604,14 +612,14 @@ export function BetsPage({
                               <BetTableCell row={row} column={column.key} />
                             </td>
                           ))}
-                          <td>
+                          <td data-column="open">
                             <Button
                               variant="ghost"
                               size="small"
                               aria-label={`Ver aposta ${betAccessibleTitle(bet)}`}
                               onClick={() => open({ kind: 'detail', id: bet.id })}
                             >
-                              Ver ↗
+                              Ver
                             </Button>
                           </td>
                         </tr>
@@ -664,7 +672,7 @@ export function BetsPage({
                             aria-label={`Ver aposta ${bet.selections[0]?.event ?? bet.reference}`}
                             onClick={() => open({ kind: 'detail', id: bet.id })}
                           >
-                            Ver ↗
+                            Ver
                           </Button>
                         </td>
                       </tr>
@@ -894,7 +902,10 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
         <div className="section-heading">
           <div>
             <h2>Contas e saldos</h2>
-            <p>Concilie com o valor disponível exibido em cada conta.</p>
+            <p>
+              O saldo que cada casa mostra contra o valor confirmado aqui. A diferença entre as
+              duas colunas é a conciliação que ainda não foi feita.
+            </p>
           </div>
         </div>
         <div className="account-grid">
@@ -912,7 +923,7 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
                   open({ kind: 'cash', operation: 'reconcile', accountId: account.id })
                 }
               >
-                Conciliar saldo ↗
+                Conciliar saldo
               </Button>
             </div>
           ))}
@@ -977,7 +988,10 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
         <div className="section-heading">
           <div>
             <h2>Movimentações</h2>
-            <p>O histórico preserva lançamentos originais e estornos.</p>
+            <p>
+              Razão de acréscimo. Cada linha é um lançamento: corrigir uma aposta cria uma nova
+              linha e estorna a anterior — nada é apagado.
+            </p>
           </div>
         </div>
         <QueryNotice
@@ -995,51 +1009,100 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
             />
           ) : (
             <>
-              <div className="journal-list">
-                {journal.data.items.map((item) => (
-                  <div className="history-entry" key={item.id}>
-                    <div>
-                      <strong>
-                        {journalLabels[item.kind] ?? item.kind}
-                        {item.reversed ? ' · estornado' : ''}
-                      </strong>
-                      <small>{dateLabel(item.effectiveAt)}</small>
-                      <p>{item.reason}</p>
-                      <div className="posting-list">
-                        {item.postings.map((posting, index) => (
-                          <span key={index}>
-                            {posting.accountName}{' '}
-                            <b className={posting.amount.startsWith('-') ? 'negative' : ''}>
-                              {formatBRL(posting.amount)}
+              {/*
+                STK-F2-18 (Fase 4): o razão era uma lista de cartões. Isso
+                quebra a propriedade que um razão precisa ter — a de ser lido
+                LINHA A LINHA e conferido. Numa lista, a coluna de valor não
+                alinha, o "lançamento" e o "motivo" competem pela mesma linha
+                e comparar dois lançamentos exige memória visual. Tabela com
+                data, lançamento, contas afetadas e valor.
+              */}
+              <div className="table-scroll">
+                <table className="product-table journal-table">
+                  <caption className="sr-only">
+                    Movimentações do razão, da mais recente para a mais antiga
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Data</th>
+                      <th scope="col">Lançamento</th>
+                      <th scope="col">Motivo</th>
+                      <th scope="col">Contas afetadas</th>
+                      <th scope="col" className="num">
+                        Valor
+                      </th>
+                      <th scope="col">
+                        <span className="sr-only">Ações</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {journal.data.items.map((item) => {
+                      const net = journalNetEffect(item.postings);
+                      const reversible =
+                        ['deposit', 'withdrawal', 'transfer', 'reconcile'].includes(item.kind) &&
+                        !item.reversed &&
+                        !item.reversalOf;
+                      return (
+                        <tr
+                          key={item.id}
+                          className={item.reversed ? 'journal-reversed' : undefined}
+                        >
+                          <td className="journal-date">{dateLabel(item.effectiveAt)}</td>
+                          <td>
+                            <strong>
+                              {journalLabels[item.kind] ?? item.kind}
+                              {item.reversed ? ' · estornado' : ''}
+                            </strong>
+                          </td>
+                          <td className="journal-reason">{item.reason}</td>
+                          <td>
+                            <span className="posting-list">
+                              {item.postings.map((posting, index) => (
+                                <span key={index}>
+                                  {posting.accountName}{' '}
+                                  <b className={posting.amount.startsWith('-') ? 'negative' : ''}>
+                                    {formatBRL(posting.amount)}
+                                  </b>
+                                </span>
+                              ))}
+                            </span>
+                          </td>
+                          <td className="num">
+                            <b className={net < 0n ? 'negative' : net > 0n ? 'positive' : undefined}>
+                              {centsLabel(net)}
                             </b>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    {['deposit', 'withdrawal', 'transfer', 'reconcile'].includes(item.kind) &&
-                    !item.reversed &&
-                    !item.reversalOf ? (
-                      <Button
-                        variant="ghost"
-                        size="small"
-                        onClick={() =>
-                          open({
-                            kind: 'correction',
-                            title: 'Estornar movimentação',
-                            build: (reason, effectiveAt) => ({
-                              type: 'journal.reverse',
-                              id: item.id,
-                              reason,
-                              effectiveAt,
-                            }),
-                          })
-                        }
-                      >
-                        Estornar
-                      </Button>
-                    ) : null}
-                  </div>
-                ))}
+                            <small className="journal-sign">
+                              {net < 0n ? 'saída' : net > 0n ? 'entrada' : 'sem efeito'}
+                            </small>
+                          </td>
+                          <td>
+                            {reversible ? (
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                onClick={() =>
+                                  open({
+                                    kind: 'correction',
+                                    title: 'Estornar movimentação',
+                                    build: (reason, effectiveAt) => ({
+                                      type: 'journal.reverse',
+                                      id: item.id,
+                                      reason,
+                                      effectiveAt,
+                                    }),
+                                  })
+                                }
+                              >
+                                Estornar
+                              </Button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
               <Pagination page={page} size={25} total={journal.data.total} change={setPage} />
             </>

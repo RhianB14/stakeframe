@@ -108,6 +108,155 @@ const me = {
 // Rotas
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * STK-F2-18 (Fase 4) — o razão é DERIVADO das apostas do portfólio, não
+ * inventado linha a linha.
+ *
+ * A Fase 4 transformou as movimentações em tabela, e a tabela renderizou
+ * vazia: o endpoint devolvia `{items: []}`. Um razão vazio esconde a única
+ * coisa que ele existe para provar — que o lançamento é append-only e que o
+ * estorno NÃO apaga a linha original.
+ *
+ * Cada aposta real do portfólio vira dois lançamentos (registro e
+ * liquidação) com os mesmos valores que a tela de apostas mostra. Os dois
+ * casos que mais importam para a leitura linha a linha também estão aqui:
+ * uma transferência entre contas própria, cujo efeito líquido é ZERO, e um
+ * estorno, cuja linha continua visível marcada.
+ */
+function journalPage(url) {
+  const page = Number(url.searchParams.get('page') ?? 1);
+  const pageSize = Number(url.searchParams.get('pageSize') ?? 25);
+  const bookmakerById = new Map(data.BOOKMAKERS.map((book) => [book.id, book.name]));
+  const uuid = (n) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const entries = [];
+  let seq = 1;
+
+  // Abertura da banca: um lançamento só, porque a reserva é a origem do
+  // dinheiro. O valor aqui é o ponto de partida da conta, não vem de aposta.
+  entries.push({
+    id: uuid(seq),
+    kind: 'opening',
+    effectiveAt: '2026-07-01T12:00:00.000Z',
+    createdAt: '2026-07-01T12:00:00.000Z',
+    reason: 'Saldos conferidos na abertura da conta',
+    reversalOf: null,
+    reversed: false,
+    postings: [{ accountId: uuid(90), accountName: 'Reserva', amount: data.workspace.bankroll }],
+  });
+  seq += 1;
+
+  data.bets.forEach((bet) => {
+    const house = bookmakerById.get(bet.bookmakerId) ?? 'Sem casa';
+    const placed = new Date(bet.placedAt);
+    const settleAt = bet.settledAt ? new Date(bet.settledAt) : null;
+    // Registro: sai da reserva, entra na casa. Efeito líquido zero — a banca
+    // não cresceu, o dinheiro mudou de conta. É a linha que ensina a leitura.
+    entries.push({
+      id: uuid(seq),
+      kind: 'bet_stake',
+      effectiveAt: placed.toISOString(),
+      createdAt: placed.toISOString(),
+      reason: `Bilhete #${bet.ticketNumber} registrado`,
+      reversalOf: null,
+      reversed: false,
+      postings: [
+        { accountId: uuid(90), accountName: 'Reserva', amount: `-${bet.stake}` },
+        { accountId: uuid(91), accountName: house, amount: bet.stake },
+      ],
+    });
+    seq += 1;
+    if (bet.state === 'settled' && settleAt) {
+      entries.push({
+        id: uuid(seq),
+        kind: 'settlement',
+        effectiveAt: settleAt.toISOString(),
+        createdAt: settleAt.toISOString(),
+        reason: `Bilhete #${bet.ticketNumber} liquidado`,
+        reversalOf: null,
+        reversed: false,
+        postings: [
+          { accountId: uuid(91), accountName: house, amount: bet.returnAmount },
+          { accountId: uuid(92), accountName: 'Apostas', amount: `-${bet.stake}` },
+        ],
+      });
+      seq += 1;
+    }
+  });
+
+  // Um estorno real: a linha original continua na tabela, marcada. Sem isto
+  // a coluna "estornado" nunca apareceria e a property append-only do razão
+  // não teria como ser conferida.
+  const target = entries.find((entry) => entry.kind === 'settlement');
+  if (target) {
+    entries.push({
+      id: uuid(seq),
+      kind: 'reversal',
+      effectiveAt: '2026-09-28T15:20:00.000Z',
+      createdAt: '2026-09-28T15:20:00.000Z',
+      reason: 'Conferência na casa corrigiu o valor liquidado',
+      reversalOf: target.id,
+      reversed: true,
+      postings: target.postings.map((posting) => ({
+        ...posting,
+        amount: posting.amount.startsWith('-')
+          ? posting.amount.slice(1)
+          : `-${posting.amount}`,
+      })),
+    });
+    seq += 1;
+  }
+
+  // Mais recente primeiro: é como o razão se lê, e é o que a tela promete.
+  const sorted = entries.sort((a, b) => (a.effectiveAt < b.effectiveAt ? 1 : -1));
+  const start = (page - 1) * pageSize;
+  return {
+    items: sorted.slice(start, start + pageSize),
+    total: sorted.length,
+    page,
+    pageSize,
+  };
+}
+
+/**
+ * STK-F2-18 (Fase 4) — o calendário filtra por PERÍODO e pagina.
+ *
+ * A rota devolvia `data.calendar` inteiro, sem `from`/`to` e sem
+ * `distinctBets`/`pendingSelections`. A Fase 4 passou a pedir o mês inteiro
+ * para popular os chips da grade, e um servidor que devolve tudo ignorando o
+ * filtro faz a tela mostrar eventos de julho numa grade de setembro — o
+ * pior tipo de bug de preview: PARECE correto e não é.
+ */
+function calendarPage(url) {
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  const view = url.searchParams.get('view') ?? 'scheduled';
+  const betState = url.searchParams.get('betState');
+  const page = Number(url.searchParams.get('page') ?? 1);
+  const pageSize = Number(url.searchParams.get('pageSize') ?? 25);
+  let items = data.calendar;
+  if (view === 'pending') {
+    // Pendência é a data, não o estado da aposta: inclui também o que não
+    // tem data nenhuma, que é justamente o que a aba existe para achar.
+    items = items.filter((item) => item.selection.dateStatus !== 'confirmed');
+  } else {
+    if (from) items = items.filter((item) => item.selection.eventDate >= from);
+    if (to) items = items.filter((item) => item.selection.eventDate <= to);
+  }
+  if (betState) items = items.filter((item) => item.betState === betState);
+  const distinctBets = new Set(items.map((item) => item.betId)).size;
+  const start = (page - 1) * pageSize;
+  return {
+    items: items.slice(start, start + pageSize),
+    total: items.length,
+    distinctBets,
+    pendingSelections: data.calendar.filter(
+      (item) => item.selection.dateStatus !== 'confirmed',
+    ).length,
+    page,
+    pageSize,
+  };
+}
+
 /** Página de bets: filtra por estado/casa/tipster/data e pagina, como o contrato. */
 function betPage(url) {
   const state = url.searchParams.get('state');
@@ -201,7 +350,7 @@ function reportSnapshot(period = 'monthly') {
     requestedBy: 'Rhian Batista',
     revisionReason: null,
   };
-  const breakdown = data.report.byBookmaker.slice(0, 8).map((row, index) => ({
+  const breakdown = data.report.byBookmaker.slice(0, 8).map((row) => ({
     id: row.key.slice(0, 40),
     label: row.label,
     labelKey: row.key,
@@ -278,7 +427,7 @@ function apiResponse(pathname, url) {
     const bet = data.bets.find((item) => item.id === id);
     return bet ? json({ bet, settlements: [] }) : json({ error: 'not_found' }, 404);
   }
-  if (pathname === '/api/v1/journal') return json({ items: [], total: 0, page: 1, pageSize: 25 });
+  if (pathname === '/api/v1/journal') return json(journalPage(url));
 
   if (pathname === '/api/v1/dashboard') return json(data.dashboard);
   if (pathname === '/api/v1/reports') return json(data.report);
@@ -287,7 +436,7 @@ function apiResponse(pathname, url) {
   if (pathname === '/api/v1/reports/bets') return json(betPage(url));
   if (pathname === '/api/v1/analytics/splits') return json(data.splits);
 
-  if (pathname === '/api/v1/calendar') return json({ items: data.calendar });
+  if (pathname === '/api/v1/calendar') return json(calendarPage(url));
   if (pathname.startsWith('/api/v1/events/')) {
     const id = pathname.slice('/api/v1/events/'.length);
     return json(data.calendar.find((item) => item.selection.id === id) ?? data.calendar[0]);

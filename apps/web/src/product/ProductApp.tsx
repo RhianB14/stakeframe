@@ -441,22 +441,29 @@ function Overview({
   );
   return (
     <>
+      {/* STK-F2-18 (Fase 4): as 4 métricas de POSIÇÃO. Saldo, disponível e
+          exposição são três leituras do mesmo instante e ficam no mesmo plano;
+          o resultado do mês vem abaixo, no painel próprio, porque resultado é
+          uma dimensão diferente de posição e somá-los na mesma grade convidava
+          a leitura errada. `exposure` é o único que é promessa — dinheiro que
+          só volta se a aposta ganhar. */}
       <div className="metric-grid">
         <Metric
-          label="Banca real"
+          label="Saldo em conta"
           value={formatBRL(workspace.bankroll)}
-          detail="Disponível + principal em aberto"
+          detail="Reserva e saldo somados nas casas"
           featured
         />
         <Metric
-          label="Disponível"
+          label="Disponível para apostar"
           value={formatBRL(workspace.available)}
-          detail="Reserva e saldo nas casas"
+          detail="Saldo menos o que está em jogo"
         />
         <Metric
-          label="Em apostas abertas"
+          label="Exposição em aberto"
           value={formatBRL(workspace.exposure)}
-          detail="Somente dinheiro real"
+          detail="Principal real ainda no jogo"
+          commitment
         />
         <Metric
           label="Unidade do mês"
@@ -471,14 +478,15 @@ function Overview({
             <p>Saldo disponível por conta</p>
           </div>
           <a className="text-link" href="#finance">
-            Ver movimentações ↗
+            Ver movimentações
           </a>
         </div>
         <div className="account-grid">
           {workspace.accounts.map((account) => (
             <div className="account-card" key={account.id}>
               <span className="account-icon" aria-hidden="true">
-                {account.kind === 'reserve' ? '↗' : account.name.slice(0, 1)}
+                {account.kind === 'reserve' ? 'R$'
+                  : account.name.trim().charAt(0).toUpperCase()}
               </span>
               <div>
                 <span>{account.name}</span>
@@ -500,16 +508,22 @@ export function Metric({
   value,
   detail,
   featured = false,
+  commitment = false,
 }: {
   label: string;
   value: string;
   detail: string;
   featured?: boolean;
+  /** Exposição: dinheiro que só volta se a aposta ganhar. */
+  commitment?: boolean;
 }) {
+  const negative = value.includes('−');
   return (
-    <div className={`metric-card ${featured ? 'featured' : ''}`}>
+    <div
+      className={`metric-card${featured ? ' featured' : ''}${commitment ? ' committed' : ''}`}
+    >
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={negative ? 'negative' : undefined}>{value}</strong>
       <small>{detail}</small>
     </div>
   );

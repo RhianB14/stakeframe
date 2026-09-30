@@ -1001,6 +1001,30 @@
   background: var(--surface-3);
   border-color: var(--border-strong);
 }
+/* STK-F2-18 (Fase 4) — a exposição é a única métrica que é uma PROMESSA:
+   dinheiro que só volta se a aposta ganhar. Saldo e disponível são
+   posição; exposição é condicional, e é a cor que a distingue na primeira
+   olhada. Uma borda de sinal, não um preenchimento: a tela já tem uma
+   superfície destacada e dois destaques competem. */
+.metric-card.committed {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.metric-card.committed > span {
+  color: var(--warn);
+}
+/* Saldo, exposição e lucro têm de ser lidos como números DIFERENTES: um é
+   posição, outro é promessa, o terceiro é resultado. A cor de sinal entra
+   só no resultado — no valor, nunca no cartão inteiro. */
+.metric-card.metric-tone-positive > strong {
+  color: var(--pos);
+}
+.metric-card.metric-tone-negative > strong {
+  color: var(--neg);
+}
+.metric-card strong.negative {
+  color: var(--neg);
+}
 .metric-card > span {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
@@ -1040,6 +1064,15 @@
   color: var(--accent-ink);
   font-size: var(--text-xs);
   white-space: nowrap;
+  /* STK-F2-18 (Fase 4): o link de texto media 17px de altura — bem abaixo
+     dos 44px de alvo. Padding vertical + `min-height` resolvem sem aumentar
+     a fonte nem a caixa do container: o alvo cresce, o texto continua 11,5px
+     e o painel não muda de altura. `inline-flex` + `align-items` para que o
+     `min-height` valha de fato (em `inline` ele é ignorado). */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 2px;
 }
 .account-grid {
   display: grid;
@@ -1075,6 +1108,13 @@
   color: var(--text-secondary);
   border-radius: 9px;
   font-weight: 600;
+  /* STK-F2-18 (Fase 4): o ícone levava a inicial da casa e o glifo `↗` na
+     reserva. Sem tamanho próprio herdava 15px, e a sigla `R$` estourava a
+     caixa de 34px. `12px` cabe as duas, está na escala do sistema e mantém a
+     grade legível — abaixo de 12px a sigla perde a forma. */
+  font-size: var(--text-sm);
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 .account-vertical {
   flex-direction: column;
@@ -1527,6 +1567,15 @@
   border: 0;
   padding: 0;
   overflow-wrap: anywhere;
+  /* STK-F2-18 (Fase 4): este botão ABRE o bilhete e media 18px de altura —
+     o alvo de toque mais importante da tabela, porque é por ele que se entra
+     no detalhe, e o menor de todos. `min-height` + flex alinham sem mudar a
+     tipografia nem a altura da linha: a linha já tem 44px, então o botão
+     cresce dentro dela sem empurrar nada. */
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  width: 100%;
 }
 .table-title:hover {
   color: var(--accent-ink);
@@ -1649,6 +1698,53 @@
 .posting-list b {
   font-weight: 500;
   padding-left: 7px;
+}
+/* STK-F2-18 (Fase 4) — o razão em tabela. A coluna de valor alinha à direita
+   e a de contas afetadas tem largura própria: são as duas que precisam ser
+   comparadas entre linhas, e comparar exige alinhamento, não memória. */
+.journal-table th.num,
+.journal-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+.journal-table td.journal-date {
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.journal-table td.journal-reason {
+  color: var(--text-secondary);
+  max-width: 260px;
+}
+.journal-table td b.positive {
+  color: var(--pos);
+}
+/* Um lançamento estornado CONTINUA na tabela — o razão é append-only e
+   esconder a linha apagaria a prova de que houve correção. O que muda é a
+   leitura: a linha recua, e o sufixo "estornado" no nome do lançamento
+   diz o motivo. */
+.journal-table tr.journal-reversed td {
+  color: var(--text-tertiary);
+}
+.journal-table tr.journal-reversed td.journal-date {
+  color: var(--text-tertiary);
+}
+.journal-sign {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+/* STK-F2-18 (Fase 4) — o estado vazio usava o glifo `▤`, que varia por
+   plataforma, não aceita `currentColor` e é lido por leitor de tela como
+   "quadrado com linhas". Virou um traço: duas linhas de 1px que dizem
+   "não há linhas" e herdam a cor do contexto. */
+.empty-state .empty-mark {
+  display: block;
+  width: 28px;
+  height: 16px;
+  margin-bottom: 12px;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
 }
 .product-footer {
   margin-top: auto;
@@ -2260,7 +2356,11 @@
 }
 .calendar-layout {
   display: grid;
-  grid-template-columns: 265px minmax(0, 1fr);
+  /* STK-F2-18 (Fase 4): 265px dava 34px por dia numa grade de 7 — o dia
+     ainda não tinha chip nenhum. Com chip, a célula precisa de ~48px para o
+     número e três marcas de 6px. O painel do picker cresce; a agenda
+     continua sendo a coluna larga. */
+  grid-template-columns: 356px minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -2294,6 +2394,107 @@
 }
 .calendar-grid .calendar-today {
   border-color: var(--focus);
+}
+/* STK-F2-18 (Fase 4) — a grade deixou de ser um seletor de dia e passou a
+   mostrar o que existe em cada dia. O botão precisava de altura para caber
+   número + chips: 9px de padding no grid de 7 colunas de 265px rendia um
+   alvo de 26px, muito abaixo dos 44px do sistema. */
+.calendar-grid button.calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: var(--tap);
+  padding: 6px 4px 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  text-align: left;
+}
+.calendar-daynum {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  /* Dia sem evento recua, mas continua legível: --text-tertiary mede
+     5,26:1 em --surface-3, acima do mínimo de texto. */
+  color: var(--text-secondary);
+}
+.calendar-grid button[aria-pressed='true'] .calendar-daynum {
+  color: var(--bg);
+  font-weight: 600;
+}
+.calendar-grid button.has-events {
+  border-color: var(--border-strong);
+}
+.calendar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.calendar-chip {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  /* Cancelada é a ausência de sinal, não um sinal: a marca usa a cor de
+     texto terciário porque é a única informação que a linha carrega — e um
+     token de texto como fundo é o defeito que a guarda barra. Ela carrega a
+     INFORMAÇÃO; a forma (6px, dentro de um dia com borda) é que comunica que
+     é uma marca e não um bloco de conteúdo. */
+  background: var(--muted);
+}
+.calendar-chip.chip-open {
+  background: var(--warn);
+}
+.calendar-chip.chip-settled {
+  background: var(--pos);
+}
+.calendar-chip.chip-cancelled {
+  background: var(--muted);
+}
+.calendar-chip.chip-more {
+  width: auto;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: var(--text-xs);
+  line-height: 10px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.calendar-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.calendar-legend i.chip-open {
+  background: var(--warn);
+}
+.calendar-legend i.chip-settled {
+  background: var(--pos);
+}
+.calendar-weekday abbr {
+  text-decoration: none;
+  border: 0;
+}
+/* Estado de onde se está, não ação: o mesmo peso dos dois lados e o
+   selecionado marcado por superfície + `aria-pressed`. */
+.calendar-tabs .segment-selected {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .calendar-weekday {
   color: var(--text-tertiary);

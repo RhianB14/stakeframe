@@ -29,6 +29,7 @@ import { request } from './api.js';
 import type { OpenModal } from './ProductApp.js';
 import { betFinancialDisplay } from './financial-display.js';
 import { DashboardPanel } from './dashboard.js';
+import { readChartTokens } from './chart-tokens.js';
 import { SplitsPanel } from './splits.js';
 
 const dayLabel = (date: string) => date.split('-').reverse().join('/');
@@ -49,6 +50,10 @@ function params(query: ReportQuery) {
   ).toString();
 }
 function Evolution({ report }: { report: PerformanceReport }) {
+  // STK-F2-18 (Fase 4): as cores do gráfico saem da camada de tokens, não de
+  // literais no JSX. `stroke` é atributo de apresentação SVG e NÃO resolve
+  // custom property — daí resolver o token uma vez e passar a cor concreta.
+  const chart = readChartTokens();
   let real = 0n;
   let promo = 0n;
   const series = report.timeline.map((bucket) => {
@@ -97,14 +102,14 @@ function Evolution({ report }: { report: PerformanceReport }) {
           <ResponsiveContainer width="100%" height="100%">
             {sparse ? (
               <BarChart data={observed} margin={{ left: 12, right: 12, top: 12, bottom: 8 }}>
-                <CartesianGrid stroke="#303847" vertical={false} />
+                <CartesianGrid stroke={chart['--border']} vertical={false} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(date) => String(date).slice(5).split('-').reverse().join('/')}
-                  stroke="#9fa9ba"
+                  stroke={chart['--text-tertiary']}
                 />
-                <YAxis stroke="#9fa9ba" width={64} />
-                <ReferenceLine y={0} stroke="#b8c5df" />
+                <YAxis stroke={chart['--text-tertiary']} width={64} />
+                <ReferenceLine y={0} stroke={chart['--border-strong']} />
                 <Tooltip
                   content={({ active, payload }) =>
                     active && payload?.[0] ? (
@@ -116,19 +121,19 @@ function Evolution({ report }: { report: PerformanceReport }) {
                     ) : null
                   }
                 />
-                <Bar dataKey="period" name="Resultado" fill="#92adff" isAnimationActive={false} />
+                <Bar dataKey="period" name="Resultado" fill={chart['--accent-ink']} isAnimationActive={false} />
               </BarChart>
             ) : (
               <LineChart data={series} margin={{ left: 12, right: 12, top: 12, bottom: 8 }}>
-                <CartesianGrid stroke="#303847" vertical={false} />
+                <CartesianGrid stroke={chart['--border']} vertical={false} />
                 <XAxis
                   dataKey="date"
                   minTickGap={45}
                   tickFormatter={(date) => String(date).slice(5).split('-').reverse().join('/')}
-                  stroke="#9fa9ba"
+                  stroke={chart['--text-tertiary']}
                 />
-                <YAxis stroke="#9fa9ba" width={64} />
-                <ReferenceLine y={0} stroke="#b8c5df" />
+                <YAxis stroke={chart['--text-tertiary']} width={64} />
+                <ReferenceLine y={0} stroke={chart['--border-strong']} />
                 <Tooltip
                   content={({ active, payload }) =>
                     active && payload?.[0] ? (
@@ -147,7 +152,7 @@ function Evolution({ report }: { report: PerformanceReport }) {
                   type="linear"
                   dataKey="real"
                   name="Dinheiro real"
-                  stroke="#92adff"
+                  stroke={chart['--accent-ink']}
                   strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
@@ -156,7 +161,7 @@ function Evolution({ report }: { report: PerformanceReport }) {
                   type="linear"
                   dataKey="promo"
                   name="Freebets"
-                  stroke="#dfbe76"
+                  stroke={chart['--warn']}
                   strokeDasharray="5 4"
                   strokeWidth={2}
                   dot={false}

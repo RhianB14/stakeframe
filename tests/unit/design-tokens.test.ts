@@ -3,12 +3,53 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const read = (relative: string) =>
-  readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
+  // Normaliza a quebra de linha. O repositório não tem `text=auto` no
+  // .gitattributes para `.tsx`, então o mesmo arquivo pode chegar com LF num
+  // clone e CRLF noutro — e um teste que casa `type Page =\n(...)` passa no
+  // primeiro e falha no segundo. Foi exatamente o que aconteceu aqui: a
+  // asserção reprovava com `declared` vazio, num arquivo cujo conteúdo
+  // estava correto. O `\r` é ruído de plataforma, nunca sinal.
+  readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
 
 const tokensCss = read('../../apps/web/src/product/tokens.css');
 const productCss = read('../../apps/web/src/product/product.css');
 const styleCss = read('../../apps/web/src/style.css');
 const productApp = read('../../apps/web/src/product/ProductApp.tsx');
+
+/**
+ * STK-F2-18 (Fase 4) — os arquivos JSX da Fase 4 entram na guarda.
+ *
+ * A guarda original lia `product.css` e `style.css`. Não lia `.tsx`, e é por
+ * isso que as 10 cores hex dentro do JSX dos gráficos (`analytics.tsx`,
+ * apontadas pela análise original) sobreviveram à Fase 0: ela barrava hex em
+ * folha de estilo e não em componente. Um teste de token que não vê o
+ * componente é metade da verificação.
+ */
+const overviewReport = read('../../apps/web/src/product/overview-report.tsx');
+const analytics = read('../../apps/web/src/product/analytics.tsx');
+const events = read('../../apps/web/src/product/events.tsx');
+const financePages = read('../../apps/web/src/product/pages.tsx');
+
+/** Um arquivo JSX de cor, com a linha em que o hex aparece. */
+function tsxHexes(source: string, name: string): string[] {
+  const found: string[] = [];
+  source.split('\n').forEach((line, index) => {
+    // Comentário e string de URL não são cor: `#product-main` num skip link
+    // e um id de âncora casariam `#abc` se não fossem filtrados.
+    const code = line.replace(/\/\*.*?\*\//g, '').replace(/^\s*\/\/.*$/, '');
+    for (const match of code.match(HEX_SOURCE) ?? []) {
+      const value = match.toLowerCase();
+      // 3 dígitos: `#fff` é cor. 4/6/8: cor. Mas `#product-main` casa
+      // `{3}`? Não — `p`, `r`, `o` não são hex. Ainda assim, uma âncora
+      // como `#abc123def` seria confundida; o filtro exige que o valor
+      // inteiro seja um hex válido de 3, 4, 6 ou 8 dígitos.
+      if (/^#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})$/.test(value)) {
+        found.push(`${name}:${index + 1} ${value}`);
+      }
+    }
+  });
+  return found;
+}
 
 /**
  * STK-F2-18 — guardas da camada de tokens.
@@ -162,6 +203,20 @@ describe('camada de tokens (STK-F2-18)', () => {
       distinct,
       `style.css tem ${distinct} hex distintos; a linha de base é ${baseline} (Fase 10 zera)`,
     ).toBeLessThanOrEqual(baseline);
+  });
+
+  it('nenhum JSX da Fase 4 escreve cor em hex — o componente consome tokens', () => {
+    /* A análise original apontou "10 cores hardcoded dentro do JSX dos
+       gráficos" e a Fase 0 não as viu porque só lia folha de estilo.
+       Este é o furo que a Fase 4 fecha, e o teste precisa cobri-lo. */
+    const stray = [
+      ...tsxHexes(overviewReport, 'overview-report.tsx'),
+      ...tsxHexes(analytics, 'analytics.tsx'),
+      ...tsxHexes(events, 'events.tsx'),
+      ...tsxHexes(financePages, 'pages.tsx'),
+      ...tsxHexes(productApp, 'ProductApp.tsx'),
+    ];
+    expect(stray, `cor em hex dentro do JSX: ${stray.join(' | ')}`).toEqual([]);
   });
 
   it('nenhum gradiente decorativo de fundo no produto', () => {

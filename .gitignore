@@ -54,3 +54,6 @@ tests/ux-capture/ux-report/
 /data/corpus/private/raw/
 /data/corpus/private/sanitized/
 /data/corpus/private/manifest.json
+
+# Capturas de revisao de design (STK-F2-18) — artefato local, nao entra no repo
+capturas/fase4/
