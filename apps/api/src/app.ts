@@ -30,6 +30,7 @@ import type {
   EntitlementService,
   ImportBatchService,
   ReportSnapshotService,
+  PolymarketRankingStore,
 } from '@stakeframe/db';
 import { registerReportRoutes } from './report-routes.js';
 import { registerReportSnapshotRoutes } from './report-snapshot-routes.js';
@@ -48,6 +49,7 @@ import {
 } from './telegram-session-routes.js';
 import { registerDebugRoutes } from './debug-routes.js';
 import { registerAdminPanelRoutes } from './admin-routes.js';
+import { registerPolymarketRankingRoutes } from './polymarket-ranking-routes.js';
 import type { TelemetryHandle } from './telemetry.js';
 import type { TelegramLinkService, TelegramTicketService, Database } from '@stakeframe/db';
 
@@ -84,10 +86,23 @@ export function createApp(options: {
    * entitlement não pode afirmar que respeita plano.
    */
   entitlements?: EntitlementService;
+  /**
+   * STK-F2-15: o limiar de amostra do ranking Polymarket. Recebe o MESMO valor
+   * do dashboard analítico (`DASHBOARD_MIN_SAMPLE`), para que "amostra
+   * pequena" signifique a mesma coisa na tela de ranking e na de análises.
+   */
+  dashboardMinSample?: number;
   /** STK-F2-04: vínculo com a conta do Telegram; ausente = rotas indisponíveis. */
   telegramLink?: TelegramLinkService;
   /** STK-F2-05: fila/preview/decisão do bilhete; ausente = rotas indisponíveis. */
   telegramTickets?: TelegramTicketService;
+  /**
+   * STK-F2-15: a LEITURA do ranking oficial Polymarket, sobre as tabelas que a
+   * F2-14 gravou. Ausente = a rota responde 503 (fail-closed): sem a tabela de
+   * séries não há como exibir a completude gravada, e uma tela de ranking sem
+   * completude é exatamente a cobertura parcial apresentada como total.
+   */
+  polymarketRanking?: PolymarketRankingStore;
   /** Handle do banco: a confirmação do preview precisa do serviço de importação. */
   database?: Database;
   telemetry?: TelemetryHandle;
@@ -263,6 +278,16 @@ export function createApp(options: {
     registerOperationsRoutes(app, options.operations);
     registerDebugRoutes(app, options.ownerAuth, options.telemetry);
     registerAdminPanelRoutes(app, options.ownerAuth, options.adminPanel);
+    // STK-F2-15 — o ranking oficial Polymarket. Fica ao lado das demais rotas
+    // privadas e usa o MESMO gate (sessão + origem + consentimento); o limiar
+    // de amostra é o do dashboard analítico, para que "amostra pequena" tenha
+    // um único significado no produto inteiro.
+    registerPolymarketRankingRoutes(app, options.ownerAuth, options.polymarketRanking, {
+      // STK-F2-02: 30 é o padrão já gravado do dashboard (`DEFAULT_DASHBOARD_MIN_SAMPLE`).
+      // Aqui ele é um PADRÃO DE MONTAGEM, e o servidor sempre passa o valor
+      // configurado — nenhuma tela decide sozinha o que é amostra pequena.
+      minSample: options.dashboardMinSample ?? 30,
+    });
     app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   });
   app.setNotFoundHandler((request, reply) => sendApiError(request, reply, 404, 'NOT_FOUND'));

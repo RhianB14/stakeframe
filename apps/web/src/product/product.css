@@ -1719,11 +1719,12 @@
   }
   .product-sidebar nav {
     width: 100%;
-    /* STK-F2-08: sete destinos na barra inferior. O número é explícito porque
-       o teste de navegador (e2e) confere que a barra NÃO rola e que todo
-       destino tem 44 px de altura — um `repeat(auto-fit, ...)` faria a contagem
-       depender da largura e o teste deixaria de verificar o que verifica. */
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    /* OITO destinos na barra inferior (o oitavo é o ranking Polymarket, STK-F2-15).
+       O número é explícito porque o teste de navegador (e2e) confere que a
+       barra NÃO rola e que todo destino tem 44 px de altura — um
+       `repeat(auto-fit, ...)` faria a contagem depender da largura e o teste
+       deixaria de verificar o que verifica. */
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     overflow: visible;
     gap: 3px;
   }

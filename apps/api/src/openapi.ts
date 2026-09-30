@@ -57,6 +57,12 @@ export function registerApiContracts(app: FastifyInstance) {
           description:
             'Painel interno do papel superadmin: metadados de contas, uso, flags, erros recentes e auditoria. Sem impersonação e sem acesso a conteúdo de usuário.',
         },
+        {
+          name: 'Integrações',
+          description:
+            'Dados públicos de integração externa. Ranking oficial de traders com métricas da ' +
+            'origem, completude declarada e amostra visível.',
+        },
       ],
       components: {
         securitySchemes: {
