@@ -536,18 +536,24 @@ describe('STK-F2-17 §15 — a 0030 no journal e replay-safe', () => {
         'utf8',
       ),
     ) as { entries: { idx: number; tag: string }[] };
-    const entry = journal.entries.find(
-      (candidate) => candidate.tag === '0030_polymarket_simulation',
+    const position = journal.entries.findIndex(
+      (entry) => entry.tag === '0030_polymarket_simulation',
     );
-    expect(entry).toBeDefined();
-    // O `idx` declarado tem de ser a posição real, porque é isso que torna
-    // confiável o replay de prefixo do migrador.
-    expect(journal.entries[journal.entries.length - 1]!.tag).toBe('0030_polymarket_simulation');
-    expect(entry!.idx).toBe(journal.entries.length - 1);
-    expect(journal.entries.every((candidate, index) => candidate.idx === index)).toBe(true);
-    // E a 0028 da F2-14 continua ANTES dela, sem trocar de lugar.
-    const ingest = journal.entries.findIndex((e) => e.tag === '0028_polymarket_ingest');
-    expect(ingest).toBeGreaterThan(0);
-    expect(journal.entries[ingest + 1]!.tag).toBe('0030_polymarket_simulation');
+    expect(position).toBeGreaterThan(0);
+    // O `idx` declarado tem de ser a posição REAL, e é isso que torna
+    // confiável o replay de prefixo do migrador. A verificação é pela POSIÇÃO
+    // e não por "é a última entrada": a 0030 foi reservada quando o journal
+    // tinha 29 entradas, e a F2-16 tomou o idx 29 com a 0029 no caminho — a
+    // 0030 ficou no 30 e a ordem das duas é o que a CI verifica.
+    expect(journal.entries[position]!.idx).toBe(position);
+    expect(journal.entries.every((entry, index) => entry.idx === index)).toBe(true);
+    // E a 0029 da F2-16 fica IMEDIATAMENTE antes: as duas foram reservadas em
+    // paralelo e a colisão de idx só apareceria aqui, na posição, e não na
+    // aplicação da migração.
+    const favorites = journal.entries.findIndex(
+      (entry) => entry.tag === '0029_polymarket_favorites',
+    );
+    expect(favorites).toBeGreaterThan(0);
+    expect(journal.entries[favorites + 1]!.tag).toBe('0030_polymarket_simulation');
   });
 });

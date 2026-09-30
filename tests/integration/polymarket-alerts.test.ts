@@ -653,7 +653,7 @@ describe('STK-F2-16 §15 — favoritos e alertas no banco', () => {
     ).rejects.toMatchObject({ code: '23505' });
   });
 
-  it('a 0029 é a ÚLTIMA entrada do journal e tem idx coerente', async () => {
+  it('a 0029 está no journal, em ordem e com idx coerente', async () => {
     // O número é RESERVADO para esta tarefa: se outra branch tivesse tomado a
     // 0029, este teste falharia com a tag errada em vez de deixar a colisão
     // passar despercebida.
@@ -663,8 +663,19 @@ describe('STK-F2-16 §15 — favoritos e alertas no banco', () => {
         'utf8',
       ),
     ) as { entries: { idx: number; tag: string }[] };
-    const last = journal.entries[journal.entries.length - 1]!;
-    expect(last.tag).toBe('0029_polymarket_favorites');
-    expect(last.idx).toBe(journal.entries.length - 1);
+    // A 0029 NÃO é mais a última: a STK-F2-17 acrescenta a 0030 depois dela.
+    // A asserção é sobre a POSIÇÃO DECLARADA no `idx` e sobre a coerência do
+    // journal inteiro, que é o que a 0029 pediu — e não sobre "é a última
+    // entrada", que quebraria a cada migração seguinte e obrigaria este teste
+    // a ser editado a cada card novo. É o mesmo critério que a 0025 e a 0027
+    // já usam.
+    const favorites = journal.entries.findIndex(
+      (entry) => entry.tag === '0029_polymarket_favorites',
+    );
+    expect(favorites).toBeGreaterThan(0);
+    expect(journal.entries[favorites]!.idx).toBe(favorites);
+    // Nenhuma entrada fora da sua posição: é o que torna confiável o replay de
+    // prefixo do migrador.
+    expect(journal.entries.every((entry, index) => entry.idx === index)).toBe(true);
   });
 });
