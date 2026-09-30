@@ -19655,6 +19655,391 @@
           }
         }
       }
+    },
+    "/api/v1/polymarket/simulation": {
+      "post": {
+        "operationId": "runPolymarketSimulation",
+        "summary": "Apurar uma simulação MERAMENTE INDICATIVA com stake fixa e premissas explícitas",
+        "tags": ["Integrações"],
+        "description": "Aplica uma stake fixa às observações já publicadas pela Polymarket e devolve um número aritmético indicativo, com as premissas de atraso, taxas, spread, slippage e dados ausentes SEMPRE visíveis. A cobertura necessária é a status gravado pela ingestão: enquanto ela não for completa, a apuração é RECUSADA com o motivo e sem nenhum número. A resposta é sempre indicativa: nada é executado, nenhuma ordem é enviada e nenhum retorno é prometido. A tentativa, recusada ou apurada, é registrada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "window": {
+                    "type": "object",
+                    "properties": {
+                      "category": {
+                        "type": "string",
+                        "enum": [
+                          "OVERALL",
+                          "POLITICS",
+                          "SPORTS",
+                          "ESPORTS",
+                          "CRYPTO",
+                          "CULTURE",
+                          "MENTIONS",
+                          "WEATHER",
+                          "ECONOMICS",
+                          "TECH",
+                          "FINANCE"
+                        ]
+                      },
+                      "timePeriod": { "type": "string", "enum": ["DAY", "WEEK", "MONTH", "ALL"] },
+                      "orderBy": { "type": "string", "enum": ["PNL", "VOL"] }
+                    },
+                    "required": ["category", "timePeriod", "orderBy"],
+                    "additionalProperties": false
+                  },
+                  "stake": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+                  "delayMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+                  "feeRate": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,6})?$"
+                  },
+                  "spreadRate": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,6})?$"
+                  },
+                  "slippageRate": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,6})?$"
+                  }
+                },
+                "required": ["window", "stake", "delayMs", "feeRate", "spreadRate", "slippageRate"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": { "type": "string", "enum": ["indicative"] },
+                    "executable": { "type": "boolean", "enum": [false] },
+                    "executed": { "type": "boolean", "enum": [false] },
+                    "window": {
+                      "type": "object",
+                      "properties": {
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "OVERALL",
+                            "POLITICS",
+                            "SPORTS",
+                            "ESPORTS",
+                            "CRYPTO",
+                            "CULTURE",
+                            "MENTIONS",
+                            "WEATHER",
+                            "ECONOMICS",
+                            "TECH",
+                            "FINANCE"
+                          ]
+                        },
+                        "timePeriod": { "type": "string", "enum": ["DAY", "WEEK", "MONTH", "ALL"] },
+                        "orderBy": { "type": "string", "enum": ["PNL", "VOL"] }
+                      },
+                      "required": ["category", "timePeriod", "orderBy"],
+                      "additionalProperties": false
+                    },
+                    "refusal": {
+                      "type": "object",
+                      "properties": {
+                        "refused": { "type": "boolean" },
+                        "code": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "SERIES_NOT_COLLECTED",
+                            "SERIES_NOT_COMPLETE",
+                            "SAMPLE_TOO_SMALL",
+                            "MISSING_DATA"
+                          ]
+                        },
+                        "reason": { "nullable": true, "type": "string", "minLength": 1 },
+                        "remedy": { "nullable": true, "type": "string", "minLength": 1 }
+                      },
+                      "required": ["refused", "code", "reason", "remedy"],
+                      "additionalProperties": false
+                    },
+                    "coverage": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["complete", "truncated", "partial", "unknown"]
+                        },
+                        "available": { "type": "boolean" },
+                        "n": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                        "minSample": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "lowSample": { "type": "boolean" },
+                        "completeness": {
+                          "type": "object",
+                          "properties": {
+                            "truncated": { "type": "boolean" },
+                            "label": { "type": "string", "minLength": 1 },
+                            "detail": { "type": "string", "minLength": 1 }
+                          },
+                          "required": ["truncated", "label", "detail"],
+                          "additionalProperties": false
+                        },
+                        "missingDataRate": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,6})?$"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "available",
+                        "n",
+                        "minSample",
+                        "lowSample",
+                        "completeness",
+                        "missingDataRate"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "premises": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "stake",
+                              "delayMs",
+                              "feeRate",
+                              "spreadRate",
+                              "slippageRate",
+                              "missingDataRate",
+                              "completeness"
+                            ]
+                          },
+                          "label": { "type": "string", "minLength": 1 },
+                          "value": { "type": "string", "minLength": 1 },
+                          "kind": {
+                            "type": "string",
+                            "enum": ["configured", "measured", "declared"]
+                          },
+                          "note": { "type": "string", "minLength": 1 }
+                        },
+                        "required": ["key", "label", "value", "kind", "note"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "indicative": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "stake": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+                        "observations": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "publishedRatio": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,6})?$"
+                        },
+                        "publishedPnlSum": {
+                          "type": "string",
+                          "pattern": "^-?(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,18})?$"
+                        },
+                        "publishedVolSum": {
+                          "type": "string",
+                          "pattern": "^-?(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,18})?$"
+                        },
+                        "grossBeforePremises": {
+                          "type": "string",
+                          "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+                        },
+                        "feeCost": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+                        "spreadCost": { "type": "string", "pattern": "^\\d{1,12}(\\.\\d{1,2})?$" },
+                        "slippageCost": {
+                          "type": "string",
+                          "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+                        },
+                        "totalFrictionCost": {
+                          "type": "string",
+                          "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+                        },
+                        "missingDataBand": {
+                          "type": "string",
+                          "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+                        },
+                        "netAfterPremises": {
+                          "type": "string",
+                          "pattern": "^\\d{1,12}(\\.\\d{1,2})?$"
+                        },
+                        "negative": { "type": "boolean" }
+                      },
+                      "required": [
+                        "stake",
+                        "observations",
+                        "publishedRatio",
+                        "publishedPnlSum",
+                        "publishedVolSum",
+                        "grossBeforePremises",
+                        "feeCost",
+                        "spreadCost",
+                        "slippageCost",
+                        "totalFrictionCost",
+                        "missingDataBand",
+                        "netAfterPremises",
+                        "negative"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "disclaimers": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "executable",
+                    "executed",
+                    "window",
+                    "refusal",
+                    "coverage",
+                    "premises",
+                    "indicative",
+                    "disclaimers"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/polymarket/simulation/premises": {
+      "get": {
+        "operationId": "getPolymarketSimulationPremises",
+        "summary": "Premissas aceitas, avisos obrigatórios e limites de entrada da simulação",
+        "tags": ["Integrações"],
+        "description": "Contrato da simulação indicativa. As premissas de fricção são escolhidas pelo usuário e assim aparecem na tela: elas não são medidas da Polymarket. Os avisos são obrigatórios em toda saída e não podem ser removidos.",
+        "security": [{ "localOwnerSession": [] }, { "secureOwnerSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "maxDelayMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "disclaimers": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": { "type": "string", "minLength": 1 }
+                    }
+                  },
+                  "required": ["maxDelayMs", "disclaimers"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "default": {
+            "description": "Default Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "/", "description": "Mesma origem da aplicação" }],

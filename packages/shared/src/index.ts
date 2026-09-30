@@ -15,6 +15,7 @@ export * from './telemetry.js';
 export * from './entitlements.js';
 export * from './polymarket.js';
 export * from './polymarket-ranking.js';
+export * from './polymarket-simulation.js';
 
 export const systemStatusSchema = z
   .object({

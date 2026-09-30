@@ -39,16 +39,25 @@ backfill 180d, completude nunca inferida).
 
 ## Fila restante
 
-1. **F2-15** — ranking oficial (em execução)
-2. **F2-16 / F2-17** — favoritos + alertas, simulação
-   indicativa. Dependem da F2-15
-3. **F2-18** — gate de ativação do Polymarket. **Exige autorização específica
+1. **F2-16** — favoritos + alertas (worker/API). Paralela, em `stk/f2-16-polymarket-favoritos`
+2. **F2-18** — gate de ativação do Polymarket. **Exige autorização específica
    do proprietário** (flag + breakers + Fase 3 iniciada)
+
+### Pendência herdada da F2-15, deliberadamente NÃO resolvida na F2-17
+
+O CHECK `polymarket_series_category_check` (0028) aceita só `OVERALL`, e a
+F2-15 descobriu por probe que a API oficial aceita **onze** categorias. A F2-17
+aceita o enum oficial de onze e **recusa** a janela sem série com
+`SERIES_NOT_COLLECTED` — ampliar o CHECK sem ampliar a INGESTÃO permitiria
+gravar séries que o job de ingestão não produz, e soltar um CHECK em migração já
+aplicada exige backup e janela própria do runbook. A ingestão multi-categoria é
+card próprio. Ver `docs/F2-17-POLYMARKET-SIMULATION.md` §4.
 
 ## Produção
 
 - Fonte em produção: `891ffa53` (janela FULL pós-BETS-02) — **19 commits atrás
-  do main**, com 10 migrações não aplicadas (0019→0028).
+  do main**, com 11 migrações não aplicadas (0019→0028 mais a 0030 da F2-17,
+  quando a branch for integrada).
 - **Domínio de produção: `stakeframe.com.br`** (`APP_DOMAIN` do container web).
   `stakeframe.app` **não** é o domínio do produto — o DNS o resolve para um IP
   sem relação com a VPS.

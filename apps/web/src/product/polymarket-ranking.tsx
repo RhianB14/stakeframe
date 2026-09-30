@@ -5,6 +5,7 @@ import {
   POLYMARKET_RANKING_LIMIT,
   polymarketRankingSchema,
   type PolymarketRanking,
+  type PolymarketRankingQuery,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
@@ -15,6 +16,7 @@ import {
   rankingPeriodOptions,
   rankingView,
 } from './ranking-view.js';
+import { PolymarketSimulationSection } from './polymarket-simulation.js';
 
 /**
  * STK-F2-15 — a página do ranking oficial Polymarket.
@@ -42,6 +44,14 @@ import {
  * 30 dias (`MONTH` na API) na categoria geral. Uma categoria oficial ainda
  * não ingerida responde com a série ausente e a explicação — nunca uma lista
  * vazia sem aviso.
+ *
+ * STK-F2-17: a simulação MERAMENTE INDICATIVA entra como SEÇÃO desta tela, e
+ * não como um destino novo da navegação. A razão é concreta: as duas
+ * features leem o MESMO status gravado pela F2-14 e precisam dizer a mesma
+ * coisa sobre a completude, e um nono destino na barra inferior forçaria
+ * `grid-template-columns: repeat(9, ...)` com nove rótulos numa tela de
+ * bolso — um alvo de toque que o teste de navegador já garante em 44 px.
+ * Uma seção é a forma de manter a verdade da cobertura num lugar só.
  */
 export function PolymarketRankingPage() {
   const [timePeriod, setTimePeriod] = useState<string>(POLYMARKET_DEFAULT_WINDOW.timePeriod);
@@ -112,6 +122,15 @@ export function PolymarketRankingPage() {
         </div>
       ) : null}
       {query.data ? <RankingTable ranking={query.data} /> : null}
+      {/* STK-F2-17: a simulação indicativa é uma SEÇÃO desta tela, não um
+          destino novo, e ela USA O MESMO filtro de janela. Uma seção com
+          filtros próprios criaria dois `select` com o mesmo rótulo acessível
+          na mesma página — indistinguíveis para um leitor de tela — e
+          permitiria que as duas seções discordassem sobre qual janela estão
+          mostrando. */}
+      <PolymarketSimulationSection
+        window={{ category, timePeriod, orderBy } as PolymarketRankingQuery}
+      />
     </section>
   );
 }

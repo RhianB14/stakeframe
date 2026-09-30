@@ -17,6 +17,8 @@ import {
   createTelegramLinkService,
   createTelegramTicketService,
   createPolymarketRankingStore,
+  createPolymarketSimulationStore,
+  createTenantContext,
   readEventSearchConfig,
 } from '@stakeframe/db';
 import { createApp } from './app.js';
@@ -118,6 +120,15 @@ async function main() {
     // aqui: ela existe para pagar por uma chamada, e esta rota não paga por
     // nenhuma. O limiar de amostra é o mesmo do dashboard analítico.
     polymarketRanking: createPolymarketRankingStore(database),
+    // STK-F2-17 — a simulação MERAMENTE INDICATIVA. Ela APURA sobre as
+    // tabelas que a F2-14 gravou (nenhuma chamada externa nova, portanto
+    // nenhuma consulta à porta de entitlement da F2-13) e grava o registro da
+    // tentativa na organização do dono. O resolvedor de organização é o MESMO
+    // `tenant-context` que o resto do produto usa, e é ele que impede a
+    // organização de vir do corpo.
+    polymarketSimulation: createPolymarketSimulationStore(database),
+    ensureOrganization: (userId: string) =>
+      createTenantContext(database).ensureOrganizationMembership(userId),
     dashboardMinSample: config.dashboard.minSample,
     database,
     telemetry,
