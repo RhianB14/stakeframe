@@ -5,6 +5,16 @@ packages:
 overrides:
   '@esbuild-kit/core-utils>esbuild': '0.25.12'
   'miniflare>sharp': '0.35.4'
+  # GHSA-qhr7-859c-m2p7 / GHSA-6j4f-fj2g-mc7p / GHSA-q2hr-2g5m-vwhr: todos os
+  # caminhos passam por minimatch (unico pai de brace-expansion na arvore).
+  'minimatch>brace-expansion': '5.0.12'
+  # GHSA-hrr3-gc8f-f4qj / GHSA-jvvf-x445-j334: fast-uri em duas linhas majors
+  # distintas. Pin por caminho preserva o major declarado por cada pai
+  # (ajv pede ^3.0.1; fast-json-stringify e @fastify/ajv-compiler pedem ^4.0.0).
+  'ajv>fast-uri': '3.1.8'
+  'json-schema-resolver>fast-uri': '3.1.8'
+  '@fastify/ajv-compiler>fast-uri': '4.1.5'
+  'fast-json-stringify>fast-uri': '4.1.5'
   # GHSA-3wwx-pv8p-q78v / CVE-2026-85024 (moderate): DoS via unhandled error in
   # WebSocket permessage-deflate decompression. Transitiva de miniflare>undici
   # (devDep do ecossistema wrangler); 7.29.0 afetada, 7.29.1 corrigida.
