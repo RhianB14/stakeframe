@@ -501,19 +501,35 @@ describe('STK-F2-14 §15 — ingestao Polymarket no banco', () => {
             where table_schema='integration' and table_name like 'polymarket%' order by table_name`,
         )
       ).rows.map((row) => row.table_name);
-      expect(tables).toEqual([
+      // A F2-14 gravou estas CINCO e o teste as fixava como lista EXATA. A
+      // STK-F2-17 acrescenta `polymarket_simulation` (o registro das
+      // simulacoes indicativas), entao a lista deixa de ser "tudo que existe"
+      // e passa a ser "as tabelas que a F2-14 gravou". A razao e a mesma que
+      // fez a 0025 e a 0027 deixarem de exigir a ultima entrada do journal:
+      // fixar a lista completa obriga cada card novo a editar este teste, e
+      // a edicao e o ponto em que a garantia se perde.
+      for (const expected of [
         'polymarket_aggregate',
         'polymarket_page',
         'polymarket_retention',
         'polymarket_series',
         'polymarket_trader',
-      ]);
-      // Acomparacao por PALAVRA, nao por substring: `polymarket_trader`
-      // contem a letra de "trade" e `polymarket_page` fala de pagina. O que
-      // esta proibido e uma tabela DEDICADA a ordem, aposta, posicao ou
-      // Kalshi — o escopo excluido do §9.1.
+      ])
+        expect(tables).toContain(expected);
+      // E o que a F2-17 NAO pode ter criado: nenhuma tabela de ordem, aposta,
+      // execucao ou wallet. A simulacao grava o PEDIDO e o desfecho, nunca
+      // uma ordem — e `polymarket_simulation` nao contem nenhum dos termos
+      // proibidos, como as outras.
       for (const table of tables) {
-        for (const forbidden of ['order', 'bet', 'trade', 'position', 'kalshi', 'wallet']) {
+        for (const forbidden of [
+          'order',
+          'bet',
+          'trade',
+          'position',
+          'kalshi',
+          'wallet',
+          'execute',
+        ]) {
           expect(table.split('_')).not.toContain(forbidden);
         }
       }
