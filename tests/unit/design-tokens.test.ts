@@ -332,11 +332,21 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(fromOklch).toBeCloseTo(6.87, 1);
   });
 
-  it('nenhum font-size abaixo de 11,5px em product.css', () => {
+  it('nenhum font-size abaixo de 12px em product.css', () => {
+    /* STK-F2-18 (PR-2): este teste validava 11,5px e PASSAVA, enquanto o E2E
+       exigia 12px na linha 648 e REPROVAVA. Duas suítes discordando do mesmo
+       número não estabelecem um piso — uma delas só herdou a fonte errada.
+       O piso real é 12px, e agora as duas medem o mesmo.
+
+       Este é o teste de fundo da correção: enquanto ele disser 11,5 ele
+       continued legitimando exatamente o valor que o E2E reprovava. */
     const sizes = [...(productCss.match(/font-size:\s*[\d.]+px/g) ?? [])]
       .map((m) => Number(m[1]))
-      .filter((v) => v < 11.5);
+      .filter((v) => v < 12);
     expect(sizes, `font-size abaixo do piso: ${sizes.join(', ')}px`).toEqual([]);
+    // E o token que era o culpado: ele LEGITIMAVA o valor que o E2E reprovava.
+    expect(tokensCss).toMatch(/--text-xs:\s*12px/);
+    expect(tokensCss).not.toMatch(/--text-xs:\s*11\.5px/);
   });
 
   it('nenhum par fundo/texto que se apaga: mesma cor nos dois lados', () => {

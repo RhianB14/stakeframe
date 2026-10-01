@@ -81,15 +81,29 @@
 
   /* ---------------------------------------------------------------------
      Tipografia — Inter em display e corpo, 3 pesos, 7 tamanhos.
-     Nenhum tamanho abaixo de 11,5px: a versão anterior tinha 51 das 150
+     Nenhum tamanho abaixo de 12px: a versão anterior tinha 51 das 150
      declarações de `font-size` abaixo de 12px, e a interface tinha virado
      listagem de terminal.
+
+     STK-F2-18 (PR-2): `--text-xs` era 11,5px. Duas suítes discordavam sobre
+     o piso e AMBAS passavam no próprio domínio — o unit legitimava 11,5px
+     enquanto o E2E exigia 12px. Duas asserções que discordam não são piso: uma
+     delas é só um número que ninguém questionou. O piso real é 12px, e agora
+     é o mesmo número dos dois lados.
      --------------------------------------------------------------------- */
   --font-display: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --font-body: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
 
-  --text-xs: 11.5px; /* rótulo em CAPS, legenda, eixo */
+  /* STK-F2-18 (PR-2): `--text-xs` e `--text-sm` valem 12px agora, e continuam
+     separados de propósito. Eles não são tamanhos diferentes — são INTENÇÕES
+     diferentes, e as 46 e 40 regras que os consomem não são intercambiáveis:
+     `--text-xs` é rótulo em CAPS, cabeçalho de tabela e legenda de
+     calendário; `--text-sm` é texto corrido pequeno. Colapsar os dois deixaria
+     a folha sem forma de dizer "isto é um rótulo", e a próxima pessoa que
+     precisasse de um rótulo menor voltaria inventando um hex cru. Dois nomes,
+     mesmo valor, uma intenção cada. */
+  --text-xs: 12px; /* rótulo em CAPS, cabeçalho de tabela, legenda */
   --text-sm: 12px; /* auxiliar, caption */
   --text-md: 13.5px; /* célula de tabela, label de campo */
   --text-body: 15px; /* corpo */
