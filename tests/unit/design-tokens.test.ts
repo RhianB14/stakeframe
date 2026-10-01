@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+// STK-F2-18 (PR-1) — o mesmo medidor que o E2E usa, importado uma vez.
+import {
+  contrastRatio,
+  luminance,
+  oklabToRgb,
+  relativeLuminance,
+  toSrgbChannels,
+  type LinearRgb,
+} from '../helpers/color.js';
 
 const read = (relative: string) =>
   // Normaliza a quebra de linha. O repositório não tem `text=auto` no
@@ -235,46 +244,32 @@ describe('camada de tokens (STK-F2-18)', () => {
 
   it('todo token de texto tem contraste medido em todas as superfícies', () => {
     /* Contraste real, medido — o número anotado no CSS é o piso, não uma
-       intenção. `surface-3` é a mais clara e por isso dita o mínimo. */
-    const relativeLuminance = (channels: number[]) =>
-      channels
-        .map((u) => (u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4))
-        .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i]!, 0);
+       intenção. `surface-3` é a mais clara e por isso dita o mínimo.
 
-    const oklabToRgb = (L: number, C: number, H: number) => {
-      const h = (H * Math.PI) / 180;
-      const a = C * Math.cos(h);
-      const b = C * Math.sin(h);
-      const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
-      const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
-      const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-      const rgb = [
-        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-        -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-      ];
-      return rgb.map((u) => (u <= 0.0031308 ? 12.92 * u : 1.055 * u ** (1 / 2.4) - 0.055));
-    };
-
-    const hexToRgb = (hex: string) => {
+       STK-F2-18 (PR-1): os conversores `oklabToRgb`/`relativeLuminance` que
+       moravam aqui foram para tests/helpers/color.ts. Agora o E2E mede com a
+       MESMA função, e o teste `a mesma cor em notações diferentes mede a
+       mesma razão` trava essa coincidência. Enquanto as duas suítes
+       tivessem instrumentos próprios, nenhuma conferia com a outra. */
+    const hexToRgb = (hex: string): LinearRgb => {
       const h = hex.replace('#', '');
-      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as unknown as LinearRgb;
     };
 
-    const contrast = (a: number[], b: number[]) => {
+    const contrast = (a: LinearRgb, b: LinearRgb) => {
       const la = relativeLuminance(a);
       const lb = relativeLuminance(b);
       return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
     };
 
-    const surfaces = {
+    const surfaces: Record<string, LinearRgb> = {
       '--bg': hexToRgb('#000000'),
       '--surface-1': hexToRgb('#0a0a0a'),
       '--surface-2': oklabToRgb(0.16, 0, 0),
       '--surface-3': oklabToRgb(0.185, 0, 0),
     };
 
-    const tokens: Array<[string, number[], number]> = [
+    const tokens: Array<[string, LinearRgb, number]> = [
       ['--text-primary', hexToRgb('#ffffff'), 4.5],
       ['--text-secondary', oklabToRgb(0.76, 0, 0), 4.5],
       ['--text-tertiary', oklabToRgb(0.68, 0, 0), 4.5],
@@ -299,17 +294,42 @@ describe('camada de tokens (STK-F2-18)', () => {
 
   it('o acento de preenchimento tem texto preto legível sobre ele', () => {
     // #ffffff sobre #0099ff mede 3,00:1 — reprova. Preto mede 7,00:1.
-    const lum = (hex: string) => {
-      const h = hex.replace('#', '');
-      return [0, 2, 4]
-        .map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
-        .map((u) => (u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4))
-        .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i]!, 0);
-    };
-    const a = lum('#000000');
-    const b = lum('#0099ff');
+    const a = luminance('#000000');
+    const b = luminance('#0099ff');
     expect((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toBeGreaterThanOrEqual(4.5);
     expect(productCss).toMatch(/\.ui-button-primary\s*\{[^}]*color:\s*var\(--bg\)/);
+  });
+
+  it('a mesma cor em notações diferentes mede a mesma razão de contraste', () => {
+    /* STK-F2-18 (PR-1) — este é o teste que teria pegado o medidor cego.
+
+       O E2E lia canais com `match(/\d+/g)` e tratava o resultado como RGB
+       0-255. Para `oklch(0.68 0 0)` ele casava [0.68, 0, 0], dividia por 255,
+       e devolvia luminância sem sentido: `--text-tertiary` sobre
+       `--surface-1` "mediava" 1,0598 num piso de 4,5. Nenhuma tela tinha o
+       contraste errado — o instrumento é que não media.
+
+       A sanidade é simétrica e fechada: se um dia `oklch()` deixar de bater com
+       o equivalente em `rgb()`, a diferença aparece aqui, e não como um
+       contraste absurdo numa tela que ninguém mexeu. */
+    const surface = '#0a0a0a';
+    const surfaceRgb = 'rgb(10, 10, 10)';
+    const tertiary = 'oklch(0.68 0 0)';
+
+    const fromOklch = contrastRatio(tertiary, surface);
+    // A MESMA cor pelo caminho que o Chromium usa em `getComputedStyle`.
+    const [red, green, blue] = toSrgbChannels(tertiary);
+    const asRgb = `rgb(${red}, ${green}, ${blue})`;
+
+    // O token é cinza puro: as duas notações precisam cair no mesmo cinza.
+    expect(asRgb).toBe('rgb(152, 152, 152)');
+    expect(luminance('#999999')).toBeCloseTo(luminance(tertiary), 2);
+    // Tolerância de 1/255 por canal: o arredondamento do rgb() é a única perda.
+    expect(Math.abs(contrastRatio(asRgb, surfaceRgb) - fromOklch)).toBeLessThan(0.02);
+
+    // E o par real do token, medido: 6,87:1 — não 1,06, que era o medidor.
+    expect(fromOklch).toBeGreaterThanOrEqual(4.5);
+    expect(fromOklch).toBeCloseTo(6.87, 1);
   });
 
   it('nenhum font-size abaixo de 11,5px em product.css', () => {

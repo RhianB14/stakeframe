@@ -11,27 +11,16 @@ import {
   type CalendarItem,
   type EventSearch,
 } from '../../packages/shared/src/index.js';
+// STK-F2-18 (PR-1): o medidor vive em tests/helpers/color.ts e é o MESMO que
+// o unit consome. A cópia local que existia aqui só entendia `rgb()` — para um
+// token `oklch()` ela casava os números como canais 0-255 e devolvia
+// luminância sem sentido (foi assim que `--text-tertiary` "mediu" 1,0598).
+import { contrastRatio } from '../helpers/color.js';
 
 const house = '10000000-0000-4000-8000-000000000001';
 const reserve = '10000000-0000-4000-8000-000000000002';
 const houseAccount = '10000000-0000-4000-8000-000000000003';
 const betId = '10000000-0000-4000-8000-000000000004';
-function luminance(color: string) {
-  const channels = color
-    .match(/\d+(?:\.\d+)?/g)
-    ?.slice(0, 3)
-    .map(Number);
-  if (!channels || channels.length !== 3) throw new Error(`Unsupported CSS color: ${color}`);
-  const [red, green, blue] = channels.map((channel) => {
-    const value = channel / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
-}
-function contrastRatio(foreground: string, background: string) {
-  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
-  return (values[0]! + 0.05) / (values[1]! + 0.05);
-}
 const emptyMetrics: ReportMetrics = {
   bets: 0,
   settledBets: 0,
