@@ -103,7 +103,12 @@ function parseRgb(body: string): LinearRgb {
 
 function parseHex(value: string): LinearRgb {
   const hex = value.slice(1);
-  const digits = hex.length === 3 || hex.length === 4 ? [...hex].map((c) => c + c) : hex.split('');
+  // `#rgb` e `#rgba` dobram cada dígito. Precisa ser `join('')`: um `map`
+  // devolve um array de pares de 2 caracteres (comprimento 3 para `#fff`),
+  // e o guard de comprimento abaixo rejeitaria a forma curta — que é a forma
+  // mais comum de escrever cor em teste.
+  const digits =
+    hex.length === 3 || hex.length === 4 ? [...hex].map((c) => c + c).join('') : hex;
   if (digits.length < 6 || digits.length % 3 !== 0) {
     throw new Error(`hex inválido: "${value}"`);
   }

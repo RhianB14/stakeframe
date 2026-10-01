@@ -98,12 +98,21 @@
   /* STK-F2-18 (PR-2): `--text-xs` e `--text-sm` valem 12px agora, e continuam
      separados de propósito. Eles não são tamanhos diferentes — são INTENÇÕES
      diferentes, e as 46 e 40 regras que os consomem não são intercambiáveis:
-     `--text-xs` é rótulo em CAPS, cabeçalho de tabela e legenda de
-     calendário; `--text-sm` é texto corrido pequeno. Colapsar os dois deixaria
-     a folha sem forma de dizer "isto é um rótulo", e a próxima pessoa que
-     precisasse de um rótulo menor voltaria inventando um hex cru. Dois nomes,
-     mesmo valor, uma intenção cada. */
-  --text-xs: 12px; /* rótulo em CAPS, cabeçalho de tabela, legenda */
+     `--text-xs` é rótulo em CAPS, cabeçalho de tabela, legenda de calendário
+     e o texto dos eixos do gráfico de análises; `--text-sm` é texto corrido
+     pequeno. Colapsar os dois deixaria a folha sem forma de dizer "isto é um
+     rótulo", e a próxima pessoa que precisasse de um rótulo menor voltaria
+     inventando um hex cru. Dois nomes, mesmo valor, uma intenção cada.
+
+     A exceção de "legenda de eixo pode ficar abaixo de 12px" foi avaliada e
+     NÃO foi usada: havia um caso abaixo de 12px de verdade, e subir o token
+     resolveu.
+     `.report-chart { font-size: var(--text-xs) }` alimenta os `<XAxis>` e
+     `<YAxis>` do recharts, que herdaram 11,5px na base — abaixo do piso que o
+     próprio E2E exige, e invisível para ele: o seletor de `smallText` do E2E
+     não casa nó de SVG. A diferença só apareceu ao ler quem consome o token
+     em vez de procurar a palavra "eixo" no CSS. */
+  --text-xs: 12px; /* rótulo em CAPS, cabeçalho de tabela, legenda, eixo */
   --text-sm: 12px; /* auxiliar, caption */
   --text-md: 13.5px; /* célula de tabela, label de campo */
   --text-body: 15px; /* corpo */

@@ -327,6 +327,18 @@ describe('camada de tokens (STK-F2-18)', () => {
     // Tolerância de 1/255 por canal: o arredondamento do rgb() é a única perda.
     expect(Math.abs(contrastRatio(asRgb, surfaceRgb) - fromOklch)).toBeLessThan(0.02);
 
+    /* A forma CURTA de hex, que é a mais escrita em teste e estava ausente
+       da cobertura. `#999` dobrando cada dígito é o mesmo `#999999`; sem esta
+       linha o `parseHex` aceitava só `#rrggbb`, o cabeçalho do módulo
+       prometia `#rgb`, e a promessa não era cumprida. O `toBe(6)` é exato
+       porque dobrar dígito não tem perda nenhuma — qualquer tolerância aqui
+       esconderia justamente o erro que o teste existe para pegar. */
+    expect(luminance('#999')).toBe(luminance('#999999'));
+    expect(luminance('#fff')).toBe(luminance('#ffffff'));
+    // E a forma curta continua caindo no mesmo cinza do token, dentro do
+    // arredondamento de 1/255 que o `rgb()` do Chromium também sofre.
+    expect(Math.abs(contrastRatio('#999', '#0a0a0a') - fromOklch)).toBeLessThan(0.1);
+
     // E o par real do token, medido: 6,87:1 — não 1,06, que era o medidor.
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
     expect(fromOklch).toBeCloseTo(6.87, 1);
