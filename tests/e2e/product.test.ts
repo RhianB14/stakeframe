@@ -510,7 +510,34 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     await expect(
       page.getByText('A tabela é mais larga que a tela.', { exact: false }),
     ).toBeVisible();
+    /* STK-F2-18 (PR-3): esta asserçãoAFFIRMAVA as 14 colunas + Abrir, mas a
+       tabela mostra 8 por padrão. As duas coisas são verdade e não podem ser
+       trocadas uma pela outra:
+
+       - as 14 são o que o USUÁRIO pode escolher ativar pelo painel;
+       - as 8 são o que a tabela MOSTRA sem nenhuma configuração.
+
+       Trocar 14 por 8 aqui teria feito o teste passar, mas jogaria fora a
+       única verificação de que o painel oferece as 14 e de que a ordem é a
+       aprovada pelo dono (STK-BETS-02). Por isso as duas afirmações ficam
+       separadas: o padrão é 8 + Abrir, e o painel oferece as 14. */
     await expect(page.locator('.bet-detail-table thead th')).toHaveText([
+      'Nº do bilhete',
+      'Data do jogo',
+      'Evento',
+      'Casa de aposta',
+      'Valor apostado',
+      'Odd',
+      'Retorno recebido',
+      'Resultado/status',
+      'Abrir',
+    ]);
+    // E o conjunto COMPLETO continua disponível: as 14 colunas aprovadas,
+    // na ordem do dono. A asserção antiga era a única que verificava isso,
+    // e trocá-la por "8 colunas" teria perdido essa cobertura de graça.
+    await page.getByRole('button', { name: /^Colunas/ }).click();
+    await expect(page.getByRole('group', { name: 'Escolher colunas da tabela' })).toBeVisible();
+    await expect(page.locator('.columns-panel-list label > span:first-of-type')).toHaveText([
       'Nº do bilhete',
       'Data do jogo',
       'Hora do jogo',
@@ -525,30 +552,58 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       'Retorno recebido',
       'Resultado/status',
       'ID técnico da aposta',
-      'Abrir',
     ]);
-    const row = page.locator('.bet-detail-table tbody tr').first();
-    await expect(row.locator('td').nth(0)).toContainText('#1');
-    await expect(row.locator('td').nth(1)).toContainText('21/09/2026');
-    await expect(row.locator('td').nth(2)).toContainText('17:00');
-    await expect(row.locator('td').nth(3)).toContainText('Aurora × Central');
-    await expect(row.locator('td').nth(4)).toContainText('Mais de 2,5');
-    await expect(row.locator('td').nth(5)).toContainText('Gols');
-    await expect(row.locator('td').nth(6)).toContainText('Simples');
-    await expect(row.locator('td').nth(7)).toContainText('Analista');
-    await expect(row.locator('td').nth(8)).toContainText('Bet365');
-    await expect(row.locator('td').nth(9)).toContainText('R$ 100,00');
-    await expect(row.locator('td').nth(10)).toContainText('2.00');
-    await expect(row.locator('td').nth(11)).toContainText('Não liquidado');
-    await expect(row.locator('td').nth(12)).toContainText('Pendente');
-    await expect(row.locator('td').nth(13)).toContainText(scheduledBet.id);
-    await page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }).click();
+    // O que é mostrado por padrão é um subconjunto do que é oferecido.
+    await expect(page.locator('.columns-panel-count')).toHaveText('8/14');
+    // O popover fecha ao clicar fora; fechar aqui para as asserções seguintes
+    // lerem a tabela, não o painel.
+    await page.locator('.bet-detail-table thead th').first().click();
+    await expect(page.locator('.bet-detail-table tbody tr').first().locator('td')).toHaveText([
+      /#1/,
+      /21\/09\/2026/,
+      /Aurora × Central/,
+      /Bet365/,
+      /R\$ 100,00/,
+      /2\.00/,
+      /Não liquidado/,
+      /Pendente/,
+      // A nona célula é a de abrir, como a nona coluna do cabeçalho.
+      /Ver/,
+    ]);
+    const multipleRow = page.locator('.bet-detail-table tbody tr').nth(1);
+    /* STK-F2-18 (PR-3): por `data-column`, não por índice. Com o painel de
+       colunas a posição deixou de ser fixa, e um `td.nth(2)` apontaria para
+       outra coluna assim que alguém escondesse uma. A Fase 3 já criou
+       `data-column` para isto — este é o lugar de usá-lo. */
+    await expect(multipleRow.locator('[data-column="gameDate"]')).toContainText(
+      'Vários jogos/horários',
+    );
+    await expect(multipleRow.locator('[data-column="event"]')).toContainText(
+      'Bandeirantes x Litoral',
+    );
+    // STK-F2-18 (PR-3): o botão de copiar o ID técnico mora na coluna
+    // `ID técnico da aposta`, que NÃO está no conjunto padrão de 8. No
+    // desktop o cartão que também o contém tem `display: none`, então a
+    // tabela é o único caminho — e ligar a coluna é o que o usuário faz
+    // para chegar lá. O teste liga pelo painel, que é o mesmo caminho da
+    // pessoa, e prova as duas coisas de uma vez: que a coluna existe e que
+    // ativá-la revela o botão.
+    await page.getByRole('button', { name: /^Colunas/ }).click();
+    await page
+      .locator('.columns-panel-list label', { hasText: 'ID técnico da aposta' })
+      .locator('input')
+      .check();
+    await expect(page.locator('.bet-detail-table thead th')).toContainText([
+      'ID técnico da aposta',
+    ]);
+    await page.locator('.bet-detail-table thead th').first().click();
+    await page
+      .getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' })
+      .first()
+      .click();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(scheduledBet.id);
-    const multipleRow = page.locator('.bet-detail-table tbody tr').nth(1);
-    await expect(multipleRow.locator('td').nth(1)).toContainText('Vários jogos/horários');
-    await expect(multipleRow.locator('td').nth(2)).toHaveText('—');
     await page.getByRole('button', { name: 'Ver aposta Bandeirantes x Litoral' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Bandeirantes x Litoral');
@@ -565,9 +620,17 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       element.scrollLeft = 0;
     });
     await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
-    await scrollContainer.evaluate((element) => {
+    /* STK-F2-18 (PR-3): o aviso de estouro e a rolagem horizontal são a MESMA
+       promessa. O aviso diz "tem mais conteúdo à direita"; se a rolagem não
+       movesse, a promessa seria falsa e o aviso apenas irritante. Antes esta
+       parte só tirava screenshot — que não prova movimento nenhum. Agora exige
+       que `scrollLeft` chegue ao fim, que é o que a pessoa de fato faz. */
+    const scrollEnd = await scrollContainer.evaluate((element) => {
       element.scrollLeft = element.scrollWidth;
+      return { left: element.scrollLeft, max: element.scrollWidth - element.clientWidth };
     });
+    expect(scrollEnd.max).toBeGreaterThan(0);
+    expect(scrollEnd.left).toBe(scrollEnd.max);
     await page.screenshot({ path: info.outputPath('bets-list-columns-right.png'), fullPage: true });
   }
 });

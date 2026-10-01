@@ -1183,11 +1183,24 @@
 }
 .bet-detail-table {
   /* STK-F2-18 (Fase 3): era `min-width: 1640px` fixo, dimensionado para as
-     14 colunas. Com o painel de colunas a largura depende de quantas estão
-     visíveis, e um piso fixo forçaria rolagem horizontal mesmo com 3
-     colunas escolhidas. O piso agora é proporcional: nenhuma coluna pode
-     ser espremida abaixo de um alvo legível. */
-  min-width: min(100%, 148px * var(--bet-columns, 8));
+     14 colunas. Com o painel de colunas a largura passou a depender de quantas
+     estão visíveis, e um piso fixo forçaria rolagem horizontal mesmo com 3
+     colunas escolhidas. O piso continua proporcional ao número de colunas.
+
+     STK-F2-18 (PR-3): era `min(100%, 148px * var(--bet-columns))`. O `min()`
+     com `100%` ERA a regressão inteira: ele garante que a largura nunca
+     ultrapasse o contêiner — e uma tabela que nunca ultrapassa o contêiner é
+     justamente a tabela que nunca rola. Medido no desktop de 1440px: com o
+     conjunto padrão de 8 colunas mais a de abrir, o piso valia 1184px contra
+     1088px úteis, mas `min()` escolhia os 1088px, a rolagem horizontal nunca
+     engatava e o aviso "A tabela é mais larga que a tela." sumia. O usuário
+     perdia a única pista de que existia conteúdo à direita.
+
+     Sem o `min()`, o piso volta a ser um piso: 148px por coluna, com os
+     1184px valendo só quando o conteúdo realmente precisa disso. Com 8
+     colunas a tabela estoura em 1440px e a rolagem funciona; com 3 colunas
+     escolhidas o piso fica em 444px e a tabela cabe, sem rolagem forçada. */
+  min-width: calc(148px * var(--bet-columns, 8));
   table-layout: auto;
 }
 .bet-detail-table th,

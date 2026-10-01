@@ -427,6 +427,26 @@ export function BetsPage({
     setter(value);
     setPage(1);
   };
+  // STK-F2-18 (PR-3): a dica de rolagem passa a ser medida, não estimada.
+  // Antes ela dependia de `columns.length > 8`, um proxy que mentia: oito
+  // colunas cabem na largura útil em algumas janelas e não cabem em outras,
+  // e o piso de largura do CSS não era consultado por ninguém. Agora o aviso
+  // aparece quando `scrollWidth` realmente passa de `clientWidth`, que é a
+  // condição de fato. Redimensionar a janela ou trocar colunas reavalia.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || compact) {
+      setOverflows(false);
+      return;
+    }
+    const measure = () => setOverflows(element.scrollWidth > element.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [compact, columns.length, sortedRows.length]);
   return (
     <section className="panel">
       <div className="section-heading">
@@ -510,12 +530,14 @@ export function BetsPage({
         ) : (
           <>
             {!compact ? (
-              /* A dica só existe quando a tabela AINDA é mais larga que a área
-                 útil — com o painel de colunas ela não é mais a verdade em
-                 geral, e dizer o contrário de uma tabela que cabe é pior que
-                 não dizer nada. `aria-hidden` porque a região rolável já
-                 é focável e anuncia o seu próprio alcance. */
-              columns.length > 8 ? (
+              /* STK-F2-18 (PR-3): a condição era `columns.length > 8`, um
+                 proxy que mentia em duas direções — oito colunas cabem numa
+                 janela larga e não cabem numa estreita, e o proxy não sabia
+                 de nada disso. A dica agora depende da geometria real
+                 (`scrollWidth > clientWidth`), que é o que o usuário
+                 sente. `aria-hidden` porque a região rolável já é focável e
+                 anuncia o seu próprio alcance. */
+              overflows ? (
                 <p className="bet-table-scroll-hint">
                   A tabela é mais larga que a tela. Deslize horizontalmente para ver as demais
                   colunas, ou use o painel de colunas para escolher quais exibir.
@@ -535,6 +557,7 @@ export function BetsPage({
               </div>
             ) : null}
             <div
+              ref={scrollRef}
               className={`table-scroll${compact ? '' : ' bet-table-desktop'}`}
               role="region"
               aria-label="Tabela de apostas"
