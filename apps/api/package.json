@@ -18,7 +18,7 @@
     "@stakeframe/shared": "workspace:*",
     "better-auth": "1.7.3",
     "drizzle-orm": "0.45.2",
-    "fastify": "5.12.3",
+    "fastify": "5.12.5",
     "fastify-type-provider-zod": "7.0.0",
     "openapi-types": "12.1.3",
     "posthog-node": "5.54.1",
