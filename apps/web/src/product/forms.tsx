@@ -1,6 +1,8 @@
 import { cloneElement, useId, useState, type ReactElement } from 'react';
 import {
+  cents,
   formatBRL,
+  formatBRLWhenPresent,
   suggestedReturn,
   type Workspace,
   type CatalogItem,
@@ -9,7 +11,13 @@ import {
   type ImportDetail,
 } from '@stakeframe/shared';
 import { CommandForm } from './actions.js';
-import { decimalInput, localNow, localInstant, type CommandInput } from './api.js';
+import {
+  decimalInput,
+  decimalInputOdds,
+  localNow,
+  localInstant,
+  type CommandInput,
+} from './api.js';
 import { Button } from '../components/ui/button.js';
 
 export function Field({
@@ -55,6 +63,9 @@ export function InitializeForm({
       submitLabel="Confirmar saldos iniciais"
       onSubmit={() => ({
         type: 'bankroll.initialize',
+        // STK-UX-DADOS — R2 com exceção legítima: aqui o zero é o ESTADO
+        // INICIAL real da conta (saldo em aberto no cadastro), não a ausência
+        // de um dado apurado. Fica o '0' explícito.
         reserve: decimalInput(reserve || '0'),
         unitPercent: decimalInput(percent),
         balances: houses.map((house) => ({
@@ -581,7 +592,7 @@ export function BetForm({
                     bookmakerId,
                     tipsterId: tipsterId || null,
                     stake: decimalInput(stake),
-                    odds: odds.replace(',', '.'),
+                    odds: decimalInputOdds(odds),
                     placedAt: localInstant(placedAt),
                     freebetId: effectiveOrigin === 'real' ? null : freebetId || null,
                     reference,
@@ -595,7 +606,7 @@ export function BetForm({
                 bookmakerId,
                 tipsterId: tipsterId || null,
                 stake: decimalInput(stake),
-                odds: odds.replace(',', '.'),
+                odds: decimalInputOdds(odds),
                 placedAt: localInstant(placedAt),
                 freebetId: freebetId || null,
                 reference,
@@ -888,11 +899,17 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
   >('win');
   const [principal, setPrincipal] = useState(bet.remaining);
   const suggested = (value: typeof outcome) =>
-    value === 'cashout' || value === 'partial_cashout'
+    // STK-UX-DADOS (R2) — sem principal aberto ou sem odd não há base para
+    // sugerir: devolvemos vazio em vez de calcular sobre '0.00'/'1.00' (o
+    // `suggestedReturn` ainda lançaria INVALID_STAKE com principal zero).
+    value === 'cashout' ||
+    value === 'partial_cashout' ||
+    bet.remaining === null ||
+    bet.odds === null
       ? ''
       : suggestedReturn(
-          bet.remaining ?? '0.00',
-          bet.odds ?? '1.00',
+          bet.remaining,
+          bet.odds,
           value,
           !!bet.freebetId,
           bet.freebetStakeReturned ?? false,
@@ -900,23 +917,54 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
   const [amount, setAmount] = useState(() => suggested('win'));
   const [at, setAt] = useState(localNow);
   const [reason, setReason] = useState('');
+  // STK-UX-DADOS — R2 no ponto que mais dói: o DADO GRAVADO.
+  //
+  // O domínio é explícito e NÃO admite 0 como "principal encerrado":
+  // `closedPrincipal` é `positiveMoneySchema` (recusa zero) e o servidor exige
+  // `principal === remaining` em toda liquidação que não seja cashout parcial
+  // (packages/db/src/finance-commands.ts). Ou seja: o valor NÃO é livre — para
+  // win/loss/void/half_*/cashout total ele É o principal ainda aberto, e para
+  // cashout parcial ele é a fração declarada, obrigatoriamente > 0 e < total.
+  //
+  // A decisão aqui é "usar o padrão do domínio", com o padrão escrito e
+  // documentado: `bet.remaining`. Um cashout parcial não tem padrão legítimo
+  // (a fração é informação do usuário, não derivável), então o campo é
+  // obrigatório e o formulário recusa com a mesma mensagem do Cashout. O
+  // `?? '0.00'` que existia gravava R$ 0,00 a partir de dado ausente — e, por
+  // `positiveMoneySchema`, esse R$ 0,00 era recusado pelo servidor: o usuário
+  // recebia "Informe..." sem entender por quê, e qualquer afrouxá-lo passaria
+  // a escrever zero no registro financeiro.
+  const remaining = bet.remaining;
+  const needsDeclaredPrincipal = outcome === 'partial_cashout';
+  const principalValue = needsDeclaredPrincipal ? principal : remaining;
   return (
     <CommandForm
       onDone={onDone}
       submitLabel="Confirmar liquidação"
-      onSubmit={() => ({
-        type: 'bet.settle',
-        id: bet.id,
-        outcome,
-        closedPrincipal: decimalInput(principal ?? '0.00'),
-        returnAmount: decimalInput(amount),
-        settledAt: localInstant(at),
-        reason,
-      })}
+      onSubmit={() => {
+        if (remaining === null)
+          throw new Error(
+            'Esta aposta ainda não tem valor registrado. Complete o valor apostado antes de liquidar.',
+          );
+        if (principalValue === null || principalValue.trim() === '')
+          throw new Error('Informe quanto do valor aberto foi encerrado.');
+        const closedPrincipal = decimalInput(principalValue);
+        if (cents(closedPrincipal) <= 0n)
+          throw new Error('Informe quanto do valor aberto foi encerrado.');
+        return {
+          type: 'bet.settle',
+          id: bet.id,
+          outcome,
+          closedPrincipal,
+          returnAmount: decimalInput(amount),
+          settledAt: localInstant(at),
+          reason,
+        };
+      }}
     >
       <p className="form-intro">
-        Principal ainda aberto: <strong>{formatBRL(bet.remaining ?? '0.00')}</strong>. Confira o
-        valor efetivamente recebido na casa.
+        Principal ainda aberto: <strong>{formatBRLWhenPresent(remaining)}</strong>. Confira o valor
+        efetivamente recebido na casa.
       </p>
       <div className="form-grid">
         <Field label="Resultado">

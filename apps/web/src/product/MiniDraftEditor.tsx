@@ -3,6 +3,7 @@ import {
   classifyTicketKind,
   deriveBetOrigin,
   formatBRL,
+  normalizeDecimalInput,
   potentialReturnFor,
   type TicketKind,
 } from '@stakeframe/shared';
@@ -18,8 +19,6 @@ import type { DraftControlsProps } from './drafts.js';
 import { Field } from './forms.js';
 import { MobilePicker } from './MobilePicker.js';
 import { COUNTRY_OPTIONS, SPORT_PICKER_OPTIONS, type PickerOption } from './miniapp-options.js';
-
-const MONEY = /^\d{1,12}(\.\d{1,2})?$/;
 
 const receivedFormat = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
@@ -229,13 +228,15 @@ export function MiniDraftEditor({
     detail.matches.captionBookmakerId,
   ]);
 
+  const stakeDecimal = normalizeDecimalInput(stake);
+  const oddsDecimal = normalizeDecimalInput(odds, 4);
   const compatibleCredits = useMemo(
     () =>
       credits.filter((item) => {
-        if (!MONEY.test(stake)) return true;
-        return origin === 'freebet' ? item.amount === stake : item.amount !== stake;
+        if (stakeDecimal === null) return true;
+        return origin === 'freebet' ? item.amount === stakeDecimal : item.amount !== stakeDecimal;
       }),
-    [credits, origin, stake],
+    [credits, origin, stakeDecimal],
   );
 
   useEffect(() => {
@@ -251,8 +252,8 @@ export function MiniDraftEditor({
   }));
   const selectedCredit = credits.find((item) => item.id === credit);
   const potentialReturn =
-    origin && MONEY.test(stake)
-      ? potentialReturnFor(origin, stake, odds, selectedCredit?.amount ?? null)
+    origin && stakeDecimal !== null
+      ? potentialReturnFor(origin, stakeDecimal, oddsDecimal ?? '', selectedCredit?.amount ?? null)
       : null;
 
   const chooseOrigin = (next: 'real' | 'freebet' | 'hibrida') => {
@@ -287,6 +288,14 @@ export function MiniDraftEditor({
     setBusy(true);
     setError(null);
     try {
+      // STK-UX-DADOS — o par normalizado (pt-BR -> canônico) vem do escopo do
+      // componente e é o mesmo que alimenta a lista de créditos e a prévia de
+      // retorno abaixo. Antes, a string crua ia para o servidor e "200,00" (o
+      // que o teclado BR entrega) era recusado por positiveMoneySchema com
+      // "Informe um valor apostado válido.". Nenhum regex do servidor foi
+      // afrouxado: mudou a entrada, não a regra. O mesmo par normalizado
+      // alimenta a comparação com a linha de base e o PATCH, para não gravar
+      // uma segunda forma do mesmo número.
       if (!origin) throw new Error('Escolha a origem da aposta.');
       if (!status) throw new Error('Escolha o status da aposta.');
       if (!bookmaker) throw new Error('Escolha a casa de aposta.');
@@ -294,8 +303,8 @@ export function MiniDraftEditor({
         throw new Error('Informe a data e a hora do jogo juntas.');
       if ((origin === 'freebet' || origin === 'hibrida') && !credit)
         throw new Error('Escolha um crédito de aposta grátis disponível para esta casa.');
-      if (!MONEY.test(stake)) throw new Error('Informe um valor apostado válido.');
-      if (!/^\d{1,12}(\.\d{1,4})?$/.test(odds)) throw new Error('Informe uma odd válida.');
+      if (stakeDecimal === null) throw new Error('Informe um valor apostado válido.');
+      if (oddsDecimal === null) throw new Error('Informe uma odd válida.');
       if (
         selections.some(
           (item) => !item.event?.trim() || !item.selection?.trim() || !item.market?.trim(),
@@ -319,8 +328,8 @@ export function MiniDraftEditor({
           bookmaker,
           tipster,
           eventAt: eventDate && eventTime ? localInstant(`${eventDate}T${eventTime}`) : null,
-          stake,
-          odds,
+          stake: stakeDecimal,
+          odds: oddsDecimal,
           sport,
           tournament,
           country,
