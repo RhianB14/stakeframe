@@ -109,7 +109,6 @@ const EVENTS = [
   },
 ];
 
-const SPORT_BY_MARKET = { Resultado: '1X2', Gols: 'Gols', Totais: 'Totais' };
 const TICKET_KIND_LABEL = { simple: 'Simples', multiple: 'Múltipla', betbuild: 'BetBuild' };
 
 // ─────────────────────────────────────────────────────────────────────────────
