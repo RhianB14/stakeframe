@@ -485,8 +485,7 @@ function Overview({
           {workspace.accounts.map((account) => (
             <div className="account-card" key={account.id}>
               <span className="account-icon" aria-hidden="true">
-                {account.kind === 'reserve' ? 'R$'
-                  : account.name.trim().charAt(0).toUpperCase()}
+                {account.kind === 'reserve' ? 'R$' : account.name.trim().charAt(0).toUpperCase()}
               </span>
               <div>
                 <span>{account.name}</span>
@@ -519,9 +518,7 @@ export function Metric({
 }) {
   const negative = value.includes('−');
   return (
-    <div
-      className={`metric-card${featured ? ' featured' : ''}${commitment ? ' committed' : ''}`}
-    >
+    <div className={`metric-card${featured ? ' featured' : ''}${commitment ? ' committed' : ''}`}>
       <span>{label}</span>
       <strong className={negative ? 'negative' : undefined}>{value}</strong>
       <small>{detail}</small>

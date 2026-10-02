@@ -55,11 +55,16 @@ async function check(name, { nav, viewport }) {
   }
 
   const result = await page.evaluate((helperSrc) => {
-    const ratio = new Function(`${helperSrc}; return (a, b) => { const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b); const hi = Math.max(lum(a), lum(b)), lo = Math.min(lum(a), lum(b)); return (hi + 0.05) / (lo + 0.05); };`)();
+    const ratio = new Function(
+      `${helperSrc}; return (a, b) => { const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b); const hi = Math.max(lum(a), lum(b)), lo = Math.min(lum(a), lum(b)); return (hi + 0.05) / (lo + 0.05); };`,
+    )();
     const parse = (v) => {
       const m = v.match(/rgba?\(([^)]+)\)/);
       if (!m) return null;
-      const p = m[1].split(/[,\s/]+/).filter(Boolean).map(Number);
+      const p = m[1]
+        .split(/[,\s/]+/)
+        .filter(Boolean)
+        .map(Number);
       return { rgb: p.slice(0, 3), a: p.length > 3 ? p[3] : 1 };
     };
     const bgOf = (el) => {
@@ -74,7 +79,10 @@ async function check(name, { nav, viewport }) {
     const out = { falhas: [], colunas: [], alvos: [], cores: {}, texto: '' };
 
     // 1. Contraste de TODO texto visível, no fundo real.
-    const walker = document.createTreeWalker(document.querySelector('#product-main'), NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(
+      document.querySelector('#product-main'),
+      NodeFilter.SHOW_TEXT,
+    );
     let node;
     const vistos = new Set();
     while ((node = walker.nextNode())) {
@@ -96,7 +104,9 @@ async function check(name, { nav, viewport }) {
       const bold = Number(st.fontWeight) >= 700;
       const min = size >= 24 || (size >= 18.66 && bold) ? 3 : 4.5;
       if (r < min) {
-        out.falhas.push(`contraste ${r.toFixed(2)}:1 (min ${min}) em "${txt.slice(0, 34)}" ${size}px`);
+        out.falhas.push(
+          `contraste ${r.toFixed(2)}:1 (min ${min}) em "${txt.slice(0, 34)}" ${size}px`,
+        );
       }
     }
 
@@ -126,7 +136,9 @@ async function check(name, { nav, viewport }) {
       const r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
       if (r.height < 44) {
-        out.alvos.push(`${(el.textContent ?? el.getAttribute('aria-label') ?? el.className).trim().slice(0, 30)}: ${Math.round(r.height)}px`);
+        out.alvos.push(
+          `${(el.textContent ?? el.getAttribute('aria-label') ?? el.className).trim().slice(0, 30)}: ${Math.round(r.height)}px`,
+        );
       }
     }
 
@@ -134,7 +146,14 @@ async function check(name, { nav, viewport }) {
     //    `color`: o chip e o cartão comprometido são preenchimentos, e ler
     //    `color` devolvia branco — um alarme falso que treina a ignorar o
     //    verificador. Foi o que aconteceu na primeira execução.
-    for (const sel of ['.metric-card.committed', '.metric-card.metric-tone-positive strong', '.metric-card.metric-tone-negative strong', '.calendar-chip.chip-open', '.calendar-chip.chip-settled', '.journal-table tr.journal-reversed']) {
+    for (const sel of [
+      '.metric-card.committed',
+      '.metric-card.metric-tone-positive strong',
+      '.metric-card.metric-tone-negative strong',
+      '.calendar-chip.chip-open',
+      '.calendar-chip.chip-settled',
+      '.journal-table tr.journal-reversed',
+    ]) {
       const el = document.querySelector(sel);
       if (el) out.cores[sel] = getComputedStyle(el).backgroundColor;
     }
@@ -147,18 +166,28 @@ async function check(name, { nav, viewport }) {
 
   if (errors.length) problems.push(`${name}: erro de console — ${errors.slice(0, 2).join(' | ')}`);
   if (result.falhas.length) problems.push(`${name}: ${result.falhas.length} falha(s) de contraste`);
-  if (result.transbordo > 0) problems.push(`${name}: transbordo horizontal de ${result.transbordo}px`);
+  if (result.transbordo > 0)
+    problems.push(`${name}: transbordo horizontal de ${result.transbordo}px`);
   const badColumns = result.colunas.filter((c) => c.numerica && c.desvioPx > 2);
   if (badColumns.length) {
-    problems.push(`${name}: coluna numérica desalinhada — ${badColumns.map((c) => `${c.coluna} (${c.desvioPx}px)`).join(', ')}`);
+    problems.push(
+      `${name}: coluna numérica desalinhada — ${badColumns.map((c) => `${c.coluna} (${c.desvioPx}px)`).join(', ')}`,
+    );
   }
   const small = [...new Set(result.alvos)];
-  if (small.length) notes.push(`${name}: ${small.length} alvo(s) < 44px — ${small.slice(0, 4).join(' · ')}`);
+  if (small.length)
+    notes.push(`${name}: ${small.length} alvo(s) < 44px — ${small.slice(0, 4).join(' · ')}`);
 
   console.log(`\n── ${name}`);
-  console.log(`   contraste: ${result.falhas.length === 0 ? 'todas as amostras >= minimo' : result.falhas.slice(0, 5).join(' ; ')}`);
-  console.log(`   colunas numericas: ${result.colunas.filter((c) => c.numerica).length} (desalinhadas: ${badColumns.length})`);
-  console.log(`   alvos < 44px: ${small.length}${small.length ? ` — ${small.slice(0, 3).join(' · ')}` : ''}`);
+  console.log(
+    `   contraste: ${result.falhas.length === 0 ? 'todas as amostras >= minimo' : result.falhas.slice(0, 5).join(' ; ')}`,
+  );
+  console.log(
+    `   colunas numericas: ${result.colunas.filter((c) => c.numerica).length} (desalinhadas: ${badColumns.length})`,
+  );
+  console.log(
+    `   alvos < 44px: ${small.length}${small.length ? ` — ${small.slice(0, 3).join(' · ')}` : ''}`,
+  );
   console.log(`   transbordo: ${result.transbordo}px`);
   console.log(`   cores: ${JSON.stringify(result.cores)}`);
   await page.close();

@@ -926,8 +926,8 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
           <div>
             <h2>Contas e saldos</h2>
             <p>
-              O saldo que cada casa mostra contra o valor confirmado aqui. A diferença entre as
-              duas colunas é a conciliação que ainda não foi feita.
+              O saldo que cada casa mostra contra o valor confirmado aqui. A diferença entre as duas
+              colunas é a conciliação que ainda não foi feita.
             </p>
           </div>
         </div>
@@ -1092,7 +1092,9 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
                             </span>
                           </td>
                           <td className="num">
-                            <b className={net < 0n ? 'negative' : net > 0n ? 'positive' : undefined}>
+                            <b
+                              className={net < 0n ? 'negative' : net > 0n ? 'positive' : undefined}
+                            >
                               {centsLabel(net)}
                             </b>
                             <small className="journal-sign">

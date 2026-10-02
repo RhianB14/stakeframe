@@ -198,9 +198,7 @@ function journalPage(url) {
       reversed: true,
       postings: target.postings.map((posting) => ({
         ...posting,
-        amount: posting.amount.startsWith('-')
-          ? posting.amount.slice(1)
-          : `-${posting.amount}`,
+        amount: posting.amount.startsWith('-') ? posting.amount.slice(1) : `-${posting.amount}`,
       })),
     });
     seq += 1;
@@ -249,9 +247,8 @@ function calendarPage(url) {
     items: items.slice(start, start + pageSize),
     total: items.length,
     distinctBets,
-    pendingSelections: data.calendar.filter(
-      (item) => item.selection.dateStatus !== 'confirmed',
-    ).length,
+    pendingSelections: data.calendar.filter((item) => item.selection.dateStatus !== 'confirmed')
+      .length,
     page,
     pageSize,
   };

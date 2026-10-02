@@ -78,16 +78,16 @@ describe('journalNetEffect', () => {
   });
 
   it('nets a transfer between two own accounts to zero', () => {
-    expect(
-      journalNetEffect([posting('500.00', 'Betano'), posting('-500.00', 'Reserva')]),
-    ).toBe(0n);
+    expect(journalNetEffect([posting('500.00', 'Betano'), posting('-500.00', 'Reserva')])).toBe(0n);
   });
 
   it('nets a deposit that moves money out of the reserve and into a bookmaker to zero', () => {
     // Um depósito entra no produto, mas sai da reserva: o efeito sobre a
     // BANCA é zero. A soma dos postings é o que separa "dinheiro chegou" de
     // "dinheiro apareceu", e o razão precisa mostrar a verdade contábil.
-    expect(journalNetEffect([posting('2000.00', 'Betano'), posting('-2000.00', 'Reserva')])).toBe(0n);
+    expect(journalNetEffect([posting('2000.00', 'Betano'), posting('-2000.00', 'Reserva')])).toBe(
+      0n,
+    );
   });
 
   it('counts a balance confirmed directly on the reserve as a real increase', () => {

@@ -1706,7 +1706,9 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
      `sport:futebol` e `includeEstimated=true`. As rotas de /reports são
      mockadas, então o período precisa apenas passar na validação — ele não
      filtra os dados que o teste compara. */
-  await page.getByLabel('Data inicial da análise').fill(saoPauloDate(new Date()).slice(0, 8) + '01');
+  await page
+    .getByLabel('Data inicial da análise')
+    .fill(saoPauloDate(new Date()).slice(0, 8) + '01');
   await page.getByLabel('Data final da análise').fill(saoPauloDate(new Date()));
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();

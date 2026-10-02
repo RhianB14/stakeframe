@@ -107,8 +107,7 @@ function parseHex(value: string): LinearRgb {
   // devolve um array de pares de 2 caracteres (comprimento 3 para `#fff`),
   // e o guard de comprimento abaixo rejeitaria a forma curta — que é a forma
   // mais comum de escrever cor em teste.
-  const digits =
-    hex.length === 3 || hex.length === 4 ? [...hex].map((c) => c + c).join('') : hex;
+  const digits = hex.length === 3 || hex.length === 4 ? [...hex].map((c) => c + c).join('') : hex;
   if (digits.length < 6 || digits.length % 3 !== 0) {
     throw new Error(`hex inválido: "${value}"`);
   }
@@ -121,7 +120,10 @@ function parseHex(value: string): LinearRgb {
 }
 
 function parseOklch(body: string): LinearRgb {
-  const parts = body.split('/')[0]!.split(/[\s,]+/).filter(Boolean);
+  const parts = body
+    .split('/')[0]!
+    .split(/[\s,]+/)
+    .filter(Boolean);
   if (parts.length < 3) throw new Error(`oklch() incompleto: "${body}"`);
   const [encodedR, encodedG, encodedB] = oklabToRgb(
     clamp01(number(parts[0]!)),

@@ -121,7 +121,12 @@ function Evolution({ report }: { report: PerformanceReport }) {
                     ) : null
                   }
                 />
-                <Bar dataKey="period" name="Resultado" fill={chart['--accent-ink']} isAnimationActive={false} />
+                <Bar
+                  dataKey="period"
+                  name="Resultado"
+                  fill={chart['--accent-ink']}
+                  isAnimationActive={false}
+                />
               </BarChart>
             ) : (
               <LineChart data={series} margin={{ left: 12, right: 12, top: 12, bottom: 8 }}>

@@ -39,8 +39,7 @@ export function OverviewReport({ version }: { version: number }) {
   const month = today.slice(0, 7);
   const query = useQuery({
     queryKey: ['product', 'overview-report', month, version],
-    queryFn: () =>
-      request(`/api/v1/reports?from=${month}-01&to=${today}`, reportSchema),
+    queryFn: () => request(`/api/v1/reports?from=${month}-01&to=${today}`, reportSchema),
   });
   const chart = readChartTokens();
   // Acumulado em CENTAVOS (BigInt) e só convertido no fim: somar `Number`
@@ -49,7 +48,9 @@ export function OverviewReport({ version }: { version: number }) {
     if (!query.data) return [];
     let running = 0n;
     return query.data.timeline.map((bucket) => {
-      running += BigInt(bucket.metrics.profit.replace('.', '').replace('-', '')) * (bucket.metrics.profit.startsWith('-') ? -1n : 1n);
+      running +=
+        BigInt(bucket.metrics.profit.replace('.', '').replace('-', '')) *
+        (bucket.metrics.profit.startsWith('-') ? -1n : 1n);
       return {
         date: bucket.date,
         accumulated: Number(running) / 100,
