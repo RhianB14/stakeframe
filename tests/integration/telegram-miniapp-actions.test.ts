@@ -186,6 +186,18 @@ beforeEach(async () => {
     balances: [{ bookmakerId: await houseId(), amount: '500.00' }],
     unitPercent: '1.00',
   });
+  // A unidade é devida no mês da aposta (finance-commands.ts:56) e só o mês
+  // corrente nasce sozinho, em ensureCurrentUnit. O placedAt destas extrações
+  // vem do texto visual do comprovante (automatic-import.ts:196), e o rascunho
+  // deste arquivo traz 17/09 — setembro precisa da unidade declarada, senão
+  // allowMissingUnit:false esbarra em UNIT_REQUIRED. O valor é 1% da reserva,
+  // igual à unidade inicial; nenhum assert deste arquivo lê o valor.
+  await run({
+    type: 'unit.set',
+    month: '2026-09',
+    amount: '5.00',
+    reason: 'Unidade de setembro conferida pelo cenário do Mini App',
+  });
   const getOwner = vi.fn(async (headers: Headers) =>
     headers.get('cookie')?.includes('session=fake')
       ? { user: { id: 'fixture-owner' }, status: 'active' }

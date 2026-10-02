@@ -137,6 +137,17 @@ beforeAll(async () => {
     ],
     unitPercent: '1.00',
   });
+  // A unidade é devida no mês da aposta (finance-commands.ts:56) e o mês corrente
+  // é a única que nasce sozinha, em ensureCurrentUnit. As apostas deste relatório são
+  // todas de setembro, então setembro precisa da sua unidade declarada — senão
+  // allowMissingUnit:false esbarra em UNIT_REQUIRED. O valor é 1% da reserva, a mesma
+  // regra que a unidade inicial usa; nenhum assert deste arquivo depende dele.
+  await run({
+    type: 'unit.set',
+    month: '2026-09',
+    amount: '100.00',
+    reason: 'Unidade de setembro conferida pelo cenário de splits',
+  });
   const freebet = await run({
     type: 'freebet.create',
     bookmakerId: pinnacle,
