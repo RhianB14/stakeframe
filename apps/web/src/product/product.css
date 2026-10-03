@@ -48,13 +48,15 @@
   flex-direction: column;
 }
 .miniapp-shell .product-content {
-  /* STK-F2-18: esta regra herdou a reserva da barra lateral (`--shell-w`).
-     No Mini App NÃO existe barra lateral: em 412px de viewport o conteúdo
-     caía para 164px, o topbar não cabia nessa largura e transbordava para
-     441px. Documento mais largo que a viewport faz o navegador ampliar o
+  /* STK-F2-18 / UX-DADOS: esta regra herdou a reserva da barra lateral
+     (`--shell-w`). No Mini App NÃO existe barra lateral: em 412px de viewport
+     o conteúdo caía para 164px, o topbar não cabia nessa largura e transbordava
+     para 441px. Documento mais largo que a viewport faz o navegador ampliar o
      ICB, e `position: fixed; bottom: 0` passa a ancorar em 897px em vez de
      839px — o centro dos links da barra fica abaixo da dofra e o clique
-     aterrissa em `.product-shell` em vez do link. Largura cheia, como antes. */
+     aterrissa em `.product-shell` em vez do link. Largura cheia, como antes.
+     STK-F3-01 introduziu `--shell-w` na casca nova; aqui a reserva é zerada
+     de propósito, e é por isso que a regra continua existindo. */
   margin-left: 0;
   width: 100%;
   min-width: 0;
@@ -713,6 +715,393 @@
   display: flex;
   flex-direction: column;
 }
+/* ==========================================================================
+   STK-F3-01 — a casca nova: barra superior + sidebar com 3 modos.
+
+   A largura que a sidebar RESERVA é publicada aqui, por seletor de classe,
+   e ela espelha `sidebarMetrics` em sidebar-mode.ts: 232px no expandido e
+   56px nos dois recolhidos. A folha e a lógica dizem o mesmo número em dois
+   lugares porque são o MESMO número — e a duplicata é o que impede o hover
+   de deslocar o conteúdo: o hover reserva 56px, não 232px.
+
+   A largura que a sidebar TEM é outra, e é a única do produto em que as
+   duas medidas divergem de propósito (`--sidebar-current-w`).
+
+   Por que classe e não `style={{}}` nem `attr()`: o card proíbe estilo
+   inline, e `attr(data-x type(<length>))` ainda não é confiável entre os
+   navegadores do projeto. Uma classe por modo é a forma que a folha
+   entende em qualquer um deles.
+   ========================================================================== */
+.sidebar-mode-expanded {
+  --sidebar-w-active: var(--sidebar-w);
+}
+.sidebar-mode-collapsed,
+.sidebar-mode-hover {
+  --sidebar-w-active: var(--sidebar-w-collapsed);
+}
+.product-sidebar {
+  /* A largura que a sidebar TEM. No hover vale 56px em repouso e 232px
+     sobre o mouse — ver a regra de hover mais abaixo. */
+  --sidebar-current-w: var(--sidebar-w-active, var(--shell-w));
+  width: var(--sidebar-current-w);
+  /* Abaixo da barra superior, não do topo da janela. */
+  top: var(--topbar-github-h);
+  padding-top: 18px;
+  padding-bottom: 12px;
+  overflow: hidden;
+  transition: width 0.15s;
+  z-index: 30;
+}
+/* O modo recolhido e o hover são a MESMA largura em repouso — 56px. A
+   diferença está no que acontece ao passar o mouse, não no repouso. */
+.product-sidebar[data-mode='collapsed'],
+.product-sidebar[data-mode='hover'] {
+  --sidebar-current-w: var(--sidebar-w-collapsed);
+}
+/* HOVER: a sidebar cresce por cima do conteúdo e a MARGEM do conteúdo não
+   muda, porque ela usa `--sidebar-w-active` (56px no hover). É a diferença
+   entre os dois modos recolhidos: aqui a largura da coluna não é do
+   usuário, e quem trabalha na tabela a tempo todo precisa da área larga. */
+.product-sidebar[data-mode='hover']:hover,
+.product-sidebar[data-mode='hover']:focus-within {
+  width: var(--sidebar-w);
+}
+/* O conteúdo desloca JUNTO com a largura que a sidebar reserva. No hover a
+   reserva é a recolhida — de propósito. */
+.product-content {
+  margin-left: var(--sidebar-w-active, 220px);
+  width: calc(100% - var(--sidebar-w-active, 220px));
+  padding-top: var(--topbar-github-h);
+}
+/* --- Rótulos fora do modo expandido -------------------------------------- */
+.product-sidebar[data-mode='collapsed'] .sidebar-caption,
+.product-sidebar[data-mode='collapsed'] .nav-label,
+.product-sidebar[data-mode='collapsed'] .sidebar-bottom-env,
+.product-sidebar[data-mode='collapsed'] .nav-count,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) .sidebar-caption,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) .nav-label,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) .sidebar-bottom-env,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) .nav-count,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) .sidebar-reserved-note {
+  display: none;
+}
+/* O rótulo que some na coluna de 56px não pode roubar a altura do alvo:
+   o item fica com a altura do alvo de toque mesmo sem texto. Vale para o
+   item RESERVADO também — ele não é `a`, e centralizar só os links
+   deixaria os dois fora de centro na coluna recolhida. */
+.product-sidebar[data-mode='collapsed'] nav a,
+.product-sidebar[data-mode='collapsed'] .sidebar-reserved,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) nav a,
+.product-sidebar[data-mode='hover']:not(:hover):not(:focus-within) .sidebar-reserved {
+  justify-content: center;
+  padding-inline: 0;
+  gap: 0;
+}
+/* --- Categorias ----------------------------------------------------------- */
+.sidebar-group {
+  display: grid;
+  gap: 4px;
+}
+.sidebar-caption {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--text-tertiary);
+  padding: 32px 12px 12px;
+}
+/* O primeiro rótulo de categoria não pode empurrar a lista para baixo da
+   marca com 32px de respiro de novo — a marca já tem o seu. */
+.sidebar-group:first-child .sidebar-caption {
+  padding-top: 12px;
+}
+/* A badge de contagem. `margin-left: auto` empurra para a direita do item,
+   que é onde a prova visual a coloca. */
+.nav-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.product-sidebar nav a[aria-current='page'] .nav-count {
+  background: var(--border-strong);
+}
+/* --- Destino reservado ---------------------------------------------------
+   Um item declarado e DESLIGADO: existe para que a decisão do dono fique à
+   vista, sem prometer uma tela. Ele não é link, não recebe foco e diz por
+   que está assim — um item cinza sem explicação seria pior que ausente. */
+.sidebar-reserved {
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+.sidebar-reserved .nav-icon {
+  display: block;
+  line-height: 0;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.sidebar-reserved-note {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+/* --- 1. BARRA SUPERIOR (padrão GitHub) ------------------------------------
+   Fixa, 52px, largura toda — inclusive a faixa da sidebar, porque é a barra
+   do APLICATIVO e não da área de conteúdo. `z-index` acima da sidebar (30). */
+.product-topbar-github {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--topbar-github-h);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  background: var(--bg);
+  border-bottom: var(--hairline) solid var(--border);
+}
+/* Botão só de ícone: 30x30 no desktop. O alvo de toque de 44px vale no
+   mobile, onde 30px seria pequeno demais para o dedo — ver o media query. */
+.product-topbar-icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.product-topbar-icon:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.product-topbar-icon:active {
+  background: var(--surface-2);
+}
+.product-topbar-logo {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+/* O disco do logo é um gradiente de DUAS cores — o teste de gradiente
+   decorativo barra o gradiente de mesma cor nas duas pontas, e este tem
+   duas de verdade. */
+.product-topbar-logo-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent-ink), var(--surface-3));
+  color: var(--bg);
+  font-size: var(--text-md);
+  font-weight: 800;
+}
+.product-topbar-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-body);
+  min-width: 0;
+}
+.product-topbar-crumb-owner {
+  color: var(--text-secondary);
+}
+.product-topbar-crumb-sep {
+  color: var(--text-tertiary);
+}
+/* O repo em azul: `--accent-ink` é o acento usado como TEXTO (5,88:1 em
+   --surface-3). O acento de preenchimento `--accent` mede 2,34:1 e não
+   passaria em texto — usar o errado aqui reprovaria o contraste do E2E. */
+.product-topbar-crumb-repo {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.product-topbar-caret {
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+}
+.product-topbar-spacer {
+  flex: 1;
+}
+.product-topbar-search {
+  width: 300px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-tertiary);
+}
+.product-topbar-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-md);
+}
+.product-topbar-search-input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.product-topbar-search kbd {
+  font-size: var(--text-xs);
+  padding: 1px 5px;
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-tertiary);
+}
+.product-topbar-divider {
+  width: 1px;
+  height: 20px;
+  flex-shrink: 0;
+  background: var(--border);
+}
+.product-topbar-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.product-topbar-avatar {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: var(--hairline) solid var(--border-strong);
+  background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+  color: var(--accent-ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+/* --- 3. SIDEBAR CONTROL NO RODAPÉ ---------------------------------------- */
+.sidebar-bottom {
+  margin-top: auto;
+  position: relative;
+  padding: 10px 0 0;
+  border-top: var(--hairline) solid var(--border);
+}
+/* O botão do rodapé tem a MESMA anatomia de um item de navegação — é o
+   que faz ele parecer parte da lista em vez de um botão solto. */
+.sidebar-control {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-control:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.sidebar-control:active {
+  background: var(--surface-2);
+}
+.sidebar-control .nav-icon {
+  display: block;
+  line-height: 0;
+  flex-shrink: 0;
+}
+.sidebar-control-popover {
+  position: absolute;
+  bottom: 44px;
+  left: 0;
+  width: 178px;
+  padding: 5px;
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  z-index: 50;
+  box-shadow: var(--shadow-float);
+}
+.sidebar-control-title {
+  padding: 7px 10px 5px;
+  margin-bottom: 4px;
+  border-bottom: var(--hairline) solid var(--border);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.sidebar-control-option {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-control-option:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.sidebar-control-option.is-active {
+  color: var(--text-primary);
+}
+/* O bullet do modo vigente. `aria-pressed` no botão carrega o estado para o
+   leitor de tela; o bullet é a mesma informação para quem enxerga.
+
+   NENHUM token de texto vira fundo aqui — nem o inativo nem o vigente, e
+   `--accent-ink` é token de TEXTO por definição (o teste de tokens barra o
+   acento como fundo). Por isso o bullet do modo vigente é a SUPERFÍCIE de
+   acento, `--accent-soft`: um disco de 5px numa superfície colorida marca a
+   seleção sem inverter a hierarquia do menu, que é exatamente o defeito que
+   aquela regra existe para impedir. O `--accent-ink` continua aparecendo
+   como TEXTO do item selecionado, que é o papel dele. */
+.sidebar-control-bullet {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.sidebar-control-option.is-active .sidebar-control-bullet {
+  background: var(--accent-soft);
+}
+.sidebar-bottom-env {
+  margin: 8px 0 0;
+  padding: 8px 12px 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
 .product-brand {
   font-family: var(--font-display);
   font-size: 22px;
@@ -725,13 +1114,11 @@
 .greeting-dot {
   color: var(--accent-ink);
 }
-.sidebar-caption {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  color: var(--text-tertiary);
-  padding: 32px 12px 12px;
-}
+/* STK-F3-01: `.sidebar-caption` e `.sidebar-bottom` passaram a ter regra
+   própria no bloco da casca nova (mais acima, com o controle de modo). As
+   versões antigas viviam aqui e eram SOBREPOSTAS pela regra nova sem que
+   nenhuma das duas percebesse — a mesma cor em dois lugares é exatamente o
+   defeito que a camada de tokens existe para impedir. */
 .product-sidebar nav {
   display: grid;
   gap: 4px;
@@ -776,18 +1163,6 @@
   /* Rotulo longo quebra em palavra, nunca no meio dela. */
   overflow-wrap: anywhere;
 }
-.sidebar-bottom {
-  margin-top: auto;
-  padding: 16px 12px 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  border-top: var(--hairline) solid var(--border);
-}
-.sidebar-bottom p {
-  color: var(--text-tertiary);
-  margin: 8px 0 0;
-  font-size: var(--text-xs);
-}
 .private-dot {
   display: inline-block;
   width: 6px;
@@ -796,13 +1171,10 @@
   background: var(--surface-3);
   margin-right: 6px;
 }
-.product-content {
-  margin-left: 220px;
-  width: calc(100% - 220px);
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
+/* STK-F3-01: a margem e a largura do conteúdo saem de
+   `--sidebar-w-active`, que o componente publica por atributo. A regra
+   antiga com 220px fixo ficava DEPOIS desta e sobrepunha os três modos —
+   era a largura que impedia o recolhido de funcionar. */
 .product-topbar {
   min-height: var(--topbar-h);
   padding: 0 40px;
@@ -1642,6 +2014,112 @@
   color: var(--warn);
   margin-top: 5px;
 }
+
+/* ==========================================================================
+   STK-F3-02 — a linha da tabela de apostas
+   --------------------------------------------------------------------------
+   Quatro decisões, e o que cada uma impede.
+
+   1. A COR DO STATUS vem do resultado, não do `state`. `--pos`/`--neg`/
+      `--warn` são as três famílias medidas de sinal; o fundo é o `-soft`
+      da MESMA família, e é ele que carrega a leitura à distância. A
+      quarta classe é `void` — anulada, reembolso, cancelada — e ela é
+      deliberadamente neutra: um reembolso é ausência de resultado, e
+      não deve competir com o dinheiro.
+
+   2. O NÚMERO DO BILHETE é outline, nunca preenchido. Um bloco sólido na
+      primeira coluna seria a mancha mais forte da linha, e quem varre a
+      tabela procurando resultado passaria por ele primeiro. Contorno
+      separa sem gritar.
+
+   3. NÚMERO À DIREITA, TEXTO À ESQUERDA. Alinhamento não é aqui uma
+      preferência estética: a régua de centavos só existe se os números
+      compartilharem a mesma borda, e `tabular` sozinho não faz isso.
+
+   4. AÇÃO COM ALVO DE 44px que não empurra a linha vizinha. O botão
+      cresce por BAIXO do texto, nunca pela largura: uma coluna de ações
+      que alarga com o alvo empurra as 14 colunas a cada toque.
+   ========================================================================== */
+
+/* --- 1. Status por resultado ------------------------------------------- */
+.bet-status-pos {
+  color: var(--pos);
+  background: var(--pos-soft);
+}
+.bet-status-neg {
+  color: var(--neg);
+  background: var(--neg-soft);
+}
+.bet-status-warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.bet-status-void {
+  color: var(--text-tertiary);
+  background: var(--surface-3);
+}
+/* R2: liquidada sem resultado registrado. O texto dentro da tag é curto
+   de propósito — a tag mede ~130px e uma frase inteira estouraria a
+   coluna, que é `nowrap` por decisão da coluna de status. */
+.bet-status-review {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* --- 2. Número do bilhete: outline ------------------------------------- */
+.bet-ticket-badge {
+  display: inline-block;
+  min-width: 40px;
+  text-align: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 3. Alinhamento ----------------------------------------------------- */
+/* `min-width` de uma coluna numérica precisa caber o MAIOR valor que ela
+   mostra, não a média: sem piso, `R$ 1.234,56` e `R$ 9,00` ficavam com
+   larguras diferentes e a coluna inteira dançava a cada digito. 96px é o
+   maior valor que o produto formata. */
+.bet-number-cell {
+  text-align: right;
+  min-width: 96px;
+}
+.bet-detail-table th.bet-number-cell {
+  text-align: right;
+}
+.bet-text-cell {
+  text-align: left;
+}
+
+/* --- 4. Ações de linha -------------------------------------------------- */
+.bet-row-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+/* O alvo de 44px vem do token `--tap` e vale na MESMA medida em desktop e
+   no mobile: um alvo que só existe no toque é um alvo que o teste não
+   mede. O `margin-block: -8px` compensa metade do padding vertical para
+   que a altura útil da linha não cresça 44px por ação — a área de toque
+   cresce, a densidade da tabela não. */
+.bet-row-action {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  margin-block: -8px;
+}
+.bet-actions-cell {
+  white-space: nowrap;
+}
+
 .filter-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2114,14 +2592,10 @@
   padding: 8px 0 25px;
 }
 @media (max-width: 1180px) {
-  .product-sidebar {
-    width: 190px;
-    padding-inline: 14px;
-  }
-  .product-content {
-    margin-left: 190px;
-    width: calc(100% - 190px);
-  }
+  /* STK-F3-01: a sidebar é estreita e o modo recolhido continua valendo,
+     então a largura vem do MODO e não deste breakpoint. A 190px fixo que
+     existia aqui sobrescrevia o modo expandido (232px) sem querer e
+     deixava os três modos indistinguíveis nesta faixa. */
   .product-main {
     padding: 28px 24px;
   }
@@ -2143,27 +2617,68 @@
   .product-shell {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
-  .product-sidebar {
+  /* STK-F3-01: no mobile a sidebar é a BARRA INFERIOR, e ela tem geometria
+     própria — a largura do modo (232/56px) e o controle de 3 modos não
+     existem aqui. Resetar a largura e o `top` é o que impede a barra de
+     herdar a reserva de 232px do modo expandido. */
+  .product-sidebar,
+  .product-sidebar[data-mode='collapsed'],
+  .product-sidebar[data-mode='hover'],
+  .product-sidebar[data-mode='hover']:hover {
     inset: auto 0 0;
     z-index: 30;
     width: 100%;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-strong);
     border-right: 0;
+    transition: none;
   }
   .product-brand,
   .sidebar-caption,
   .sidebar-bottom {
     display: none;
   }
+  /* Os itens reservados (Global, Telegram) não entram na barra inferior: em
+     uma tela de bolso um item cinza ocupando um dos dez slots seria pior que
+     não existir. Eles continuam na sidebar do desktop, onde há espaço para
+     dizer que estão em breve. */
+  .sidebar-reserved {
+    display: none;
+  }
+  /* STK-F3-01: as CATEGORIAS somem na barra inferior, e com elas o `display:
+     grid` que cada `.sidebar-group` traz do desktop. Sem isto, cada grupo é
+     uma LINHA dentro do nav que é uma grade de dez colunas, e a barra passa
+     a ter quatro linhas de altura — o suficiente para cobrir o conteúdo e
+     fazer o clique do teste cair no item errado ("subtree intercepts pointer
+     events"). O `display: contents` faz o grupo não gerar caixa nenhuma: os
+     itens viram filhos diretos do nav e ocupam as dez colunas, que é o que
+     uma barra de bolso deve ser. */
+  .sidebar-group {
+    display: contents;
+  }
   .product-sidebar nav {
     width: 100%;
-    /* OITO destinos na barra inferior (o oitavo é o ranking Polymarket, STK-F2-15).
+    /* ONZE destinos na barra inferior (STK-F3-01 começou em DEZ; STK-F3-04
+       subiu para ONZE).
        O número é explícito porque o teste de navegador (e2e) confere que a
        barra NÃO rola e que todo destino tem 44 px de altura — um
        `repeat(auto-fit, ...)` faria a contagem depender da largura e o teste
-       deixaria de verificar o que verifica. */
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+       deixaria de verificar o que verifica.
+
+       A contagem subiu de OITO para DEZ porque a categoria Polymarket
+       acrescenta dois DESTINOS reais (Favoritos e Simulação), e a barra do
+       mobile é esta MESMA navegação: esconder dois destinos porque a
+       sidebar do desktop é categorizada seria trocar um defeito (item
+       inacessível) por outro (destino que existe e não aparece). A badge de
+       contagem e os itens reservados NÃO entram — os reservados porque não
+       são destino, e a badge porque um número numa coluna estreita não cabe
+       sem roubar a altura do alvo de toque.
+
+       STK-F3-04: subiu de DEZ para ONZE porque `pm-global` deixou de ser
+       reservado e passou a ter tela. A regra que contou as outras vezes
+       conta esta: destino real entra na barra. O único reservado que sobra
+       (Telegram) continua fora, e por isso são ONZE e não doze. */
+    grid-template-columns: repeat(11, minmax(0, 1fr));
     overflow: visible;
     gap: 3px;
   }
@@ -2194,12 +2709,45 @@
        a ter 683px de conteúdo em 400px de largura — o teste de navegador exige
        que a barra NÃO role. `anywhere` deixa a quebra de palavra (e o `<wbr>`
        que o próprio componente já traz) fazer o trabalho, e a altura mínima de
-       44px continua valendo porque o alvo cresce, não encolhe. */
+       44px continua valendo porque o alvo cresce, não encolhe.
+
+       STK-F3-01: com DEZ destinos a coluna fica mais estreita e `anywhere`
+       vira obrigatório — é ele que segura "Configurações" e "Simulação"
+       dentro da coluna em vez de deixar a barra passar de 400px. */
     overflow-wrap: anywhere;
   }
+  /* STK-F3-01: no mobile não há sidebar lateral, então o conteúdo ocupa a
+     largura toda e não reserva nada para a barra inferior. */
   .product-content {
     margin-left: 0;
     width: 100%;
+    /* A barra superior da GitHub continua existindo no mobile, e o conteúdo
+       começa abaixo dela — mesma regra do desktop. */
+    padding-top: var(--topbar-github-h);
+  }
+  /* A busca de 300px não cabe numa tela de 412px. O campo encolhe e o
+     breadcrumb some primeiro: em tela de bolso o contexto é a URL, e o que
+     a pessoa precisa na barra é o menu e a busca. */
+  .product-topbar-github {
+    padding-inline: 8px;
+    gap: 6px;
+  }
+  .product-topbar-crumb {
+    display: none;
+  }
+  .product-topbar-search {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+  /* Alvo de toque: 30px no desktop é insuficiente para o dedo. */
+  .product-topbar-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .product-topbar-avatar {
+    width: 34px;
+    height: 34px;
   }
   .product-main {
     padding: 27px 16px 8px;
@@ -2638,6 +3186,17 @@
     transition: none;
   }
 }
+/* STK-F3-01: a sidebar e os controles novos animam largura e cor. Quem pede
+   movimento reduzido não quer nenhuma dessas transições — a largura troca
+   de golpe, sem o "deslizar" de 0,15s que é a parte visível do efeito. */
+@media (prefers-reduced-motion: reduce) {
+  .product-sidebar,
+  .product-topbar-icon,
+  .sidebar-control,
+  .sidebar-control-option {
+    transition: none;
+  }
+}
 .report-intro {
   max-width: 800px;
   color: var(--text-secondary);
@@ -2686,11 +3245,46 @@
 .report-context strong {
   color: var(--text-tertiary);
 }
+/* STK-F3-03 — a altura do PLOT, não a da caixa.
+   O dono reclamou que o gráfico estava pequeno demais (170px na prova
+   anterior): 170px de área preenchida são ~40px de linha útil entre o topo
+   e a base, e uma variação de 30% do resultado vira um degrau que parece
+   ruído. A faixa 240–280px é o que dá à inclinação espaço para ser lida.
+
+   A legenda NÃO sai desta altura: o Recharts a reserva dentro do SVG, e é
+   por isso que o `min-height` do plot efetivo fica abaixo do número acima.
+   O que segura a leitura é a faixa, não a caixa. */
 .report-chart {
-  height: 300px;
+  height: 264px;
   width: 100%;
   min-width: 0;
   font-size: var(--text-xs);
+}
+@media (min-width: 1100px) {
+  .report-chart {
+    height: 280px;
+  }
+}
+/* No mobile o plot encolhe, mas nunca abaixo de 180px: abaixo disso a área
+   deixa de ser tendência e vira um decalque. O número é da CAIXA, e ela
+   precisa ser maior que 180px porque a legenda e o eixo X consomem ~90px do
+   SVG — foi assim que 260px de caixa produziram 169px desenhados, o defeito
+   que o dono reclamou. 240px de caixa deixam ~150px; 272px deixam ~180. */
+@media (max-width: 760px) {
+  .report-chart {
+    height: 272px;
+  }
+}
+/* A legenda do Recharts é um `<g>` com `fill` inline; a cor do texto vive
+   aqui para que o rótulo da série não caia no branco padrão do SVG. */
+.report-chart .recharts-legend-item-text {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+/* A grade horizontal do Recharts: `strokeDasharray` no componente vira atributo
+   no `<line>`, e sem esta regra o padrão de grade cheia volta por herança. */
+.report-chart .recharts-cartesian-grid line {
+  stroke-dasharray: 3 3;
 }
 .report-tooltip {
   border: 1px solid var(--text-tertiary);
@@ -2739,9 +3333,10 @@
     align-items: flex-start;
     flex-direction: column;
   }
-  .report-chart {
-    height: 260px;
-  }
+  /* STK-F3-03: a altura de `.report-chart` no mobile é definida junto com o
+     resto do gráfico, acima. A antiga regra de `260px` vivia aqui e, por
+     estar DEPOIS no arquivo, vencia a do bloco novo — o resultado era 169px
+     de área desenhada, exatamente a queixa que o card manda resolver. */
   .report-check {
     font-size: var(--text-sm);
   }
@@ -3018,4 +3613,264 @@
   background: var(--surface-2);
   color: var(--text-primary);
   font-size: var(--text-md);
+}
+
+/* ==========================================================================
+   STK-F3-04 — a tela Global do Polymarket: TIPSTER EM CARDS
+   --------------------------------------------------------------------------
+   Duas decisões de superfície, e elas são o que separa um card de um
+   retângulo com texto:
+
+   - O card é `--surface-2` e as MÉTRICAS dentro dele são `--surface-1`, mais
+     escuro. A hierarquia vem de degrau de superfície, não de borda e sombra:
+     é o que a R5 pede quando ela diz "densidade > estética" — a informação
+     se separa por PLANO, e não por enfeite.
+
+   - O truncamento ganha `--warn` na borda. Uma borda colorida de aviso é
+     uma informação, e é a mesma linguagem que `.notice.warning` já usa no
+     produto; a cor aqui é de ESTADO, não de decoração.
+   ========================================================================== */
+
+.global-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.global-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+/* O chip é um `<button>` de verdade, e o alvo de toque vale nele como vale em
+   toda superfície interativa do produto: `--tap`, nunca menos. */
+.global-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: var(--tap);
+  padding: 6px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* O estado ativo é a SUPERFÍCIE de acento, não o acento puro: o acento
+   registered mede 2,34:1 em `--surface-3` e reprovaria como fundo de um chip
+   de texto em 12px. `--accent-soft` marca a seleção sem inverter a
+   hierarquia. */
+.global-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-ink);
+  color: var(--text-primary);
+}
+.global-chip-count {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.global-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Três colunas no desktop, duas no tablet, uma no mobile. O `auto-fill` com
+     `minmax` é o que faz a grade se adaptar sem três media queries: o card
+     define o próprio piso de largura. */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.global-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  height: 100%;
+  min-height: var(--tap);
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.global-card:hover {
+  background: var(--surface-3);
+}
+/* O card truncado é o ÚNICO que ganha borda de atenção, e ela é a informação
+   de que a métrica dependente da série completa não existe. */
+.global-card.is-truncated {
+  border-color: var(--warn);
+}
+
+.global-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.global-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.global-card-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* O nome NÃO usa `text-overflow` como sinal de truncamento: ele some do
+   `innerText` e da árvore de acessibilidade, e o dono pediu reticência que
+   o usuário PERCEBA. A reticência é o caractere `…` que a view já escreveu
+   no texto, e aqui só se garante que ele não seja quebrado em duas linhas. */
+.global-card-name {
+  font-size: var(--text-h3);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.global-card-scope {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.global-card-rank {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.global-truncated {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--text-xs);
+}
+.global-truncated span {
+  color: var(--text-secondary);
+}
+
+.global-card-market-label {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.global-card-market {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A grade de métricas: duas colunas porque o card precisa CABER INFORMAÇÃO
+   (R5), e uma coluna só deixaria nove linhas de altura. */
+.global-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+  margin: 0;
+}
+.global-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+}
+.global-metric dt {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.global-metric dd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+.global-metric-value {
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A cor de resultado vem do TOM calculado na view. `--pos` e `--neg` são os
+   tokens reais da família semântica; a base é `--text-primary` e não uma
+   cor neutra inventada. */
+.global-metric-value.is-pos {
+  color: var(--pos);
+}
+.global-metric-value.is-neg {
+  color: var(--neg);
+}
+/* "Sem base" e "bloqueado" são textos de ESTADO, não de resultado, e por
+   isso não recebem a cor do sinal: verde em "Sem base" seria uma leitura de
+   resultado que a R2 proíbe. */
+.global-metric.is-unknown .global-metric-value,
+.global-metric.is-blocked .global-metric-value {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.global-metric.is-blocked {
+  border: 1px dashed var(--warn);
+}
+/* A amostra é pequena e tem contraste medido: é `--text-tertiary`, que é o
+   piso do produto, e nunca o `--muted` decorativo. */
+.global-metric-n {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* A métrica de destaque é a que o card precisa ler primeiro; as demais ficam
+   no mesmo peso para que a densidade não vire hierarquia de tampos. */
+.global-metric.is-emphasis .global-metric-value {
+  font-size: var(--text-h3);
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .global-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

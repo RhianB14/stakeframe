@@ -288,12 +288,32 @@ test('os avisos de jogo responsável estão na tela nos DOIS desfechos', async (
   }
 });
 
-test('a página não estoura a largura e a navegação mantém os OITO destinos', async ({ page }) => {
+test('a página não estoura a largura e a navegação mantém os DEZ destinos', async ({ page }) => {
   await openSimulation(page, refused());
   await expect(page.getByTestId('simulacao-resultado')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  // A simulação é uma SEÇÃO do ranking, não um destino novo: a barra continua
-  // com os oito destinos que o teste de navegação já garante em 44px.
+  // STK-F3-01: a simulação deixou de ser SEÇÃO do ranking e virou
+  // DESTINO, e a contagem subiu de OITO para DEZ. O número continua
+  // LITERAL e continua sendo verificado — o que mudou foi o número, com a
+  // justificativa escrita na asserção de `product.test.ts` e no corpo do
+  // commit, não a asserção.
+  //
+  // STK-F3-04: `pm-global` deixou de ser RESERVADO e passou a ser destino
+  // de verdade — a tela existe, em cards. Isso troca UM `<span
+  // class="sidebar-reserved">` por UM `<a>`, e o contador deste teste mede
+  // `<a>`, não destinos. Onze, portanto: os dez de antes mais o Global. O
+  // `pm-telegram` continua reservado e continuafora da contagem, porque um
+  // destino desligado não é link.
   const nav = page.locator('.product-sidebar nav');
-  await expect(nav.locator('a')).toHaveCount(8);
+  await expect(nav.locator('a')).toHaveCount(11);
+  // E a janela é mostrada em TEXTO, e é a janela padrão do produto.
+  //
+  // STK-F3-04: `getByText(/Janela:/)` virou AMBÍGUO. A tela passou a
+  // declarar a própria janela em `data-testid="janela-da-simulacao"`, e o
+  // rodapé de `view.footnote` também começa com "Janela:". São dois textos
+  // legítimos e diferentes — o `strict mode violation` é do seletor, não do
+  // produto. O que este teste quer provar é que a janela está escrita na
+  // tela, e para isso existe um `testid` estável; asubstringa genérica é que
+  // era frágil, não o conteúdo.
+  await expect(page.getByTestId('janela-da-simulacao')).toBeVisible();
 });

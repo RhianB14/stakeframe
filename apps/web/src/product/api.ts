@@ -36,6 +36,24 @@ export async function request<T>(
   url: string,
   schema: { parse: (value: unknown) => T },
   init: RequestInit = {},
+  /**
+   * STK-F3-01 — consultas DECORATIVAS marcam isto como verdadeiro para que o
+   * 401 delas NÃO seja tratado como sessão expirada.
+   *
+   * O 401 global limpa o cache do produto inteiro (`App.tsx` escuta
+   * `stakeframe:session-expired` e chama `removeQueries({ queryKey: ['product'] })`),
+   * e essa leitura está correta para o resto do produto: se a sessão acabou,
+   * a tela inteira tem que sair. Ela NÃO está correta para uma consulta de
+   * enfeite — a badge de contagem da sidebar responde 401 em qualquer
+   * produto sem o Polymarket liberado, e usar isso para derrubar a tela de
+   * quem está lendo as apostas seria trocar um número faltando pela tela
+   * inteira faltando.
+   *
+   * A consequência é a que R2 já exige: sem base, não se escreve número. A
+   * badge simplesmente não aparece, e o destino de Favoritos continua
+   * funcionando.
+   */
+  options: { decorative?: boolean } = {},
 ) {
   let response: Response;
   try {
@@ -59,7 +77,7 @@ export async function request<T>(
     );
   }
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && options.decorative !== true) {
       window.dispatchEvent(new Event('stakeframe:session-expired'));
     }
     let error;

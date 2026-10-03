@@ -4,6 +4,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -14,6 +15,7 @@ import { reportSchema, saoPauloDate, formatReportBRL } from '@stakeframe/shared'
 import { request } from './api.js';
 import { Button } from '../components/ui/button.js';
 import { readChartTokens } from './chart-tokens.js';
+import { axisTick, chartHasSample, lowChartSampleMessage, resultDomain } from './chart-domain.js';
 
 /**
  * STK-F2-18 (Fase 4) — resultado realizado do mês na Visão geral.
@@ -60,8 +62,16 @@ export function OverviewReport({ version }: { version: number }) {
     });
   }, [query.data]);
   const observed = series.filter((row) => row.bets > 0);
-  // Abaixo de 4 pontos observados a área é uma forma inventada.
-  const sparse = observed.length < 4;
+  /* STK-F3-03 — o PISO DE AMOSTRA manda neste gráfico, e ele não é
+     negociável. Abaixo do piso o produto NÃO desenha e diz por quê: um
+     gráfico com 1 ou 2 pontos é uma forma interpolada a partir de nada, e a
+     biblioteca desenha isso com a mesma confiança com que desenha 30 pontos
+     reais. Números crus no lugar do desenho é a resposta honesta. */
+  const drawable = chartHasSample(observed.length);
+  /* A escala inclui o zero quando a série é negativa — ver `resultDomain`.
+     Aplicar o mínimo automático aqui inverteria o sinal do resultado, que é
+     o defeito mais caro que um gráfico de dinheiro pode ter. */
+  const domain = resultDomain(series.map((row) => row.accumulated));
 
   return (
     <div className="panel">
@@ -122,7 +132,7 @@ export function OverviewReport({ version }: { version: number }) {
               }
             />
           </div>
-          {observed.length >= 4 ? (
+          {drawable ? (
             <div
               className="report-chart"
               role="img"
@@ -131,23 +141,42 @@ export function OverviewReport({ version }: { version: number }) {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={series} margin={{ left: 12, right: 12, top: 12, bottom: 8 }}>
                   <defs>
-                    {/* O degradê é alfa do token de sinal, não uma cor nova. */}
+                    {/* O degradê é alfa do token de sinal, não uma cor nova.
+                        0,34 no topo e 0,02 na base é o que dá à área o peso de
+                        "volume acumulado" sem competir com a linha, que é o
+                        dado. */}
                     <linearGradient id="overview-accumulated" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={chart['--pos']} stopOpacity={0.22} />
-                      <stop offset="100%" stopColor={chart['--pos']} stopOpacity={0} />
+                      <stop offset="0%" stopColor={chart['--pos']} stopOpacity={0.34} />
+                      <stop offset="100%" stopColor={chart['--pos']} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke={chart['--border']} vertical={false} />
+                  {/* Grade só HORIZONTAL e tracejada: a vertical seria uma
+                      parede atrás de cada dia, e a horizontal é a régua que
+                      permite ler a altura contra um valor. */}
+                  <CartesianGrid
+                    stroke={chart['--border']}
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
                   <XAxis
                     dataKey="date"
                     minTickGap={45}
+                    tickLine={false}
+                    axisLine={false}
                     tickFormatter={(date: string) => date.split('-').reverse().join('/')}
                     stroke={chart['--text-tertiary']}
                     tick={{ fill: chart['--text-tertiary'], fontSize: 12 }}
                   />
+                  {/* `domain` inclui o zero quando a série é negativa. Sem `domain`
+                      explícito o Recharts escolhe o mínimo pelos dados, e uma
+                      série toda negativa sai desenhada como se subisse. */}
                   <YAxis
                     stroke={chart['--text-tertiary']}
-                    width={64}
+                    width={72}
+                    domain={domain}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={axisTick}
                     tick={{ fill: chart['--text-tertiary'], fontSize: 12 }}
                   />
                   <ReferenceLine y={0} stroke={chart['--border-strong']} />
@@ -165,29 +194,25 @@ export function OverviewReport({ version }: { version: number }) {
                       ) : null
                     }
                   />
-                  {sparse ? (
-                    <Area
-                      type="linear"
-                      dataKey="accumulated"
-                      name="Resultado acumulado"
-                      stroke={chart['--pos']}
-                      strokeWidth={2}
-                      fill="none"
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  ) : (
-                    <Area
-                      type="linear"
-                      dataKey="accumulated"
-                      name="Resultado acumulado"
-                      stroke={chart['--pos']}
-                      strokeWidth={2}
-                      fill="url(#overview-accumulated)"
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  )}
+                  {/* Legenda embaixo, com a cor e o rótulo da série: o leitor
+                      não precisa adivinhar a qual linha a área pertence. */}
+                  <Legend
+                    verticalAlign="bottom"
+                    height={24}
+                    iconType="plainline"
+                    wrapperStyle={{ color: chart['--text-secondary'] }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="accumulated"
+                    name="Resultado acumulado"
+                    stroke={chart['--pos']}
+                    strokeWidth={2}
+                    fill="url(#overview-accumulated)"
+                    dot={false}
+                    activeDot={{ r: 3 }}
+                    isAnimationActive={false}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -195,7 +220,7 @@ export function OverviewReport({ version }: { version: number }) {
             <p className="panel-footnote">
               {observed.length === 0
                 ? 'Nenhuma aposta com data de evento elegível neste mês.'
-                : `Apenas ${observed.length} ${observed.length === 1 ? 'dia com apostas' : 'dias com apostas'} no mês — abaixo de 4, o gráfico seria uma forma inventada. Os números acima são o resultado.`}
+                : lowChartSampleMessage(observed.length)}
             </p>
           )}
           {query.data.exclusions.unknownDateBets + query.data.exclusions.estimatedDateBets > 0 ? (

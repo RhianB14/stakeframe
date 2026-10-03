@@ -57,6 +57,24 @@
   --accent-ink: oklch(0.76 0.13 245); /* 5,88:1 em --surface-3 · rgb 99,185,254 */
   --focus: var(--accent-ink);
 
+  /* STK-F3-01 — a SUPERFÍCIE de acento, para marcar seleção sem inverter a
+     hierarquia do menu. Ela é necessária porque o papel de acento como
+     fundo e o papel de acento como texto não podem ser o mesmo token:
+     `--accent-ink` é token de TEXTO (o teste de tokens barra usá-lo como
+     fundo, e com razão — um item de menu selecionado 30% mais claro que o
+     resto da lista é hierarquia invertida), e `--accent` é preenchimento de
+     CTA, que mede 2,34:1 e reprovaria em texto.
+
+     É derivada do próprio acento por canal alfa, e não um matiz novo: é a
+     mesma família, vista como superfície.
+
+     A proporção é 34%, e não algo menor: o primeiro valor testado (22%)
+     ficava indistinguível do fundo em um disco de 5px — a marcação de
+     "modo vigente" era invisível justamente onde ela precisa ser lida. Uma
+     superfície de acento que precisa ser vista é uma cor clara demais para
+     ser misturada até desaparecer. */
+  --accent-soft: color-mix(in oklab, var(--accent) 34%, var(--surface-3));
+
   /* ---------------------------------------------------------------------
      Sinal de resultado — uma carteira de apostas não codifica lucro sem
      cor semântica, e a paleta Framer não tem uma. Derivados por propósito.
@@ -147,6 +165,19 @@
   --shell-w: 248px;
   --content-max: 1240px;
   --topbar-h: 76px;
+  /* ---------------------------------------------------------------------
+     STK-F3-01 — a casca nova: barra superior de 52px e sidebar de 232px.
+
+     A barra superior é a do PADRÃO GitHub (52px) e a sidebar passa a 232px
+     em vez de 248px. Nenhuma das duas medidas é escrita no componente:
+     elas vivem aqui, e `sidebarMetrics` em sidebar-mode.ts devolve os
+     mesmos números que `--sidebar-w`/`--sidebar-w-collapsed`, para que a
+     lógica e a folha nunca discordem. `--sidebar-w` continua valendo 248px
+     como valor do Mini App, que não tem sidebar nenhuma.
+     --------------------------------------------------------------------- */
+  --topbar-github-h: 52px;
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 56px;
 }
 
 /* ==========================================================================

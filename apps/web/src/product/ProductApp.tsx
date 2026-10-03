@@ -6,10 +6,14 @@ import {
   onboardingStatusSchema,
   formatBRL,
   saoPauloDate,
+  polymarketFavoritesResponseSchema,
+  POLYMARKET_DEFAULT_WINDOW,
+  POLYMARKET_RANKING_LIMIT,
   type Workspace,
   type Bet,
   type CatalogItem,
   type ReleaseInfo,
+  type PolymarketFavoritesResponse,
 } from '@stakeframe/shared';
 import { authAction } from '../OwnerAccess.js';
 import { Button } from '../components/ui/button.js';
@@ -37,7 +41,13 @@ import { ReportsPage } from './reports.js';
 import { OverviewReport } from './overview-report.js';
 import { OnboardingPage } from './onboarding.js';
 import { PolymarketRankingPage } from './polymarket-ranking.js';
+// STK-F3-04: a tela Global em cards de tipster (esportes e e-sports).
+import { PolymarketGlobalPage } from './polymarket-global.js';
+import { PolymarketFavoritesPage } from './polymarket-favorites.js';
+import { PolymarketSimulationPage } from './polymarket-simulation.js';
 import { NavGlyph, type NavIcon } from './nav-icons.js';
+import { SidebarFooter, TopBar } from './app-shell.js';
+import { readSidebarMode, writeSidebarMode, type SidebarMode } from './sidebar-mode.js';
 import './tokens.css';
 import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
@@ -64,6 +74,18 @@ type Owner = { id: string; name: string };
  * dependia de `navigation` — referência circular, que o compilador recusa.
  * A lista abaixo e a constante precisam concordar; o teste
  * tests/unit/design-tokens.test.ts confere as duas.
+ *
+ * STK-F3-01 acrescenta as quatro rotas da categoria Polymarket. `pm-favorites`
+ * e `pm-simulation` têm item na navegação e tela. `pm-global` e `pm-telegram`
+ * são declaradas aqui e NÃO têm item nem tela: o card é explícito ao dizer
+ * que implementá-las está fora de escopo, e elas continuam sendo ROTA — um
+ * link guardado para o futuro que cai na tela errada é pior que um 404
+ * honesto.
+ *
+ * A união é mantida CONTÍGUA, sem comentário no meio, porque o teste de
+ * tokens a lê com um regex que para na primeira linha fora do padrão. Um
+ * comentário aqui não é estilo: é a asserção de concord navigation ↔ Page
+ * parando de enxergar as quatro rotas.
  */
 type Page =
   | 'overview'
@@ -74,7 +96,11 @@ type Page =
   | 'ranking'
   | 'finance'
   | 'settings'
-  | 'imports';
+  | 'imports'
+  | 'pm-global'
+  | 'pm-favorites'
+  | 'pm-telegram'
+  | 'pm-simulation';
 // STK-F2-18: `icon` é um identificador do traçado em nav-icons.tsx, não um
 // glifo. Um caractere Unicode como ícone varia entre plataformas, não aceita
 // `currentColor` e some em algumas fontes — e o desenho passava a ser a única
@@ -93,7 +119,35 @@ const navigation = [
   { id: 'ranking', title: 'Ranking', icon: 'ranking' },
   { id: 'finance', title: 'Financeiro', icon: 'finance' },
   { id: 'settings', title: 'Configurações', icon: 'settings' },
+  /* STK-F3-01: Favoritos e Simulação NÃO estão nesta lista. Eles são
+     destinos de primeira classe (as telas da F2-16 e da F2-17, promovidas a
+     página sem reescrita), mas a navegação os desenha a partir de
+     `polymarketItems`, que guarda a ordem do card e o estado de reservado.
+     Listá-los aqui também os renderizaria DUAS vezes — uma na categoria e
+     outra no fim da lista plana. */
 ] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: NavIcon }>;
+
+/**
+ * STK-F3-01 — as categorias da sidebar, na ordem da prova visual.
+ *
+ * `sidebarGroups` NÃO duplica os destinos: ele guarda o rótulo de cada
+ * categoria e os IDS que a compõem, e a navegação continua sendo a
+ * `navigation` acima — a lista plana é a que o teste de tokens lê e a que
+ * `currentPage` resolve. Se as duas tivessem os títulos, uma delas
+ * passaria a ser a verdade e a outra uma cópia.
+ *
+ * Os dois destinos que o card pede e cujas telas estão FORA DE ESCOPO
+ * (Global, Telegram) NÃO entram em `sidebarGroups` — eles são renderizados
+ * como itens reservados dentro da categoria Polymarket. Um item ausente
+ * some da decisão do dono; um item clicável que leva a lugar nenhum é pior
+ * que os dois. Eles ficam desligados e VISÍVEIS, e cada um diz por quê.
+ */
+const sidebarGroups = [
+  { caption: 'SEU ESPAÇO PESSOAL', ids: ['overview', 'bets', 'calendar', 'analytics', 'reports'] },
+  { caption: 'MERCADO', ids: ['ranking', 'finance'] },
+  { caption: 'POLYMARKET', ids: ['pm-favorites', 'pm-simulation'] },
+  { caption: 'CONTA', ids: ['settings'] },
+] as const satisfies ReadonlyArray<{ caption: string; ids: ReadonlyArray<Page> }>;
 /**
  * STK-F2-12 — os MESMOS quatro destinos dentro do Mini App, sobre as mesmas
  * telas e os mesmos modais. O Telegram entrega um menu inferior, não uma
@@ -107,10 +161,226 @@ const miniAppNavigation = [
   { id: 'imports', title: 'Pendentes', icon: 'inbox' },
   { id: 'settings', title: 'Ajustes', icon: 'settings' },
 ] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: NavIcon }>;
+/**
+ * STK-F3-01 — os quatro destinos da categoria Polymarket, NA ORDEM DO CARD:
+ * Global, Favoritos, Telegram, Simulação.
+ *
+ * A lista guarda a ordem porque a ordem é parte do que o dono pediu, e ela
+ * é o tipo de coisa que se perde em uma refatoração: os dois destinos
+ * existentes estavam na `navigation` e os dois reservados eram
+ * condicionais espalhadas dentro do mapa. Qualquer um dos dois caminhos
+ * produzia a ordem errada sem quebrar nada.
+ *
+ * `reserved: true` marca os dois cujas telas estão FORA DE ESCOPO. Eles
+ * aparecem declarados e desligados: um item ausente some da decisão do dono,
+ * e um item clicável que leva a lugar nenhum é pior que os dois.
+ *
+ * `count: true` marca o único item com badge de contagem (Favoritos) — e a
+ * badge só é desenhada com o dado carregado, nunca com um zero escrito à
+ * mão (R2).
+ */
+const polymarketItems = [
+  // STK-F3-04: `pm-global` DEIXOU de ser reservado — a tela existe, em cards,
+  // e a `reserved: true` é o que faria a sidebar continuar desenhando um item
+  // desligado para uma rota que agora funciona. `pm-telegram` continua
+  // reservado: nenhuma tela dele foi pedida aqui, e continua sendo o
+  // destino honesto para "ainda não existe".
+  { id: 'pm-global', title: 'Global', icon: 'global' },
+  { id: 'pm-favorites', title: 'Favoritos', icon: 'favorite', count: true },
+  { id: 'pm-telegram', title: 'Telegram', icon: 'telegram', reserved: true },
+  { id: 'pm-simulation', title: 'Simulação', icon: 'simulation' },
+] as const satisfies ReadonlyArray<{
+  id: Page;
+  title: string;
+  icon: NavIcon;
+  reserved?: boolean;
+  count?: boolean;
+}>;
+
+/**
+ * STK-F3-01 — as rotas RESERVADAS da categoria Polymarket.
+ *
+ * STK-F3-04: sobrou só `pm-telegram`. `pm-global` saiu daqui porque a tela
+ * foi construída, e a entrada que saía daqui era o que mantinha a rota
+ * resolvida — removê-la sem trocar o `currentPage` teria feito a tela nova
+ * cair em "Visão geral" (e foi exatamente isso que aconteceu até a correção).
+ *
+ * A reserva não é um detalhe de menu: uma rota reservada continua sendo ROTA
+ * e renderiza a explicação de "ainda não existe", e não um id que devolve
+ * "Visão geral" em silêncio. Um link guardado para o futuro que cai na tela
+ * errada é pior que um 404 honesto.
+ */
+const reservedPages = new Set<Page>(['pm-telegram']);
+
+/**
+ * STK-F3-01 — os rótulos de `h1` das rotas da categoria Polymarket.
+ *
+ * STK-F3-04: este conjunto deixou de ser só das rotas RESERVADAS. O `h1` é
+ * resolvido por `items.find(...) ?? esteConjunto`, e `items` é `navigation`,
+ * que não contém os ids da categoria Polymarket desde o F3-01 (eles foram
+ * para `polymarketItems` para não aparecerem duas vezes). Então o rótulo de
+ * uma tela Polymarket que FUNCIONA vem daqui — e é o que impede o `h1` de
+ * sair vazio. O nome ficou `pageTitles` porque ele serve às duas situações.
+ */
+const pageTitles: Partial<Record<Page, { title: string }>> = {
+  // `pm-global` deixou de ser reserva no STK-F3-04, e o `h1` da tela nova
+  // continua precisando do rótulo.
+  'pm-global': { title: 'Global' },
+  'pm-telegram': { title: 'Telegram' },
+};
+
+/**
+ * STK-F3-01 — a tela de um destino RESERVADO.
+ *
+ * Ela existe para que `#pm-global` não caia em silêncio na Visão geral. A
+ * mensagem diz o que o destino é e o que falta, e oferece o caminho que
+ * funciona hoje — a categoria Polymarket já tem Favoritos e Simulação
+ * funcionando, e são esses os destinos para onde a pessoa vai agora.
+ */
+function ReservedPage({ title }: { title: string }) {
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <h2>{title} · Polymarket</h2>
+          <p>
+            Esta tela ainda não existe. Os dois destinos que já funcionam estão em Favoritos e em
+            Simulação, na mesma categoria da barra lateral.
+          </p>
+        </div>
+      </div>
+      <div className="button-row">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            location.hash = '#pm-favorites';
+          }}
+        >
+          Ir para Favoritos
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            location.hash = '#pm-simulation';
+          }}
+        >
+          Ir para Simulação
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * STK-F3-01 — um destino do card cuja tela está FORA DE ESCOPO.
+ *
+ * Ele é um item VISÍVEL e DESLIGADO, não um link: existe para que a decisão
+ * do dono (Global e Telegram foram pedidos) fique à vista sem prometer uma
+ * tela que não existe. Um link que leva a lugar nenhum seria pior que
+ * silencioso; um item cinza sem explicação seria pior que ausente.
+ *
+ * `aria-disabled` num elemento que não é interativo é inocuo aqui e é o que
+ * a auditoria espera encontrar: o item não recebe foco, não é anunciável
+ * como ação e o texto do motivo é lido no mesmo lugar.
+ */
+function ReservedDestination({ icon, title }: { icon: NavIcon; title: string }) {
+  return (
+    <span className="sidebar-reserved" aria-disabled="true">
+      <span className="nav-icon">
+        <NavGlyph icon={icon} />
+      </span>
+      <span className="nav-label">{title}</span>
+      <span className="sidebar-reserved-note">em breve</span>
+    </span>
+  );
+}
+
+/**
+ * STK-F3-01 — a badge de contagem de Favoritos na sidebar.
+ *
+ * R2 vale aqui com força: dado ausente NÃO é zero. Enquanto a resposta não
+ * chega — ou se a rota falha — a badge não é desenhada, e um `0` seria uma
+ * afirmação de que a pessoa não tem favorito nenhum, que é o oposto de "não
+ * sabemos". Quando aparece, é o número que o CONTRATO devolveu (`used`),
+ * nunca um número escrito aqui.
+ *
+ * A consulta é a MESMA da tela de Favoritos (`queryKey` idêntica), então
+ * favoritar em qualquer lugar já reflete na badge sem uma segunda chamada. E
+ * ela roda mesmo fora da tela: uma badge que só existe quando a página está
+ * aberta deixa de avisar a pessoa justamente quando ela está em outro lugar.
+ */
+function FavoritesBadge() {
+  const favorites = useQuery({
+    queryKey: ['polymarket', 'favorites'],
+    queryFn: () =>
+      request(
+        '/api/v1/polymarket/favorites',
+        polymarketFavoritesResponseSchema,
+        {},
+        /* STK-F3-01 — `decorative: true` NÃO É AFORDAMENTO DE REDE: é
+           integridade da casca.
+
+           A rota responde 401 em qualquer produto sem o Polymarket
+           liberado, e `api.ts` transforma 401 em
+           `stakeframe:session-expired`, que em `App.tsx` faz
+           `removeQueries({ queryKey: ['product'] })` — desmonta o produto
+           inteiro e o reconstrói. A tela voltava a "Seu espaço" e o
+           navegador reclamava "element was detached from the DOM, retrying"
+           no clique da navegação: 45 testes de produto caíram de uma vez por
+           causa de uma badge decorativa.
+
+           O 401 dessa consulta não significa sessão perdida — significa que
+           este usuário não tem a feature. Tratar isso como sessão expirada
+           desligava a tela de quem estava lendo as apostas. */
+        { decorative: true },
+      ),
+    /* `placeholderData`, e NÃO `initialData`: o segundo CONGELA a chave com
+       o sentinela e adia a consulta até `staleTime`, o que fazia a badge
+       nunca aparecer. O primeiro não bloqueia nada — a consulta roda e o
+       sentinela só ocupa o lugar enquanto ela não volta. */
+    placeholderData: favoritesPending,
+    staleTime: 30_000,
+  });
+  // Os dois estados em que a badge NAO é desenhada: o sentinela de
+  // "ainda não buscou" e a ausência de dado (a consulta ainda não voltou,
+  // ou falhou). Nenhum dos dois vira um zero escrito à mão.
+  if (favorites.data === undefined || favorites.data === favoritesPending) return null;
+  return (
+    <span className="nav-count" aria-hidden="true">
+      {favorites.data.used}
+    </span>
+  );
+}
+
+/**
+ * O estado de "a lista de favoritos ainda não foi buscada". Ele é um
+ * SENTINELA e não um objeto com `used: 0`: um zero aqui seria uma
+ * afirmação de que a pessoa não tem favorito nenhum, que é o oposto de
+ * "não sabemos" — R2 vale para a badge como vale para o resto.
+ */
+const favoritesPending = { favoritesPending: true } as unknown as PolymarketFavoritesResponse;
+
 function currentPage(): Page {
   const id = location.hash.slice(1);
   if (id === 'imports') return 'imports';
-  return navigation.find((item) => item.id === id)?.id ?? 'overview';
+  const known = navigation.find((item) => item.id === id)?.id;
+  if (known) return known;
+  /* STK-F3-01 moveu os destinos da categoria Polymarket para `polymarketItems`
+     — é ela que guarda a ordem do card e o estado de reservado — e a busca
+     acima só varre `navigation`. Um id dessa categoria só era resolvido
+     porque passava pelo `reservedPages` logo abaixo.
+
+     STK-F3-04: `pm-global` deixou de ser reservado, e a rota deixou de ser
+     resolvida: o hash caía em "Visão geral" e a tela nova nunca aparecia. É
+     o defeito que os 12 testes de navegador pegaram de uma vez só, e ele é a
+     razão desta linha existir. A busca passa a olhar `polymarketItems`, que
+     é a lista que DETÉM o id: um destino da categoria continua resolvido
+     porque alguém o declarou, e não porque sobrou no fim de um `if`. */
+  const polymarket = polymarketItems.find((item) => item.id === id);
+  if (polymarket) return polymarket.id;
+  // As rotas reservadas caem na explicação de "ainda não existe" — nunca em
+  // "Visão geral" em silêncio.
+  return reservedPages.has(id as Page) ? (id as Page) : 'overview';
 }
 
 export function ProductApp({
@@ -168,6 +438,14 @@ function ProductShell({
   const releaseLabel = release && release.version !== 'unversioned' ? ` · v${release.version}` : '';
   const [page, setPage] = useState(currentPage);
   const [modal, setModal] = useState<Modal | null>(null);
+  // STK-F3-01 — o modo da sidebar é estado do CASCA, não do conteúdo: sobrevive
+  // à troca de página e é lido do storage uma vez, na montagem. A leitura é
+  // preguiçosa de propósito — o valor inicial só importa na primeira
+  // renderização, e reler a cada render faria a sidebar piscar entre o modo
+  // gravado e o padrão enquanto o usuário navega.
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() =>
+    readSidebarMode(typeof window === 'undefined' ? null : window.localStorage),
+  );
   const actions = useFinanceActions();
   const client = useQueryClient();
   const onboarding = useQuery({
@@ -236,8 +514,18 @@ function ProductShell({
   // modais, formulários e o caminho financeiro com confirmação) é o MESMO
   // componente da web — por isso a troca não pode duplicar regra nenhuma.
   const items = variant === 'mini' ? miniAppNavigation : navigation;
+  /* STK-F3-01 — a classe do shell carrega o MODO, e é dela que a folha tira
+     a largura reservada (`.sidebar-mode-*`). O `metrics` não vai para a
+     marcação: publicá-lo exigiria estilo inline (proibido) ou `attr()`
+     tipado, que ainda não é confiável entre os navegadores do projeto. A
+     folha repete os mesmos dois números de `sidebarMetrics`, e o teste de
+     tokens confere que as duas cópias concordam. */
+  const shellClass =
+    variant === 'mini'
+      ? 'product-shell miniapp-shell'
+      : `product-shell sidebar-mode-${sidebarMode}`;
   return (
-    <div className={variant === 'mini' ? 'product-shell miniapp-shell' : 'product-shell'}>
+    <div className={shellClass}>
       {/*
         STK-F2-18: skip link. O alvo (`#product-main`) já existia no código
         desde antes desta fase e nada apontava para ele — a navegação por
@@ -249,28 +537,77 @@ function ProductShell({
         Pular para o conteúdo
       </a>
       {variant === 'web' ? (
-        <aside className="product-sidebar">
+        <TopBar
+          collapsed={sidebarMode === 'collapsed'}
+          onToggleSidebar={() => {
+            const next: SidebarMode = sidebarMode === 'collapsed' ? 'expanded' : 'collapsed';
+            writeSidebarMode(typeof window === 'undefined' ? null : window.localStorage, next);
+            setSidebarMode(next);
+          }}
+        />
+      ) : null}
+      {variant === 'web' ? (
+        <aside className="product-sidebar" data-mode={sidebarMode}>
           <a href="#overview" className="product-brand">
             stakeframe<span>.</span>
           </a>
-          <p className="sidebar-caption">SEU ESPAÇO PESSOAL</p>
+          {/* STK-F3-01 — a sidebar tem UM `nav` só, com as quatro categorias
+              dentro dele. Não são quatro `nav`: os quatro seriam quatro listas
+              de mesmo peso para o leitor de tela, e a barra inferior do mobile
+              (que é este mesmo `nav`) precisa de UM elemento com a grade
+              explícita que o teste de navegador mede. As categorias são
+              `<section>` com `aria-label`, não navegação — elas não mudam de
+              contexto, só seccionam. */}
           <nav aria-label="Navegação principal">
-            {navigation.map((item) => (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                aria-current={page === item.id ? 'page' : undefined}
-              >
-                <span className="nav-icon">
-                  <NavGlyph icon={item.icon} />
-                </span>
-                <span className="nav-label">{item.title}</span>
-              </a>
+            {sidebarGroups.map((group) => (
+              <section className="sidebar-group" key={group.caption} aria-label={group.caption}>
+                <p className="sidebar-caption">{group.caption}</p>
+                {/* STK-F3-01 — a categoria Polymarket é a única que NÃO é uma
+                    lista de ids, porque os quatro destinos do card não são
+                    quatro Rotas iguais: dois existem (Favoritos, Simulação) e
+                    dois estão declarados e desligados (Global, Telegram). A
+                    ordem é a do card — Global, Favoritos, Telegram, Simulação
+                    — e a lista `polymarketItems` é a que a garante; deixá-la
+                    espalhada por condicionais dentro do mapa era a forma de a
+                    ordem depender de onde alguém-editaria o arquivo. */}
+                {group.caption === 'POLYMARKET'
+                  ? polymarketItems.map((entry) =>
+                      'reserved' in entry ? (
+                        <ReservedDestination key={entry.id} icon={entry.icon} title={entry.title} />
+                      ) : (
+                        <a
+                          key={entry.id}
+                          href={`#${entry.id}`}
+                          aria-current={page === entry.id ? 'page' : undefined}
+                        >
+                          <span className="nav-icon">
+                            <NavGlyph icon={entry.icon} />
+                          </span>
+                          <span className="nav-label">{entry.title}</span>
+                          {'count' in entry ? <FavoritesBadge /> : null}
+                        </a>
+                      ),
+                    )
+                  : group.ids.map((id) => {
+                      const item = navigation.find((entry) => entry.id === id)!;
+                      return (
+                        <a
+                          key={item.id}
+                          href={`#${item.id}`}
+                          aria-current={page === item.id ? 'page' : undefined}
+                        >
+                          <span className="nav-icon">
+                            <NavGlyph icon={item.icon} />
+                          </span>
+                          <span className="nav-label">{item.title}</span>
+                          {'count' in item ? <FavoritesBadge /> : null}
+                        </a>
+                      );
+                    })}
+              </section>
             ))}
           </nav>
-          <div className="sidebar-bottom">
-            <span className="private-dot" /> Acesso privado<p>Horário de São Paulo</p>
-          </div>
+          <SidebarFooter mode={sidebarMode} onChange={setSidebarMode} />
         </aside>
       ) : null}
       <div className="product-content">
@@ -323,7 +660,15 @@ function ProductShell({
                   ? 'Primeiros passos'
                   : page === 'imports'
                     ? 'Recebimentos técnicos'
-                    : items.find((item) => item.id === page)!.title}
+                    : // STK-F3-01: uma rota da categoria Polymarket não tem item
+                      // em `navigation` (ela vive em `polymarketItems`, para
+                      // não aparecer duas vezes), então o título vem de
+                      // `pageTitles` — e, no caso de uma rota RESERVADA, a
+                      // página logo abaixo diz que ela ainda não existe. Um
+                      // `!` aqui derrubaria a tela inteira para quem abrir um
+                      // link guardado para o futuro, e um `?? ''` mostraria
+                      // um `h1` vazio numa tela que existe.
+                      (items.find((item) => item.id === page) ?? pageTitles[page as Page])?.title}
               </h1>
             </div>
             <span className="live-label">
@@ -379,6 +724,42 @@ function ProductShell({
             // tenant — que é impersonação, e a rota não aceita nem usuário nem
             // organização justamente por isso.
             <PolymarketRankingPage />
+          ) : page === 'pm-favorites' ? (
+            // STK-F3-01: Favoritos deixa de ser SEÇÃO do ranking e vira
+            // DESTINO. A tela é a MESMA seção da F2-16 — nenhuma regra foi
+            // reescrita —; o que muda é que ela agora tem endereço próprio e
+            // aparece na navegação. Continua sem `workspace` pelo mesmo
+            // motivo do ranking: quem guarda uma carteira pública escolhe uma
+            // carteira, não um espaço de trabalho.
+            <PolymarketFavoritesPage />
+          ) : page === 'pm-simulation' ? (
+            // STK-F3-01: a simulação também vira destino. A JANELA é a padrão
+            // do produto (a mesma de `POLYMARKET_DEFAULT_WINDOW`) porque a
+            // tela deixou de estar abaixo do ranking — herdar a janela do
+            // ranking por contexto deixou de existir, e repetir os três
+            // `select` aqui devolveria dois controles com o mesmo rótulo
+            // acessível na mesma tela.
+            //
+            // `limit` não entra: ele limita a QUANTIDADE de linhas do
+            // leaderboard, que é do ranking, e a simulação não pede tabela.
+            <PolymarketSimulationPage
+              window={{
+                ...POLYMARKET_DEFAULT_WINDOW,
+                limit: POLYMARKET_RANKING_LIMIT,
+              }}
+            />
+          ) : page === 'pm-global' ? (
+            // STK-F3-04: a tela Global do Polymarket em CARDS de tipster, só
+            // esportes e e-sports. Sem `workspace` pelo mesmo motivo do
+            // ranking: é dado público, idêntico para qualquer conta, e ligar
+            // a lista a um tenant abriria espaço para impersonação.
+            //
+            // A integração está PENDENTE (gate F2-18 não autorizado) e a
+            // tela usa os dados locais de `polymarket-global-data.ts`, que
+            // passam pelo mesmo contrato que um payload real passaria.
+            <PolymarketGlobalPage />
+          ) : reservedPages.has(page) ? (
+            <ReservedPage title={pageTitles[page as Page]!.title} />
           ) : page === 'reports' ? (
             // STK-F2-08: a página do relatório privado. Ela não recebe o
             // `workspace` porque é a ÚNICA tela do produto que lê o SNAPSHOT

@@ -20,6 +20,10 @@ export * from './polymarket-simulation.js';
 // do Composite Score. Nenhuma exportação daqui devolve o score: o serviço
 // grava a versão e só isso, e é essa ausência que mantém a avaliação paralela.
 export * from './polymarket-alerts.js';
+// STK-F3-04: a tela Global do Polymarket em CARDS, só esportes e e-sports.
+// A integração com o endpoint está PENDENTE (gate F2-18 não autorizado); o
+// que este arquivo define é o CONTRATO e as funções puras de apresentação.
+export * from './polymarket-global-cards.js';
 
 export const systemStatusSchema = z
   .object({

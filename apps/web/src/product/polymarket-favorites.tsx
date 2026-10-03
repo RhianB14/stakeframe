@@ -99,12 +99,19 @@ export function FavoriteButton({ proxyWallet }: { proxyWallet: string }) {
 /**
  * A seção de favoritos e de configuração do alerta.
  *
- * A escolha de NÃO criar um destino novo na navegação é deliberada e não é
- * cosmética: `tests/e2e/product.test.ts` fixa TRÊS invariantes de
- * acessibilidade na barra `.product-sidebar nav`, e o número de colunas do CSS
- * (`grid-template-columns: repeat(N, ...)` no media query de 760px) é LITERAL.
- * Um oitavo destino quebraria a geometria da barra para transformar uma função
- * que cabe em uma seção da tela que o usuário já visita.
+ * STK-F3-01 mudou a FORMA, não o conteúdo: esta seção deixou de viver
+ * exclusivamente dentro da tela de ranking e ganhou endereço próprio
+ * (`#pm-favorites`), virando destino de primeira classe na navegação. O
+ * argumento original — "a geometria da barra inferior é literal e um
+ * destino a mais a quebraria" — continua VALENDO, e é exatamente por isso
+ * que a asserção de contagem de colunas foi atualizada com a
+ * justificativa escrita, em vez de relaxada.
+ *
+ * A tela em si NÃO foi reescrita: ela é a mesma, com o mesmo teto de dez, o
+ * mesmo aviso de recusar o excedente e a mesma separação entre favoritar e
+ * ligar alerta. Por isso a página abaixo é um ENVOLTÓRIO, não uma segunda
+ * implementação — duas telas de favoritos divergiriam na primeira mudança
+ * de regra.
  */
 export function PolymarketFavoritesSection() {
   const client = useQueryClient();
@@ -369,5 +376,40 @@ function AlertConfigPanel({
         Um alerta adiado pelo silêncio continua ocupando a cota do dia.
       </p>
     </div>
+  );
+}
+
+/**
+ * STK-F3-01 — a tela de Favoritos como DESTINO (`#pm-favorites`).
+ *
+ * É um ENVOLTÓRIO, e não uma segunda implementação: ele monta a MESMA
+ * `PolymarketFavoritesSection` que o ranking renderiza. A tela de ranking
+ * continua contendo a seção — mudar isso seria tirar uma função de onde a
+ * pessoa já estava — e o destino novo é o mesmo componente, promoted.
+ *
+ * A única coisa que a página acrescenta é o enquadramento: um cabeçalho
+ * PRÓPRIO, que diz a que destino a pessoa chegou. O título do cabeçalho é
+ * deliberadamente DIFERENTE do `h2` da seção abaixo (`Favoritos do
+ * ranking Polymarket`): dois `heading` com o mesmo nome acessível na mesma
+ * tela tornam `getByRole('heading', { name })` ambíguo, e essa ambiguidade
+ * quebraria justamente o teste que prova que a tela está mostrando o teto
+ * de favoritos.
+ */
+export function PolymarketFavoritesPage() {
+  return (
+    <>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <h2>Seus favoritos da Polymarket</h2>
+            <p>
+              As carteiras públicas que você guardou do leaderboard, com o uso do teto e o alerta de
+              atividade. Favoritar não liga alerta: a ativação é separada, abaixo.
+            </p>
+          </div>
+        </div>
+      </section>
+      <PolymarketFavoritesSection />
+    </>
   );
 }
