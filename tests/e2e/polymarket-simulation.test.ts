@@ -297,8 +297,15 @@ test('a página não estoura a largura e a navegação mantém os DEZ destinos',
   // LITERAL e continua sendo verificado — o que mudou foi o número, com a
   // justificativa escrita na asserção de `product.test.ts` e no corpo do
   // commit, não a asserção.
+  //
+  // STK-F3-04: `pm-global` deixou de ser RESERVADO e passou a ser destino
+  // de verdade — a tela existe, em cards. Isso troca UM `<span
+  // class="sidebar-reserved">` por UM `<a>`, e o contador deste teste mede
+  // `<a>`, não destinos. Onze, portanto: os dez de antes mais o Global. O
+  // `pm-telegram` continua reservado e continuafora da contagem, porque um
+  // destino desligado não é link.
   const nav = page.locator('.product-sidebar nav');
-  await expect(nav.locator('a')).toHaveCount(10);
+  await expect(nav.locator('a')).toHaveCount(11);
   // E a seção continua na tela de ranking: as duas premissas de cobertura
   // ainda são as mesmas, e a janela mostrada em texto é a padrão do produto.
   await expect(page.getByText(/Janela:/)).toBeVisible();
