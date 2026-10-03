@@ -306,7 +306,14 @@ test('a página não estoura a largura e a navegação mantém os DEZ destinos',
   // destino desligado não é link.
   const nav = page.locator('.product-sidebar nav');
   await expect(nav.locator('a')).toHaveCount(11);
-  // E a seção continua na tela de ranking: as duas premissas de cobertura
-  // ainda são as mesmas, e a janela mostrada em texto é a padrão do produto.
-  await expect(page.getByText(/Janela:/)).toBeVisible();
+  // E a janela é mostrada em TEXTO, e é a janela padrão do produto.
+  //
+  // STK-F3-04: `getByText(/Janela:/)` virou AMBÍGUO. A tela passou a
+  // declarar a própria janela em `data-testid="janela-da-simulacao"`, e o
+  // rodapé de `view.footnote` também começa com "Janela:". São dois textos
+  // legítimos e diferentes — o `strict mode violation` é do seletor, não do
+  // produto. O que este teste quer provar é que a janela está escrita na
+  // tela, e para isso existe um `testid` estável; asubstringa genérica é que
+  // era frágil, não o conteúdo.
+  await expect(page.getByTestId('janela-da-simulacao')).toBeVisible();
 });
