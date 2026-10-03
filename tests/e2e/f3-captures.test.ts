@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { PerformanceReport, ReportMetrics } from '@stakeframe/shared';
+import type { PerformanceReport, ReportMetrics } from '../../packages/shared/src/index.js';
 import { enabledProduct } from './product-fixtures.js';
 
 /**

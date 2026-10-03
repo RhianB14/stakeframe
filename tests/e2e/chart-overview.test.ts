@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { PerformanceReport, ReportMetrics } from '@stakeframe/shared';
+import type { PerformanceReport, ReportMetrics } from '../../packages/shared/src/index.js';
 import { enabledProduct } from './product-fixtures.js';
 
 /**
@@ -114,7 +114,7 @@ test.describe('STK-F3-03 — gráfico de resultado no padrão SharkTrack', () =>
       /* A curva é o `<path class="recharts-area-curve">`. Um seletor de TAG
          pegaria também o clipPath e o gradiente, e o `getPointAtLength` deles
          devolve uma coordenada fora da tela. */
-      const curve = node.querySelector('.recharts-area-curve');
+      const curve = node.querySelector<SVGPathElement>('.recharts-area-curve');
       if (!zeroLine) throw new Error('linha de referência do zero ausente');
       if (!area) throw new Error('área preenchida ausente');
       if (!curve) throw new Error('curva da área ausente');

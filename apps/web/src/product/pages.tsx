@@ -149,7 +149,7 @@ function BetStatusTag({ bet }: { bet: Bet }) {
 }
 
 function BetTableCell({ row, column }: { row: BetTableRow; column: BetTableColumnKey }) {
-  const { bet, details, result, tipster, bookmaker } = row;
+  const { bet, details, tipster, bookmaker } = row;
   switch (column) {
     case 'ticket':
       return (

@@ -6,6 +6,7 @@ import {
   type Workspace,
   type Bet,
   type ReportMetrics,
+  type PerformanceReport,
 } from '../../packages/shared/src/index.js';
 import type { Page } from '@playwright/test';
 
