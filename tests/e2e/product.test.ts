@@ -1796,6 +1796,40 @@ test('analytics chart axis labels honour the same 12px floor as the rest of the 
     route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } }),
   );
   await page.goto('/#analytics');
+  // Sincroniza antes de preencher: o painel re-monta quando a query de opções
+  // resolve, e preencher durante o re-render faz o input ser detached a cada
+  // tentativa (o id useId muda: _r_3g_, _r_3n_, _r_6i_…). É o mesmo guard do
+  // teste de analytics acima, pela mesma razão.
+  await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  /* AS DUAS BORDAS SÃO PREENCHIDAS AQUI — segunda ocorrência da mesma armadilha
+     de calendário, e a mesma união de mecanismos já aplicada no teste de
+     analytics acima.
+
+     A tela deriva `from` do primeiro dia do mês corrente (analytics.tsx:213) e
+     abre com `to` = hoje. O formulário recusa `from > to` (analytics.tsx:254):
+     quando recusa, o submit não roda, o setFilter nunca acontece, o eixo do
+     gráfico não aparece — e o clique em "Aplicar filtros" morre com "element
+     was detached from the DOM", um erro que parece de flaky e não é. Com o
+     fixture em 2026-09 e a máquina rodando em 2026-10, `from`=2026-10-01 >
+     `to`=2026-09-30, e o teste morre só por causa do dia em que roda.
+
+     - Borda FINAL: âncora DINÂMICA (`saoPauloDate(new Date())`), a mesma data
+       que a tela já usa para `to`. Nunca é literal do passado, então não
+       quebra na virada do mês.
+     - Borda INICIAL: dia 1 DESSE MESMO mês corrente, coerente com a âncora
+       acima. Assim `from <= to` vale sempre, inclusive no dia 1 (fica
+       `from == to`, e a validação aceita igualdade).
+
+     Não copiei os literais fixos '2026-09-01'/'2026-09-30' de propósito: eles
+     consertam hoje e quebram em novembro. A âncora tem que ser derivada.
+
+     PADRAO (as duas ocorrências agora seguem isto): nenhum teste de e2e depende
+     de data fixa em fronteira de mês. Se um terceiro aparecer, é a MESMA
+     armadilha — preencha as duas bordas com âncora derivada, não com literal. */
+  await page
+    .getByLabel('Data inicial da análise')
+    .fill(saoPauloDate(new Date()).slice(0, 8) + '01');
+  await page.getByLabel('Data final da análise').fill(saoPauloDate(new Date()));
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
 
   const ticks = page.locator('.report-chart .recharts-cartesian-axis-tick-value');
