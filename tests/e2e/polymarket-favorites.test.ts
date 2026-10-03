@@ -345,18 +345,31 @@ test('Composite Score, badge e recomendação NÃO aparecem em lugar nenhum da t
   expect(nav.toLowerCase()).not.toContain('score');
 });
 
-test('a navegação não ganhou destino: favoritos ficam dentro da tela de ranking', async ({
-  page,
-}) => {
-  // A escolha é deliberada — `product.test.ts` fixa a geometria da barra com
-  // um número LITERAL de colunas — e este teste a torna explícita para que uma
-  // PR futura não adicione um destino sem perceber que quebraria a barra.
+test('favoritos viraram DESTINO e continuam dentro da tela de ranking', async ({ page }) => {
+  // STK-F3-01 inverte este teste, e a inversão é o registro da decisão: o
+  // dono pediu Favoritos e Simulação na navegação, e o argumento que os
+  // mantinha fora — "a barra inferior tem um número LITERAL de colunas e um
+  // destino a mais a quebraria" — foi resolvido ATUALIZANDO a contagem com a
+  // justificativa escrita, não relaxando o teste. A asserção que este teste
+  // fazia era a de AUSÊNCIA de um destino; ela prova agora a PRESENÇA dele
+  // e que a SEÇÃO continua na tela de ranking, que é a parte da regra da
+  // F2-16 que este card não revoga.
   await openRanking(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(1, false),
   });
   const nav = await page.locator('.product-sidebar nav a').allInnerTexts();
-  expect(nav.join(' ')).not.toContain('Favoritos');
+  expect(nav.join(' ')).toContain('Favoritos');
+  // E a seção continua onde estava: favoritar pela linha da tabela do ranking
+  // continua sendo o caminho, e a tela de ranking não perdeu nada.
+  await expect(
+    page.getByRole('heading', { name: 'Favoritos do ranking Polymarket' }),
+  ).toBeVisible();
+  // E o destino novo abre a MESMA tela — não uma segunda implementação.
+  await page.getByRole('link', { name: 'Favoritos', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Favoritos do ranking Polymarket' }),
+  ).toBeVisible();
   // E a página não estoura a largura da tela com a nova coluna.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

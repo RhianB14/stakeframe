@@ -28,6 +28,7 @@ import {
   type BetTableSortDirection,
 } from '@stakeframe/shared';
 import { BetColumnsPanel, loadBetColumns } from './bet-columns-panel.js';
+import { betStatusLabel, betStatusNeedsReview, betStatusTone } from './bet-status.js';
 import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
@@ -129,6 +130,24 @@ const columnClassNames: Partial<Record<BetTableColumnKey, string>> = {
   id: 'bet-id-cell',
 };
 
+/**
+ * STK-F3-02 — a etiqueta de situação da aposta.
+ *
+ * A cor vem de `betStatusTone`, que lê o RESULTADO e não o `state`: os três
+ * estados da aposta (aberta, liquidada, cancelada) e os resultados possíveis
+ * não são a mesma coisa, e uma etiqueta que pinte "aberta" de verde está
+ * afirmando um resultado que ainda não existe.
+ */
+function BetStatusTag({ bet }: { bet: Bet }) {
+  const tone = betStatusTone(bet);
+  return (
+    <span className={`status-badge bet-status-${tone}`}>
+      {betStatusLabel(bet)}
+      {betStatusNeedsReview(bet) ? <span className="bet-status-review"> · a conferir</span> : null}
+    </span>
+  );
+}
+
 function BetTableCell({ row, column }: { row: BetTableRow; column: BetTableColumnKey }) {
   const { bet, details, result, tipster, bookmaker } = row;
   switch (column) {
@@ -177,7 +196,7 @@ function BetTableCell({ row, column }: { row: BetTableRow; column: BetTableColum
       const qualifier = betResultQualifier(bet);
       return (
         <>
-          <span className={`status-badge status-${bet.state}`}>{result}</span>
+          <BetStatusTag bet={bet} />
           {qualifier ? <small>{qualifier}</small> : null}
         </>
       );
@@ -580,17 +599,18 @@ export function BetsPage({
                   <tr>
                     {compact ? (
                       <>
-                        <th>Nº / bilhete / evento</th>
-                        <th>Casa</th>
-                        <th>Valor</th>
-                        <th>Odd</th>
-                        <th>Situação</th>
-                        <th>Resultado realizado</th>
+                        <th data-column="ticket">Nº / bilhete / evento</th>
+                        <th data-column="bookmaker">Casa</th>
+                        <th data-column="stake">Valor</th>
+                        <th data-column="odds">Odd</th>
+                        <th data-column="result">Situação</th>
+                        <th data-column="return">Resultado realizado</th>
                       </>
                     ) : (
                       columns.map((column) => (
                         <th
                           key={column.key}
+                          data-column={column.key}
                           aria-sort={column.key === sort?.column ? sort.direction : 'none'}
                         >
                           <button
@@ -603,7 +623,7 @@ export function BetsPage({
                         </th>
                       ))
                     )}
-                    <th>
+                    <th data-column="open">
                       <span className="sr-only">Abrir</span>
                     </th>
                   </tr>
@@ -636,22 +656,53 @@ export function BetsPage({
                               <BetTableCell row={row} column={column.key} />
                             </td>
                           ))}
-                          <td data-column="open">
-                            <Button
-                              variant="ghost"
-                              size="small"
-                              aria-label={`Ver aposta ${betAccessibleTitle(bet)}`}
-                              onClick={() => open({ kind: 'detail', id: bet.id })}
-                            >
-                              Ver
-                            </Button>
+                          <td data-column="open" className="bet-actions-cell">
+                            {/* STK-F3-02: as duas ações de linha. "ver" abre
+                                o BetDrawer (o detalhe ao lado da lista, que
+                                é onde a comparação entre linhas continua
+                                possível) e "editar" abre o editor da aposta —
+                                o mesmo `{ kind: 'bet' }` que o detalhe já
+                                usa, e que portanto corrige dados em vez de
+                                criar outro.
+
+                                Os dois têm `aria-label` com o TÍTULO da
+                                aposta, não com a palavra da ação: numa lista
+                                de 25 linhas, "Editar" repetido 25 vezes não
+                                diz a ninguém qual aposta será corrigida. O
+                                rótulo visível é curto e o nome acessível é
+                                completo — é a divisão que o leitor de tela
+                                precisa.
+
+                                O alvo de toque de 44px é CSS (`.bet-row-action`),
+                                não atributo: o botão cresce por baixo em vez
+                                de empurrar as linhas vizinhas. */}
+                            <div className="bet-row-actions">
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                className="bet-row-action"
+                                aria-label={`Ver aposta ${betAccessibleTitle(bet)}`}
+                                onClick={() => open({ kind: 'detail', id: bet.id })}
+                              >
+                                Ver
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                className="bet-row-action"
+                                aria-label={`Editar aposta ${betAccessibleTitle(bet)}`}
+                                onClick={() => open({ kind: 'bet', bet })}
+                              >
+                                Editar
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
                     }
                     return (
                       <tr key={bet.id}>
-                        <td>
+                        <td data-column="ticket">
                           <small className="ticket-number">Bilhete #{bet.ticketNumber}</small>
                           <button
                             className="table-title"
@@ -668,8 +719,13 @@ export function BetsPage({
                             <span className="pending-label">Data do evento a conferir</span>
                           ) : null}
                         </td>
-                        <td>{catalogName(workspace, bet.bookmakerId)}</td>
-                        <td className="tabular">
+                        <td data-column="bookmaker">{catalogName(workspace, bet.bookmakerId)}</td>
+                        {/* STK-F3-02: `tabular` sozinho dá a FIGURA fixa (dígitos
+                            do mesmo peso) e nada mais: sem `align-end` a coluna
+                            continuaria com o texto grudado à esquerda, e a régua
+                            de centavos não se formaria. `bet-number-cell` faz as
+                            duas coisas. */}
+                        <td data-column="stake" className="tabular bet-number-cell">
                           {formatBRLWhenPresent(bet.stake)}
                           <small>
                             {bet.stakeUnits === null
@@ -677,19 +733,19 @@ export function BetsPage({
                               : `${Number(bet.stakeUnits).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} u`}
                           </small>
                         </td>
-                        <td className="tabular">{bet.odds ?? 'A definir'}</td>
-                        <td>
-                          <span className={`status-badge status-${bet.state}`}>
-                            {stateLabels[bet.state]}
-                          </span>
+                        <td data-column="odds" className="tabular">
+                          {bet.odds ?? 'A definir'}
                         </td>
-                        <td className={`tabular ${financial.tone}`}>
+                        <td data-column="result">
+                          <BetStatusTag bet={bet} />
+                        </td>
+                        <td data-column="return" className={`tabular ${financial.tone}`}>
                           {financial.profitText}
                           {financial.qualifier !== 'Realizado' ? (
                             <small>{financial.qualifier}</small>
                           ) : null}
                         </td>
-                        <td>
+                        <td data-column="open">
                           <Button
                             variant="ghost"
                             size="small"

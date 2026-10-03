@@ -57,3 +57,8 @@ tests/ux-capture/ux-report/
 
 # Capturas de revisao de design (STK-F2-18) — artefato local, nao entra no repo
 capturas/fase4/
+# STK-F3-01/03/04 - as capturas da Fase 3 sao gravadas na RAIZ de `capturas/`,
+# nao em `capturas/fase4/`: os testes E2E de captura (chart-overview,
+# polymarket-global-captures, f3-captures) nomeiam os arquivos por cartao e
+# cenario. Sem esta regra mais ampla, `capturas/` inteiro entraria no commit.
+capturas/

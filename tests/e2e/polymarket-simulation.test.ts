@@ -288,12 +288,18 @@ test('os avisos de jogo responsável estão na tela nos DOIS desfechos', async (
   }
 });
 
-test('a página não estoura a largura e a navegação mantém os OITO destinos', async ({ page }) => {
+test('a página não estoura a largura e a navegação mantém os DEZ destinos', async ({ page }) => {
   await openSimulation(page, refused());
   await expect(page.getByTestId('simulacao-resultado')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  // A simulação é uma SEÇÃO do ranking, não um destino novo: a barra continua
-  // com os oito destinos que o teste de navegação já garante em 44px.
+  // STK-F3-01: a simulação deixou de ser SEÇÃO do ranking e virou
+  // DESTINO, e a contagem subiu de OITO para DEZ. O número continua
+  // LITERAL e continua sendo verificado — o que mudou foi o número, com a
+  // justificativa escrita na asserção de `product.test.ts` e no corpo do
+  // commit, não a asserção.
   const nav = page.locator('.product-sidebar nav');
-  await expect(nav.locator('a')).toHaveCount(8);
+  await expect(nav.locator('a')).toHaveCount(10);
+  // E a seção continua na tela de ranking: as duas premissas de cobertura
+  // ainda são as mesmas, e a janela mostrada em texto é a padrão do produto.
+  await expect(page.getByText(/Janela:/)).toBeVisible();
 });

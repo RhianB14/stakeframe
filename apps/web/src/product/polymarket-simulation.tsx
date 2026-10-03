@@ -295,3 +295,21 @@ function SimulationResult({ simulation }: { simulation: PolymarketSimulation }) 
     </div>
   );
 }
+
+/**
+ * STK-F3-01 — a simulação como DESTINO (`#pm-simulation`).
+ *
+ * Um ENVOLTÓRIO da MESMA `PolymarketSimulationSection` que o ranking
+ * renderiza — nenhuma regra foi reescrita, nenhuma premissa mudou, e o
+ * aviso de jogo responsável continua aparecendo nos dois desfechos.
+ *
+ * A diferença é a JANELA, e ela é consequência de a tela ter saído de baixo
+ * do ranking: como não existe mais um `select` de período logo acima para
+ * herdar, a simulação recebe a janela padrão do produto. Repetir os três
+ * filtros aqui devolveria dois controles com o mesmo rótulo acessível na
+ * mesma tela — que é indistinguível para um leitor de tela — e a tela
+ * mostraria em texto qual janela está usando, como já fazia.
+ */
+export function PolymarketSimulationPage({ window }: { window: PolymarketRankingQuery }) {
+  return <PolymarketSimulationSection window={window} />;
+}
