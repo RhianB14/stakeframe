@@ -1585,6 +1585,14 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   );
   await page.goto('/#analytics');
   await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  // As DUAS bordas do período são fixadas aqui de propósito. A página deriva
+  // `from` do primeiro dia do MÊS CORRENTE (analytics.tsx:213); se o teste
+  //.fill() só a borda final, em qualquer dia a partir de 2026-10-01 fica
+  // from=2026-10-01 > to=2026-09-30, a validação do form recusa o submit
+  // (analytics.tsx:254) e o setFilter nunca roda — a requisição não sai e o
+  // waitForRequest estoura o teto do teste. Preencher `from` deixa o período
+  // igual ao `filters` do próprio fixture e independente do relógio.
+  await page.getByLabel('Data inicial da análise').fill('2026-09-01');
   await page.getByLabel('Data final da análise').fill('2026-09-30');
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
@@ -1610,6 +1618,15 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   await page.getByLabel('Incluir datas estimadas').check();
   const request = page.waitForRequest(
     (request) => request.url().includes('/reports?') && request.url().includes('sport%3Afutebol'),
+    // Teto PRÓPRIO, deliberadamente curto: esta requisição é um clique local
+    // sobre um mock de rota, ela não depende de rede nem de backend. O valor
+    // não é folga para a página demorar — é para o waitForRequest NÃO herdar
+    // o teto global do teste. Herdado, um clique que não dispara a requisição
+    // só se revela quando o teste inteiro estoura 30s, e o stack aponta a
+    // linha do waitForRequest em vez do clique que falhou (foi exatamente o
+    // que mascarou o bug de validação de período). O timeout global do
+    // playwright.config NÃO foi tocado: continua 30s para todo o resto.
+    { timeout: 5_000 },
   );
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await request;

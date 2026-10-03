@@ -179,6 +179,19 @@ beforeAll(async () => {
     unitPercent: '1.00',
     expectedVersion: (await finance.workspace(context)).version,
   });
+  // A unidade é devida no mês da aposta (finance-commands.ts:56) e só o mês
+  // corrente nasce sozinho, em ensureCurrentUnit. Neste arquivo o placedAt nasce
+  // do instante da mensagem (telegram-text-registration.ts:407) e asfixtures usam
+  // receivedAt de setembro, então setembro precisa da unidade declarada — senão
+  // allowMissingUnit:false esbarra em UNIT_REQUIRED. O valor é 1% da reserva,
+  // igual à unidade inicial; nenhum assert daqui lê o valor.
+  await finance.command(context, randomUUID(), {
+    type: 'unit.set',
+    month: '2026-09',
+    amount: '50.00',
+    reason: 'Unidade de setembro conferida pelo cenário de texto',
+    expectedVersion: (await finance.workspace(context)).version,
+  });
 });
 
 afterAll(async () => {
@@ -695,7 +708,19 @@ describe('STK-F2-07 — os onze comandos são de LEITURA', () => {
       unitPercent: '1.00',
       expectedVersion: otherWorkspace.version,
     });
-    const otherAfterInit = (await finance.workspace(other)).version;
+    // A unidade é devida no mês da aposta (finance-commands.ts:56) e só o mês
+    // corrente nasce sozinho, em ensureCurrentUnit. Esta aposta é de 19/09, então
+    // setembro precisa da unidade declarada na MESMA organização — senão
+    // allowMissingUnit:false esbarra em UNIT_REQUIRED. O valor é 1% da reserva,
+    // igual à unidade inicial; nenhum assert deste arquivo lê o valor, e a
+    // separação entre organizações segue intacta: a unidade é desta org só.
+    await finance.command(other, randomUUID(), {
+      type: 'unit.set',
+      month: '2026-09',
+      amount: '50.00',
+      reason: 'Unidade de setembro conferida pelo cenário de isolamento',
+      expectedVersion: (await finance.workspace(other)).version,
+    });
     await finance.command(other, randomUUID(), {
       type: 'bet.create',
       bookmakerId: house.id,
@@ -718,7 +743,7 @@ describe('STK-F2-07 — os onze comandos são de LEITURA', () => {
           dateStatus: 'confirmed',
         },
       ],
-      expectedVersion: otherAfterInit,
+      expectedVersion: (await finance.workspace(other)).version,
     });
     const { commands } = commandsFor();
     const answer = await commands.read('pendentes');

@@ -67,6 +67,31 @@ beforeEach(async () => {
     balances: [{ bookmakerId, amount: '500.00' }],
     unitPercent: '1.00',
   });
+  // A unidade é devida no mês da aposta (finance-commands.ts:56) e só o mês
+  // corrente nasce sozinho, em ensureCurrentUnit. A aposta deste arquivo
+  // posicionada no passado relativo ("agora menos dois dias",
+  // automatic-import.test.ts:674) cai no mês ANTERIOR justamente no começo do
+  // mês, quando esse mês ainda não tem unidade — foi isso que deixou a main
+  // vermelha desde 1º de outubro. Declarar a unidade do mês anterior é a mesma
+  // conferência que o dono faria, e é para isso que unit.set existe.
+  // Nenhum assert daqui lê este valor: o unitAmount: '10.00' continua vindo da
+  // unidade do mês corrente, que nasce em bankroll.initialize.
+  const retroMonth = (shiftDays: number) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+    })
+      .format(new Date(Date.now() - shiftDays * 86_400_000))
+      .slice(0, 7);
+  const retroMonthUnit = retroMonth(2);
+  if (retroMonthUnit !== retroMonth(0))
+    await run({
+      type: 'unit.set',
+      month: retroMonthUnit,
+      amount: '5.00',
+      reason: 'Unidade do mês anterior conferida para a aposta retroativa do cenário',
+    });
   await run({
     type: 'catalog.create',
     kind: 'tipster',
