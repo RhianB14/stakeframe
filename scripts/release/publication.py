@@ -10,6 +10,11 @@ import zipfile
 from pathlib import Path
 from verify_oci import TARGETS, require, verify
 
+# The immutability rule and its probe live with the other publisher so the two
+# publication paths cannot drift apart: a tag is written once, and a tag that
+# already holds different content is never moved.
+from registry_publish import read_tag_digest
+
 APPROVAL = Path("infra/release/approved-arm64.json")
 DIRECTORY = Path(".cache/publication")
 
@@ -81,9 +86,15 @@ def publish(directory, approval):
         subprocess.run(["skopeo", "login", "--authfile", authfile, "--username", os.environ["GITHUB_ACTOR"], "--password-stdin", "ghcr.io"], input=os.environ["GITHUB_TOKEN"], text=True, check=True)
         auth = ["--authfile", authfile]
         for item in approval["images"]:
-            subprocess.run(["skopeo", "copy", *auth, "--all", "--preserve-digests", "oci-archive:" + str(directory / "archives" / (item["target"] + ".oci.tar")), "docker://" + item["repository"] + ":" + tag], check=True)
-            registry_readback(item["repository"], item["digest"], auth)
-            print("PUBLICATION_REGISTRY_VERIFIED", item["target"], item["digest"], flush=True)
+            existing = read_tag_digest(item["repository"], tag, auth)
+            if existing != item["digest"]:
+                require(existing is None, "PUBLICATION_TAG_IMMUTABLE_REFUSED")
+                subprocess.run(["skopeo", "copy", *auth, "--all", "--preserve-digests", "oci-archive:" + str(directory / "archives" / (item["target"] + ".oci.tar")), "docker://" + item["repository"] + ":" + tag], check=True)
+                registry_readback(item["repository"], item["digest"], auth)
+                print("PUBLICATION_REGISTRY_VERIFIED", item["target"], item["digest"], flush=True)
+            else:
+                print("PUBLICATION_ALREADY_PRESENT", item["target"], tag, flush=True)
+
     result.update({"published": True, "publicAccessVerified": False, "productionDeployed": False, "tag": tag})
     (directory / "published.json").write_text(json.dumps(result, indent=2) + "\n")
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
