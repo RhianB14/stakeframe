@@ -704,7 +704,7 @@ function ExistingBetPicker({
       id: bet.id,
       reference: bet.reference ?? '',
       bookmakerId: bet.bookmakerId ?? '',
-      stake: bet.stake ?? '0.00',
+      stake: bet.stake ?? '',
       placedAt: bet.placedAt,
       event: bet.selections[0]?.event ?? 'Bilhete',
     });

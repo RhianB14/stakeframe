@@ -82,3 +82,37 @@ export function formatBRL(value: string): string {
   const absolute = amount < 0n ? -amount : amount;
   return `${amount < 0n ? '−' : ''}R$ ${(absolute / 100n).toLocaleString('pt-BR')},${String(absolute % 100n).padStart(2, '0')}`;
 }
+
+// STK-UX-DADOS (R2) — dado ausente NÃO é zero. `formatBRL` exige um valor
+// canônico; os campos com `stake`/`remaining` anulável usavam `?? '0.00'` e
+// mostravam R$ 0,00 para uma aposta sem valor registrado. Aqui o ausente vira
+// "Sem base", como a coluna de unidade da lista de apostas já faz
+// ("Unidade a conferir").
+export function formatBRLWhenPresent(
+  value: string | null | undefined,
+  fallback = 'Sem base',
+): string {
+  return value === null || value === undefined ? fallback : formatBRL(value);
+}
+
+const DECIMAL_INPUT_MONEY = /^(0|[1-9]\d{0,11})(\.\d{1,2})?$/;
+const DECIMAL_INPUT_ODDS = /^(0|[1-9]\d{0,5})(\.\d{1,4})?$/;
+
+/**
+ * STK-UX-DADOS — a entrada de valor no produto é pt-BR ("R$ 1.000,50", vírgula
+ * no teclado BR) e o registro canônico é en-US ("1000.50"). Esta é a ÚNICA
+ * normalização: todo campo numérico do produto normaliza por aqui ANTES de
+ * validar, para que a vírgula deixe de ser recusada e nenhum regex do servidor
+ * precise afrouxar. Devolve `null` (nunca um valor adivinhado) quando o texto
+ * não é um decimal inequívoco — inclusive "1.000" sem vírgula, que é
+ * ambíguo entre mil e um.
+ */
+export function normalizeDecimalInput(value: string, scale: 2 | 4 = 2): string | null {
+  const clean = value
+    .trim()
+    .replace(/^R\$\s*/i, '')
+    .replace(/\s/g, '');
+  if (clean === '') return null;
+  const decimal = clean.includes(',') ? clean.replaceAll('.', '').replace(',', '.') : clean;
+  return (scale === 2 ? DECIMAL_INPUT_MONEY : DECIMAL_INPUT_ODDS).test(decimal) ? decimal : null;
+}

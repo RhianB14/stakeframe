@@ -5,6 +5,7 @@ import {
   betDetailSchema,
   journalPageSchema,
   formatBRL,
+  formatBRLWhenPresent,
   saoPauloDate,
   type Bet,
   type Workspace,
@@ -669,7 +670,7 @@ export function BetsPage({
                         </td>
                         <td>{catalogName(workspace, bet.bookmakerId)}</td>
                         <td className="tabular">
-                          {formatBRL(bet.stake ?? '0.00')}
+                          {formatBRLWhenPresent(bet.stake)}
                           <small>
                             {bet.stakeUnits === null
                               ? 'Unidade a conferir'
@@ -751,7 +752,7 @@ export function BetDetails({
         <div>
           <span>Valor apostado</span>
           <strong>
-            {formatBRL(bet.stake ?? '0.00')}
+            {formatBRLWhenPresent(bet.stake)}
             {bet.freebetId ? ' · freebet' : ''}
           </strong>
         </div>
@@ -761,7 +762,7 @@ export function BetDetails({
         </div>
         <div>
           <span>Principal aberto</span>
-          <strong>{formatBRL(bet.remaining ?? '0.00')}</strong>
+          <strong>{formatBRLWhenPresent(bet.remaining)}</strong>
         </div>
         <div>
           <span>Retorno recebido</span>

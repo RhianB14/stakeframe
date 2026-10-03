@@ -403,7 +403,13 @@ function ImportedControls({
     detail.betOrigin ??
     (bet.freebetId
       ? bet.freebetAmount
-        ? deriveBetOrigin(bet.stake ?? '0.00', bet.freebetAmount)
+        ? // STK-UX-DADOS (R2) — sem stake não há como derivar a modalidade:
+          // tratar R$ 0,00 como valor realIZARIA o crédito como "híbrida".
+          // O editor do rascunho (MiniDraftEditor) já usava 'real' nesse
+          // caso; aqui replicamos o mesmo tratamento.
+          bet.stake === null
+          ? 'real'
+          : deriveBetOrigin(bet.stake, bet.freebetAmount)
         : 'freebet'
       : 'real');
   const [origin, setOrigin] = useState<'real' | 'freebet' | 'hibrida'>(currentOrigin);

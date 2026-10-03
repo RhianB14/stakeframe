@@ -11,6 +11,7 @@ import {
   importConfirmResultSchema,
   cents,
   money,
+  normalizeDecimalInput,
   saoPauloDate,
   type TicketKind,
   type FinanceCommand,
@@ -286,8 +287,23 @@ export function sendCommand(command: FinanceCommand, key: string) {
   });
 }
 export function decimalInput(value: string) {
-  const clean = value.trim().replace(/^R\$\s*/, '');
-  return money(cents(clean.includes(',') ? clean.replaceAll('.', '').replace(',', '.') : clean));
+  // STK-UX-DADOS — a normalização pt-BR mora em `normalizeDecimalInput`
+  // (packages/shared), agora a implementação única do produto. Aqui só o
+  // caminho "tem valor e é válido", que os formulários já tratam como erro.
+  const decimal = normalizeDecimalInput(value);
+  if (decimal === null) throw new Error('Informe um valor válido.');
+  return money(cents(decimal));
+}
+/**
+ * A odd tem 4 casas (oddsSchema) e NÃO é dinheiro: por isso não passa por
+ * `cents`/`money`. Antes o formulário fazia `odds.replace(',', '.')`, que
+ * aceitava "1,80" mas transformava "1.500" (milhar pt-BR) em "1.500", uma odd
+ * inválida sem aviso. Aqui a entrada é normalizada e validada, nunca remendada.
+ */
+export function decimalInputOdds(value: string) {
+  const decimal = normalizeDecimalInput(value, 4);
+  if (decimal === null) throw new Error('Informe uma odd válida.');
+  return decimal;
 }
 export function localNow() {
   const date = new Date();

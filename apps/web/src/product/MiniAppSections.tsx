@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react';
-import { formatBRL, type ImportDetail } from '@stakeframe/shared';
+import {
+  formatBRL,
+  formatBRLWhenPresent,
+  normalizeDecimalInput,
+  type ImportDetail,
+} from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { ApiFailure } from './api.js';
+
+// STK-UX-DADOS — as dicas de erro do cashout mostravam "150.00", o único
+// formato que a validação RECUSAVA: o produto se contradizia na mesma tela. As
+// dicas agora falam pt-BR, que é o que o teclado BR entrega e o que a
+// normalização aceita.
+const RETURN_HINT = 'Informe o valor recebido (ex.: 150,00).';
+const CLOSED_HINT = 'Informe quanto do valor aberto foi encerrado (ex.: 50,00).';
 
 // STK-G0-19-R7 — seções reais do Mini App abertas pelos botões da mensagem do
 // Telegram ("Alterar Status" e "Alterar Casa"). Toda gravação viaja pelo
@@ -92,8 +104,8 @@ export function StatusSection({
       <h3>Status da aposta</h3>
       <p role="status">
         Estado atual: <strong>{stateLabel(bet.state)}</strong> · Stake{' '}
-        {formatBRL(bet.stake ?? '0.00')} · Odd {bet.odds ?? 'A definir'} · Em aberto{' '}
-        {formatBRL(bet.remaining ?? '0.00')}
+        {formatBRLWhenPresent(bet.stake)} · Odd {bet.odds ?? 'A definir'} · Em aberto{' '}
+        {formatBRLWhenPresent(bet.remaining)}
       </p>
       {incomplete ? (
         <p className="notice warning" role="status">
@@ -479,7 +491,11 @@ export function CashoutSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const MONEY = /^\d{1,12}(\.\d{1,2})?$/;
+  // STK-UX-DADOS — o teclado BR entrega "1.500,00" e o produto precisa falar a
+  // língua do usuário: normalizamos pt-BR -> canônico ANTES de validar, e a
+  // mensagem passa a mostrar o formato que a pessoa digita. O regex do
+  // servidor continua intocado; o que mudou foi a entrada, não a regra.
+  const money = (value: string) => normalizeDecimalInput(value);
   if (!bet)
     return (
       <div className="draft-controls">
@@ -500,18 +516,18 @@ export function CashoutSection({
         </p>
       </div>
     );
-  const validate = (): string | null => {
-    if (!MONEY.test(returnAmount)) return 'Informe o valor recebido (ex.: 150.00).';
-    if (mode === 'partial_cashout') {
-      if (!MONEY.test(closedPrincipal))
-        return 'Informe quanto do valor aberto foi encerrado (ex.: 50.00).';
-    }
-    return null;
+  const validate = (): { error: string; returnAmount: string; closedPrincipal: string } => {
+    const received = money(returnAmount);
+    if (received === null) return { error: RETURN_HINT, returnAmount: '', closedPrincipal: '' };
+    if (mode === 'cashout') return { error: '', returnAmount: received, closedPrincipal: '' };
+    const closed = money(closedPrincipal);
+    if (closed === null) return { error: CLOSED_HINT, returnAmount: '', closedPrincipal: '' };
+    return { error: '', returnAmount: received, closedPrincipal: closed };
   };
   const save = async () => {
-    const invalid = validate();
-    if (invalid) {
-      setError(invalid);
+    const checked = validate();
+    if (checked.error !== '') {
+      setError(checked.error);
       return;
     }
     setBusy(true);
@@ -520,8 +536,8 @@ export function CashoutSection({
       const result = await sender({
         version: detail.item.version,
         action: mode,
-        returnAmount,
-        ...(mode === 'partial_cashout' ? { closedPrincipal } : {}),
+        returnAmount: checked.returnAmount,
+        ...(mode === 'partial_cashout' ? { closedPrincipal: checked.closedPrincipal } : {}),
       });
       setSaved(true);
       setConfirming(false);
@@ -538,7 +554,7 @@ export function CashoutSection({
     <div className="draft-controls">
       <h3>Cashout</h3>
       <p role="status">
-        Em aberto {formatBRL(bet.remaining ?? '0.00')} · Stake {formatBRL(bet.stake ?? '0.00')} ·
+        Em aberto {formatBRLWhenPresent(bet.remaining)} · Stake {formatBRLWhenPresent(bet.stake)} ·
         Odd {bet.odds ?? 'A definir'}
       </p>
       <fieldset>
@@ -572,6 +588,7 @@ export function CashoutSection({
         Valor recebido (R$) *
         <input
           inputMode="decimal"
+          placeholder="ex.: 150,00"
           value={returnAmount}
           onChange={(event) => {
             setReturnAmount(event.target.value);
@@ -584,6 +601,7 @@ export function CashoutSection({
           Valor encerrado (R$) *
           <input
             inputMode="decimal"
+            placeholder="ex.: 50,00"
             value={closedPrincipal}
             onChange={(event) => {
               setClosedPrincipal(event.target.value);
