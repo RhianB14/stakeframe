@@ -1,10 +1,44 @@
+/* ==========================================================================
+   STK-F2-18 — casca do produto sobre a camada de tokens.
+   Ordem de populacao: fundo e texto primeiro (a pagina fica legivel),
+   depois borda, depois acento. Todo bloco abaixo consome `var(--*)`; um
+   literal hex aqui e defeito, e tests/unit/design-tokens.test.ts barra.
+   ========================================================================== */
+
 .product-shell {
   min-height: 100svh;
   display: flex;
-  background: #101318;
-  color: #edf0f6;
-  font-size: 14px;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: var(--text-body);
   line-height: 1.5;
+}
+
+/* --- Skip link: oculto ate receber foco ---------------------------------
+   O alvo (`#product-main`) ja existia no codigo desde antes desta fase e
+   nada apontava para ele: a navegacao por teclado passava por 8 links de
+   menu antes de chegar ao conteudo, em todas as telas do produto. Fica
+   fora da tela em vez de `display: none`, porque um elemento com display
+   none nao e focavel e o link nunca apareceria. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 12px 20px;
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--text-md);
+  font-weight: 600;
+  border-radius: 0 0 var(--radius) 0;
+  text-decoration: none;
+}
+.skip-link:focus-visible {
+  left: 0;
+  outline-offset: -4px;
 }
 
 /* STK-F2-12 — casca do Mini App: o MESMO produto da web dentro do Telegram.
@@ -14,13 +48,39 @@
   flex-direction: column;
 }
 .miniapp-shell .product-content {
-  /* O menu inferior é fixo: o conteúdo cresce por baixo dele. */
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  /* STK-F2-18: esta regra herdou a reserva da barra lateral (`--shell-w`).
+     No Mini App NÃO existe barra lateral: em 412px de viewport o conteúdo
+     caía para 164px, o topbar não cabia nessa largura e transbordava para
+     441px. Documento mais largo que a viewport faz o navegador ampliar o
+     ICB, e `position: fixed; bottom: 0` passa a ancorar em 897px em vez de
+     839px — o centro dos links da barra fica abaixo da dofra e o clique
+     aterrissa em `.product-shell` em vez do link. Largura cheia, como antes. */
+  margin-left: 0;
   width: 100%;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .miniapp-shell .product-main {
-  padding-inline: 12px;
+  /* Sem `padding` aqui de propósito: quem define o padding do produto em
+     tela de bolso é a regra `max-width: 760px` mais abaixo, e o shorthand
+     de desktop (40/40/32) desta regra — 0,2,0 contra 0,1,0 — vencia a
+     media query e tirava as calhas estreitas do Mini App inteiro. O Mini
+     App é o mesmo produto em viewport estreito, inclusive nas margens. */
+  display: block;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  min-width: 0;
+}
+/* O alvo do skip link recebe foco por script, nao por clique. Sem isto o
+   anel apareceria como um contorno solto ao redor da pagina inteira. */
+.product-main:focus {
+  outline: none;
+}
+.product-main:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 .miniapp-nav {
   position: fixed;
@@ -32,8 +92,8 @@
   justify-content: space-around;
   gap: 2px;
   padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
-  background: rgba(16, 19, 24, 0.96);
-  border-top: 1px solid #23262e;
+  background: color-mix(in oklab, var(--surface-1) 96%, transparent);
+  border-top: 1px solid var(--border);
   backdrop-filter: blur(8px);
 }
 .miniapp-nav a {
@@ -42,23 +102,34 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 2px;
-  border-radius: 10px;
+  gap: 4px;
+  padding: 8px 2px;
+  border-radius: var(--radius);
   text-decoration: none;
-  /* Alvo de toque confortável em tela de bolso. */
-  min-height: 48px;
+  /* Alvo de toque confortavel em tela de bolso. */
+  min-height: var(--tap);
   justify-content: center;
+  color: var(--text-tertiary);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.miniapp-nav a:hover {
+  color: var(--text-secondary);
+}
+.miniapp-nav a:active {
+  background: var(--surface-2);
 }
 .miniapp-nav a[aria-current='page'] {
-  background: #1a1f28;
+  background: var(--surface-3);
+  color: var(--accent-ink);
 }
 .miniapp-nav .nav-icon {
-  font-size: 16px;
-  line-height: 1;
+  display: block;
+  line-height: 0;
 }
 .miniapp-nav .nav-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   /* Rótulo curto não pode quebrar o menu em telas estreitas. */
   white-space: nowrap;
   overflow: hidden;
@@ -68,19 +139,28 @@
 
 /* Telegram Mini App — mobile-first editor */
 .miniapp-page {
-  --mini-bg: #07101f;
-  --mini-card: #101a2b;
-  --mini-border: #253450;
-  --mini-muted: #9aa9c1;
-  --mini-blue: #2878ff;
+  /* STK-F2-18 (Fase 3): estes cinco overrides apontam TODOS para
+     `--text-tertiary`, que é token de TEXTO (rgb 152). Resultado: o Mini
+     App inteiro ficava com fundo cinza claro e texto branco por cima —
+     2,88:1, abaixo até do 3:1 de componente. A verificação da Fase 0
+     conferia pares de token e nunca estes overrides, que vivem só aqui.
+
+     O Mini App não é um tema próprio: é o MESMO produto em viewport
+     estreito, então usa as mesmas superfícies. `--mini-blue` continua
+     sendo o acento, agora com o ink para texto. */
+  --mini-bg: var(--bg);
+  --mini-card: var(--surface-1);
+  --mini-border: var(--border-strong);
+  --mini-muted: var(--text-tertiary);
+  --mini-blue: var(--accent-ink);
   min-height: 100svh;
   background: var(--mini-bg);
-  color: #f6f8fc;
+  color: var(--text-primary);
   padding: 18px 14px calc(104px + env(safe-area-inset-bottom));
   color-scheme: dark;
 }
 .miniapp-page .mini-placeholder {
-  color: var(--text-faint);
+  color: var(--text-tertiary);
 }
 .miniapp-page > * {
   max-width: 680px;
@@ -93,7 +173,7 @@
 }
 .miniapp-page h2,
 .miniapp-page h3 {
-  color: #fff;
+  color: var(--text-primary);
 }
 .miniapp-page .form-intro {
   color: var(--mini-muted);
@@ -117,7 +197,7 @@
   gap: 13px;
 }
 .mini-card {
-  background: linear-gradient(145deg, rgba(17, 29, 48, 0.98), rgba(13, 23, 40, 0.98));
+  background: var(--mini-card);
   border: 1px solid var(--mini-border);
   border-radius: 14px;
   padding: 15px;
@@ -132,12 +212,12 @@
 }
 .mini-card-title h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--text-h3);
 }
 .mini-card-title p {
   margin: 2px 0 0;
   color: var(--mini-muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .mini-card-heading {
   display: flex;
@@ -148,13 +228,13 @@
 }
 .mini-card-heading h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--text-h3);
 }
 .mini-card-heading p,
 .mini-helper {
   margin: 3px 0 0;
   color: var(--mini-muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.45;
 }
 .mini-two-columns {
@@ -165,9 +245,9 @@
 .mini-received-at {
   padding: 9px 10px;
   border-radius: 9px;
-  background: #0a1424;
-  color: #aab7cb;
-  font-size: 12px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 .mini-grid {
   display: grid;
@@ -179,8 +259,8 @@
 }
 .miniapp-page label,
 .mini-field-label {
-  color: #c7d1e1;
-  font-size: 13px;
+  color: var(--text-tertiary);
+  font-size: var(--text-md);
   font-weight: 650;
 }
 .miniapp-page input:not([type='radio']):not([type='checkbox']),
@@ -191,10 +271,10 @@
   min-height: 48px;
   margin-top: 6px;
   padding: 11px 12px;
-  border: 1px solid #2b3b59;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: #0b1526;
-  color: #f6f8fc;
+  background: var(--surface-1);
+  color: var(--text-primary);
   font: inherit;
   outline: none;
   transition:
@@ -207,12 +287,16 @@
   resize: vertical;
   line-height: 1.45;
 }
-.miniapp-page input:focus,
-.miniapp-page select:focus,
-.miniapp-page textarea:focus,
+/* STK-F2-18: o anel de foco estava em `:focus`, que dispara tambem no
+   clique — no celular, tocar num campo deixava um contorno que nao
+   indicava nada, porque a pessoa ja esta olhando para o campo. Em
+   `:focus-visible` o anel e do teclado, que e quem precisa dele. */
+.miniapp-page input:focus-visible,
+.miniapp-page select:focus-visible,
+.miniapp-page textarea:focus-visible,
 .mini-picker-trigger:focus-visible {
   border-color: var(--mini-blue);
-  box-shadow: 0 0 0 3px rgba(40, 120, 255, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent);
 }
 .mini-picker-trigger {
   display: flex;
@@ -240,7 +324,7 @@
   padding: 4px;
   margin: 8px 0 12px;
   border-radius: 11px;
-  background: #081223;
+  background: var(--surface-1);
 }
 .mini-segmented label {
   position: relative;
@@ -249,7 +333,7 @@
   place-items: center;
   border-radius: 8px;
   cursor: pointer;
-  color: #aab7cb;
+  color: var(--text-secondary);
   text-align: center;
 }
 .mini-segmented input {
@@ -258,8 +342,8 @@
   pointer-events: none;
 }
 .mini-segmented label:has(input:checked) {
-  background: #21385f;
-  color: #fff;
+  background: var(--surface-3);
+  color: var(--accent-ink);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
 }
 .mini-selections {
@@ -269,8 +353,8 @@
 }
 .mini-selections > legend {
   margin-bottom: 9px;
-  color: #c7d1e1;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--text-md);
   font-weight: 650;
 }
 .mini-reveal {
@@ -289,9 +373,9 @@
 .mini-selection,
 .mini-selections .draft-selection {
   padding: 12px;
-  border: 1px solid #243552;
+  border: 1px solid var(--border);
   border-radius: 11px;
-  background: #0a1424;
+  background: var(--surface-1);
 }
 .mini-selection + .mini-selection,
 .mini-selections .draft-selection + .draft-selection {
@@ -309,10 +393,10 @@
   width: 100%;
   min-height: 44px;
   margin-top: 10px;
-  border: 1px dashed #3478db;
+  border: 1px dashed var(--accent-ink);
   border-radius: 10px;
   background: transparent;
-  color: #68a4ff;
+  color: var(--accent-ink);
   font-weight: 700;
   cursor: pointer;
 }
@@ -320,16 +404,16 @@
   min-height: 40px;
   border: 0;
   background: transparent;
-  color: #ff8793;
+  color: var(--neg);
   cursor: pointer;
 }
 .mini-return,
 .mini-return-preview {
   padding: 12px;
-  border: 1px solid #176a4b;
+  border: 1px solid var(--pos);
   border-radius: 10px;
-  background: #0d2b23;
-  color: #65e39f;
+  background: var(--pos-soft);
+  color: var(--pos);
 }
 .mini-return strong,
 .mini-return-preview strong {
@@ -339,11 +423,11 @@
 .mini-help {
   margin: 6px 0 0;
   color: var(--mini-muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.45;
 }
 .mini-helper.warning {
-  color: #ffcf78;
+  color: var(--warn);
 }
 .mini-return-preview {
   display: grid;
@@ -352,13 +436,13 @@
 }
 .mini-sync-card h2 {
   margin: 0 0 8px;
-  font-size: 17px;
+  font-size: var(--text-h3);
 }
 .mini-sync-card p {
   margin: 4px 0;
 }
 .mini-sync-card p span {
-  color: #53db98;
+  color: var(--pos);
   font-weight: 900;
 }
 .mini-sync-card small {
@@ -367,10 +451,10 @@
 .mini-error {
   margin: 10px 0 0;
   padding: 11px;
-  border: 1px solid #7f3340;
+  border: 1px solid var(--neg);
   border-radius: 10px;
-  color: #ffc0c8;
-  background: #30151d;
+  color: var(--neg);
+  background: var(--neg-soft);
 }
 .mini-sync-row,
 .mini-sync-card p {
@@ -378,14 +462,14 @@
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  color: #d8e1ed;
+  color: var(--text-primary);
 }
 .mini-sync-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #43d58c;
-  box-shadow: 0 0 0 4px rgba(67, 213, 140, 0.13);
+  background: var(--pos);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--pos) 13%, transparent);
 }
 .mini-save-bar,
 .mini-sticky-action {
@@ -395,8 +479,8 @@
   right: 0;
   bottom: 0;
   padding: 10px max(14px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
-  background: rgba(7, 16, 31, 0.92);
-  border-top: 1px solid #22314c;
+  background: color-mix(in oklab, var(--bg) 92%, transparent);
+  border-top: 1px solid var(--border);
   backdrop-filter: blur(14px);
 }
 .mini-save-bar button,
@@ -408,9 +492,9 @@
   border: 0;
   border-radius: 11px;
   background: var(--mini-blue);
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 800;
-  font-size: 16px;
+  font-size: var(--text-h3);
   cursor: pointer;
 }
 .mini-save-bar button:disabled,
@@ -424,7 +508,7 @@
   inset: 0;
   display: flex;
   align-items: flex-end;
-  background: rgba(0, 5, 15, 0.72);
+  background: color-mix(in oklab, var(--bg) 72%, transparent);
   backdrop-filter: blur(4px);
   animation: miniFade 0.16s ease-out;
 }
@@ -433,8 +517,8 @@
   max-height: min(78svh, 720px);
   overflow: hidden;
   border-radius: 22px 22px 0 0;
-  background: #101a2e;
-  border: 1px solid #2c3c5a;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
   animation: miniSheet 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -443,7 +527,7 @@
   height: 4px;
   margin: 0 auto 12px;
   border-radius: 9px;
-  background: #405170;
+  background: var(--surface-3);
 }
 .mini-sheet-heading {
   display: flex;
@@ -453,14 +537,14 @@
 }
 .mini-sheet-heading h2 {
   margin: 0;
-  font-size: 21px;
+  font-size: var(--text-h2);
 }
 .mini-sheet-heading button {
   min-width: 44px;
   min-height: 44px;
   border: 0;
   background: transparent;
-  color: #dce5f3;
+  color: var(--text-primary);
   font-size: 24px;
   cursor: pointer;
 }
@@ -483,18 +567,27 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #f4f7fc;
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
 }
-.mini-sheet-options button:hover,
+.mini-sheet-options button:hover {
+  background: var(--surface-2);
+}
+/* STK-F2-18: aqui o `outline: none` era um foco que sumia de verdade — a
+   regra combinava `:focus-visible` com `outline: none` e nao havia
+   substituto nenhum. Quem navega por teclado na folha de selecao do
+   Mini App nao via onde estava. */
 .mini-sheet-options button:focus-visible {
-  background: #172746;
-  outline: none;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 .mini-sheet-options button.selected {
-  background: #1b3158;
-  color: #8cb8ff;
+  /* STK-F2-18: fundo e texto estavam no mesmo token — o item selecionado
+     da folha ficava invisivel. Estado selecionado e superficie real +
+     cor de acento, o mesmo par do item ativo do menu. */
+  background: var(--surface-3);
+  color: var(--accent-ink);
 }
 .mini-sheet-options button > span:nth-child(2) {
   display: grid;
@@ -512,16 +605,16 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(1, 6, 16, 0.72);
+  background: color-mix(in oklab, var(--bg) 72%, transparent);
   backdrop-filter: blur(5px);
   animation: miniFade 0.18s ease-out;
 }
 .mini-feedback {
   width: min(390px, 100%);
   padding: 25px;
-  border: 1px solid #315074;
+  border: 1px solid var(--border-strong);
   border-radius: 18px;
-  background: #111d31;
+  background: var(--surface-2);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
   text-align: center;
   animation: miniPop 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -533,16 +626,16 @@
   place-items: center;
   margin: 0 auto 14px;
   border-radius: 50%;
-  background: #12392d;
-  color: #62e5a2;
-  font-size: 30px;
+  background: var(--pos-soft);
+  color: var(--pos);
+  font-size: var(--text-h1);
 }
 .mini-feedback h2 {
   margin: 0 0 8px;
 }
 .mini-feedback p {
   margin: 0;
-  color: #b8c4d6;
+  color: var(--text-secondary);
 }
 .mini-status-confirm-actions {
   display: flex;
@@ -558,8 +651,8 @@
   width: 30px;
   height: 30px;
   margin: auto;
-  border: 3px solid #2b4162;
-  border-top-color: #5a9bff;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--accent-ink);
   border-radius: 50%;
   animation: miniSpin 0.8s linear infinite;
 }
@@ -598,7 +691,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .mini-segmented label {
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -611,78 +704,96 @@
   }
 }
 .product-sidebar {
-  width: 220px;
-  padding: 34px 20px;
-  border-right: 1px solid #282d37;
+  width: var(--shell-w);
+  padding: 32px 20px;
+  border-right: var(--hairline) solid var(--border);
   position: fixed;
   inset: 0 auto 0 0;
-  background: #14181f;
+  background: var(--surface-1);
   display: flex;
   flex-direction: column;
 }
 .product-brand {
-  font-size: 25px;
+  font-family: var(--font-display);
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -1px;
+  letter-spacing: -0.02em;
   padding-left: 8px;
+  color: var(--text-primary);
 }
 .product-brand span,
 .greeting-dot {
-  color: #92adff;
+  color: var(--accent-ink);
 }
 .sidebar-caption {
-  font-size: 12px;
-  letter-spacing: 1.6px;
-  color: var(--text-faint);
-  padding: 35px 12px 15px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--text-tertiary);
+  padding: 32px 12px 12px;
 }
 .product-sidebar nav {
   display: grid;
-  gap: 7px;
+  gap: 4px;
 }
 .product-sidebar nav a {
-  padding: 12px 14px;
-  border-radius: 8px;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
-  gap: 13px;
-  color: #9fa9ba;
-  font-size: 13px;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
+/* STK-F2-18: os tres estados, com o par fundo/texto trocado na mesma
+   regra. O :hover move o fundo e escurece o texto ao mesmo tempo — nunca
+   "puxar o texto para o cinza da marca", que e o defeito classico. */
 .product-sidebar nav a:hover {
-  background: #202733;
-  color: #edf0f6;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.product-sidebar nav a:active {
+  background: var(--surface-3);
 }
 .product-sidebar nav a[aria-current='page'] {
-  background: #24304a;
-  color: #b8caff;
+  background: var(--surface-3);
+  color: var(--accent-ink);
+  font-weight: 600;
 }
 .product-sidebar nav a .nav-icon {
-  font-size: 20px;
-  width: 22px;
-  text-align: center;
+  display: block;
+  line-height: 0;
+  flex-shrink: 0;
 }
 .product-sidebar nav a .nav-label {
   min-width: 0;
+  /* Rotulo longo quebra em palavra, nunca no meio dela. */
+  overflow-wrap: anywhere;
 }
 .sidebar-bottom {
   margin-top: auto;
-  padding: 18px 12px 0;
-  color: #adb6c5;
-  font-size: 11px;
-  border-top: 1px solid #292f3b;
+  padding: 16px 12px 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  border-top: var(--hairline) solid var(--border);
 }
 .sidebar-bottom p {
-  color: #7e899b;
+  color: var(--text-tertiary);
   margin: 8px 0 0;
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .private-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #90b6a4;
+  background: var(--surface-3);
   margin-right: 6px;
 }
 .product-content {
@@ -693,16 +804,16 @@
   flex-direction: column;
 }
 .product-topbar {
-  height: 82px;
+  min-height: var(--topbar-h);
   padding: 0 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #282d37;
-  gap: 14px;
+  border-bottom: var(--hairline) solid var(--border);
+  gap: 16px;
 }
 .product-topbar > span {
-  font-size: 15px;
+  font-size: var(--text-body);
 }
 .product-main {
   display: block;
@@ -717,37 +828,44 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
 }
 .product-eyebrow {
   margin: 0 0 10px;
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   font-weight: 600;
-  letter-spacing: 1.6px;
+  /* CAPS exige tracking positivo: 0,09em e o piso de tipografia. */
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 .product-main h1 {
-  font-size: 30px;
-  letter-spacing: -1px;
-  line-height: 1.2;
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 .product-shell h2,
 .dialog-content h2 {
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
   font-weight: 600;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
   margin: 0;
 }
 .product-shell h3,
 .dialog-content h3 {
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
   font-weight: 600;
+  line-height: 1.3;
   margin: 0;
 }
 .live-label {
-  color: #8f9aab;
-  font-size: 11px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 .button-row {
   display: flex;
@@ -761,47 +879,68 @@
   justify-content: center;
   flex-shrink: 0;
   gap: 7px;
-  min-height: 40px;
-  padding: 9px 16px;
+  /* STK-F2-18: alvo de toque. A versao anterior tinha 40px aqui e 30px
+     no botao "Copiar" da tabela — o unico controle que se mira com o
+     dedo numa tela de 14 colunas. */
+  min-height: var(--tap);
+  padding: 10px 18px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
-  border: 1px solid transparent;
-  border-radius: 7px;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 .ui-button-primary {
-  background: #94afff;
-  color: #111b31;
+  background: var(--accent);
+  color: var(--bg);
 }
 .ui-button-primary:hover {
-  background: #aec2ff;
+  /* O hover inverte os DOIS lados: o par continua com 7,00:1. Escurecer
+     so o fundo deixaria o texto preto sem contraste. */
+  background: color-mix(in oklab, var(--accent) 88%, var(--fg));
+  color: var(--bg);
+}
+.ui-button-primary:active {
+  background: color-mix(in oklab, var(--accent) 78%, var(--fg));
 }
 .ui-button-secondary {
-  background: #232a36;
-  border-color: #384252;
-  color: #dbe2ee;
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 .ui-button-secondary:hover {
-  background: #303a4b;
+  background: var(--surface-3);
+  border-color: var(--text-tertiary);
 }
 .ui-button-ghost {
   background: transparent;
-  color: #b0bed6;
+  color: var(--text-secondary);
 }
 .ui-button-ghost:hover {
-  background: #252e3c;
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 .ui-button-destructive {
-  background: #38252a;
-  border-color: #664047;
-  color: #f5b6bd;
+  background: var(--neg-soft);
+  border-color: var(--neg);
+  color: var(--neg);
 }
+.ui-button-destructive:hover {
+  background: color-mix(in oklab, var(--neg-soft) 80%, var(--neg));
+  color: var(--neg);
+}
+/* STK-F2-18: alvo pequeno continua tocavel. A variante compacta nao
+   pode ser menor que 44px — o teste de toque e a unica garantia de que
+   o botao e alcancavel no celular, e vale para as duas variantes. */
 .ui-button-small {
-  min-height: 34px;
-  padding: 6px 11px;
-  font-size: 11px;
+  min-height: var(--tap);
+  padding: 8px 14px;
+  font-size: var(--text-sm);
 }
 .ui-button:disabled {
   opacity: 0.45;
@@ -814,13 +953,17 @@
   gap: 16px;
   padding: 16px 18px;
   margin-bottom: 20px;
-  border: 1px solid #605134;
+  border: 1px solid var(--warn);
   border-radius: 9px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .notice.warning {
-  background: #29251d;
-  color: #e4c992;
+  /* STK-F2-18 (Fase 3): era `var(--text-tertiary)` — token de TEXTO usado
+     como fundo. Um aviso é a única coisa da interface que precisa ter um
+     degrau de superfície próprio, porque é a única que interrompe. */
+  background: var(--warn-soft);
+  color: var(--warn);
+  border: 1px solid var(--warn);
 }
 .notice p {
   margin: 5px 0 0;
@@ -830,19 +973,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: linear-gradient(110deg, #202c45, #19202c);
-  border: 1px solid #3d4e72;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 25px;
   margin-bottom: 24px;
 }
 .initial-card h2 {
   margin: 8px 0;
-  font-size: 20px;
+  font-size: var(--text-h2);
 }
 .initial-card p {
-  color: #aab7cd;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
   max-width: 520px;
   margin: 0;
 }
@@ -853,8 +996,8 @@
   margin-bottom: 25px;
 }
 .metric-card {
-  border: 1px solid #2c3340;
-  background: #191e27;
+  border: 1px solid var(--text-tertiary);
+  background: var(--surface-2);
   border-radius: 11px;
   padding: 20px;
   min-width: 0;
@@ -863,12 +1006,39 @@
   gap: 14px;
 }
 .metric-card.featured {
-  background: #202d46;
-  border-color: #40557e;
+  /* Token de TEXTO como fundo invertia a hierarquia: a métrica principal
+     ficava mais clara que o chrome e disputava atenção com o topo. O
+     destaque é a superfície mais clara do sistema, por desenho. */
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+/* STK-F2-18 (Fase 4) — a exposição é a única métrica que é uma PROMESSA:
+   dinheiro que só volta se a aposta ganhar. Saldo e disponível são
+   posição; exposição é condicional, e é a cor que a distingue na primeira
+   olhada. Uma borda de sinal, não um preenchimento: a tela já tem uma
+   superfície destacada e dois destaques competem. */
+.metric-card.committed {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.metric-card.committed > span {
+  color: var(--warn);
+}
+/* Saldo, exposição e lucro têm de ser lidos como números DIFERENTES: um é
+   posição, outro é promessa, o terceiro é resultado. A cor de sinal entra
+   só no resultado — no valor, nunca no cartão inteiro. */
+.metric-card.metric-tone-positive > strong {
+  color: var(--pos);
+}
+.metric-card.metric-tone-negative > strong {
+  color: var(--neg);
+}
+.metric-card strong.negative {
+  color: var(--neg);
 }
 .metric-card > span {
-  color: #a7b2c5;
-  font-size: 11px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 .metric-card strong {
   font-size: clamp(18px, 1.8vw, 28px);
@@ -878,12 +1048,12 @@
   overflow-wrap: anywhere;
 }
 .metric-card small {
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 .panel {
-  border: 1px solid #2c3340;
-  background: #181d25;
+  border: 1px solid var(--text-tertiary);
+  background: var(--surface-2);
   border-radius: 11px;
   padding: 24px;
   margin-bottom: 24px;
@@ -897,14 +1067,23 @@
   margin-bottom: 22px;
 }
 .section-heading p {
-  font-size: 11px;
-  color: #939fb3;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   margin: 5px 0 0;
 }
 .text-link {
-  color: #abc0ff;
-  font-size: 11px;
+  color: var(--accent-ink);
+  font-size: var(--text-xs);
   white-space: nowrap;
+  /* STK-F2-18 (Fase 4): o link de texto media 17px de altura — bem abaixo
+     dos 44px de alvo. Padding vertical + `min-height` resolvem sem aumentar
+     a fonte nem a caixa do container: o alvo cresce, o texto continua 11,5px
+     e o painel não muda de altura. `inline-flex` + `align-items` para que o
+     `min-height` valha de fato (em `inline` ele é ignorado). */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 2px;
 }
 .account-grid {
   display: grid;
@@ -916,17 +1095,17 @@
   align-items: center;
   gap: 14px;
   padding: 17px;
-  background: #1d2430;
-  border: 1px solid #2b3544;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 .account-card span:not(.account-icon) {
-  font-size: 11px;
-  color: #acb7c8;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 .account-card strong {
   display: block;
-  font-size: 17px;
+  font-size: var(--text-h3);
   font-weight: 600;
   margin-top: 4px;
   overflow-wrap: anywhere;
@@ -936,10 +1115,17 @@
   height: 34px;
   display: grid;
   place-items: center;
-  background: #2c3850;
-  color: #b5c6ee;
+  background: var(--surface-3);
+  color: var(--text-secondary);
   border-radius: 9px;
   font-weight: 600;
+  /* STK-F2-18 (Fase 4): o ícone levava a inicial da casa e o glifo `↗` na
+     reserva. Sem tamanho próprio herdava 15px, e a sigla `R$` estourava a
+     caixa de 34px. `12px` cabe as duas, está na escala do sistema e mantém a
+     grade legível — abaixo de 12px a sigla perde a forma. */
+  font-size: var(--text-sm);
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 .account-vertical {
   flex-direction: column;
@@ -951,17 +1137,17 @@
   padding: 40px 16px;
 }
 .empty-state > span {
-  color: #6d80a3;
+  color: var(--text-tertiary);
   font-size: 29px;
   display: block;
   margin-bottom: 13px;
 }
 .empty-state h3 {
-  color: #cbd5e7;
+  color: var(--text-tertiary);
 }
 .empty-state p {
-  color: #8794a9;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
   margin: 9px auto 0;
   max-width: 370px;
 }
@@ -974,19 +1160,19 @@
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .product-table th {
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 500;
-  color: #8e9ab0;
+  color: var(--text-tertiary);
   white-space: nowrap;
   padding: 12px 10px;
-  background: #1c232e;
+  background: var(--surface-2);
 }
 .product-table td {
   padding: 16px 10px;
-  border-bottom: 1px solid #2a313e;
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 .product-table tr:last-child td {
@@ -997,17 +1183,35 @@
   max-width: 300px;
 }
 .bet-table-desktop {
-  border: 1px solid #2a313e;
+  border: 1px solid var(--text-tertiary);
   border-radius: 12px;
-  scrollbar-color: #52617a #151b26;
+  scrollbar-color: var(--border-strong) var(--surface-sunken);
 }
 .bet-table-scroll-hint {
   margin: 12px 0 8px;
-  color: #8e9ab0;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 .bet-detail-table {
-  min-width: 1640px;
+  /* STK-F2-18 (Fase 3): era `min-width: 1640px` fixo, dimensionado para as
+     14 colunas. Com o painel de colunas a largura passou a depender de quantas
+     estão visíveis, e um piso fixo forçaria rolagem horizontal mesmo com 3
+     colunas escolhidas. O piso continua proporcional ao número de colunas.
+
+     STK-F2-18 (PR-3): era `min(100%, 148px * var(--bet-columns))`. O `min()`
+     com `100%` ERA a regressão inteira: ele garante que a largura nunca
+     ultrapasse o contêiner — e uma tabela que nunca ultrapassa o contêiner é
+     justamente a tabela que nunca rola. Medido no desktop de 1440px: com o
+     conjunto padrão de 8 colunas mais a de abrir, o piso valia 1184px contra
+     1088px úteis, mas `min()` escolhia os 1088px, a rolagem horizontal nunca
+     engatava e o aviso "A tabela é mais larga que a tela." sumia. O usuário
+     perdia a única pista de que existia conteúdo à direita.
+
+     Sem o `min()`, o piso volta a ser um piso: 148px por coluna, com os
+     1184px valendo só quando o conteúdo realmente precisa disso. Com 8
+     colunas a tabela estoura em 1440px e a rolagem funciona; com 3 colunas
+     escolhidas o piso fica em 444px e a tabela cabe, sem rolagem forçada. */
+  min-width: calc(148px * var(--bet-columns, 8));
   table-layout: auto;
 }
 .bet-detail-table th,
@@ -1016,7 +1220,7 @@
   vertical-align: top;
 }
 .bet-detail-table th {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .bet-detail-table td:first-child {
   min-width: 88px;
@@ -1040,8 +1244,8 @@
 }
 .bet-id-compact {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  color: #9aa7bd;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 .bet-detail-table .bet-id-cell .bet-id-compact {
   display: block;
@@ -1064,9 +1268,13 @@
   margin-top: 5px;
 }
 .copy-id .ui-button {
-  min-height: 30px;
-  padding: 3px 8px;
-  font-size: 10px;
+  /* STK-F2-18: era 30px de altura e 10px de fonte — abaixo do alvo de
+     toque E abaixo do piso de tipografia, na unica coluna que se mira
+     com o dedo numa tela de 14 colunas. O alvo agora e 44px; a fonte
+     sobe para o piso da tabela. */
+  min-height: var(--tap);
+  padding: 6px 10px;
+  font-size: var(--text-sm);
 }
 .table-sort {
   display: inline-flex;
@@ -1081,36 +1289,211 @@
   cursor: pointer;
 }
 .table-sort:hover {
-  color: #cbd5e7;
+  color: var(--text-tertiary);
 }
 .table-sort:focus-visible {
-  outline: 2px solid #7c98d5;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
 .bet-detail-table th[aria-sort='ascending'] .table-sort::after {
   content: '▲';
-  font-size: 8px;
+  font-size: var(--text-xs);
 }
 .bet-detail-table th[aria-sort='descending'] .table-sort::after {
   content: '▼';
-  font-size: 8px;
+  font-size: var(--text-xs);
 }
 .bet-list-cards {
   display: none;
 }
+/* ==========================================================================
+   STK-F2-18 (Fase 3) — painel de colunas e drawer de detalhe
+   ========================================================================== */
+
+.columns-panel {
+  position: relative;
+  flex: none;
+}
+.columns-panel-count {
+  /* Contagem tabular: o número não deve pular de largura quando a pessoa
+     troca uma coluna. */
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.columns-panel-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: 0 18px 48px var(--shadow-float);
+}
+.columns-panel-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.columns-panel-hint {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.columns-panel-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.columns-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+/* Hover move a SUPERFÍCIE, nunca o texto: trocar a cor do texto para
+   --muted no hover baixa o contraste e é a falha de estado mais comum. */
+.columns-panel-item:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.columns-panel-item:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.columns-panel-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.columns-panel-item input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.columns-panel-item.is-required {
+  color: var(--text-primary);
+}
+.columns-panel-required {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.columns-panel-actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Drawer — ancorado à direita: a lista permanece o contexto. */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  backdrop-filter: blur(4px);
+}
+.drawer-content {
+  position: fixed;
+  z-index: 51;
+  inset: 0 0 0 auto;
+  width: min(560px, 100vw);
+  max-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 26px;
+  border-left: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 23px;
+}
+.drawer-header h2 {
+  margin: 0;
+  font-size: var(--text-h2);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.drawer-header p {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  margin: 6px 0 0;
+}
+.drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  /* 30px era o tamanho herdado do diálogo — abaixo do alvo de toque. */
+  width: var(--tap);
+  height: var(--tap);
+  cursor: pointer;
+}
+.drawer-close:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.drawer-body {
+  display: grid;
+  gap: 18px;
+}
+@media (max-width: 640px) {
+  .drawer-content {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 92svh;
+    border-left: 0;
+    border-top: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .columns-panel-popover {
+    right: auto;
+    left: 0;
+  }
+}
 .bet-schedule-note {
-  color: #d9b870;
-  font-size: 11px;
+  color: var(--warn);
+  font-size: var(--text-xs);
   margin: 5px 0 0;
 }
 .bet-list-card {
   display: grid;
   gap: 14px;
   padding: 16px;
-  border: 1px solid #303a4d;
+  border: 1px solid var(--border-strong);
   border-radius: 14px;
-  background: #171e2b;
+  background: var(--surface-2);
 }
 .bet-list-card-heading {
   display: flex;
@@ -1139,31 +1522,31 @@
   grid-column: 1 / -1;
 }
 .bet-list-card-fields dt {
-  color: #8e9ab0;
-  font-size: 11px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   margin-bottom: 4px;
 }
 .bet-list-card-fields dd {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .bet-list-card-fields .bet-id-compact {
-  font-size: 11px;
+  font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
 .bet-card-selections {
-  border: 1px solid #2c3648;
+  border: 1px solid var(--text-tertiary);
   border-radius: 10px;
   padding: 10px 12px;
 }
 .bet-card-selections summary {
   cursor: pointer;
-  color: #cbd5e7;
-  font-size: 12px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 .bet-card-selections summary:focus-visible {
-  outline: 2px solid #7c98d5;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -1178,15 +1561,15 @@
   gap: 3px;
 }
 .bet-card-selections li strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 .bet-card-selections li small {
-  color: #8e9bb1;
-  font-size: 11px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 .bet-card-selections li .pending-label {
-  color: #d5bc8e;
+  color: var(--warn);
 }
 .bet-list-card .ui-button {
   justify-self: start;
@@ -1195,59 +1578,68 @@
 .catalog-entry small,
 .history-entry small {
   display: block;
-  color: #8e9bb1;
-  font-size: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   margin-top: 5px;
 }
 .table-title {
   text-align: left;
-  color: #dfe7f6;
-  font-size: 12px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   cursor: pointer;
   background: transparent;
   border: 0;
   padding: 0;
   overflow-wrap: anywhere;
+  /* STK-F2-18 (Fase 4): este botão ABRE o bilhete e media 18px de altura —
+     o alvo de toque mais importante da tabela, porque é por ele que se entra
+     no detalhe, e o menor de todos. `min-height` + flex alinham sem mudar a
+     tipografia nem a altura da linha: a linha já tem 44px, então o botão
+     cresce dentro dela sem empurrar nada. */
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  width: 100%;
 }
 .table-title:hover {
-  color: #a8bdff;
+  color: var(--accent-ink);
 }
 .tabular {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .negative {
-  color: #eea8af;
+  color: var(--neg);
 }
 .positive {
-  color: #9ecbbb;
+  color: var(--text-tertiary);
 }
 .neutral {
-  color: #a8b3c5;
+  color: var(--text-tertiary);
 }
 .status-badge {
   display: inline-block;
   border-radius: 5px;
   padding: 4px 7px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 .status-open {
-  color: #e0c38b;
-  background: #393022;
+  color: var(--warn);
+  background: var(--warn-soft);
 }
 .status-settled {
-  color: #a3d4c0;
-  background: #21392f;
+  color: var(--text-tertiary);
+  background: var(--pos-soft);
 }
 .status-cancelled {
-  color: #a7afbd;
-  background: #303641;
+  color: var(--text-tertiary);
+  background: var(--surface-3);
 }
 .pending-label {
   display: block;
-  font-size: 10px;
-  color: #d5bc8e;
+  font-size: var(--text-xs);
+  color: var(--warn);
   margin-top: 5px;
 }
 .filter-grid {
@@ -1257,15 +1649,15 @@
   margin-bottom: 20px;
 }
 .pagination {
-  border-top: 1px solid #2a313e;
+  border-top: 1px solid var(--text-tertiary);
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 18px;
   padding-top: 16px;
   gap: 12px;
-  color: #94a0b5;
-  font-size: 11px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 .page-actions {
   margin-bottom: 22px;
@@ -1281,16 +1673,16 @@
   align-items: center;
   gap: 10px;
   padding: 17px 0;
-  border-top: 1px solid #2b3341;
+  border-top: 1px solid var(--border);
   overflow-wrap: anywhere;
 }
 .catalog-entry strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .panel-footnote,
 .muted {
-  color: #98a4b8;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 .panel-footnote {
   margin: 20px 0 0;
@@ -1301,19 +1693,19 @@
   align-items: flex-start;
   gap: 14px;
   padding: 18px 0;
-  border-top: 1px solid #2b3341;
+  border-top: 1px solid var(--border);
 }
 .history-entry > div {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .history-entry strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .history-entry p {
   margin: 6px 0;
-  color: #b6c1d3;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 .posting-list {
   display: flex;
@@ -1321,23 +1713,70 @@
   gap: 7px;
 }
 .posting-list span {
-  background: #242d3b;
+  background: var(--surface-3);
   padding: 5px 8px;
   border-radius: 4px;
-  font-size: 10px;
-  color: #a7b5ca;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 .posting-list b {
   font-weight: 500;
   padding-left: 7px;
+}
+/* STK-F2-18 (Fase 4) — o razão em tabela. A coluna de valor alinha à direita
+   e a de contas afetadas tem largura própria: são as duas que precisam ser
+   comparadas entre linhas, e comparar exige alinhamento, não memória. */
+.journal-table th.num,
+.journal-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+.journal-table td.journal-date {
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.journal-table td.journal-reason {
+  color: var(--text-secondary);
+  max-width: 260px;
+}
+.journal-table td b.positive {
+  color: var(--pos);
+}
+/* Um lançamento estornado CONTINUA na tabela — o razão é append-only e
+   esconder a linha apagaria a prova de que houve correção. O que muda é a
+   leitura: a linha recua, e o sufixo "estornado" no nome do lançamento
+   diz o motivo. */
+.journal-table tr.journal-reversed td {
+  color: var(--text-tertiary);
+}
+.journal-table tr.journal-reversed td.journal-date {
+  color: var(--text-tertiary);
+}
+.journal-sign {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+/* STK-F2-18 (Fase 4) — o estado vazio usava o glifo `▤`, que varia por
+   plataforma, não aceita `currentColor` e é lido por leitor de tela como
+   "quadrado com linhas". Virou um traço: duas linhas de 1px que dizem
+   "não há linhas" e herdam a cor do contexto. */
+.empty-state .empty-mark {
+  display: block;
+  width: 28px;
+  height: 16px;
+  margin-bottom: 12px;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
 }
 .product-footer {
   margin-top: auto;
   padding: 15px 40px 28px;
   display: flex;
   justify-content: space-between;
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 .product-loading {
   max-width: 700px;
@@ -1350,12 +1789,12 @@
 }
 .product-loading p {
   margin: 20px 0;
-  color: #aab6ca;
+  color: var(--text-secondary);
 }
 .loading-note {
   padding: 30px 0;
-  color: #9eabc0;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 .import-list {
   display: grid;
@@ -1368,28 +1807,28 @@
   gap: 16px;
   width: 100%;
   padding: 18px 14px;
-  border: 1px solid #354055;
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
-  background: #222b3a;
-  color: #e3eaf5;
+  background: var(--surface-2);
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
 }
 .import-row:hover {
-  background: #2a364a;
+  background: var(--surface-3);
 }
 .import-row strong {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 .import-row small {
   display: block;
-  color: #a8b5c9;
+  color: var(--text-secondary);
   margin-top: 5px;
 }
 .import-symbol {
-  color: #6ab8f5;
+  color: var(--accent-ink);
   font-size: 24px;
   text-align: center;
 }
@@ -1405,11 +1844,11 @@
   align-items: center;
   gap: 9px;
   padding: 12px;
-  background: #121925;
-  border: 1px solid #354055;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
-  color: #8ec9ff;
-  font-size: 11px;
+  color: var(--accent-ink);
+  font-size: var(--text-xs);
 }
 .ticket-preview img {
   max-width: 100%;
@@ -1419,10 +1858,10 @@
 .caption-evidence {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: #d5dfed;
+  color: var(--text-primary);
 }
 .review-evidence small {
-  color: #a8b5c9;
+  color: var(--text-tertiary);
 }
 .review-modes {
   display: flex;
@@ -1431,49 +1870,49 @@
   margin: 22px 0;
 }
 .review-modes .ui-button {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .extraction-summary,
 .duplicate-review {
   margin: 18px 0;
   padding: 16px;
-  border: 1px solid #41536c;
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
-  background: #223047;
+  background: var(--surface-3);
   overflow-wrap: anywhere;
 }
 .extraction-summary p {
-  color: #bccce0;
+  color: var(--text-tertiary);
   margin: 8px 0;
 }
 .extraction-summary .warning-text {
-  color: #f1c36c;
+  color: var(--warn);
 }
 .duplicate-review {
-  border-color: #786444;
-  background: #342e24;
+  border-color: var(--warn);
+  background: var(--warn-soft);
 }
 .duplicate-review > div {
   margin: 10px 0;
 }
 .duplicate-review span {
   display: block;
-  color: #dec395;
-  font-size: 11px;
+  color: var(--warn);
+  font-size: var(--text-xs);
 }
 .bet-attachments {
   padding: 12px 0 20px;
 }
 .record-id {
   overflow-wrap: anywhere;
-  font-size: 10px;
-  color: #a8b5c9;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 .dialog-overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: #060910b8;
+  background: var(--scrim);
   backdrop-filter: blur(4px);
 }
 .dialog-content {
@@ -1487,12 +1926,12 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 26px;
-  border: 1px solid #3b465a;
+  border: 1px solid var(--border-strong);
   border-radius: 14px;
-  background: #1b222e;
-  color: #e3eaf5;
-  box-shadow: 0 30px 100px #0007;
-  font-size: 13px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 .dialog-header {
@@ -1503,15 +1942,15 @@
   margin-bottom: 23px;
 }
 .dialog-header p {
-  color: #9eacc2;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
   margin: 6px 0 0;
 }
 .dialog-close {
   border: 0;
   border-radius: 6px;
-  background: #2d3747;
-  color: #b8c6dc;
+  background: var(--surface-3);
+  color: var(--text-secondary);
   width: 30px;
   height: 30px;
   font-size: 23px;
@@ -1540,8 +1979,8 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
-  font-size: 11px;
-  color: #c1ccdf;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   margin-bottom: 7px;
 }
 .form-field input,
@@ -1549,49 +1988,49 @@
 .form-field textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid #5b6984;
-  background: #151c27;
-  color: #e4ebf8;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
   border-radius: 6px;
   min-height: 40px;
   padding: 9px 10px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  outline: 2px solid #94afff;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .form-field input:disabled,
 .form-field select:disabled {
-  color: #98a7bd;
-  background: #242d3b;
+  color: var(--text-tertiary);
+  background: var(--surface-2);
 }
 .form-field input::placeholder {
-  color: var(--text-faint);
+  color: var(--text-tertiary);
 }
 .form-field textarea {
   resize: vertical;
 }
 .form-field small {
-  color: #8e9db4;
-  font-size: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   display: block;
   margin-top: 6px;
 }
 .form-intro {
   margin: 0 0 20px;
-  color: #a8b6cc;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 .checkbox-field {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-size: 12px;
-  color: #c0cce0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   margin: 14px 0 22px;
 }
 .checkbox-field input {
@@ -1599,7 +2038,7 @@
   height: 16px;
   flex-shrink: 0;
   margin-top: 2px;
-  accent-color: #94afff;
+  accent-color: var(--focus);
 }
 .form-actions {
   display: flex;
@@ -1607,28 +2046,28 @@
   gap: 10px;
   padding-top: 19px;
   margin-top: 8px;
-  border-top: 1px solid #344053;
+  border-top: 1px solid var(--border-strong);
 }
 .form-error {
-  background: #3e282e;
-  border: 1px solid #76444e;
-  color: #ffc2c9;
+  background: var(--neg-soft);
+  border: 1px solid var(--neg);
+  color: var(--neg);
   padding: 12px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .selection-form {
   padding: 17px;
-  border: 1px solid #39465a;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #1e2837;
+  background: var(--surface-2);
   margin-bottom: 17px;
 }
 .selection-form p {
   margin: 7px 0;
 }
 .selection-form small {
-  color: #9dacc3;
+  color: var(--text-tertiary);
 }
 .selection-heading {
   display: flex;
@@ -1641,7 +2080,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  color: #b0bed3;
+  color: var(--text-secondary);
   margin-bottom: 20px;
 }
 .detail-metrics {
@@ -1649,24 +2088,24 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #344053;
+  border-bottom: 1px solid var(--border-strong);
 }
 .detail-metrics span {
   display: block;
-  color: #94a4bd;
-  font-size: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   margin-bottom: 5px;
 }
 .detail-metrics strong {
-  font-size: 16px;
+  font-size: var(--text-h3);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .detail-metrics small {
   display: block;
   margin-top: 5px;
-  color: #a8b3c5;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 .bet-detail > p {
   margin: 14px 0;
@@ -1709,7 +2148,7 @@
     z-index: 30;
     width: 100%;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom));
-    border-top: 1px solid #374156;
+    border-top: 1px solid var(--border-strong);
     border-right: 0;
   }
   .product-brand,
@@ -1734,13 +2173,18 @@
     min-width: 0;
     min-height: 44px;
     padding: 5px 2px;
-    font-size: 12px;
+    font-size: var(--text-sm);
     line-height: 1.15;
     text-align: center;
     overflow-wrap: anywhere;
   }
   .product-sidebar nav a .nav-icon {
-    font-size: 18px;
+    /* STK-F2-18: o ícone deixou de ser glifo e passou a ser SVG com
+       `width`/`height` próprios. `font-size` não dimensiona mais nada
+       aqui — o tamanho vem do atributo `size` do NavGlyph, e o mesmo
+       componente serve a sidebar de desktop e à barra inferior. */
+    display: block;
+    line-height: 0;
   }
   .product-sidebar nav a .nav-label {
     max-width: 100%;
@@ -1765,14 +2209,14 @@
     padding: 0 16px;
   }
   .product-topbar > span {
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .product-topbar .button-row {
     gap: 2px;
   }
   .product-topbar .ui-button {
     padding-inline: 10px;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .product-main h1 {
     font-size: 27px;
@@ -1784,7 +2228,7 @@
     display: none;
   }
   .product-eyebrow {
-    font-size: 12px;
+    font-size: var(--text-sm);
     letter-spacing: 0.08em;
   }
   .initial-card {
@@ -1805,13 +2249,13 @@
     gap: 12px;
   }
   .metric-card strong {
-    font-size: 21px;
+    font-size: var(--text-h2);
   }
   .metric-card > span {
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
   .metric-card small {
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .panel {
     padding: 18px 14px;
@@ -1823,7 +2267,7 @@
     margin-bottom: 18px;
   }
   .section-heading h2 {
-    font-size: 15px;
+    font-size: var(--text-body);
   }
   .account-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1834,7 +2278,7 @@
     gap: 9px;
   }
   .account-card strong {
-    font-size: 15px;
+    font-size: var(--text-body);
   }
   .account-icon {
     width: 27px;
@@ -1849,7 +2293,7 @@
     margin-bottom: 8px;
   }
   .pagination {
-    font-size: 10px;
+    font-size: var(--text-xs);
     gap: 5px;
   }
   .pagination .button-row {
@@ -1857,7 +2301,7 @@
   }
   .product-footer {
     padding: 10px 16px 20px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .product-footer span {
     display: none;
@@ -1936,7 +2380,11 @@
 }
 .calendar-layout {
   display: grid;
-  grid-template-columns: 265px minmax(0, 1fr);
+  /* STK-F2-18 (Fase 4): 265px dava 34px por dia numa grade de 7 — o dia
+     ainda não tinha chip nenhum. Com chip, a célula precisa de ~48px para o
+     número e três marcas de 6px. O painel do picker cresce; a agenda
+     continua sendo a coluna larga. */
+  grid-template-columns: 356px minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -1956,29 +2404,133 @@
   background: transparent;
   padding: 9px 0;
   cursor: pointer;
-  color: #cbd4e3;
+  color: var(--text-primary);
 }
 .calendar-grid button:hover {
-  background: #26324a;
+  background: var(--surface-3);
 }
 .calendar-grid button[aria-pressed='true'] {
-  background: #506dac;
-  color: #fff;
+  /* STK-F2-18: era branco sobre o azul de acento — 3,00:1, reprovado.
+     O acento da paleta é preenchimento claro: o texto sobre ele é preto,
+     que mede 7,00:1. */
+  background: var(--accent);
+  color: var(--bg);
 }
 .calendar-grid .calendar-today {
-  border-color: #7c98d5;
+  border-color: var(--focus);
+}
+/* STK-F2-18 (Fase 4) — a grade deixou de ser um seletor de dia e passou a
+   mostrar o que existe em cada dia. O botão precisava de altura para caber
+   número + chips: 9px de padding no grid de 7 colunas de 265px rendia um
+   alvo de 26px, muito abaixo dos 44px do sistema. */
+.calendar-grid button.calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: var(--tap);
+  padding: 6px 4px 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  text-align: left;
+}
+.calendar-daynum {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  /* Dia sem evento recua, mas continua legível: --text-tertiary mede
+     5,26:1 em --surface-3, acima do mínimo de texto. */
+  color: var(--text-secondary);
+}
+.calendar-grid button[aria-pressed='true'] .calendar-daynum {
+  color: var(--bg);
+  font-weight: 600;
+}
+.calendar-grid button.has-events {
+  border-color: var(--border-strong);
+}
+.calendar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.calendar-chip {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  /* Cancelada é a ausência de sinal, não um sinal: a marca usa a cor de
+     texto terciário porque é a única informação que a linha carrega — e um
+     token de texto como fundo é o defeito que a guarda barra. Ela carrega a
+     INFORMAÇÃO; a forma (6px, dentro de um dia com borda) é que comunica que
+     é uma marca e não um bloco de conteúdo. */
+  background: var(--muted);
+}
+.calendar-chip.chip-open {
+  background: var(--warn);
+}
+.calendar-chip.chip-settled {
+  background: var(--pos);
+}
+.calendar-chip.chip-cancelled {
+  background: var(--muted);
+}
+.calendar-chip.chip-more {
+  width: auto;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: var(--text-xs);
+  line-height: 10px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.calendar-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.calendar-legend i.chip-open {
+  background: var(--warn);
+}
+.calendar-legend i.chip-settled {
+  background: var(--pos);
+}
+.calendar-weekday abbr {
+  text-decoration: none;
+  border: 0;
+}
+/* Estado de onde se está, não ação: o mesmo peso dos dois lados e o
+   selecionado marcado por superfície + `aria-pressed`. */
+.calendar-tabs .segment-selected {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .calendar-weekday {
-  color: #8491a5;
+  color: var(--text-tertiary);
   padding: 6px 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .calendar-tabs {
   margin-bottom: 20px;
   flex-wrap: wrap;
 }
 .calendar-summary {
-  color: #b8c8e5;
+  color: var(--text-tertiary);
   margin: 22px 0 12px;
 }
 .event-card {
@@ -1986,17 +2538,17 @@
   grid-template-columns: 82px minmax(0, 1fr) auto;
   gap: 16px;
   padding: 22px 0;
-  border-top: 1px solid #2b3340;
+  border-top: 1px solid var(--border);
   align-items: start;
 }
 .event-timing {
   display: grid;
   gap: 5px;
-  font-size: 12px;
-  color: #aebbd0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 .event-timing strong {
-  color: #d9e3f4;
+  color: var(--text-tertiary);
 }
 .event-description {
   min-width: 0;
@@ -2004,15 +2556,15 @@
 }
 .event-description h3 {
   margin: 0;
-  font-size: 15px;
-  color: #edf0f6;
+  font-size: var(--text-body);
+  color: var(--text-primary);
 }
 .event-description p {
   margin: 5px 0;
-  color: #aeb8c9;
+  color: var(--text-secondary);
 }
 .event-description small {
-  color: #8795aa;
+  color: var(--text-tertiary);
 }
 .event-description .button-row {
   margin-top: 10px;
@@ -2024,7 +2576,7 @@
   gap: 5px;
 }
 .event-search-panel {
-  border: 1px solid #344054;
+  border: 1px solid var(--text-tertiary);
   border-radius: 12px;
   padding: 18px;
   margin: 24px 0;
@@ -2034,27 +2586,27 @@
 }
 .search-history details {
   padding: 14px 0;
-  border-top: 1px solid #344054;
+  border-top: 1px solid var(--border-strong);
 }
 .search-history summary {
   cursor: pointer;
-  color: #bdcde8;
+  color: var(--text-secondary);
 }
 .event-candidate {
-  background: #121922;
-  border: 1px solid #303c50;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   padding: 16px;
   border-radius: 8px;
   margin: 12px 0;
   overflow-wrap: anywhere;
 }
 .event-candidate a {
-  color: #adc7ff;
+  color: var(--accent-ink);
 }
 .event-candidate p {
   white-space: pre-wrap;
-  color: #aeb9cb;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--text-md);
 }
 @media (max-width: 1100px) {
   .calendar-layout {
@@ -2088,7 +2640,7 @@
 }
 .report-intro {
   max-width: 800px;
-  color: #a9b5c8;
+  color: var(--text-secondary);
   margin-bottom: 24px;
 }
 .report-filter-grid {
@@ -2098,12 +2650,12 @@
 }
 .report-definitions summary {
   cursor: pointer;
-  color: #b9caff;
+  color: var(--accent-ink);
   padding-block: 12px;
 }
 .report-definitions p {
   max-width: 900px;
-  color: #a9b5c8;
+  color: var(--text-secondary);
 }
 .report-check {
   display: flex;
@@ -2126,25 +2678,25 @@
 .report-context p {
   margin: 0;
   padding: 16px 0;
-  color: #c0cadb;
+  color: var(--text-secondary);
 }
 .report-context small {
-  color: #8e9cb3;
+  color: var(--text-tertiary);
 }
 .report-context strong {
-  color: #edf0f6;
+  color: var(--text-tertiary);
 }
 .report-chart {
   height: 300px;
   width: 100%;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .report-tooltip {
-  border: 1px solid #47546c;
+  border: 1px solid var(--text-tertiary);
   border-radius: 8px;
-  background: #19202b;
-  color: #edf0f6;
+  background: var(--surface-2);
+  color: var(--text-primary);
   padding: 12px;
 }
 .report-event {
@@ -2162,10 +2714,10 @@
 }
 .report-pagination {
   margin-top: 18px;
-  color: #a9b5c8;
+  color: var(--text-secondary);
 }
 .report-export p {
-  color: #a9b5c8;
+  color: var(--text-tertiary);
   margin-bottom: 0;
 }
 .report-metrics .metric-card strong {
@@ -2191,7 +2743,7 @@
     height: 260px;
   }
   .report-check {
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
 }
 .report-table td:first-child {
@@ -2206,21 +2758,20 @@
 /* STK-F2-01: tokens locais do onboarding. A paleta é a mesma do produto (tema escuro
    único); centralizada aqui para um tema claro futuro trocar apenas valores. */
 .onboarding-panel {
-  --onb-border: #2c3340;
-  --onb-surface: #1c2434;
-  --onb-accent: #94afff;
-  --onb-accent-contrast: #111b31;
-  --onb-done: #a9c6b2;
-  --onb-done-bg: #24402f;
-  --onb-muted: #7e899b;
+  /* STK-F2-18 (Fase 3): os sete `--onb-*` que ficavam aqui eram RESTO do
+     mapeamento da Fase 0 — sete aliases com ZERO uso em toda a folha,
+     apontando quase todos para `--text-tertiary`. Eram a segunda paleta
+     coexistindo que a análise original apontava, agora morta e sem nenhum
+     `var(--onb-*)` para justificar. A regra do onboarding usa os tokens
+     do sistema diretamente. */
   max-width: 780px;
 }
 .onboarding-progress {
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: #b8caff;
-  border: 1px solid #3d4e72;
+  color: var(--accent-ink);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   padding: 7px 13px;
   white-space: nowrap;
@@ -2237,20 +2788,20 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 12px;
-  color: #7e899b;
-  border: 1px solid #262c37;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 7px 13px;
 }
 .onboarding-step.active {
-  border-color: #586ea6;
-  background: #1c2434;
-  color: #c9d5f4;
+  border-color: var(--accent-ink);
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 .onboarding-step.done {
-  color: #a9c6b2;
-  border-color: #33503f;
+  color: var(--text-tertiary);
+  border-color: var(--border-strong);
 }
 .onboarding-step-number {
   width: 19px;
@@ -2259,22 +2810,24 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #232a37;
-  font-size: 10px;
+  background: var(--surface-2);
+  font-size: var(--text-xs);
 }
 .onboarding-step.done .onboarding-step-number {
-  background: #24402f;
-  color: #c9ecd2;
+  /* "Concluído" é estado semântico, não estilo: fundo positivo com texto
+     primário. Cinza de texto aqui dizia "existe" onde queria dizer "feito". */
+  background: var(--pos-soft);
+  color: var(--pos);
 }
 .onboarding-section {
   display: grid;
   gap: 4px;
-  border-top: 1px solid #2c3340;
+  border-top: 1px solid var(--border);
   padding-top: 20px;
 }
 .onboarding-section h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-h3);
   letter-spacing: -0.2px;
 }
 .onboarding-actions {
@@ -2287,7 +2840,7 @@
   display: grid;
   gap: 4px;
   justify-items: start;
-  border: 1px dashed #3d4e72;
+  border: 1px dashed var(--border-strong);
   border-radius: 9px;
   padding: 16px 18px;
 }
@@ -2303,7 +2856,7 @@
     min-height: 44px;
   }
   .onboarding-step {
-    font-size: 11px;
+    font-size: var(--text-xs);
     padding: 6px 11px;
   }
   .onboarding-progress {
@@ -2334,7 +2887,7 @@
 }
 
 .consent-row small {
-  color: var(--muted, #6b7280);
+  color: var(--muted, var(--text-tertiary));
 }
 
 /* STK-F2-11 — painel interno do superadmin. Somente leitura, sem controles de
@@ -2372,7 +2925,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--border, #2a3040);
+  border: 1px solid var(--border, var(--border));
   border-radius: 8px;
 }
 
@@ -2394,17 +2947,17 @@
 .report-immutable {
   margin: 0 0 6px;
   padding: 11px 14px;
-  border: 1px solid #2f3a52;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #1a2130;
-  color: #cdd6e6;
-  font-size: 13px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--text-md);
   line-height: 1.55;
 }
 .report-hash {
   margin: 0 0 18px;
-  color: var(--text-faint, #7e899b);
-  font-size: 11px;
+  color: var(--text-faint, var(--text-tertiary));
+  font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
 .report-hash code {
@@ -2419,25 +2972,25 @@
 }
 .report-narrative li {
   padding: 11px 14px;
-  border-left: 3px solid #374156;
-  background: #171c25;
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-2);
   border-radius: 0 8px 8px 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.55;
 }
 /* A distinção número/leitura é VISÍVEL: a heurística do produto não se passa
    por métrica medida. */
 .report-narrative li.fact {
-  border-left-color: #92adff;
+  border-left-color: var(--accent-ink);
 }
 .report-narrative li.heuristic {
-  border-left-color: #b98a3d;
+  border-left-color: var(--warn);
 }
 .report-narrative li small {
   display: block;
   margin-top: 5px;
-  color: var(--text-faint, #7e899b);
-  font-size: 11px;
+  color: var(--text-faint, var(--text-tertiary));
+  font-size: var(--text-xs);
 }
 .report-revisions {
   list-style: none;
@@ -2453,16 +3006,16 @@
   flex-wrap: wrap;
 }
 .report-revisions li small {
-  color: var(--text-faint, #7e899b);
-  font-size: 11px;
+  color: var(--text-faint, var(--text-tertiary));
+  font-size: var(--text-xs);
 }
 .report-revise-row input[type='text'] {
   flex: 1 1 260px;
   min-width: 0;
   padding: 9px 12px;
-  border: 1px solid #2a3040;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #14181f;
-  color: #edf0f6;
-  font-size: 13px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--text-md);
 }

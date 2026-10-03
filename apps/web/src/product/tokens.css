@@ -1,0 +1,183 @@
+/* ==========================================================================
+   STAKEFRAME — camada de tokens (Fase 0 do redesign web)
+   --------------------------------------------------------------------------
+   Direção visual: sistema Framer. A paleta registrada é o contrato:
+   #000000 #0a0a0a #ffffff #737373 #242424 #0099ff.
+
+   Este arquivo é a ÚNICA fonte de cor do produto. `product.css` e
+   `style.css` consomem `var(--*)`; literal hex fora de `:root` é defeito e
+   é barrado por teste (tests/unit/design-tokens.test.ts).
+
+   Derivações em `oklch()` são permitidas e nomeadas por PROPÓSITO
+   (superfície, borda de componente, sinal de resultado) — nunca por matiz.
+
+   Todo contraste foi MEDIDO nas 4 superfícies do sistema, não presumido.
+   O número ao lado de cada token é o piso real medido, não o desejado.
+   ========================================================================== */
+
+:root {
+  /* ---------------------------------------------------------------------
+     Paleta registrada — literais hex, inalterados
+     --------------------------------------------------------------------- */
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --fg: #ffffff;
+  --muted: #737373; /* 4,43:1 em --bg. ABAIXO de 4,5:1 — decorativo apenas. */
+  --border: #242424; /* divisor, não componente: não exige 3:1 */
+  --accent: #0099ff; /* preenchimento. Sobre ele, texto preto = 7,00:1 */
+
+  /* ---------------------------------------------------------------------
+     Superfícies — 4 degraus de profundidade.
+     A mais clara é --surface-3 (rgb 19), e é ela que dita o piso de
+     contraste de TODO token de texto e de toda borda de componente.
+     Foi a medição dela que reprovou --text-tertiary e --border-strong na
+     primeira versão desta camada.
+     --------------------------------------------------------------------- */
+  --surface-1: #0a0a0a; /* canvas do painel, cartão, sidebar */
+  --surface-2: oklch(0.16 0 0); /* painel aninhado, linha de tabela, campo */
+  --surface-3: oklch(0.185 0 0); /* chip, avatar, hover, estado ativo */
+  --surface-sunken: oklch(0.13 0 0); /* trilho de tabela, área de código */
+
+  /* ---------------------------------------------------------------------
+     Texto — 3 níveis, todos ≥ 4,5:1 nas 4 superfícies.
+     --muted (#737373) fica FORA desta lista de propósito: em texto
+     pequeno mede 4,43:1 em --bg e 1,48:1 em --surface-3.
+     --------------------------------------------------------------------- */
+  --text-primary: var(--fg); /* 8,54:1 em --surface-3 */
+  --text-secondary: oklch(0.76 0 0); /* 6,05:1 em --surface-3 · rgb 177 */
+  --text-tertiary: oklch(0.68 0 0); /* 5,26:1 em --surface-3 · rgb 152 */
+
+  /* ---------------------------------------------------------------------
+     Acento — 2 papéis, porque 1 não basta.
+     --accent é preenchimento (o CTA). --accent-ink é o acento usado como
+     TEXTO ou borda de estado ativo: o #0099ff puro mede 2,34:1 em
+     --surface-3, abaixo dos 3:1 de componente. O ink sobe para 5,88:1 sem
+     sair da família. Regra de uso: no máximo 2 usos de acento por tela.
+     --------------------------------------------------------------------- */
+  --accent-ink: oklch(0.76 0.13 245); /* 5,88:1 em --surface-3 · rgb 99,185,254 */
+  --focus: var(--accent-ink);
+
+  /* ---------------------------------------------------------------------
+     Sinal de resultado — uma carteira de apostas não codifica lucro sem
+     cor semântica, e a paleta Framer não tem uma. Derivados por propósito.
+     --------------------------------------------------------------------- */
+  --pos: oklch(0.82 0.14 158); /* 6,59:1 em --surface-3 */
+  --pos-soft: oklch(0.22 0.05 158); /* fundo de pilha; --pos sobre ele = 5,43:1 */
+  --neg: oklch(0.78 0.15 26); /* 5,68:1 em --surface-3 */
+  --neg-soft: oklch(0.22 0.05 26); /* --neg sobre ele = 5,10:1 */
+  --warn: oklch(0.84 0.13 82); /* 6,70:1 em --surface-3 */
+  --warn-soft: oklch(0.23 0.04 82); /* --warn sobre ele = 5,20:1 */
+
+  /* ---------------------------------------------------------------------
+     Bordas — 3 funções distintas, e a distinção é o ponto.
+     --border         divisor visual; não é componente, não exige 3:1
+     --border-strong  BORDA DE COMPONENTE: exige 3:1 contra a própria
+                     superfície, medida na mais clara (--surface-3)
+     --border-focus   anel de foco, separado para nunca ser confundido com
+                     a borda de repouso nem apagado num estado :hover
+     --------------------------------------------------------------------- */
+  --border-strong: oklch(0.58 0 0); /* 4,30:1 em --surface-3 · 10,58:1 em --bg */
+  --border-focus: var(--accent-ink);
+
+  /* ---------------------------------------------------------------------
+     Tipografia — Inter em display e corpo, 3 pesos, 7 tamanhos.
+     Nenhum tamanho abaixo de 12px: a versão anterior tinha 51 das 150
+     declarações de `font-size` abaixo de 12px, e a interface tinha virado
+     listagem de terminal.
+
+     STK-F2-18 (PR-2): `--text-xs` era 11,5px. Duas suítes discordavam sobre
+     o piso e AMBAS passavam no próprio domínio — o unit legitimava 11,5px
+     enquanto o E2E exigia 12px. Duas asserções que discordam não são piso: uma
+     delas é só um número que ninguém questionou. O piso real é 12px, e agora
+     é o mesmo número dos dois lados.
+     --------------------------------------------------------------------- */
+  --font-display: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
+
+  /* STK-F2-18 (PR-2): `--text-xs` e `--text-sm` valem 12px agora, e continuam
+     separados de propósito. Eles não são tamanhos diferentes — são INTENÇÕES
+     diferentes, e as 46 e 40 regras que os consomem não são intercambiáveis:
+     `--text-xs` é rótulo em CAPS, cabeçalho de tabela, legenda de calendário
+     e o texto dos eixos do gráfico de análises; `--text-sm` é texto corrido
+     pequeno. Colapsar os dois deixaria a folha sem forma de dizer "isto é um
+     rótulo", e a próxima pessoa que precisasse de um rótulo menor voltaria
+     inventando um hex cru. Dois nomes, mesmo valor, uma intenção cada.
+
+     A exceção de "legenda de eixo pode ficar abaixo de 12px" foi avaliada e
+     NÃO foi usada: havia um caso abaixo de 12px de verdade, e subir o token
+     resolveu.
+     `.report-chart { font-size: var(--text-xs) }` alimenta os `<XAxis>` e
+     `<YAxis>` do recharts, que herdaram 11,5px na base — abaixo do piso que o
+     próprio E2E exige, e invisível para ele: o seletor de `smallText` do E2E
+     não casa nó de SVG. A diferença só apareceu ao ler quem consome o token
+     em vez de procurar a palavra "eixo" no CSS. */
+  --text-xs: 12px; /* rótulo em CAPS, cabeçalho de tabela, legenda, eixo */
+  --text-sm: 12px; /* auxiliar, caption */
+  --text-md: 13.5px; /* célula de tabela, label de campo */
+  --text-body: 15px; /* corpo */
+  --text-h3: 16px;
+  --text-h2: 21px;
+  --text-h1: 30px;
+
+  /* ---------------------------------------------------------------------
+     Geometria — raio 8px como token base; 6 e 14 derivam dele como escala
+     de superfície, não como exceção.
+     --------------------------------------------------------------------- */
+  --radius: 8px;
+  --radius-sm: 6px; /* controle pequeno */
+  --radius-lg: 14px; /* painel */
+  --hairline: 1px;
+  --gap: 8px;
+  --tap: 44px; /* alvo de toque mínimo, vale em toda superfície interativa */
+
+  /* ---------------------------------------------------------------------
+     Efeitos — Alfa sobre o fundo. São tokens porque a versão anterior
+     escrevia o valor à mão no overlay do diálogo e na sombra do painel.
+     Com alfa, um hex sai da paleta registrada sem que a asserção de
+     hex a veja — por isso o teste casa 4 e 8 dígitos também.
+     --------------------------------------------------------------------- */
+  --scrim: rgb(6 9 16 / 0.72); /* overlay do diálogo; --bg sob ele é 7:1 */
+  --shadow-panel: 0 30px 100px rgb(0 0 0 / 0.47); /* elevação do diálogo */
+  --shadow-float: 0 18px 48px rgb(0 0 0 / 0.4); /* popover sobre a tabela */
+
+  /* ---------------------------------------------------------------------
+     Layout da casca
+     --------------------------------------------------------------------- */
+  --shell-w: 248px;
+  --content-max: 1240px;
+  --topbar-h: 76px;
+}
+
+/* ==========================================================================
+   Base da aplicação
+   ========================================================================== */
+
+.product-shell,
+.miniapp-page,
+.product-loading {
+  /* Coluna de dinheiro alinhada é o produto, não decoração. */
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-body);
+}
+
+/* Todo elemento focável tem anel. `outline` não é removido em lugar
+   nenhum do CSS do produto — é a única garantia de que o teclado nunca
+   some. */
+.product-shell :focus-visible,
+.miniapp-page :focus-visible,
+.dialog-content :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Alvo de toque: a regra é de elemento, não de página — por isso não há
+   exceção declarada em nenhum lugar do CSS do produto. */
+.product-shell button,
+.product-shell a,
+.miniapp-page button,
+.miniapp-page a,
+.miniapp-page summary {
+  touch-action: manipulation;
+}

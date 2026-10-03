@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   calendarPageSchema,
@@ -30,6 +30,22 @@ function dayLabel(value: string) {
     new Date(`${value}T12:00:00Z`),
   );
 }
+/**
+ * STK-F2-18 (Fase 4): a grade usava `['D','S','T','Q','Q','S','S']` — duas
+ * quartas e dois sábados idênticos, e o leitor de tela anunciava "Q" duas
+ * vezes sem distinguir qual era. A sigla continua curta; o nome inteiro
+ * vai em `title`, que é o que o leitor de tela e o hover anunciam.
+ */
+const weekdayNames = [
+  { short: 'D', long: 'Domingo' },
+  { short: 'S', long: 'Segunda' },
+  { short: 'T', long: 'Terça' },
+  { short: 'Q', long: 'Quarta' },
+  { short: 'Q', long: 'Quinta' },
+  { short: 'S', long: 'Sexta' },
+  { short: 'S', long: 'Sábado' },
+] as const;
+
 function timeValue(instant: string | null) {
   return instant
     ? new Intl.DateTimeFormat('en-GB', {
@@ -64,6 +80,32 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
     setView(value);
     setPage(1);
   }
+  // STK-F2-18 (Fase 4): a grade do mês deixa de ser só um seletor de dia e
+  // passa a mostrar o que existe em cada dia. Antes ela respondia "que dia
+  // eu escolho" e a resposta de "o que tem neste dia" exigia clicar duas
+  // vezes. O recorte de dados é o mesmo da agenda: quando há dia escolhido a
+  // grade continua inteira e só o destaque muda, porque o mês é a unidade de
+  // leitura do calendário.
+  const monthQuery = useQuery({
+    queryKey: ['product', 'calendar-month', month, workspace.version],
+    queryFn: () =>
+      request(
+        `/api/v1/calendar?from=${month}-01&to=${month}-${days}&view=scheduled&page=1&pageSize=100`,
+        calendarPageSchema,
+      ),
+    enabled: month !== '',
+  });
+  const byDay = useMemo(() => {
+    const grouped = new Map<string, CalendarItem[]>();
+    for (const item of monthQuery.data?.items ?? []) {
+      const date = item.selection.eventDate;
+      if (!date) continue;
+      const list = grouped.get(date) ?? [];
+      list.push(item);
+      grouped.set(date, list);
+    }
+    return grouped;
+  }, [monthQuery.data]);
   return (
     <div className="calendar-layout">
       <section className="panel calendar-picker" aria-label="Escolher período">
@@ -83,9 +125,9 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
           />
         </Field>
         <div className="calendar-grid" aria-label="Dias do mês">
-          {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((label, index) => (
-            <span className="calendar-weekday" aria-hidden="true" key={index}>
-              {label}
+          {weekdayNames.map((label) => (
+            <span className="calendar-weekday" aria-hidden="true" key={label.long}>
+              <abbr title={label.long}>{label.short}</abbr>
             </span>
           ))}
           {Array.from({ length: startWeekday }, (_, index) => (
@@ -93,23 +135,63 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
           ))}
           {Array.from({ length: days }, (_, index) => {
             const value = `${month}-${String(index + 1).padStart(2, '0')}`;
+            const items = byDay.get(value) ?? [];
+            // A agenda não soma valor por SELEÇÃO: um mesmo bilhete pode ter
+            // duas seleções no mesmo dia e continuaria sendo uma aposta. A
+            // contagem de chips é de seleções e a legenda diz isso.
+            const selected = day === value;
             return (
               <button
                 type="button"
                 key={value}
-                aria-label={dayLabel(value)}
-                aria-pressed={day === value}
-                className={value === saoPauloDate(new Date()) ? 'calendar-today' : ''}
+                aria-label={
+                  items.length === 0
+                    ? dayLabel(value)
+                    : `${dayLabel(value)}, ${items.length} ${items.length === 1 ? 'seleção' : 'seleções'}`
+                }
+                aria-pressed={selected}
+                className={[
+                  'calendar-day',
+                  value === saoPauloDate(new Date()) ? 'calendar-today' : '',
+                  selected ? 'calendar-selected' : '',
+                  items.length > 0 ? 'has-events' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onClick={() => {
-                  setDay(day === value ? '' : value);
+                  setDay(selected ? '' : value);
                   setView('scheduled');
                   setPage(1);
                 }}
               >
-                {index + 1}
+                <span className="calendar-daynum">{index + 1}</span>
+                {items.length > 0 ? (
+                  <span className="calendar-chips" aria-hidden="true">
+                    {items.slice(0, 3).map((item) => (
+                      <span
+                        key={item.selection.id}
+                        className={`calendar-chip chip-${item.betState}`}
+                      />
+                    ))}
+                    {items.length > 3 ? (
+                      <span className="calendar-chip chip-more">+{items.length - 3}</span>
+                    ) : null}
+                  </span>
+                ) : null}
               </button>
             );
           })}
+        </div>
+        <div className="calendar-legend" aria-hidden="true">
+          <span>
+            <i className="chip-open" /> Em aberto
+          </span>
+          <span>
+            <i className="chip-settled" /> Liquidada
+          </span>
+          <span>
+            <i className="chip-cancelled" /> Cancelada
+          </span>
         </div>
         <Button
           variant="ghost"
@@ -135,17 +217,25 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
             <p>Cada seleção mantém seu vínculo com o bilhete.</p>
           </div>
         </div>
-        <div className="button-row calendar-tabs">
+        {/* STK-F2-18 (Fase 4): as duas abas eram ambas `default`, ou seja dois
+            botões sólidos no mesmo viewport. A visão ativa vira segmentado —
+            estado de onde se está, não ação — e o e2e continua encontra o
+            botão pelo nome acessível. */}
+        <div className="button-row calendar-tabs" role="group" aria-label="Fonte da agenda">
           <Button
             type="button"
-            variant={view === 'scheduled' ? 'default' : 'secondary'}
+            variant="ghost"
+            aria-pressed={view === 'scheduled'}
+            className={view === 'scheduled' ? 'segment-selected' : undefined}
             onClick={() => changeView('scheduled')}
           >
             Programação
           </Button>
           <Button
             type="button"
-            variant={view === 'pending' ? 'default' : 'secondary'}
+            variant="ghost"
+            aria-pressed={view === 'pending'}
+            className={view === 'pending' ? 'segment-selected' : undefined}
             onClick={() => changeView('pending')}
           >
             Pendências{query.data ? ` (${query.data.pendingSelections})` : ''}
@@ -668,7 +758,7 @@ function EventSearchPanel({
               {search.candidates.map((candidate) => (
                 <article key={candidate.id} className="event-candidate">
                   <a href={candidate.url} target="_blank" rel="noreferrer">
-                    {candidate.title} ↗
+                    {candidate.title}
                   </a>
                   <p>{candidate.excerpt}</p>
                   {candidate.rawDate || candidate.rawTime ? (

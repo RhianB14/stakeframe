@@ -178,7 +178,7 @@ test('abre o Mini App com os quatro fluxos e navegação própria', async ({ pag
   await page.goto('/miniapp');
   // Painel (fluxo 1): as métricas da web, o mesmo componente.
   await expect(page.getByRole('heading', { name: 'Painel' })).toBeVisible();
-  await expect(page.getByText('Banca real')).toBeVisible();
+  await expect(page.getByText('Saldo em conta')).toBeVisible();
   // Menu inferior com os quatro destinos do escopo, e sem a barra lateral.
   const nav = page.getByRole('navigation', { name: 'Navegação do aplicativo' });
   await expect(nav.getByRole('link', { name: 'Painel' })).toBeVisible();

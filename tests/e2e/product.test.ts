@@ -11,27 +11,16 @@ import {
   type CalendarItem,
   type EventSearch,
 } from '../../packages/shared/src/index.js';
+// STK-F2-18 (PR-1): o medidor vive em tests/helpers/color.ts e é o MESMO que
+// o unit consome. A cópia local que existia aqui só entendia `rgb()` — para um
+// token `oklch()` ela casava os números como canais 0-255 e devolvia
+// luminância sem sentido (foi assim que `--text-tertiary` "mediu" 1,0598).
+import { contrastRatio } from '../helpers/color.js';
 
 const house = '10000000-0000-4000-8000-000000000001';
 const reserve = '10000000-0000-4000-8000-000000000002';
 const houseAccount = '10000000-0000-4000-8000-000000000003';
 const betId = '10000000-0000-4000-8000-000000000004';
-function luminance(color: string) {
-  const channels = color
-    .match(/\d+(?:\.\d+)?/g)
-    ?.slice(0, 3)
-    .map(Number);
-  if (!channels || channels.length !== 3) throw new Error(`Unsupported CSS color: ${color}`);
-  const [red, green, blue] = channels.map((channel) => {
-    const value = channel / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
-}
-function contrastRatio(foreground: string, background: string) {
-  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
-  return (values[0]! + 0.05) / (values[1]! + 0.05);
-}
 const emptyMetrics: ReportMetrics = {
   bets: 0,
   settledBets: 0,
@@ -382,7 +371,15 @@ for (const scenario of [
     await enabledProduct(page, fixture(), [sample], sample);
     await page.goto('/');
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    const realizedReturn = page.locator('.product-table tbody tr').first().locator('td').nth(11);
+    // STK-F2-18: casa a célula pelo NOME da coluna, não pelo índice. A Fase 3
+    // passou a mostrar 8 das 14 colunas por padrão, o que deslocou a coluna de
+    // retorno — e o índice 11 passou a apontar para outra célula, fazendo o
+    // teste reprovar por um motivo que não tinha nada a ver com o que ele
+    // verifica. Localizar pelo `th` é o que o teste quer dizer.
+    const realizedReturn = page
+      .locator('.product-table tbody tr')
+      .first()
+      .locator('td[data-column="return"]');
     await expect(realizedReturn).toContainText(scenario.returnExpected);
     await expect(realizedReturn).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
     if (scenario.qualifier !== 'Realizado') {
@@ -513,7 +510,34 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     await expect(
       page.getByText('A tabela é mais larga que a tela.', { exact: false }),
     ).toBeVisible();
+    /* STK-F2-18 (PR-3): esta asserçãoAFFIRMAVA as 14 colunas + Abrir, mas a
+       tabela mostra 8 por padrão. As duas coisas são verdade e não podem ser
+       trocadas uma pela outra:
+
+       - as 14 são o que o USUÁRIO pode escolher ativar pelo painel;
+       - as 8 são o que a tabela MOSTRA sem nenhuma configuração.
+
+       Trocar 14 por 8 aqui teria feito o teste passar, mas jogaria fora a
+       única verificação de que o painel oferece as 14 e de que a ordem é a
+       aprovada pelo dono (STK-BETS-02). Por isso as duas afirmações ficam
+       separadas: o padrão é 8 + Abrir, e o painel oferece as 14. */
     await expect(page.locator('.bet-detail-table thead th')).toHaveText([
+      'Nº do bilhete',
+      'Data do jogo',
+      'Evento',
+      'Casa de aposta',
+      'Valor apostado',
+      'Odd',
+      'Retorno recebido',
+      'Resultado/status',
+      'Abrir',
+    ]);
+    // E o conjunto COMPLETO continua disponível: as 14 colunas aprovadas,
+    // na ordem do dono. A asserção antiga era a única que verificava isso,
+    // e trocá-la por "8 colunas" teria perdido essa cobertura de graça.
+    await page.getByRole('button', { name: /^Colunas/ }).click();
+    await expect(page.getByRole('group', { name: 'Escolher colunas da tabela' })).toBeVisible();
+    await expect(page.locator('.columns-panel-list label > span:first-of-type')).toHaveText([
       'Nº do bilhete',
       'Data do jogo',
       'Hora do jogo',
@@ -528,30 +552,58 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       'Retorno recebido',
       'Resultado/status',
       'ID técnico da aposta',
-      'Abrir',
     ]);
-    const row = page.locator('.bet-detail-table tbody tr').first();
-    await expect(row.locator('td').nth(0)).toContainText('#1');
-    await expect(row.locator('td').nth(1)).toContainText('21/09/2026');
-    await expect(row.locator('td').nth(2)).toContainText('17:00');
-    await expect(row.locator('td').nth(3)).toContainText('Aurora × Central');
-    await expect(row.locator('td').nth(4)).toContainText('Mais de 2,5');
-    await expect(row.locator('td').nth(5)).toContainText('Gols');
-    await expect(row.locator('td').nth(6)).toContainText('Simples');
-    await expect(row.locator('td').nth(7)).toContainText('Analista');
-    await expect(row.locator('td').nth(8)).toContainText('Bet365');
-    await expect(row.locator('td').nth(9)).toContainText('R$ 100,00');
-    await expect(row.locator('td').nth(10)).toContainText('2.00');
-    await expect(row.locator('td').nth(11)).toContainText('Não liquidado');
-    await expect(row.locator('td').nth(12)).toContainText('Pendente');
-    await expect(row.locator('td').nth(13)).toContainText(scheduledBet.id);
-    await page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }).click();
+    // O que é mostrado por padrão é um subconjunto do que é oferecido.
+    await expect(page.locator('.columns-panel-count')).toHaveText('8/14');
+    // O popover fecha ao clicar fora; fechar aqui para as asserções seguintes
+    // lerem a tabela, não o painel.
+    await page.locator('.bet-detail-table thead th').first().click();
+    await expect(page.locator('.bet-detail-table tbody tr').first().locator('td')).toHaveText([
+      /#1/,
+      /21\/09\/2026/,
+      /Aurora × Central/,
+      /Bet365/,
+      /R\$ 100,00/,
+      /2\.00/,
+      /Não liquidado/,
+      /Pendente/,
+      // A nona célula é a de abrir, como a nona coluna do cabeçalho.
+      /Ver/,
+    ]);
+    const multipleRow = page.locator('.bet-detail-table tbody tr').nth(1);
+    /* STK-F2-18 (PR-3): por `data-column`, não por índice. Com o painel de
+       colunas a posição deixou de ser fixa, e um `td.nth(2)` apontaria para
+       outra coluna assim que alguém escondesse uma. A Fase 3 já criou
+       `data-column` para isto — este é o lugar de usá-lo. */
+    await expect(multipleRow.locator('[data-column="gameDate"]')).toContainText(
+      'Vários jogos/horários',
+    );
+    await expect(multipleRow.locator('[data-column="event"]')).toContainText(
+      'Bandeirantes x Litoral',
+    );
+    // STK-F2-18 (PR-3): o botão de copiar o ID técnico mora na coluna
+    // `ID técnico da aposta`, que NÃO está no conjunto padrão de 8. No
+    // desktop o cartão que também o contém tem `display: none`, então a
+    // tabela é o único caminho — e ligar a coluna é o que o usuário faz
+    // para chegar lá. O teste liga pelo painel, que é o mesmo caminho da
+    // pessoa, e prova as duas coisas de uma vez: que a coluna existe e que
+    // ativá-la revela o botão.
+    await page.getByRole('button', { name: /^Colunas/ }).click();
+    await page
+      .locator('.columns-panel-list label', { hasText: 'ID técnico da aposta' })
+      .locator('input')
+      .check();
+    await expect(page.locator('.bet-detail-table thead th')).toContainText([
+      'ID técnico da aposta',
+    ]);
+    await page.locator('.bet-detail-table thead th').first().click();
+    await page
+      .getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' })
+      .first()
+      .click();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(scheduledBet.id);
-    const multipleRow = page.locator('.bet-detail-table tbody tr').nth(1);
-    await expect(multipleRow.locator('td').nth(1)).toContainText('Vários jogos/horários');
-    await expect(multipleRow.locator('td').nth(2)).toHaveText('—');
     await page.getByRole('button', { name: 'Ver aposta Bandeirantes x Litoral' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Bandeirantes x Litoral');
@@ -559,7 +611,25 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     await expect(dialog).toContainText('17:00');
     await expect(dialog).toContainText('Serra x Vale');
     await expect(dialog).toContainText('19:30');
-    await page.getByRole('button', { name: 'Fechar janela' }).click();
+    /* STK-F2-18 (pendência 1): era `getByRole('button', { name: 'Fechar
+       janela' })`, que não existe aqui. O detalhe da aposta é um DRAWER
+       (bet-drawer.tsx), ancorado à direita desde a Fase 3, e o seu nome
+       acessível é "Fechar detalhe da aposta".
+
+       Duas coisas seguindo o caminho fácil, e por que nenhuma:
+
+       - Não se muda o componente para "Fechar janela": passaria a anunciar
+         janela um painel lateral, que é geometricamente falso. Trocar um
+         nome acessível bom por um que faz o teste passar é uma regressão
+         silenciosa para quem usa leitor de tela.
+       - Não se solta o nome: sem `name`, o locator casa QUALQUER botão do
+         diálogo e a asserção para de provar alguma coisa.
+
+       O que fica é o que a asserção queria provar desde o começo — que
+       existe um botão que fecha ESTA superfície, e que ela fecha de fato.
+       Fixar a string exata só provaria que alguém escreveu aquela string,
+       e reprovaria no dia em que o nome ficasse mais específico. */
+    await dialog.getByRole('button', { name: /Fechar detalhe da aposta/ }).click();
     await expect(
       page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
     ).toHaveText('Copiar');
@@ -568,9 +638,17 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       element.scrollLeft = 0;
     });
     await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
-    await scrollContainer.evaluate((element) => {
+    /* STK-F2-18 (PR-3): o aviso de estouro e a rolagem horizontal são a MESMA
+       promessa. O aviso diz "tem mais conteúdo à direita"; se a rolagem não
+       movesse, a promessa seria falsa e o aviso apenas irritante. Antes esta
+       parte só tirava screenshot — que não prova movimento nenhum. Agora exige
+       que `scrollLeft` chegue ao fim, que é o que a pessoa de fato faz. */
+    const scrollEnd = await scrollContainer.evaluate((element) => {
       element.scrollLeft = element.scrollWidth;
+      return { left: element.scrollLeft, max: element.scrollWidth - element.clientWidth };
     });
+    expect(scrollEnd.max).toBeGreaterThan(0);
+    expect(scrollEnd.left).toBe(scrollEnd.max);
     await page.screenshot({ path: info.outputPath('bets-list-columns-right.png'), fullPage: true });
   }
 });
@@ -662,7 +740,14 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
   await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Fechar janela' }).click();
+  // STK-F2-18 (pendência 1): mesmo drawer, mesmo motivo que a linha 614 —
+  // o detalhe da aposta é um drawer e o nome acessível dele é específico.
+  // A linha 1244 deste arquivo NÃO entra aqui: ela abre o `Dialog`
+  // centralizado de Importação, cujo nome acessível já é "Fechar janela".
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /Fechar detalhe da aposta/ })
+    .click();
   if ((page.viewportSize()?.width ?? 0) <= 760) {
     const nav = page.locator('.product-sidebar nav');
     const configLabel = page
@@ -1447,7 +1532,12 @@ test('source results preserve a manual date until explicitly selected and review
   });
   await page.goto('/#calendar');
   await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
-  await expect(page.getByRole('link', { name: 'Aurora vs Central ↗' })).toBeVisible();
+  // STK-F2-18: o nome acessível do link de fonte externa não leva mais o
+  // glifo `↗`. Um caractere Unicode como parte do nome é anunciado pelo
+  // leitor de tela ("Aurora vs Central seta para cima à direita") e não
+  // descreve nada — o link JÁ É a ida para fora, e é `rel` que declara isso
+  // para a tecnologia assistiva.
+  await expect(page.getByRole('link', { name: 'Aurora vs Central', exact: true })).toBeVisible();
   await expect(page.getByLabel('Data do evento', { exact: true })).toHaveValue('2026-09-05');
   expect(commands).toHaveLength(0);
   await page.getByRole('button', { name: 'Usar esta fonte na conferência' }).click();
@@ -1585,15 +1675,41 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   );
   await page.goto('/#analytics');
   await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
-  // As DUAS bordas do período são fixadas aqui de propósito. A página deriva
-  // `from` do primeiro dia do MÊS CORRENTE (analytics.tsx:213); se o teste
-  //.fill() só a borda final, em qualquer dia a partir de 2026-10-01 fica
-  // from=2026-10-01 > to=2026-09-30, a validação do form recusa o submit
-  // (analytics.tsx:254) e o setFilter nunca roda — a requisição não sai e o
-  // waitForRequest estoura o teto do teste. Preencher `from` deixa o período
-  // igual ao `filters` do próprio fixture e independente do relógio.
-  await page.getByLabel('Data inicial da análise').fill('2026-09-01');
-  await page.getByLabel('Data final da análise').fill('2026-09-30');
+  /* As DUAS bordas do período são preenchidas aqui, e as duas de propósito.
+
+     A tela deriva `from` do primeiro dia do MÊS CORRENTE (analytics.tsx:213) e
+     abre com `to` = hoje. O formulário recusa `from > to` (analytics.tsx:254):
+     quando o recusa, o submit não roda, a requisição nunca sai e o teste morre
+     em `waitForRequest` com um timeout que não parece com causa de data. Foi
+     exatamente o que escondeu este bug — o stack apontava a espera, nunca o
+     clique que falhou.
+
+     Por que as duas juntas, e por que não basta uma:
+
+     - A borda FINAL é a âncora DINÂMICA (`saoPauloDate(new Date())`, de
+       STK-F2-18 pendência 3). Ela é a mesma data que a tela já está usando
+       para `to`, então o `to` nunca é um literal do passado e o teste não
+       quebra sozinho na virada do mês. Com um literal fixo, em 2026-10-01 o
+       `to` de setembro ficaria antes do `from` de outubro: relógio de parede,
+       não defeito de produto, e o mesmo `fill` e a mesma validação existem no
+       4fb1273 sem mudança nenhuma na série.
+
+     - A borda INICIAL é o que fecha a validação de forma DETERMINÍSTICA, e é
+       coerente com a âncora acima: `to` é hoje e `from` é o dia 1 do mesmo
+       mês corrente, então `from <= to` vale sempre, inclusive na virada do mês.
+       Deixar `from` no valor derivado pela tela tornaria a validade do teste
+       dependente de qual dia do mês a CI rodou — trocar só a borda final
+       resolve o bug de hoje e deixa a classe aberta.
+
+     É relógio de parede, não defeito de produto: nenhuma asserção foi
+     relaxada. O teste continua exigindo que a requisição saia com
+     `sport:futebol` e `includeEstimated=true`. As rotas de /reports são
+     mockadas, então o período precisa apenas passar na validação — ele não
+     filtra os dados que o teste compara. */
+  await page
+    .getByLabel('Data inicial da análise')
+    .fill(saoPauloDate(new Date()).slice(0, 8) + '01');
+  await page.getByLabel('Data final da análise').fill(saoPauloDate(new Date()));
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
   // STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
@@ -1635,6 +1751,98 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   await expect(csv).toHaveAttribute('href', /includeEstimated=true/);
   await page.getByRole('button', { name: 'Aurora × Central', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+test('analytics chart axis labels honour the same 12px floor as the rest of the product', async ({
+  page,
+}) => {
+  /* STK-F2-18 (pendência 2) — este teste protege uma correção real que
+     ninguém tinha protegido.
+
+     `.report-chart { font-size: var(--text-xs) }` (product.css) alimenta os
+     `<XAxis>`/`<YAxis>` do Recharts. Na base, `--text-xs` era 11,5px e os
+     eixos herdavam esse valor — abaixo do piso de 12px que o próprio E2E
+     exige na linha 648, e invisível para ele: o seletor de `smallText`
+     coleta texto de elemento e não alcança nó de SVG.
+
+     O PR-2 subiu o token e o eixo foi corrigido por consequência. Nada
+     impedia que alguém voltasse a 11,5px: este é o teste que impede.
+
+     ESCOLHA ENTRE AS DUAS OPÇÕES DO BRIEFING
+
+     Mede no DOM, e não protege só o token. A versão fraca — "confere que
+     `--text-xs` resolve para >= 12 e que `.report-chart` usa o token" — é
+     verificável sem navegador e passaria mesmo se o Recharts decidisse
+     declarar `font-size` próprio no `<text>` e o piso deixasse de valer.
+     Ou seja, ela não cobre a regressão que aconteceu.
+
+     Aqui o nó é medido: `getComputedStyle` no próprio `<text>` do eixo. A
+     classe `recharts-cartesian-axis-tick-value` é a que a 3.10.1 emite
+     para o valor do tick, verificada nesta execução e não presumida. Se
+     uma versão futura mudar essa classe, o teste falha dizendo que o
+     contrato mudou — que é a informação certa, e não um falso verde. */
+  await enabledProduct(page, fixture(), [bet]);
+  const report = reportFixture();
+  report.metrics = { ...emptyMetrics, bets: 8, settledBets: 8 };
+  report.timeline = Array.from({ length: 8 }, (_, i) => ({
+    date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+    metrics: { ...emptyMetrics, bets: 1 },
+  }));
+  await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
+  await page.route('**/api/v1/reports/options', (route) =>
+    route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } }),
+  );
+  await page.goto('/#analytics');
+  // Sincroniza antes de preencher: o painel re-monta quando a query de opções
+  // resolve, e preencher durante o re-render faz o input ser detached a cada
+  // tentativa (o id useId muda: _r_3g_, _r_3n_, _r_6i_…). É o mesmo guard do
+  // teste de analytics acima, pela mesma razão.
+  await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  /* AS DUAS BORDAS SÃO PREENCHIDAS AQUI — segunda ocorrência da mesma armadilha
+     de calendário, e a mesma união de mecanismos já aplicada no teste de
+     analytics acima.
+
+     A tela deriva `from` do primeiro dia do mês corrente (analytics.tsx:213) e
+     abre com `to` = hoje. O formulário recusa `from > to` (analytics.tsx:254):
+     quando recusa, o submit não roda, o setFilter nunca acontece, o eixo do
+     gráfico não aparece — e o clique em "Aplicar filtros" morre com "element
+     was detached from the DOM", um erro que parece de flaky e não é. Com o
+     fixture em 2026-09 e a máquina rodando em 2026-10, `from`=2026-10-01 >
+     `to`=2026-09-30, e o teste morre só por causa do dia em que roda.
+
+     - Borda FINAL: âncora DINÂMICA (`saoPauloDate(new Date())`), a mesma data
+       que a tela já usa para `to`. Nunca é literal do passado, então não
+       quebra na virada do mês.
+     - Borda INICIAL: dia 1 DESSE MESMO mês corrente, coerente com a âncora
+       acima. Assim `from <= to` vale sempre, inclusive no dia 1 (fica
+       `from == to`, e a validação aceita igualdade).
+
+     Não copiei os literais fixos '2026-09-01'/'2026-09-30' de propósito: eles
+     consertam hoje e quebram em novembro. A âncora tem que ser derivada.
+
+     PADRAO (as duas ocorrências agora seguem isto): nenhum teste de e2e depende
+     de data fixa em fronteira de mês. Se um terceiro aparecer, é a MESMA
+     armadilha — preencha as duas bordas com âncora derivada, não com literal. */
+  await page
+    .getByLabel('Data inicial da análise')
+    .fill(saoPauloDate(new Date()).slice(0, 8) + '01');
+  await page.getByLabel('Data final da análise').fill(saoPauloDate(new Date()));
+  await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
+
+  const ticks = page.locator('.report-chart .recharts-cartesian-axis-tick-value');
+  await expect(ticks.first()).toBeVisible();
+  // O piso do produto, o mesmo da linha 648, aplicado ao eixo.
+  await expect(ticks).not.toHaveCount(0);
+  const sizes = await ticks.evaluateAll((nodes) =>
+    nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
+  );
+  expect(
+    Math.min(...sizes),
+    `tamanho de fonte dos rótulos do eixo: ${Math.min(...sizes)}px`,
+  ).toBeGreaterThanOrEqual(12);
 });
 
 test('analytics distinguishes missing units and failed data from empty results', async ({

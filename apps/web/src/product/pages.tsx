@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   betPageSchema,
@@ -15,7 +15,7 @@ import { request, dateLabel } from './api.js';
 import { TelegramLinkPanel } from './telegram-link.js';
 import type { OpenModal } from './ProductApp.js';
 import { BetAttachments } from './imports.js';
-import { betFinancialDisplay } from './financial-display.js';
+import { betFinancialDisplay, journalNetEffect, centsLabel } from './financial-display.js';
 import {
   betResultLabel,
   betResultQualifier,
@@ -26,6 +26,7 @@ import {
   type BetTableRow,
   type BetTableSortDirection,
 } from '@stakeframe/shared';
+import { BetColumnsPanel, loadBetColumns } from './bet-columns-panel.js';
 import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
@@ -293,7 +294,7 @@ function BetListDetails({
 export function Empty({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="empty-state">
-      <span aria-hidden="true">▤</span>
+      <span aria-hidden="true" className="empty-mark" />
       <h3>{title}</h3>
       <p>{detail}</p>
     </div>
@@ -361,10 +362,12 @@ function Pagination({
 export function BetsPage({
   workspace,
   open,
+  owner,
   compact = false,
 }: {
   workspace: Workspace;
   open: OpenModal;
+  owner: string;
   compact?: boolean;
 }) {
   const [page, setPage] = useState(1);
@@ -373,6 +376,15 @@ export function BetsPage({
   const [tipster, setTipster] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  // STK-F2-18 (Fase 3): as 14 colunas aprovadas não cabem na largura útil.
+  // O painel escolhe quais aparecem; a ordem continua sendo a do produto.
+  const [visibleColumns, setVisibleColumns] = useState<BetTableColumnKey[]>(() =>
+    loadBetColumns(owner),
+  );
+  const columns = useMemo(
+    () => betTableColumns.filter((column) => visibleColumns.includes(column.key)),
+    [visibleColumns],
+  );
   const [sort, setSort] = useState<{
     column: BetTableColumnKey;
     direction: BetTableSortDirection;
@@ -415,6 +427,26 @@ export function BetsPage({
     setter(value);
     setPage(1);
   };
+  // STK-F2-18 (PR-3): a dica de rolagem passa a ser medida, não estimada.
+  // Antes ela dependia de `columns.length > 8`, um proxy que mentia: oito
+  // colunas cabem na largura útil em algumas janelas e não cabem em outras,
+  // e o piso de largura do CSS não era consultado por ninguém. Agora o aviso
+  // aparece quando `scrollWidth` realmente passa de `clientWidth`, que é a
+  // condição de fato. Redimensionar a janela ou trocar colunas reavalia.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || compact) {
+      setOverflows(false);
+      return;
+    }
+    const measure = () => setOverflows(element.scrollWidth > element.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [compact, columns.length, sortedRows.length]);
   return (
     <section className="panel">
       <div className="section-heading">
@@ -424,9 +456,11 @@ export function BetsPage({
         </div>
         {compact ? (
           <a className="text-link" href="#bets">
-            Ver todas ↗
+            Ver todas
           </a>
-        ) : null}
+        ) : (
+          <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
+        )}
       </div>
       {!compact ? (
         <div className="filter-grid">
@@ -496,10 +530,19 @@ export function BetsPage({
         ) : (
           <>
             {!compact ? (
-              <p className="bet-table-scroll-hint">
-                A tabela é mais larga que a tela. Deslize horizontalmente para ver todas as colunas.
-                Use o título de uma coluna para ordenar os registros desta página.
-              </p>
+              /* STK-F2-18 (PR-3): a condição era `columns.length > 8`, um
+                 proxy que mentia em duas direções — oito colunas cabem numa
+                 janela larga e não cabem numa estreita, e o proxy não sabia
+                 de nada disso. A dica agora depende da geometria real
+                 (`scrollWidth > clientWidth`), que é o que o usuário
+                 sente. `aria-hidden` porque a região rolável já é focável e
+                 anuncia o seu próprio alcance. */
+              overflows ? (
+                <p className="bet-table-scroll-hint">
+                  A tabela é mais larga que a tela. Deslize horizontalmente para ver as demais
+                  colunas, ou use o painel de colunas para escolher quais exibir.
+                </p>
+              ) : null
             ) : null}
             {!compact ? (
               <div className="bet-list-cards">
@@ -514,12 +557,21 @@ export function BetsPage({
               </div>
             ) : null}
             <div
+              ref={scrollRef}
               className={`table-scroll${compact ? '' : ' bet-table-desktop'}`}
               role="region"
               aria-label="Tabela de apostas"
               tabIndex={0}
             >
-              <table className={`product-table${compact ? '' : ' bet-detail-table'}`}>
+              <table
+                className={`product-table${compact ? '' : ' bet-detail-table'}`}
+                // O CSS dimensiona o piso da tabela a partir desta contagem.
+                style={
+                  compact
+                    ? undefined
+                    : ({ '--bet-columns': String(columns.length) } as CSSProperties)
+                }
+              >
                 <caption className="sr-only">
                   Apostas com jogo, mercado, tipo, valores e resultado
                 </caption>
@@ -535,7 +587,7 @@ export function BetsPage({
                         <th>Resultado realizado</th>
                       </>
                     ) : (
-                      betTableColumns.map((column) => (
+                      columns.map((column) => (
                         <th
                           key={column.key}
                           aria-sort={column.key === sort?.column ? sort.direction : 'none'}
@@ -563,9 +615,17 @@ export function BetsPage({
                     if (!compact) {
                       return (
                         <tr key={bet.id}>
-                          {betTableColumns.map((column) => (
+                          {columns.map((column) => (
                             <td
                               key={column.key}
+                              // STK-F2-18: a coluna precisa de identidade no
+                              // DOM. Com o painel de colunas, a posição
+                              // deixou de ser fixa — um `td` por índice
+                              // passou a apontar para outra coluna quando
+                              // alguém esconde uma. `data-column` é o que
+                              // permite ao teste (e a quem depurar no
+                              // inspector) dizer qual coluna é qual.
+                              data-column={column.key}
                               className={
                                 column.key === 'return'
                                   ? `tabular ${financial.tone}`
@@ -575,14 +635,14 @@ export function BetsPage({
                               <BetTableCell row={row} column={column.key} />
                             </td>
                           ))}
-                          <td>
+                          <td data-column="open">
                             <Button
                               variant="ghost"
                               size="small"
                               aria-label={`Ver aposta ${betAccessibleTitle(bet)}`}
                               onClick={() => open({ kind: 'detail', id: bet.id })}
                             >
-                              Ver ↗
+                              Ver
                             </Button>
                           </td>
                         </tr>
@@ -635,7 +695,7 @@ export function BetsPage({
                             aria-label={`Ver aposta ${bet.selections[0]?.event ?? bet.reference}`}
                             onClick={() => open({ kind: 'detail', id: bet.id })}
                           >
-                            Ver ↗
+                            Ver
                           </Button>
                         </td>
                       </tr>
@@ -865,7 +925,10 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
         <div className="section-heading">
           <div>
             <h2>Contas e saldos</h2>
-            <p>Concilie com o valor disponível exibido em cada conta.</p>
+            <p>
+              O saldo que cada casa mostra contra o valor confirmado aqui. A diferença entre as duas
+              colunas é a conciliação que ainda não foi feita.
+            </p>
           </div>
         </div>
         <div className="account-grid">
@@ -883,7 +946,7 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
                   open({ kind: 'cash', operation: 'reconcile', accountId: account.id })
                 }
               >
-                Conciliar saldo ↗
+                Conciliar saldo
               </Button>
             </div>
           ))}
@@ -948,7 +1011,10 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
         <div className="section-heading">
           <div>
             <h2>Movimentações</h2>
-            <p>O histórico preserva lançamentos originais e estornos.</p>
+            <p>
+              Razão de acréscimo. Cada linha é um lançamento: corrigir uma aposta cria uma nova
+              linha e estorna a anterior — nada é apagado.
+            </p>
           </div>
         </div>
         <QueryNotice
@@ -966,51 +1032,102 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
             />
           ) : (
             <>
-              <div className="journal-list">
-                {journal.data.items.map((item) => (
-                  <div className="history-entry" key={item.id}>
-                    <div>
-                      <strong>
-                        {journalLabels[item.kind] ?? item.kind}
-                        {item.reversed ? ' · estornado' : ''}
-                      </strong>
-                      <small>{dateLabel(item.effectiveAt)}</small>
-                      <p>{item.reason}</p>
-                      <div className="posting-list">
-                        {item.postings.map((posting, index) => (
-                          <span key={index}>
-                            {posting.accountName}{' '}
-                            <b className={posting.amount.startsWith('-') ? 'negative' : ''}>
-                              {formatBRL(posting.amount)}
+              {/*
+                STK-F2-18 (Fase 4): o razão era uma lista de cartões. Isso
+                quebra a propriedade que um razão precisa ter — a de ser lido
+                LINHA A LINHA e conferido. Numa lista, a coluna de valor não
+                alinha, o "lançamento" e o "motivo" competem pela mesma linha
+                e comparar dois lançamentos exige memória visual. Tabela com
+                data, lançamento, contas afetadas e valor.
+              */}
+              <div className="table-scroll">
+                <table className="product-table journal-table">
+                  <caption className="sr-only">
+                    Movimentações do razão, da mais recente para a mais antiga
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Data</th>
+                      <th scope="col">Lançamento</th>
+                      <th scope="col">Motivo</th>
+                      <th scope="col">Contas afetadas</th>
+                      <th scope="col" className="num">
+                        Valor
+                      </th>
+                      <th scope="col">
+                        <span className="sr-only">Ações</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {journal.data.items.map((item) => {
+                      const net = journalNetEffect(item.postings);
+                      const reversible =
+                        ['deposit', 'withdrawal', 'transfer', 'reconcile'].includes(item.kind) &&
+                        !item.reversed &&
+                        !item.reversalOf;
+                      return (
+                        <tr
+                          key={item.id}
+                          className={item.reversed ? 'journal-reversed' : undefined}
+                        >
+                          <td className="journal-date">{dateLabel(item.effectiveAt)}</td>
+                          <td>
+                            <strong>
+                              {journalLabels[item.kind] ?? item.kind}
+                              {item.reversed ? ' · estornado' : ''}
+                            </strong>
+                          </td>
+                          <td className="journal-reason">{item.reason}</td>
+                          <td>
+                            <span className="posting-list">
+                              {item.postings.map((posting, index) => (
+                                <span key={index}>
+                                  {posting.accountName}{' '}
+                                  <b className={posting.amount.startsWith('-') ? 'negative' : ''}>
+                                    {formatBRL(posting.amount)}
+                                  </b>
+                                </span>
+                              ))}
+                            </span>
+                          </td>
+                          <td className="num">
+                            <b
+                              className={net < 0n ? 'negative' : net > 0n ? 'positive' : undefined}
+                            >
+                              {centsLabel(net)}
                             </b>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    {['deposit', 'withdrawal', 'transfer', 'reconcile'].includes(item.kind) &&
-                    !item.reversed &&
-                    !item.reversalOf ? (
-                      <Button
-                        variant="ghost"
-                        size="small"
-                        onClick={() =>
-                          open({
-                            kind: 'correction',
-                            title: 'Estornar movimentação',
-                            build: (reason, effectiveAt) => ({
-                              type: 'journal.reverse',
-                              id: item.id,
-                              reason,
-                              effectiveAt,
-                            }),
-                          })
-                        }
-                      >
-                        Estornar
-                      </Button>
-                    ) : null}
-                  </div>
-                ))}
+                            <small className="journal-sign">
+                              {net < 0n ? 'saída' : net > 0n ? 'entrada' : 'sem efeito'}
+                            </small>
+                          </td>
+                          <td>
+                            {reversible ? (
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                onClick={() =>
+                                  open({
+                                    kind: 'correction',
+                                    title: 'Estornar movimentação',
+                                    build: (reason, effectiveAt) => ({
+                                      type: 'journal.reverse',
+                                      id: item.id,
+                                      reason,
+                                      effectiveAt,
+                                    }),
+                                  })
+                                }
+                              >
+                                Estornar
+                              </Button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
               <Pagination page={page} size={25} total={journal.data.total} change={setPage} />
             </>
