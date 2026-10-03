@@ -48,15 +48,26 @@
   flex-direction: column;
 }
 .miniapp-shell .product-content {
-  margin-left: var(--shell-w);
-  width: calc(100% - var(--shell-w));
+  /* STK-F2-18: esta regra herdou a reserva da barra lateral (`--shell-w`).
+     No Mini App NÃO existe barra lateral: em 412px de viewport o conteúdo
+     caía para 164px, o topbar não cabia nessa largura e transbordava para
+     441px. Documento mais largo que a viewport faz o navegador ampliar o
+     ICB, e `position: fixed; bottom: 0` passa a ancorar em 897px em vez de
+     839px — o centro dos links da barra fica abaixo da dofra e o clique
+     aterrissa em `.product-shell` em vez do link. Largura cheia, como antes. */
+  margin-left: 0;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 .miniapp-shell .product-main {
+  /* Sem `padding` aqui de propósito: quem define o padding do produto em
+     tela de bolso é a regra `max-width: 760px` mais abaixo, e o shorthand
+     de desktop (40/40/32) desta regra — 0,2,0 contra 0,1,0 — vencia a
+     media query e tirava as calhas estreitas do Mini App inteiro. O Mini
+     App é o mesmo produto em viewport estreito, inclusive nas margens. */
   display: block;
-  padding: 40px 40px 32px;
   width: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
