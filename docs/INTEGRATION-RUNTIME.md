@@ -87,6 +87,67 @@ Estados técnicos: `pending`, `processing`, `review`, `failed`, `discarded`,
 durável com identificador novo, sem repetir automaticamente chamadas pagas;
 respostas tardias só podem concluir a tentativa que as originou.
 
+## Ciclo de vida da mensagem no Telegram
+
+**Telegram é para Pendente. Web é para sempre.** Esta é a regra do produto
+(STK-F2-TELEGRAM-AUTO, 04/10/2026) e ela faz parte do contrato de integração,
+não de uma preferência de exibição.
+
+O usuário envia a foto e recebe **uma única mensagem**: a resposta final, com
+todos os dados canônicos e os botões. Não existe mensagem de preview. O
+recebimento da foto (`attachTelegram`) grava o vínculo com o chat e **não**
+enfileira `send_processing_message` — a intenção não é gravada quando nada será
+enviado, para que a fila nunca exponha um envio que não aconteceu. A operação e
+o executor dela permanecem no contrato apenas para drenar itens gravados antes
+desta mudança.
+
+A limpeza é por operação, na mesma transação do comando financeiro, e o
+gatilho é a **saída do estado `open`** — nunca a confirmação:
+
+| `finance.bet.state` | Rótulo na mensagem | Limpeza |
+| ------------------- | ------------------ | ------- |
+| `open`              | Pendente           | **não** |
+| `settled`           | Liquidada          | **sim** |
+| `cancelled`         | Cancelada          | **sim** |
+
+Ao limpar, `enqueueCleanupForBet` enfileira `delete_source_message` (a foto),
+`delete_result_message` (a resposta final) e `delete_processing_message`
+(herdado, no-op quando a temporária nunca existiu). `delete_result_message` é o
+que marca `telegram_deleted_at`; a partir daí a resposta deixa de ser editada
+e os botões deixam de ter destino — que é exatamente o desejado.
+
+Um cashout **parcial** deixa valor aberto, logo o bilhete continua `open` e
+**não** limpa: a regra é "saiu de pendente", não "houve liquidação".
+
+Os dois caminhos convergem no mesmo ponto. O botão de status do bot
+(`telegram-callbacks.ts`) e o do Mini App (`import-routes.ts`) chamam o mesmo
+`setStatus`, que emite o mesmo `bet.settle`; a limpeza está em
+`finance-commands.ts`, no executor canônico. Confirmar pela Web **não** deixa
+mensagem órfã no Telegram.
+
+O vínculo canônico **sobrevive à confirmação**: `import.confirm` e a
+confirmação automática apenas reescrevem a resposta final
+(`edit_result_message` / `send_result_message`) e nunca zeram o vínculo. Só a
+limpeza o destrói. Enquanto a mensagem existe, os botões funcionam.
+
+### Limitação conhecida: editar depois da limpeza
+
+Depois que a aposta sai de `open`, a edição é **só pela Web** — e o comando
+`bet.update` hoje alcança apenas `tipsterId`, `reference` e `selections`
+(`packages/shared/src/finance.ts`). **Valor, odd e casa não têm comando
+corrigível em aposta confirmada**, em nenhum lugar do produto: a divergência
+é recusada com `STATE_CONFLICT` por `canonicalDivergences`
+(`packages/db/src/telegram-sync.ts`), e o bloqueio está registrado no próprio
+código como pendência de produto/contrato.
+
+Isto é uma limitação **conhecida, aceita pelo dono e temporária** até o
+redesign da tela de edição. Não é bug escondido: significa que uma extração
+automática errada em valor ou odd não pode ser corrigida depois que a
+mensagem some. As mitigações hoje são a política fail-closed
+(`automatic-config.ts`), a reprovação em extração incerta
+(`automatic-import.ts`) e o bilhete `incomplete`, que não pode ser liquidado
+antes de ser completado pelo usuário.
+
 ## Configuração e operação
 
 `AI_ENABLED=true` exige as variáveis OpenRouter de `.env.example` e segredo

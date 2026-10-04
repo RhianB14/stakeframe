@@ -100,6 +100,17 @@ const outbox = async () =>
       'select operation,state,version from integration.telegram_outbox order by created_at,id',
     )
   ).rows;
+// STK-F2-TELEGRAM-AUTO — a outbox de UM rascunho, para que uma trava possa
+// varrer vários desfechos no mesmo teste sem depender do histórico anterior.
+const outboxOf = async (inboxId: string) =>
+  (
+    await database.pool.query<{ operation: string; state: string; version: number }>(
+      'select operation,state,version from integration.telegram_outbox where inbox_id=$1 order by created_at,id',
+      [inboxId],
+    )
+  ).rows;
+const deletesOf = async (inboxId: string) =>
+  (await outboxOf(inboxId)).filter((op) => op.operation.startsWith('delete_'));
 
 beforeEach(async () => {
   name = `stk_telegram_sync_${randomUUID().replaceAll('-', '')}`;
@@ -130,7 +141,11 @@ afterEach(async () => {
 afterAll(async () => admin.close());
 
 describe('telegram sync canonical draft', () => {
-  it('binds the private identifiers idempotently and queues the processing message once', async () => {
+  // STK-F2-TELEGRAM-AUTO — a mensagem de preview saiu da experiência: o
+  // recebimento da foto NÃO grava mais `send_processing_message` na outbox.
+  // Gravar a intenção sem enviar faria a fila mentir sobre um envio que não
+  // aconteceu; a trava abaixo falha se a linha voltar.
+  it('binds the private identifiers idempotently and never queues the preview message', async () => {
     const id = await upload();
     const meta = { chatId: 42, sourceMessageId: 900, receivedAt: new Date('2026-09-17T13:00:00Z') };
     await imports.attachTelegram(tenantContext, id, meta);
@@ -151,7 +166,10 @@ describe('telegram sync canonical draft', () => {
     expect(Number(row.telegram_source_message_id)).toBe(900);
     expect(row.telegram_sync_state).toBe('pending');
     const ops = await outbox();
-    expect(ops.filter((op) => op.operation === 'send_processing_message')).toHaveLength(1);
+    expect(ops.filter((op) => op.operation === 'send_processing_message')).toHaveLength(0);
+    // Nenhuma operação de preview em absoluto: nem envio, nem remoção de uma
+    // mensagem que jamais existiu.
+    expect(ops).toHaveLength(0);
   });
 
   it('stores the declared origin, confirms the event date and preserves the received instant', async () => {
@@ -521,10 +539,102 @@ describe('automatic telegram cleanup after leaving pending', () => {
       reason: 'Correção do resultado',
     });
     const after = await outbox();
-    expect(after.filter((op) => op.operation.startsWith('send_')).length).toBe(1); // só a processamento (da attach)
+    // STK-F2-TELEGRAM-AUTO: a preview não é mais enfileirada, então a
+    // reversão não recria NENHUMA mensagem — nem a temporária, nem a final.
+    expect(after.filter((op) => op.operation.startsWith('send_')).length).toBe(0);
     expect(after.filter((op) => op.operation.startsWith('delete_')).length).toBe(deletesBefore);
     expect(after.filter((op) => op.operation === 'send_result_message').length).toBe(0);
     void importId;
+  });
+
+  // STK-F2-TELEGRAM-AUTO — TRAVA 1: a limpeza dispara quando o estado SAI de
+  // 'open'. A trava cobre os dois desfechos terminais do domínio
+  // ('settled' e 'cancelled') e afirma que a limpeza sai na MESMA transação do
+  // comando financeiro. Falha se `enqueueCleanupForBet` sair do executor
+  // canônico ou passar a ser chamado por fora dele.
+  it('queues the cleanup in the same transaction for every state that left open', async () => {
+    for (const outcome of ['win', 'loss', 'void'] as const) {
+      const { importId, betId } = await importedWithTelegram();
+      await settle(betId, outcome);
+      const bet = (await finance.bet(tenantContext, betId)).bet;
+      expect(bet.state).toBe('settled');
+      expect((await deletesOf(importId)).map((op) => op.operation)).toEqual(
+        expect.arrayContaining(['delete_source_message', 'delete_result_message']),
+      );
+    }
+    const { importId, betId } = await importedWithTelegram();
+    await run({
+      type: 'bet.cancel',
+      id: betId,
+      effectiveAt: new Date().toISOString(),
+      reason: 'Aposta anulada',
+    });
+    const bet = (await finance.bet(tenantContext, betId)).bet;
+    expect(bet.state).toBe('cancelled');
+    expect((await deletesOf(importId)).map((op) => op.operation)).toEqual(
+      expect.arrayContaining(['delete_source_message', 'delete_result_message']),
+    );
+  });
+
+  // STK-F2-TELEGRAM-AUTO — TRAVA 2: 'open' NÃO limpa. Um cashout parcial
+  // deixa valor aberto, então o bilhete continua 'open' (= Pendente na
+  // mensagem) e a mensagem e a foto têm de permanecer. É a fronteira que
+  // separa "saiu de pendente" de "ainda está pendente": falhar aqui significa
+  // que a limpeza disparou cedo e apagou a única pista de uma aposta viva.
+  it('keeps the message and the photo while a partial cashout leaves the bet open', async () => {
+    const { importId, betId } = await importedWithTelegram();
+    const settled = await run({
+      type: 'bet.settle',
+      id: betId,
+      outcome: 'partial_cashout',
+      closedPrincipal: '40.00',
+      returnAmount: '60.00',
+      settledAt: new Date().toISOString(),
+      reason: 'Cashout parcial conferido',
+    });
+    void settled;
+    const bet = (await finance.bet(tenantContext, betId)).bet;
+    expect(bet.state).toBe('open');
+    expect(bet.remaining).toBe('60.00');
+    expect(await deletesOf(importId)).toHaveLength(0);
+    const row = (
+      await database.pool.query<{
+        telegram_deleted_at: Date | null;
+        telegram_source_message_id: string | null;
+        telegram_result_message_id: string | null;
+      }>(
+        'select telegram_deleted_at,telegram_source_message_id,telegram_result_message_id from integration.inbox where id=$1',
+        [importId],
+      )
+    ).rows[0]!;
+    expect(row.telegram_deleted_at).toBeNull();
+    expect(row.telegram_source_message_id).not.toBeNull();
+    expect(row.telegram_result_message_id).not.toBeNull();
+  });
+
+  // STK-F2-TELEGRAM-AUTO — os DOIS caminhos precisam limpar. O bot do Telegram
+  // e o Mini App chamam o mesmo `setStatus`; aqui a prova é feita pelo ponto de
+  // entrada do Mini App (actor 'web'), o mesmo que import-routes.ts usa. Se
+  // algum dia o cleanup passar a existir só num dos caminhos, esta trava
+  // quebra — é a razão de o dono exigir que vale nos dois.
+  it('cleans up through the Mini App entry point, not only through the raw command', async () => {
+    const { importId, betId } = await importedWithTelegram();
+    const before = (
+      await database.pool.query<{ version: number }>(
+        'select version from integration.inbox where imported_bet_id=$1',
+        [betId],
+      )
+    ).rows[0]!;
+    const result = await imports.setStatus(
+      tenantContext,
+      importId,
+      { version: before.version, action: 'win' },
+      'web',
+    );
+    expect(result.betState).toBe('settled');
+    expect((await deletesOf(importId)).map((op) => op.operation)).toEqual(
+      expect.arrayContaining(['delete_source_message', 'delete_result_message']),
+    );
   });
 });
 
