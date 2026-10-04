@@ -11,11 +11,18 @@ on:
   workflow_dispatch:
     inputs:
       candidate_run_id:
-        description: Run id of the Candidate images workflow to promote
+        description: Run id of the Release candidate workflow to promote
         required: true
         type: string
       deployment_id:
         description: Stable deployment identifier from the private deployment.env
+        required: true
+        type: string
+      publication_run_id:
+        description: >-
+          Run id of the Publish approved candidate workflow that published this
+          candidate. Its published.json must name this same candidate run, so
+          infra/release/approved-arm64.json stays the gate that names the build.
         required: true
         type: string
 
@@ -40,26 +47,39 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Download candidate evidence from the approved run
+      - name: Download candidate and publication evidence from the approved runs
         env:
           RUN_ID: ${{ inputs.candidate_run_id }}
+          PUBLICATION_RUN_ID: ${{ inputs.publication_run_id }}
         run: |
           set -euo pipefail
           mkdir -p .cache/promotion/evidence
           gh api "repos/RhianB14/stakeframe/actions/runs/$RUN_ID" > .cache/promotion/run.json
           SOURCE_SHA="$(python3 -c 'import json;print(json.load(open(".cache/promotion/run.json"))["head_sha"])')"
+          # The two halves of the evidence are written by two different
+          # workflows and meet here for the first time: the candidate archive
+          # carries candidate.json (what the build claimed), the publication
+          # archive carries published.json (what the registry served). The
+          # record script cross-checks them by index digest.
+          # Production is arm64 and only arm64 is published, so only arm64 is
+          # composed — the record must not assert anything the evidence lacks.
+          CANDIDATE_DIR="$(mktemp -d)"
           gh run download "$RUN_ID" -R RhianB14/stakeframe \
-            -n "candidate-evidence-$SOURCE_SHA-amd64" -D .cache/promotion/evidence/amd64
-          gh run download "$RUN_ID" -R RhianB14/stakeframe \
-            -n "candidate-evidence-$SOURCE_SHA-arm64" -D .cache/promotion/evidence/arm64
+            -n "candidate-$SOURCE_SHA-arm64" -D "$CANDIDATE_DIR"
+          cp "$CANDIDATE_DIR/candidate.json" .cache/promotion/evidence/candidate.json
+          rm -rf "$CANDIDATE_DIR"
+          PUBLICATION_DIR="$(mktemp -d)"
+          gh run download "$PUBLICATION_RUN_ID" -R RhianB14/stakeframe \
+            -n "publication-$PUBLICATION_RUN_ID" -D "$PUBLICATION_DIR"
+          cp "$PUBLICATION_DIR/published.json" .cache/promotion/evidence/published.json
+          rm -rf "$PUBLICATION_DIR"
           echo "PROMOTION_EVIDENCE_DOWNLOADED $SOURCE_SHA"
       - name: Verify evidence and compose the promotion record
         run: |
           set -euo pipefail
           python3 -B scripts/release/promotion_record.py prepare \
             --run-json .cache/promotion/run.json \
-            --evidence-amd64 .cache/promotion/evidence/amd64 \
-            --evidence-arm64 .cache/promotion/evidence/arm64 \
+            --evidence .cache/promotion/evidence \
             --deployment-id "${{ inputs.deployment_id }}" \
             --requested-by "${{ github.actor }}" \
             --output .cache/promotion/promotion-record.json
