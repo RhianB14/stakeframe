@@ -32,6 +32,37 @@ export class ApiFailure extends Error {
     super(message);
   }
 }
+
+/**
+ * STK-F3-04 — um 401 só é SESSÃO EXPIRADA quando a rota É a sessão; de qualquer
+ * outra rota ele é SUSPEITA, e quem confirma é o `/me`.
+ *
+ * O evento `stakeframe:session-expired` limpa o cache do produto inteiro
+ * (`App.tsx` chama `removeQueries({ queryKey: ['product'] })`), e `ProductApp`
+ * desmonta a árvore enquanto `/workspace` não volta. Tratar QUALQUER 401 como
+ * sessão é exatamente esse efeito: uma rota de recurso que responde 401 — e
+ * responde, por desenho, em produto sem o recurso liberado — derrubava a tela
+ * de quem estava lendo as apostas, e o ciclo se repetia a cada nova consulta.
+ *
+ * R2: ausência de dado não vira ausência de tela. Um 401 de recurso é erro
+ * LOCAL, do componente que pediu; um 401 de sessão é o produto inteiro saindo.
+ *
+ * A lista é curta, e é essa brevidade que a faz auditável: `/me` é a fonte de
+ * identidade e é a única que pode derrubar tudo. As rotas de Telegram NÃO
+ * entram — `/api/v1/telegram/session` responde 401 justamente para distinguir
+ * "conta sem vínculo" de conta revogada, e essa distinção é orientacional:
+ * tratá-la como sessão apagaria a tela em vez de mostrar o vínculo ausente.
+ *
+ * O 401 de `/me` continua chegando por `loadOwner` (`OwnerAccess.tsx`), que
+ * NÃO usa `request()` e resolve a sessão por `owner.data === null` em
+ * `App.tsx` — inclusive no Mini App, onde a sessão do navegador não vale. A
+ * entrada abaixo existe para o comando autenticado, que passa por aqui.
+ */
+const SESSION_ROUTES = new Set(['/api/v1/me']);
+export function isSessionRoute(url: string): boolean {
+  const path = url.split('?')[0] ?? url;
+  return SESSION_ROUTES.has(path);
+}
 export async function request<T>(
   url: string,
   schema: { parse: (value: unknown) => T },
@@ -78,7 +109,15 @@ export async function request<T>(
   }
   if (!response.ok) {
     if (response.status === 401 && options.decorative !== true) {
-      window.dispatchEvent(new Event('stakeframe:session-expired'));
+      if (isSessionRoute(url)) window.dispatchEvent(new Event('stakeframe:session-expired'));
+      // STK-F3-04 — um 401 de RECURSO não é prova de nada: a rota pode estar
+      // bloqueada por produto (é assim que `/polymarket/favorites` e
+      // `/import-batches` respondem). Derrubar a tela aqui apagaria a leitura de
+      // quem está usando o produto, e o pedido voltaria, refazendo o ciclo
+      // inteiro. Este evento NÃO derruba nada: ele pede a CONFIRMAÇÃO no
+      // `/me`, que é a fonte de identidade. Se o `/me` responder 401 também, aí
+      // sim a sessão acabou e o `App.tsx` trata pelo caminho que já existe.
+      else window.dispatchEvent(new Event('stakeframe:session-suspected'));
     }
     let error;
     try {

@@ -51,6 +51,25 @@ export function App() {
     window.addEventListener('stakeframe:session-expired', expired);
     return () => window.removeEventListener('stakeframe:session-expired', expired);
   }, [client]);
+  /* STK-F3-04 — um 401 de rota de recurso é SUSPEITA, não prova: a rota pode
+     estar bloqueada por produto. A confirmação é o `/me`, que é a fonte de
+     identidade — e é o mesmo caminho que já trata a sessão perdida: um 401
+     aqui devolve `null` de `loadOwner`, e o efeito logo abaixo já limpa o
+     produto nesse caso.
+
+     Por que refetch e não esperar o intervalo: o `refetchInterval` do dono é de
+     30 s, e uma sessão que cai no meio da leitura só sairia da tela 30 s depois
+     — ou nunca, se a tela já não estiver mais pedindo. Confirmar na hora custa
+     UM request por suspeita, não um por segundo: o `/me` só é reconsultado
+     quando alguma rota já respondeu 401. */
+  useEffect(() => {
+    if (miniApp) return;
+    const suspected = () => {
+      void owner.refetch();
+    };
+    window.addEventListener('stakeframe:session-suspected', suspected);
+    return () => window.removeEventListener('stakeframe:session-suspected', suspected);
+  }, [miniApp, owner]);
   // STK-F2-12 — e o cache do produto nunca é descartado por causa da sessão do
   // navegador nessa tela: a identidade vem do vínculo do Telegram, e um 401 de
   // cookie (que não existe ali) não significa sessão de produto perdida.
