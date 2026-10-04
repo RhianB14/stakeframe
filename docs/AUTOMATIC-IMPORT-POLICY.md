@@ -107,6 +107,47 @@ reconhecido = não aprovada.
 3. Nenhum segredo, imagem de bilhete ou conteúdo privado entra em commit, PR,
    card ou log — apenas totais, contagens e hashes.
 
+## O que a ativação exige (STK-F2-TELEGRAM-AUTO)
+
+A confirmação automática **já está implementada e fail-closed**
+(`apps/worker/src/automatic-config.ts`, `packages/db/src/automatic-import.ts`).
+O que falta é **ativação em produção**, que é operação de ambiente e exige
+autorização explícita e separada do proprietário — o STK-F2-TELEGRAM-AUTO
+(04/10/2026) **não** a executou.
+
+Para ligar depois, são exatamente três coisas:
+
+1. **Variável de ambiente**: `AUTOMATIC_IMPORT_ENABLED=true` no ambiente do
+   worker, mais `AUTOMATIC_IMPORT_POLICIES_FILE` apontando para o arquivo
+   privado absoluto. Sem a primeira, o loader devolve `{ state: 'absent',
+policy: null }` e **nada é autorizado** — `null` jamais é autorização.
+2. **Arquivo de policy**: `/etc/stakeframe/automatic-import.json` instalado e
+   validado offline antes da janela (procedimento na seção acima), com
+   `schemaVersion: 3`, `expiresAt` no futuro e `approvedBy: "owner"`.
+3. **Casas na lista `approved`**: apenas as casas com `requiresUserBookmaker`
+   resolvido e homologação completa entram no caminho automático. No retrato
+   atual, **Bet365 é a única aprovada**; **Superbet está `pending`** e, mesmo
+   com a flag ligada, continua em revisão manual
+   (`BOOKMAKER_NOT_APPROVED`). Aprovar a Superbet exige rodada real completa —
+   a projeção local e a rodada direcionada não bastam.
+
+Ou seja: **ligar a flag não libera a Superbet**. Ela entra na lista `approved`
+só por homologação real, em processo próprio.
+
+### Efeito no Telegram
+
+Com a automação ligada, a aposta é registrada e a mensagem final é reescrita
+com os dados canônicos **sem ninguém tocar em nada** — a resposta já nasce
+com os botões. A mensagem permanece no Telegram enquanto a aposta está
+`open` (Pendente) e some, junto com a foto, quando a aposta sai de `open`
+(`settled` ou `cancelled`). O ciclo está em
+[INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
+
+A consequência a levar em conta: depois que a mensagem some, corrigir valor,
+odd ou casa não é possível hoje (o comando `bet.update` não os alcança).
+Limitação **conhecida e aceita** até o redesign da tela de edição — ver a
+seção "Limitação conhecida" em [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
+
 ## Rollback da policy
 
 1. `docker compose --env-file /etc/stakeframe/deployment.env -f compose.production.yml up -d --wait worker`

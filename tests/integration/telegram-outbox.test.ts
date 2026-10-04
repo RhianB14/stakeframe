@@ -85,6 +85,25 @@ async function boundInbox(): Promise<string> {
 }
 const service = () => createTelegramOutboxService(database, config, fetchImpl);
 
+// STK-F2-TELEGRAM-AUTO — `attachTelegram` não enfileira mais a mensagem de
+// preview. A operação e o executor dela continuam no contrato porque itens já
+// gravados antes da mudança ainda podem estar na fila; por isso os testes do
+// executor enfileiram a preview EXPLICITAMENTE, cobrindo esse caminho
+// herdado. Nenhum teste pode voltar a depender de `attachTelegram` para
+// obtê-la — a trava está em telegram-sync.test.ts.
+const queuePreview = async (id: string) => {
+  const version = (
+    await database.pool.query<{ version: number }>(
+      'select version from integration.inbox where id=$1',
+      [id],
+    )
+  ).rows[0]!.version;
+  const tenant = createTenantContext(database);
+  await tenant.withOrganizationTransaction(tenantContext, (client) =>
+    enqueueOutbox(client, id, 'send_processing_message', version),
+  );
+};
+
 beforeEach(async () => {
   name = `stk_telegram_outbox_${randomUUID().replaceAll('-', '')}`;
   if (!/^stk_telegram_outbox_[a-f0-9]{32}$/.test(name)) throw new Error('INVALID_TEST_DATABASE');
@@ -130,6 +149,7 @@ afterAll(async () => admin.close());
 describe('telegram outbox executor', () => {
   it('sends the processing message once, storing its id and the source binding', async () => {
     const id = await boundInbox();
+    await queuePreview(id);
     responses.push(json({ ok: true, result: { message_id: 111 } }));
     await service().processOnce();
     const row = (
@@ -169,6 +189,7 @@ describe('telegram outbox executor', () => {
 
   it('delivers the result before deleting the temporary message, never duplicating', async () => {
     const id = await boundInbox();
+    await queuePreview(id);
     responses.push(
       json({ ok: true, result: { message_id: 111 } }),
       json({ ok: true, result: { message_id: 222 } }),
@@ -246,6 +267,7 @@ describe('telegram outbox executor', () => {
 
   it('respects retry_after on 429 and does not duplicate the message on retry', async () => {
     const id = await boundInbox();
+    await queuePreview(id);
     responses.push(json({ ok: false, error_code: 429, parameters: { retry_after: 7 } }, 429));
     await service().processOnce();
     const row = (
@@ -274,6 +296,7 @@ describe('telegram outbox executor', () => {
 
   it('marks permanent failures for reconciliation without touching canonical data', async () => {
     const id = await boundInbox();
+    await queuePreview(id);
     responses.push(json({ ok: true, result: { message_id: 111 } }));
     await service().processOnce();
     await database.pool.query(
@@ -522,6 +545,7 @@ describe('telegram outbox executor', () => {
 
   it('keeps the settled status when a cleanup deletion fails permanently', async () => {
     const id = await boundInbox();
+    await queuePreview(id);
     responses.push(json({ ok: true, result: { message_id: 333 } }));
     await service().processOnce();
     await database.pool.query(

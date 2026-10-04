@@ -537,8 +537,19 @@ export function createImportDraftService(database: Database) {
       return { ...saved, automaticPolicy: automaticPolicyNotice() };
     },
     /**
-     * Vínculo privado com o Telegram no recebimento da foto (idempotente) e o
-     * pedido da mensagem temporária de processamento.
+     * Vínculo privado com o Telegram no recebimento da foto (idempotente).
+     *
+     * STK-F2-TELEGRAM-AUTO: aqui NÃO é enfileirada `send_processing_message`.
+     * A mensagem de preview foi removida da experiência — o usuário recebe
+     * apenas a resposta final, com os botões. Gravar a intenção sem nunca
+     * enviar faria a fila mentir sobre um envio que não aconteceu, então a
+     * linha foi removida em vez de suprimida apenas no executor.
+     *
+     * A coluna `telegram_processing_message_id` e as operações
+     * `send_processing_message`/`delete_processing_message` permanecem no
+     * contrato: itens já gravados antes desta mudança continuam sendo
+     * processados, e o `delete_processing_message` é no-op seguro quando a
+     * temporária nunca existiu (o próprio executor retorna cedo sem o id).
      */
     async attachTelegram(
       context: OrganizationContext,
@@ -546,12 +557,10 @@ export function createImportDraftService(database: Database) {
       meta: { chatId: number; sourceMessageId: number; receivedAt: Date },
     ) {
       return withOrg(context, async (client) => {
-        const updated = await client.query<{ version: number }>(
-          "update integration.inbox set telegram_chat_id=$2,telegram_source_message_id=$3,telegram_received_at=$4,telegram_sync_state='pending',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and telegram_source_message_id is null returning version",
+        await client.query(
+          "update integration.inbox set telegram_chat_id=$2,telegram_source_message_id=$3,telegram_received_at=$4,telegram_sync_state='pending',version=version+1,updated_at=now() where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 and telegram_source_message_id is null",
           [id, meta.chatId, meta.sourceMessageId, meta.receivedAt],
         );
-        if (!updated.rowCount) return;
-        await enqueueOutbox(client, id, 'send_processing_message', updated.rows[0]!.version);
       });
     },
     /**
