@@ -8,7 +8,7 @@ const read = (relative) => readFileSync(new URL(relative, base), 'utf8');
 const promotionRunbook = read('docs/deploy/promotion-runbook.md');
 const migrationRunbook = read('docs/deploy/migration-runbook.md');
 const migrationCompose = read('compose.migration.yml');
-const candidateImages = read('.github/workflows/candidate-images.yml');
+const candidateImages = read('.github/workflows/release-candidate.yml');
 const promotionRecord = read('.github/workflows/promotion-record.yml');
 const ci = read('.github/workflows/ci.yml');
 
@@ -71,31 +71,28 @@ test('migration compose mirrors the production hardening and joins only the back
   assert.ok(!migrationCompose.includes(':latest'), 'compose.migration.yml must never use latest');
 });
 
-test('candidate images workflow publishes digests without any production access', () => {
+test('release candidate workflow builds the five targets for review without any production access', () => {
   for (const marker of [
     'workflow_dispatch',
     'source_sha',
     'scripts/release/source.mjs',
     'verify_oci.py',
-    'registry_publish.py publish',
-    '--directory .cache/release --arch',
-    'packages: write',
     'candidate-${{ inputs.source_sha }}-${{ matrix.arch }}',
-    'candidate-evidence-${{ inputs.source_sha }}-${{ matrix.arch }}',
+    'for target in api worker migrate web-production operations',
   ]) {
-    assert.ok(candidateImages.includes(marker), `candidate-images.yml is missing: ${marker}`);
+    assert.ok(candidateImages.includes(marker), `release-candidate.yml is missing: ${marker}`);
   }
   assert.ok(
     !lineStarts(candidateImages, 'environment'),
-    'candidate publication must not use a production environment gate',
+    'candidate build must not use a production environment gate',
   );
   for (const forbidden of ['ssh', 'secrets', 'PRIVATE KEY']) {
     assert.ok(
       !lineStarts(candidateImages, forbidden),
-      `candidate-images.yml must not contain: ${forbidden}`,
+      `release-candidate.yml must not contain: ${forbidden}`,
     );
   }
-  assert.ok(!candidateImages.includes(':latest'), 'candidate-images.yml must never use latest');
+  assert.ok(!candidateImages.includes(':latest'), 'release-candidate.yml must never use latest');
 });
 
 test('promotion record workflow is the approval gate and never deploys', () => {
@@ -119,20 +116,32 @@ test('promotion record workflow is the approval gate and never deploys', () => {
   assert.ok(!promotionRecord.includes(':latest'), 'promotion-record.yml must never use latest');
 });
 
-test('promotion record workflow points the evidence flags at the download directories', () => {
+test('promotion record workflow points the evidence flag at the download directory', () => {
   assert.ok(
-    promotionRecord.includes('--evidence-amd64 .cache/promotion/evidence/amd64'),
-    'promotion-record.yml must pass the amd64 evidence directory',
+    promotionRecord.includes('--evidence .cache/promotion/evidence'),
+    'promotion-record.yml must pass the evidence directory',
   );
   assert.ok(
-    promotionRecord.includes('--evidence-arm64 .cache/promotion/evidence/arm64'),
-    'promotion-record.yml must pass the arm64 evidence directory',
+    !promotionRecord.includes('--evidence-amd64') && !promotionRecord.includes('--evidence-arm64'),
+    'promotion-record.yml must not compose per-architecture evidence: only arm64 is published',
   );
   assert.ok(
-    !promotionRecord.includes('evidence/amd64/candidate.json') &&
-      !promotionRecord.includes('evidence/arm64/candidate.json'),
+    !promotionRecord.includes('--evidence .cache/promotion/evidence/candidate.json'),
     'promotion-record.yml must not pass a file path where the script expects a directory',
   );
+});
+
+test('promotion record composes the two halves of the evidence it never sees together', () => {
+  // The candidate archive carries candidate.json and the publication archive
+  // carries published.json; the record is the only place they meet.
+  for (const marker of [
+    'publication_run_id',
+    'candidate-$SOURCE_SHA-arm64',
+    'publication-$PUBLICATION_RUN_ID',
+    'approved-arm64.json',
+  ]) {
+    assert.ok(promotionRecord.includes(marker), `promotion-record.yml is missing: ${marker}`);
+  }
 });
 
 test('continuous integration runs the promotion composition checks', () => {
@@ -156,7 +165,7 @@ test('promotion artifacts carry no secret material', () => {
     'docs/deploy/promotion-runbook.md': promotionRunbook,
     'docs/deploy/migration-runbook.md': migrationRunbook,
     'compose.migration.yml': migrationCompose,
-    '.github/workflows/candidate-images.yml': candidateImages,
+    '.github/workflows/release-candidate.yml': candidateImages,
     '.github/workflows/promotion-record.yml': promotionRecord,
     'scripts/release/registry_publish.py': read('scripts/release/registry_publish.py'),
     'scripts/release/promotion_record.py': read('scripts/release/promotion_record.py'),

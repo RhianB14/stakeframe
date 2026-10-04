@@ -180,7 +180,7 @@ jobs:
       - name: Lint promotion YAML
         run: |
           python3 -m pip install --quiet --user --break-system-packages 'yamllint==1.35.1'
-          yamllint -d "{extends: relaxed, rules: {line-length: {max: 130}}}" .github/workflows/candidate-images.yml .github/workflows/promotion-record.yml compose.migration.yml compose.production.yml compose.operations.yml
+          yamllint -d "{extends: relaxed, rules: {line-length: {max: 130}}}" .github/workflows/release-candidate.yml .github/workflows/promotion-record.yml .github/workflows/publish-candidate.yml compose.migration.yml compose.production.yml compose.operations.yml
 
       - name: Validate promotion runbooks and pipeline hygiene
         run: node --test scripts/validation/promotion.test.mjs

@@ -1,10 +1,30 @@
 """Compose the promotion record from an approved candidate run (no deploy).
 
-Verifies the run of the `Candidate images` workflow (main, dispatch, success),
-cross-checks the downloaded candidate evidence of both architectures against
-its publication evidence, and emits the immutable promotion record that the
-manual SSH window consumes: fixed digests per target and architecture, the
-deployment identifier and the requester. This script never touches production.
+Verifies the run of the `Release candidate` workflow (main, dispatch,
+success), cross-checks the downloaded candidate evidence of the deployment
+architecture against its publication evidence, and emits the immutable
+promotion record that the manual SSH window consumes: the fixed digests per
+target, the deployment identifier and the requester. This script never touches
+production.
+
+The candidate workflow is identified by its `path`, not by its display
+`name`: `name` is a human label that may be reworded without breaking any
+contract, while `path` is the reviewed file this repository ships. This
+mirrors scripts/release/download-approved.mjs, which already gates the
+publication side on the same `path`.
+
+The record is arm64-only, and deliberately so. Production runs on ARM64 and
+only the ARM64 indexes are approved and published: publication is a single
+ARM64 job (scripts/release/publication.py), so no amd64 evidence exists to
+attest. A record carrying an amd64 digest could only ever assert that the
+build produced it, never that the registry served it. Asserting less than the
+evidence proves would make the record weaker, so it asserts exactly what was
+published.
+
+The registry never proves which build was promoted, so digests alone cannot
+identify the build: the record is bound to the approval registry
+(infra/release/approved-arm64.json) through the candidate run id it names. A
+build without an entry there cannot obtain a record.
 """
 import json
 import os
@@ -15,7 +35,12 @@ from pathlib import Path
 
 from verify_oci import TARGETS, require
 
-WORKFLOW_NAME = "Candidate images"
+# The reviewed file that produces a candidate, not the display label.
+CANDIDATE_WORKFLOW_PATH = ".github/workflows/release-candidate.yml"
+# Where the approved digests live; the gate that names the build.
+APPROVAL_PATH = "infra/release/approved-arm64.json"
+# Production is ARM64; only this architecture is approved and published.
+DEPLOYMENT_ARCHITECTURE = "arm64"
 REPOSITORY = "RhianB14/stakeframe"
 REGISTRY = "ghcr.io"
 NAMESPACE = "rhianb14"
@@ -33,7 +58,7 @@ def read_json(path):
 
 
 def validate_run(run):
-    require(run.get("name") == WORKFLOW_NAME, "PROMOTION_RUN_WORKFLOW_REFUSED")
+    require(run.get("path") == CANDIDATE_WORKFLOW_PATH, "PROMOTION_RUN_WORKFLOW_REFUSED")
     require(run.get("repository", {}).get("full_name") == REPOSITORY, "PROMOTION_RUN_REPOSITORY_REFUSED")
     require(run.get("event") == "workflow_dispatch", "PROMOTION_RUN_EVENT_REFUSED")
     require(run.get("head_branch") == "main", "PROMOTION_RUN_BRANCH_REFUSED")
@@ -42,62 +67,108 @@ def validate_run(run):
     return run
 
 
-def load_arch_evidence(directory, arch, sha):
+def read_approval(path):
+    """Read the reviewed approval registry: the gate that names the build."""
+    approval = read_json(path)
+    require(bool(SHA.fullmatch(approval.get("sourceSha", ""))), "PROMOTION_APPROVAL_INVALID")
+    require(isinstance(approval.get("candidateRunId"), int), "PROMOTION_APPROVAL_INVALID")
+    require([item.get("target") for item in approval.get("images", [])] == list(TARGETS),
+            "PROMOTION_APPROVAL_INVALID")
+    return approval
+
+
+def validate_approval(run, published, approval):
+    """Bind the record to the approved build, not merely to some build.
+
+    The published evidence carries the candidate run that produced it. That
+    id must be the one the approval registry names, and the sha must agree.
+    Without this, a `published.json` from any other build would satisfy the
+    digest comparison and the record would attest to nothing.
+    """
+    require(run.get("id") == approval["candidateRunId"], "PROMOTION_RUN_NOT_APPROVED")
+    require(run.get("head_sha") == approval["sourceSha"], "PROMOTION_RUN_NOT_APPROVED")
+    require(published.get("candidateRunId") == approval["candidateRunId"],
+            "PROMOTION_PUBLICATION_NOT_APPROVED")
+    require(published.get("sourceSha") == approval["sourceSha"], "PROMOTION_PUBLICATION_NOT_APPROVED")
+
+
+def load_evidence(directory, sha):
+    """Cross-check what the build claimed against what the registry served.
+
+    `candidate.json` comes from the candidate run and carries the index digest
+    each built archive was verified to have. `published.json` comes from the
+    publication run and carries the digest the registry read back. They are
+    written by different workflows and meet here for the first time, so the
+    comparison below is the whole point of the record.
+    """
     candidate = read_json(Path(directory) / "candidate.json")
     require(candidate.get("version") == 1 and candidate.get("status") == "candidate", "PROMOTION_EVIDENCE_INVALID")
-    require(candidate.get("sourceSha") == sha and candidate.get("architecture") == arch, "PROMOTION_EVIDENCE_MISMATCH")
+    require(candidate.get("sourceSha") == sha, "PROMOTION_EVIDENCE_MISMATCH")
+    require(candidate.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
     images = candidate.get("images", [])
     require([item.get("target") for item in images] == list(TARGETS), "PROMOTION_EVIDENCE_INVALID")
     for item in images:
         require(bool(DIGEST.fullmatch(item.get("indexDigest", ""))), "PROMOTION_EVIDENCE_INVALID")
     published = read_json(Path(directory) / "published.json")
     require(published.get("published") is True and published.get("productionDeployed") is False, "PROMOTION_EVIDENCE_INVALID")
-    require(published.get("sourceSha") == sha and published.get("architecture") == arch, "PROMOTION_EVIDENCE_MISMATCH")
-    tag = "candidate-" + sha + "-" + arch
+    require(published.get("sourceSha") == sha, "PROMOTION_EVIDENCE_MISMATCH")
+    tag = "candidate-" + sha + "-" + DEPLOYMENT_ARCHITECTURE
     require(published.get("tag") == tag, "PROMOTION_TAG_REFUSED")
     registry_images = published.get("images", [])
     require([item.get("target") for item in registry_images] == list(TARGETS), "PROMOTION_EVIDENCE_INVALID")
     resolved = []
     for reviewed, actual in zip(images, registry_images):
         repository = REGISTRY + "/" + NAMESPACE + "/stakeframe-" + reviewed["target"]
-        require(actual.get("repository") == repository and actual.get("tag") == tag, "PROMOTION_EVIDENCE_INVALID")
-        require(actual.get("digest") == reviewed["indexDigest"], "PROMOTION_DIGEST_MISMATCH")
-        resolved.append({"target": reviewed["target"], "repository": repository, "tag": tag, "digest": reviewed["indexDigest"]})
+        require(actual.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
+        require(actual.get("indexDigest") == reviewed["indexDigest"], "PROMOTION_DIGEST_MISMATCH")
+        require(actual.get("provenanceVerified") is True, "PROMOTION_EVIDENCE_INVALID")
+        resolved.append({"target": reviewed["target"], "repository": repository, "tag": tag,
+                         "digest": reviewed["indexDigest"]})
     return resolved
 
 
-def prepare(run, evidence_amd64, evidence_arm64, deployment_id, requested_by, output):
+def prepare(run, evidence, deployment_id, requested_by, output, approval_path=APPROVAL_PATH):
     validate_run(run)
     sha = run["head_sha"]
     require(bool(DEPLOYMENT_ID.fullmatch(deployment_id or "")), "PROMOTION_DEPLOYMENT_ID_REFUSED")
     require(bool(REQUESTER.fullmatch(requested_by or "")), "PROMOTION_REQUESTER_REFUSED")
-    amd64 = load_arch_evidence(evidence_amd64, "amd64", sha)
-    arm64 = load_arch_evidence(evidence_arm64, "arm64", sha)
+    approval = read_approval(Path(approval_path))
+    # Bind to the approved build before trusting any digest comparison.
+    validate_approval(run, read_json(Path(evidence) / "published.json"), approval)
+    images = load_evidence(evidence, sha)
+
+    # The registry digests must be exactly the approved ones: this is what
+    # turns a verified build into an approved build.
+    approved = {item["target"]: item["digest"] for item in approval["images"]}
+    for item in images:
+        require(item["digest"] == approved[item["target"]], "PROMOTION_DIGEST_NOT_APPROVED")
+
     record = {
         "version": 1,
         "kind": "stakeframe-promotion-record",
         "sourceSha": sha,
         "candidateRunId": run.get("id"),
         "candidateRunUrl": run.get("html_url"),
+        "approvalSourceSha": approval["sourceSha"],
+        "approvalCandidateRunId": approval["candidateRunId"],
         "deploymentId": deployment_id,
         "environment": "production",
+        "architecture": DEPLOYMENT_ARCHITECTURE,
         "requestedBy": requested_by,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "productionDeployed": False,
-        "images": [
-            {"target": left["target"], "repository": left["repository"],
-             "amd64": {"tag": left["tag"], "digest": left["digest"]},
-             "arm64": {"tag": right["tag"], "digest": right["digest"]}}
-            for left, right in zip(amd64, arm64)
-        ],
+        "images": images,
     }
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     lines = ["## Promotion record — " + deployment_id, "",
-             "Source: `" + sha + "` (candidate run [" + str(run.get("id")) + "](" + str(run.get("html_url")) + "))", "",
-             "| Target | Digest (arm64, deployment) | Digest (amd64) |", "| --- | --- | --- |"]
-    lines.extend("| " + item["target"] + " | `" + item["arm64"]["digest"] + "` | `" + item["amd64"]["digest"] + "` |" for item in record["images"])
+             "Source: `" + sha + "` (candidate run [" + str(run.get("id")) + "](" + str(run.get("html_url")) + "))",
+             "",
+             "Approved by `infra/release/approved-arm64.json` (candidate run "
+             + str(approval["candidateRunId"]) + ").", "",
+             "| Target | Digest (arm64, deployment) |", "| --- | --- |"]
+    lines.extend("| " + item["target"] + " | `" + item["digest"] + "` |" for item in record["images"])
     lines.extend(["", "The production environment gate was approved for this run. Deployment remains",
                   "manual, over restricted SSH, by the arm64 digests above — never `latest` —",
                   "following docs/deploy/promotion-runbook.md.", ""])
@@ -112,16 +183,16 @@ if __name__ == "__main__":
         arguments = sys.argv[1:]
         require(len(arguments) >= 1 and arguments[0] == "prepare", "PROMOTION_COMMAND_REQUIRED")
         flags = dict(zip(arguments[1::2], arguments[2::2]))
-        require(len(arguments) % 2 == 1 and len(arguments) >= 11, "PROMOTION_COMMAND_REQUIRED")
-        allowed = {"--run-json", "--evidence-amd64", "--evidence-arm64", "--deployment-id", "--requested-by", "--output"}
-        require(set(flags) <= allowed and {"--run-json", "--evidence-amd64", "--evidence-arm64", "--deployment-id", "--requested-by"} <= set(flags), "PROMOTION_COMMAND_REQUIRED")
+        require(len(arguments) % 2 == 1 and len(arguments) >= 9, "PROMOTION_COMMAND_REQUIRED")
+        allowed = {"--run-json", "--evidence", "--deployment-id", "--requested-by", "--output", "--approval"}
+        require(set(flags) <= allowed and {"--run-json", "--evidence", "--deployment-id", "--requested-by"} <= set(flags), "PROMOTION_COMMAND_REQUIRED")
         prepare(
             read_json(flags["--run-json"]),
-            flags["--evidence-amd64"],
-            flags["--evidence-arm64"],
+            flags["--evidence"],
             flags["--deployment-id"],
             flags["--requested-by"],
             flags.get("--output", DEFAULT_OUTPUT),
+            flags.get("--approval", APPROVAL_PATH),
         )
     except (ValueError, KeyError, OSError) as error:
         print("PROMOTION_FAILED", str(error) if isinstance(error, ValueError) else type(error).__name__, file=sys.stderr)

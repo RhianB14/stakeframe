@@ -25,15 +25,25 @@
 
 ## 2. Gates de CI (o que cada workflow faz — e o que não faz)
 
-| Workflow                                  | Disparo                                                      | Faz                                                                                                                                                                                                                    | Não faz                                 |
-| ----------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `candidate-images.yml` (Candidate images) | `workflow_dispatch` com `source_sha` da `main` com CI 5/5    | Constrói os cinco targets em amd64+arm64, verifica OCI/proveniência, publica os indexes verificados no GHCR sob tag imutável `candidate-<sha>-<arch>` (recusa mover tag existente para outro digest) e retém evidência | Nenhum deploy, nenhum SSH, sem `latest` |
-| `promotion-record.yml` (Promotion record) | `workflow_dispatch` com `candidate_run_id` e `deployment_id` | Pausa no GitHub Environment `production` (required reviewer: proprietário); valida run e evidências; emite `promotion-record.json` com os digests por serviço/arquitetura                                              | Nenhum deploy, nenhum SSH, sem segredos |
+| Workflow                                             | Disparo                                                                            | Faz                                                                                                                                                                                                                                      | Não faz                                                            |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `release-candidate.yml` (Release candidate)          | `workflow_dispatch` com `source_sha` da `main` com CI verde                        | Constrói os cinco targets em amd64+arm64, verifica OCI/proveniência e retém o candidato `candidate-<sha>-<arch>` para revisão                                                                                                            | Nenhum acesso ao registry, nenhum deploy, nenhum SSH, sem `latest` |
+| `publish-candidate.yml` (Publish approved candidate) | `workflow_dispatch` (lê o registro)                                                | Baixa o artifact exatamente aprovado por `infra/release/approved-arm64.json`, confere cada archive contra os digests aprovados, publica os indexes inalterados no GHCR sob tag imutável `candidate-<sha>-arm64` e retém `published.json` | Nenhum deploy, sem `latest`                                        |
+| `promotion-record.yml` (Promotion record)            | `workflow_dispatch` com `candidate_run_id`, `publication_run_id` e `deployment_id` | Pausa no GitHub Environment `production` (required reviewer: proprietário); cruza o `candidate.json` do candidato com o `published.json` da publicação e com o registro de aprovação; emite `promotion-record.json` com os digests arm64 | Nenhum deploy, nenhum SSH, sem segredos                            |
 
-Evidências do candidato: artifact `candidate-<sha>-<arch>` (retém 1 dia; tars
-OCI + registros) e `candidate-evidence-<sha>-<arch>` (retém 30 dias; candidate,
-published e source-validation). O registro aprovado fica em
+Evidência: o candidato `candidate-<sha>-<arch>` retém **1 dia** e carrega o
+`candidate.json` (o que o build declarou); a publicação
+`publication-<run_id>` retém **30 dias** e carrega o `published.json` (o que
+o registry serviu). O record é o único lugar onde as duas metades se
+encontram, e ele recusa se o `candidateRunId` do `published.json` não for o
+que `infra/release/approved-arm64.json` nomeia — nenhum build sem aprovação
+no registro obtém record. O registro aprovado fica em
 `promotion-record-<deployment_id>-<run_id>` (90 dias).
+
+**O record é arm64-only.** Produção roda em ARM64 e só os indexes ARM64 são
+aprovados e publicados: a publicação é um job ARM64 único, logo não existe
+evidência amd64 a atestar. Um record que carregasse digest amd64 só poderia
+afirmar que o build o produziu, nunca que o registry o serviu.
 
 ## 3. Fluxo de promoção
 
@@ -147,4 +157,4 @@ banco exige backup verificado e janela própria ([RECOVERY.md](../RECOVERY.md)).
 - [migration-runbook.md](migration-runbook.md) — etapa de migração;
 - [RELEASE-TRACEABILITY.md](../RELEASE-TRACEABILITY.md) §5 — registro no Kanban;
 - `compose.production.yml` — hardening e pins; `compose.migration.yml` — migração;
-- `.github/workflows/candidate-images.yml` e `.github/workflows/promotion-record.yml`.
+- `.github/workflows/release-candidate.yml`, `.github/workflows/publish-candidate.yml` e `.github/workflows/promotion-record.yml`.
