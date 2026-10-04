@@ -458,13 +458,22 @@ describe('import confirmation under the R5 contract', () => {
 });
 
 describe('automatic telegram cleanup after leaving pending', () => {
-  const settle = (id: string, outcome: 'win' | 'loss' | 'cashout') =>
+  // `void` devolve o principal em dinheiro real (returns.ts: `origin === 'freebet'
+  // ? '0.00' : principal`), por isso o retorno de 100.00 abaixo.
+  const settle = (id: string, outcome: 'win' | 'loss' | 'cashout' | 'void') =>
     run({
       type: 'bet.settle',
       id,
       outcome,
       closedPrincipal: '100.00',
-      returnAmount: outcome === 'win' ? '200.00' : outcome === 'cashout' ? '150.00' : '0.00',
+      returnAmount:
+        outcome === 'win'
+          ? '200.00'
+          : outcome === 'cashout'
+            ? '150.00'
+            : outcome === 'void'
+              ? '100.00'
+              : '0.00',
       settledAt: new Date().toISOString(),
       reason: 'Liquidação conferida',
     });
