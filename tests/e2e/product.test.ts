@@ -2366,8 +2366,12 @@ test('freebet house change loads credits for the DESTINATION house and saves ato
   // (regex ancorada: o nome do <select> concatena as opções; o label do
   // crédito contém "nova casa" no meio — só a âncora ^Nova casa o separa.)
   await page.getByLabel(/^Nova casa/).selectOption(superbet);
-  await expect.poll(() => creditCalls.length).toBeGreaterThan(0);
-  expect(creditCalls.at(-1)).toBe(superbet);
+  // A MONTAGEM da seção já pede créditos da casa atual (BookmakerSection
+  // dispara o efeito ao abrir), então `creditCalls.length > 0` nasce verdadeiro
+  // e o poll antigo voltava antes da requisição da casa de DESTINO — o
+  // `.at(-1)` lia a chamada antiga e a casa errada "vence". Aqui a espera é
+  // pela PROPRIA afirmação: a última chamada tem que ser a da nova casa.
+  await expect.poll(() => creditCalls.at(-1)).toBe(superbet);
   const creditSelect = page.getByLabel(/^Crédito de freebet para a nova casa/);
   await expect(creditSelect).toBeVisible();
   // Sem crédito escolhido, a confirmação fica DESABILITADA.

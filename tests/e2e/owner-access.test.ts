@@ -92,7 +92,13 @@ test('unexpected redirect destinations are rejected', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Entrar com Google' }).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível entrar.');
-  await expect(page).toHaveURL(/127\.0\.0\.1:8088\/$/);
+  // A string é mesclada ao `baseURL` da config por `new URL()`, que é a mesma
+  // resolução que o `page.goto('/')` acima usou: o destino final é a raiz da
+  // origem configurada. Escrever a porta aqui fixava o teste no 8088 do
+  // `compose.local.yml` e dava falso vermelho em `E2E_BASE_URL` ≠ 8088. O
+  // destino não confiável (`https://untrusted.example.test`) não casaria com
+  // esta string, então a recusa do redirect continua sendo o que se prova.
+  await expect(page).toHaveURL('/');
 });
 
 test('public footer shows the stamped version and hides unstamped builds safely', async ({
