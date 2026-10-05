@@ -263,6 +263,15 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
   ).toHaveLength(0);
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Confirmar saldos iniciais' }).click();
+  // O comando precisa ser CONFIRMADO antes do reload: enquanto o POST está em
+  // voo, `actions.tsx` ainda não limpou `stakeframe.pending-command`, e o
+  // reload aborta a requisição. Sem esta espera, a página volta com a operação
+  // pendente e o `<fieldset disabled>` do CommandForm trava o formulário
+  // inteiro (inclusive "Casa de aposta") — a falha dependia só do timing.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('stakeframe.pending-command')))
+    .toBeNull();
   const initialized = harness.commands.find(
     (item) => (item as { type?: string }).type === 'bankroll.initialize',
   );
@@ -487,9 +496,11 @@ test('the Telegram step issues a single-use deep link and confirms it on the sit
   // itself is never chosen in the browser. The Settings panel is the
   // always-available surface for the same operation.
   await page.goto('/#settings');
-  await page.evaluate(() => {
-    location.search = '?telegram=fixture-token-value-000000';
-  });
+  // Chega pelo deep link como o Telegram abriria: UMA navegação. Atribuir
+  // `location.search` dentro de evaluate TAMBÉM navega, e essa navegação ainda
+  // estava no ar quando o `page.goto` seguinte começou — as duas disputam a
+  // mesma URL e a segunda aborta a primeira (net::ERR_ABORTED / "interrupted
+  // by another navigation"). O destino final é idêntico; o evaluate, não.
   await page.goto('/?telegram=fixture-token-value-000000#settings');
   await expect(page.getByRole('button', { name: 'Confirmar vínculo' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar vínculo' }).click();
