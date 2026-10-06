@@ -116,7 +116,7 @@ export function PolymarketSimulationSection({ window }: { window: PolymarketRank
         </Field>
       </div>
 
-      <fieldset className="notice" style={{ border: '1px solid #23262e' }}>
+      <fieldset className="notice" style={{ border: '1px solid var(--border)' }}>
         <legend>Premissas de fricção (escolhidas por você)</legend>
         <div className="filter-grid">
           <Field label="Atraso assumido (ms)">
