@@ -19,7 +19,7 @@
     "@stakeframe/shared": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",
