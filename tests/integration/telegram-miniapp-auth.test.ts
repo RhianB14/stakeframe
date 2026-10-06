@@ -124,16 +124,69 @@ describe('mini app authentication on the real import routes', () => {
       method: 'PATCH',
       url: `/api/v1/imports/${id}`,
       headers: { 'x-telegram-init-data': initData, 'content-type': 'application/json' },
-      payload: { version: 1, betOrigin: 'real' },
+      payload: { version: 1, betOrigin: 'real', sport: 'Tênis', reason: 'Correção validada' },
     });
     expect(patch.statusCode).toBe(200);
     expect(patch.json()).toMatchObject({ version: 2 });
+    const audit = (
+      await database.pool.query<{
+        actor: string;
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+      }>(
+        "select actor,before,after from finance.audit where type='import.draft_update' and entity_id=$1 order by created_at desc limit 1",
+        [id],
+      )
+    ).rows[0]!;
+    expect(audit.actor).toBe('fixture-owner');
+    expect(audit.before).toEqual({ sport: null });
+    expect(audit.after).toEqual({
+      channel: 'miniapp',
+      changes: { sport: 'Tênis' },
+      reason: 'Correção validada',
+    });
+    await expect(
+      database.pool.query("update finance.audit set after='{}'::jsonb where entity_id=$1", [id]),
+    ).rejects.toThrow('FINANCIAL_HISTORY_IMMUTABLE');
+    // `actor` não pertence ao schema aceito pelo cliente (strict); falha
+    // fechada, sem substituir a identidade autenticada da auditoria.
+    const spoof = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { 'x-telegram-init-data': initData, 'content-type': 'application/json' },
+      payload: { version: 2, actor: 'attacker-controlled' },
+    });
+    expect(spoof.statusCode).toBe(400);
     const reread = await app.inject({
       method: 'GET',
       url: `/api/v1/imports/${id}`,
       headers: { 'x-telegram-init-data': initData },
     });
     expect(reread.json()).toMatchObject({ betOrigin: 'real', item: { id } });
+  });
+
+  it('attributes a web PATCH to the authenticated owner, not the request payload', async () => {
+    const id = await upload();
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/imports/${id}`,
+      headers: { cookie: 'session=fake', origin: 'https://stakeframe.test' },
+      payload: { version: 1, sport: 'Tênis' },
+    });
+    expect(patch.statusCode).toBe(200);
+    const audit = (
+      await database.pool.query<{
+        actor: string;
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+      }>(
+        "select actor,before,after from finance.audit where type='import.draft_update' and entity_id=$1 order by created_at desc limit 1",
+        [id],
+      )
+    ).rows[0]!;
+    expect(audit.actor).toBe('fixture-owner');
+    expect(audit.before).toEqual({ sport: null });
+    expect(audit.after).toEqual({ channel: 'web', changes: { sport: 'Tênis' } });
   });
 
   it('accepts production-style file-backed Telegram credentials', async () => {

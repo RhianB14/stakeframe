@@ -235,12 +235,13 @@ export function registerImportRoutes(
     },
     (request, reply) =>
       execute(request, reply, async () => {
-        const actor = request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web';
+        const channel = request.headers['x-telegram-init-data'] ? 'miniapp' : 'web';
         return service!.updateDraft(
           contexts.get(request)!,
           params.parse(request.params).id,
           draftUpdateSchema.parse(request.body),
-          actor,
+          contexts.get(request)!.userId,
+          channel,
         );
       }),
   );
@@ -295,6 +296,10 @@ export function registerImportRoutes(
           params.parse(request.params).id,
           importStatusSchema.parse(request.body),
           actor,
+          {
+            actor: contexts.get(request)!.userId,
+            channel: request.headers['x-telegram-init-data'] ? 'miniapp' : 'web',
+          },
         );
       }),
   );
@@ -323,6 +328,10 @@ export function registerImportRoutes(
   // cliente nunca escreve direto na inbox quando há aposta registrada.
   const actorOf = (request: FastifyRequest) =>
     request.headers['x-telegram-init-data'] ? 'telegram:miniapp' : 'web';
+  const auditContextOf = (request: FastifyRequest) => ({
+    actor: contexts.get(request)!.userId,
+    channel: (request.headers['x-telegram-init-data'] ? 'miniapp' : 'web') as 'miniapp' | 'web',
+  });
   // R9 — toda ação de importação exige a chave de idempotência da confirmação
   // intencional do cliente (UUID); retry reutiliza a MESMA chave.
   const idempotencyKeyOf = (request: FastifyRequest): string => {
@@ -352,6 +361,7 @@ export function registerImportRoutes(
           importBookmakerActionSchema.parse(request.body),
           actorOf(request),
           idempotencyKeyOf(request),
+          auditContextOf(request),
         ),
       ),
   );
@@ -379,6 +389,7 @@ export function registerImportRoutes(
           importTipsterActionSchema.parse(request.body),
           actorOf(request),
           idempotencyKeyOf(request),
+          auditContextOf(request),
         ),
       ),
   );
@@ -404,6 +415,7 @@ export function registerImportRoutes(
           importOriginActionSchema.parse(request.body),
           actorOf(request),
           idempotencyKeyOf(request),
+          auditContextOf(request),
         ),
       ),
   );
@@ -429,6 +441,7 @@ export function registerImportRoutes(
           importEventActionSchema.parse(request.body),
           actorOf(request),
           idempotencyKeyOf(request),
+          auditContextOf(request),
         ),
       ),
   );
