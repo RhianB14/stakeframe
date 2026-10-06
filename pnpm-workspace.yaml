@@ -19,6 +19,9 @@ overrides:
   # WebSocket permessage-deflate decompression. Transitiva de miniflare>undici
   # (devDep do ecossistema wrangler); 7.29.0 afetada, 7.29.1 corrigida.
   undici: '7.29.1'
+  # GHSA-68fv-2mgg-jv7q: source-map-js <1.2.2 permite DoS no event loop via
+  # offsets de seções indexadas; pin global na primeira versão corrigida.
+  source-map-js: '1.2.2'
 
 allowBuilds:
   esbuild: true
