@@ -14434,6 +14434,7 @@
                     "exclusiveMinimum": true,
                     "maximum": 9007199254740991
                   },
+                  "reason": { "type": "string", "minLength": 3, "maxLength": 500 },
                   "betOrigin": {
                     "nullable": true,
                     "type": "string",

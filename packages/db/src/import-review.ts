@@ -42,6 +42,7 @@ function deterministicKey(seed: string): string {
 // o resultado gravado é sanitizado (nunca conteúdo de bilhete) e vive em
 // `result jsonb`, validado pelo schema específico da ação no replay.
 type ImportActionKind = 'bookmaker' | 'origin' | 'event' | 'tipster';
+type ImportAuditContext = { actor: string; channel: 'web' | 'miniapp' };
 type ImportActionReceiptRow = { action: string; hash: string; result: unknown };
 type BookmakerResult = {
   version: number;
@@ -65,6 +66,8 @@ type TipsterResult = {
 };
 const actionHash = (action: ImportActionKind, id: string, body: unknown): string =>
   createHash('sha256').update(JSON.stringify({ action, id, body })).digest('hex');
+const auditContextFor = (actor: string, context?: ImportAuditContext): ImportAuditContext =>
+  context ?? { actor, channel: actor === 'telegram:miniapp' ? 'miniapp' : 'web' };
 const readReceiptRow = async (
   client: PoolClient,
   key: string,
@@ -397,8 +400,9 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           | undefined;
       },
       actor: string,
+      channel: 'web' | 'miniapp' = 'web',
     ) {
-      return draft.updateDraft(context, id, patch, actor);
+      return draft.updateDraft(context, id, patch, actor, channel);
     },
     attachTelegram(
       context: OrganizationContext,
@@ -889,6 +893,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         closedPrincipal?: string | undefined;
       },
       actor: string,
+      auditContext?: ImportAuditContext,
     ) {
       return tenant.withOrganizationTransaction(context, async (client) => {
         const settings = (
@@ -1031,7 +1036,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           expectedVersion: currentSettings.version,
         });
         const key = deterministicKey(`import-status:${id}:${input.version}:${input.action}`);
-        await executeFinancialCommand(client, actor, key, command, currentSettings);
+        await executeFinancialCommand(
+          client,
+          actor,
+          key,
+          command,
+          currentSettings,
+          auditContextFor(actor, auditContext),
+        );
         let updated = (
           await client.query<{ version: number }>(
             'select version from integration.inbox where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
@@ -1068,6 +1080,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       input: { version: number; bookmakerId: string; freebetId?: string | null | undefined },
       actor: string,
       idempotencyKey: string,
+      auditContext?: ImportAuditContext,
     ) {
       const route = await read(context, async (client) => {
         const row = (
@@ -1108,7 +1121,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
               bookmakerId: input.bookmakerId,
               ...(input.freebetId !== undefined ? { freebetId: input.freebetId } : {}),
             },
-            actor,
+            auditContextFor(actor, auditContext).actor,
+            auditContextFor(actor, auditContext).channel,
           );
           const name = (
             await client.query<{ name: string }>(
@@ -1168,7 +1182,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
         // R9 — a chave do comando deriva da OPERAÇÃO do cliente (nunca do
         // alvo): repetir um valor antigo com chave nova aplica de verdade.
         const key = deterministicKey(`import-action:${idempotencyKey}`);
-        await executeFinancialCommand(client, actor, key, command, settings);
+        await executeFinancialCommand(
+          client,
+          actor,
+          key,
+          command,
+          settings,
+          auditContextFor(actor, auditContext),
+        );
         const updated = (
           await client.query<{ state: string; bookmaker_id: string }>(
             'select state,bookmaker_id from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
@@ -1212,6 +1233,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       },
       actor: string,
       idempotencyKey: string,
+      auditContext?: ImportAuditContext,
     ) {
       const route = await read(context, async (client) => {
         const row = (
@@ -1248,7 +1270,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             client,
             id,
             { version: input.version, betOrigin: input.kind, freebetId: credit },
-            actor,
+            auditContextFor(actor, auditContext).actor,
+            auditContextFor(actor, auditContext).channel,
           );
           const result: OriginResult = {
             version: saved.version,
@@ -1297,7 +1320,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           expectedVersion: settings.version,
         });
         const key = deterministicKey(`import-action:${idempotencyKey}`);
-        await executeFinancialCommand(client, actor, key, command, settings);
+        await executeFinancialCommand(
+          client,
+          actor,
+          key,
+          command,
+          settings,
+          auditContextFor(actor, auditContext),
+        );
         const updated = (
           await client.query<{ state: string }>(
             'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
@@ -1333,6 +1363,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       input: { version: number; tipsterId: string },
       actor: string,
       idempotencyKey: string,
+      auditContext?: ImportAuditContext,
     ) {
       const requestHash = actionHash('tipster', id, {
         version: input.version,
@@ -1365,7 +1396,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             client,
             id,
             { version: input.version, tipsterId: input.tipsterId },
-            actor,
+            auditContextFor(actor, auditContext).actor,
+            auditContextFor(actor, auditContext).channel,
           );
           const name = (
             await client.query<{ name: string }>(
@@ -1449,7 +1481,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           expectedVersion: settings.version,
         });
         const key = deterministicKey(`import-action:${idempotencyKey}`);
-        await executeFinancialCommand(client, actor, key, command, settings);
+        await executeFinancialCommand(
+          client,
+          actor,
+          key,
+          command,
+          settings,
+          auditContextFor(actor, auditContext),
+        );
         const updated = (
           await client.query<{ state: string; tipster_id: string | null }>(
             'select state,tipster_id from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
@@ -1489,6 +1528,7 @@ export function createImportService(database: Database, storage?: ObjectStorage)
       input: { version: number; selectionId: string; eventAt: string | null },
       actor: string,
       idempotencyKey: string,
+      auditContext?: ImportAuditContext,
     ) {
       const route = await read(context, async (client) => {
         const row = (
@@ -1523,7 +1563,8 @@ export function createImportService(database: Database, storage?: ObjectStorage)
             client,
             id,
             { version: input.version, eventAt: input.eventAt },
-            actor,
+            auditContextFor(actor, auditContext).actor,
+            auditContextFor(actor, auditContext).channel,
           );
           const result: EventResult = { version: saved.version, betState: null };
           await insertReceiptRow(client, idempotencyKey, 'event', actor, requestHash, result);
@@ -1614,7 +1655,14 @@ export function createImportService(database: Database, storage?: ObjectStorage)
           expectedVersion: settings.version,
         });
         const key = deterministicKey(`import-action:${idempotencyKey}`);
-        await executeFinancialCommand(client, actor, key, command, settings);
+        await executeFinancialCommand(
+          client,
+          actor,
+          key,
+          command,
+          settings,
+          auditContextFor(actor, auditContext),
+        );
         const updated = (
           await client.query<{ state: string }>(
             'select state from finance.bet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
