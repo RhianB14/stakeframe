@@ -112,6 +112,8 @@ alvo medido ≥ 44 (meta própria). Reproduzir a medição com
 
 ## Etapa 9 — Consolidar tokens (D1) · último
 
+**Estado:** a consolidação já ocorreu por outra via na Fase 0 (`apps/web/src/product/tokens.css`); o remanescente é migrar as 16 entradas de navegação e os 14 modais.
+
 **Por que último:** é a refatoração mais ampla e a menos urgente.
 
 **O que fazer:** de seis azuis para `--action`, escada de superfície, cinco breakpoints para três.

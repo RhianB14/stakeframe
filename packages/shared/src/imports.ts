@@ -318,6 +318,7 @@ export type ImportDetail = z.infer<typeof importDetailSchema>;
 export const draftUpdateSchema = z
   .strictObject({
     version: z.number().int().positive(),
+    reason: z.string().trim().min(3).max(500).optional(),
     betOrigin: z.enum(['real', 'freebet', 'hibrida']).nullable().optional(),
     freebetId: z.uuid().nullable().optional(),
     eventAt: instant.nullable().optional(),

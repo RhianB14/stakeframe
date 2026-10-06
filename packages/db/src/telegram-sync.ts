@@ -79,6 +79,7 @@ function readDraftOverrides(value: unknown): DraftOverrides {
 // O chamador é dono da transação — e do recibo idempotente gravado nela.
 type DraftPatch = {
   version: number;
+  reason?: string | undefined;
   betOrigin?: 'real' | 'freebet' | 'hibrida' | null | undefined;
   freebetId?: string | null | undefined;
   eventAt?: string | null | undefined;
@@ -190,6 +191,7 @@ async function applyDraftUpdate(
   id: string,
   patch: DraftPatch,
   actor: string,
+  channel: 'web' | 'miniapp',
 ): Promise<{ version: number; freebetCleared: boolean }> {
   {
     const row = (
@@ -239,6 +241,20 @@ async function applyDraftUpdate(
       }
     }
     const currentOverrides = readDraftOverrides(row.metadata);
+    const beforeAuditState: Record<string, unknown> = {
+      betOrigin: row.bet_origin,
+      freebetId: row.freebet_id,
+      eventAt: row.event_at,
+      bookmakerId: row.bookmaker_override_id,
+      tipsterId: currentOverrides.tipsterId ?? null,
+      sport: currentOverrides.sport ?? null,
+      tournament: currentOverrides.tournament ?? null,
+      country: currentOverrides.country ?? null,
+      ticketKind: currentOverrides.ticketKind ?? null,
+      stake: currentOverrides.stake ?? null,
+      odds: currentOverrides.odds ?? null,
+      selectionCount: currentOverrides.selections?.length ?? null,
+    };
     const nextOverrides: DraftOverrides = { ...currentOverrides };
     if (patch.tipsterId !== undefined) {
       if (patch.tipsterId === null) delete nextOverrides.tipsterId;
@@ -366,6 +382,29 @@ async function applyDraftUpdate(
         if (conflicts.length) throw new FinanceError('STATE_CONFLICT');
       }
     }
+    const afterAuditState: Record<string, unknown> = {
+      betOrigin: nextOrigin,
+      freebetId: nextFreebet,
+      eventAt: nextEventAt,
+      bookmakerId: nextBookmakerOverride,
+      tipsterId: nextOverrides.tipsterId ?? null,
+      sport: nextOverrides.sport ?? null,
+      tournament: nextOverrides.tournament ?? null,
+      country: nextOverrides.country ?? null,
+      ticketKind: nextOverrides.ticketKind ?? null,
+      stake: nextOverrides.stake ?? null,
+      odds: nextOverrides.odds ?? null,
+      // Bilhete/seleções são conteúdo privado; a trilha guarda somente a
+      // contagem alterada, nunca nomes de eventos, mercados ou palpites.
+      selectionCount: nextOverrides.selections?.length ?? null,
+    };
+    const beforeChanges: Record<string, unknown> = {};
+    const afterChanges: Record<string, unknown> = {};
+    for (const [field, nextValue] of Object.entries(afterAuditState)) {
+      if (JSON.stringify(beforeAuditState[field]) === JSON.stringify(nextValue)) continue;
+      beforeChanges[field] = beforeAuditState[field] ?? null;
+      afterChanges[field] = nextValue ?? null;
+    }
     const updated = await client.query<{ version: number }>(
       "update integration.inbox set bet_origin=$2,freebet_id=$3,event_at=$4,event_date_status=$5,bookmaker_override_id=$6,metadata=$7,version=version+1,updated_at=now(),telegram_sync_state=case when telegram_chat_id is null then telegram_sync_state else 'pending' end where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 returning version",
       [
@@ -406,26 +445,15 @@ async function applyDraftUpdate(
         await saveSelections(client, row.imported_bet_id, selectionInputs);
     }
     await client.query(
-      "insert into finance.audit(type,actor,entity_id,after) values('import.draft_update',$2,$1,$3)",
+      "insert into finance.audit(type,actor,entity_id,before,after) values('import.draft_update',$2,$1,$3,$4)",
       [
         id,
         actor,
+        JSON.stringify(beforeChanges),
         JSON.stringify({
-          betOrigin: nextOrigin,
-          freebetSelected: !!nextFreebet,
-          eventDateStatus: nextEventAt ? 'confirmed' : 'pending',
-          bookmakerDeclared: !!nextBookmakerOverride,
-          tipsterDeclared: !!nextOverrides.tipsterId,
-          manualFields: {
-            sport: nextOverrides.sport ?? null,
-            tournament: nextOverrides.tournament ?? null,
-            country: nextOverrides.country ?? null,
-            ticketKind: nextOverrides.ticketKind ?? null,
-            stake: nextOverrides.stake ?? null,
-            odds: nextOverrides.odds ?? null,
-            selectionCount: nextOverrides.selections?.length ?? null,
-          },
-          freebetCleared,
+          channel,
+          changes: afterChanges,
+          ...(patch.reason !== undefined ? { reason: patch.reason } : {}),
         }),
       ],
     );
@@ -522,17 +550,29 @@ export function createImportDraftService(database: Database) {
      * usada pelos serviços de ação (bookmaker/origin/event) para gravar efeito,
      * auditoria, outbox e RECIBO na mesma transação (nunca aninhando transações).
      */
-    async updateDraftWithin(client: PoolClient, id: string, patch: DraftPatch, actor: string) {
-      return applyDraftUpdate(client, id, patch, actor);
+    async updateDraftWithin(
+      client: PoolClient,
+      id: string,
+      patch: DraftPatch,
+      actor: string,
+      channel: 'web' | 'miniapp' = 'web',
+    ) {
+      return applyDraftUpdate(client, id, patch, actor, channel);
     },
     /**
      * Atualização canônica do rascunho: origem financeira, crédito escolhido,
      * casa declarada e data do evento. Versão otimista, auditoria sanitizada e
      * outbox na mesma transação; a web/Mini App refletem o mesmo registro.
      */
-    async updateDraft(context: OrganizationContext, id: string, patch: DraftPatch, actor: string) {
+    async updateDraft(
+      context: OrganizationContext,
+      id: string,
+      patch: DraftPatch,
+      actor: string,
+      channel: 'web' | 'miniapp' = 'web',
+    ) {
       const saved = await withOrg(context, async (client) =>
-        applyDraftUpdate(client, id, patch, actor),
+        applyDraftUpdate(client, id, patch, actor, channel),
       );
       return { ...saved, automaticPolicy: automaticPolicyNotice() };
     },

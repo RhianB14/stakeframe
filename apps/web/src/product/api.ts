@@ -165,6 +165,7 @@ export function patchImportDraft(
   id: string,
   body: {
     version: number;
+    reason?: string;
     betOrigin?: 'real' | 'freebet' | 'hibrida' | null;
     freebetId?: string | null;
     eventAt?: string | null;

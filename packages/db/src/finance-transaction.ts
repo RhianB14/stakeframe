@@ -11,6 +11,7 @@ export async function executeFinancialCommand(
   key: string,
   command: FinanceCommand,
   settings: SettingsRow,
+  auditContext?: { actor: string; channel: 'web' | 'miniapp' },
 ) {
   if (!actor || actor.length > 200 || !/^[a-f0-9-]{36}$/i.test(key))
     throw new FinanceError('INVALID_FINANCIAL_OPERATION');
@@ -63,10 +64,14 @@ export async function executeFinancialCommand(
     'insert into finance.audit(type,actor,entity_id,before,after) values($1,$2,$3,$4,$5)',
     [
       command.type,
-      actor,
+      auditContext?.actor ?? actor,
       result.id,
       applied.before === null ? null : JSON.stringify(applied.before),
-      JSON.stringify({ command, result }),
+      JSON.stringify({
+        command,
+        result,
+        ...(auditContext ? { channel: auditContext.channel } : {}),
+      }),
     ],
   );
   await client.query(
