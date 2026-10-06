@@ -1,5 +1,7 @@
 # STK-UX-02 — Sistema visual e decisões de design
 
+> **Aviso — camada de cor superada:** a camada de cor/tokens deste documento foi SUPERADA pela Fase 0 do redesign web, entregue em STK-F2-18. `apps/web/src/product/tokens.css` é hoje a fonte única de cor do produto. Os valores de §2 são HISTÓRICOS. As decisões semânticas D1–D9 permanecem válidas como princípios somente onde não contradizem essa implementação; nomes e tons de tokens antigos que conflitam com ela não são critérios vigentes.
+
 Derivado do produto **real** em `6be4f0e`, não de referência externa. Cada token abaixo foi conferido contra `apps/web/src` antes de ser proposto — onde o código diverge, isso está escrito.
 
 > **Princípio:** os tokens aqui **unificam o que já existe**, não introduzem paleta nova. Nenhuma decisão altera regra financeira, comando canônico, idempotência ou comportamento de liquidação.
@@ -22,6 +24,8 @@ O `UI-UX-PLAN.md` propõe `action: #92ADFF` e `surface: #181D26`. Confrontado co
 ---
 
 ## 2. Tokens
+
+> **HISTÓRICO:** tabelas e descrições de tokens desta seção registram a proposta anterior; não representam o sistema em vigor. Em caso de conflito de nomes ou tons, prevalece `apps/web/src/product/tokens.css`.
 
 ### 2.1 Superfície — escada derivada do real
 
