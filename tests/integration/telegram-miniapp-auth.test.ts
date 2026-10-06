@@ -139,10 +139,10 @@ describe('mini app authentication on the real import routes', () => {
       )
     ).rows[0]!;
     expect(audit.actor).toBe('fixture-owner');
-    expect(audit.before).toEqual({ sport: null });
+    expect(audit.before).toEqual({ betOrigin: null, sport: null });
     expect(audit.after).toEqual({
       channel: 'miniapp',
-      changes: { sport: 'Tênis' },
+      changes: { betOrigin: 'real', sport: 'Tênis' },
       reason: 'Correção validada',
     });
     await expect(
