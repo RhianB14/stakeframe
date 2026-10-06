@@ -853,14 +853,26 @@ test('ambiguous network result is recovered with the same key and body after rel
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Verificar operação', exact: true })).toBeVisible();
+  // A primeira chamada já falhou e foi abortada antes do reload. Aguarde a
+  // resposta HTTP de sucesso da POST de recuperação; uma requestfailed não
+  // emite Response e, portanto, não pode satisfazer este predicado.
+  const recoveredResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      new URL(response.url()).pathname === '/api/v1/commands' &&
+      request.method() === 'POST' &&
+      response.ok()
+    );
+  });
   await page.getByRole('button', { name: 'Verificar operação', exact: true }).click();
+  await recoveredResponse;
   await expect(page.getByText('Uma operação aguarda confirmação.')).toHaveCount(0);
   expect(requests).toHaveLength(2);
   expect(requests[0]).toEqual(requests[1]);
   expect(requests[0]?.body).toMatchObject({ expectedVersion: 1, amount: '25.50' });
-  expect(
-    await page.evaluate(() => sessionStorage.getItem('stakeframe.pending-command')),
-  ).toBeNull();
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('stakeframe.pending-command')))
+    .toBeNull();
 });
 test('partial cashout sends closed principal independently from received money', async ({
   page,
