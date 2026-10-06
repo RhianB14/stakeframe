@@ -38,6 +38,7 @@ const overviewReport = read('../../apps/web/src/product/overview-report.tsx');
 const analytics = read('../../apps/web/src/product/analytics.tsx');
 const events = read('../../apps/web/src/product/events.tsx');
 const financePages = read('../../apps/web/src/product/pages.tsx');
+const polymarketSimulation = read('../../apps/web/src/product/polymarket-simulation.tsx');
 
 /** Um arquivo JSX de cor, com a linha em que o hex aparece. */
 function tsxHexes(source: string, name: string): string[] {
@@ -224,6 +225,7 @@ describe('camada de tokens (STK-F2-18)', () => {
       ...tsxHexes(events, 'events.tsx'),
       ...tsxHexes(financePages, 'pages.tsx'),
       ...tsxHexes(productApp, 'ProductApp.tsx'),
+      ...tsxHexes(polymarketSimulation, 'polymarket-simulation.tsx'),
     ];
     expect(stray, `cor em hex dentro do JSX: ${stray.join(' | ')}`).toEqual([]);
   });
