@@ -1,43 +1,43 @@
 {
   "version": 1,
-  "authorization": "Rhian authorized the deploy of 0.1.0-beta.12 (2026-10-05, relayed by OpenClaude); these ARM64 digests come from the verified Release candidate of main 7b00068 with 6/6 CI green. Previous approval was 787fa34 (2026-10-04, beta.11). NOTE: the restore rehearsal gate (stakeframe-restore.service failed 2026-10-01, RESTORE_FAILURE_GENERIC) is RED and accepted by the orchestrator for this deploy under the owner's authorization - tracking card t_restore_rehearsal.",
-  "sourceSha": "7b00068ba983befe773622100ec6cd31ab5f1e07",
-  "sourceCiRunId": 37356035959,
-  "candidateRunId": 37360363161,
+  "authorization": "Rhian authorized the deploy of 0.1.0-beta.13 on 2026-10-06 (direct instruction to the orchestrator, relayed by OpenClaude); these ARM64 digests come from the verified Release candidate of main 4cd9a484507ffeb31f69b5d9d721ec187e6ec136 with 6/6 CI green. Previous approval was 7b00068ba983befe773622100ec6cd31ab5f1e07 (2026-10-05, beta.12). NOTE: the restore rehearsal gate (stakeframe-restore.service failed 2026-10-01, RESTORE_FAILURE_GENERIC) could not be re-verified in this session because the runtime blocks SSH; it remains RED and is accepted as a known risk for this window under the owner's authorization - tracking card t_restore_rehearsal.",
+  "sourceSha": "4cd9a484507ffeb31f69b5d9d721ec187e6ec136",
+  "sourceCiRunId": 37537940543,
+  "candidateRunId": 37540102109,
   "architecture": "arm64",
   "visibility": "public",
   "artifact": {
-    "id": 11366446467,
-    "name": "candidate-7b00068ba983befe773622100ec6cd31ab5f1e07-arm64",
-    "bytes": 586428055,
-    "sha256": "1c28523b523671fe53b88434f6e6016248210120548854154b35d0e8e02fdd84",
-    "expiresAt": "2026-10-06T19:03:28Z"
+    "id": 11447978990,
+    "name": "candidate-4cd9a484507ffeb31f69b5d9d721ec187e6ec136-arm64",
+    "bytes": 586571927,
+    "sha256": "9585455c9fa6e790deaa66377b9f1600a3b27e6f26214fb8ba2255c72c1a0343",
+    "expiresAt": "2026-10-07T22:23:50Z"
   },
   "images": [
     {
       "target": "api",
       "repository": "ghcr.io/rhianb14/stakeframe-api",
-      "digest": "sha256:a9bf408db8e78f17d7e967f802765a16683c7f576f51a4d775057fda94579739"
+      "digest": "sha256:01f9849a0995a1896aa5203a095b6d255cbb48f67c1df921eca23e3872c9e61a"
     },
     {
       "target": "worker",
       "repository": "ghcr.io/rhianb14/stakeframe-worker",
-      "digest": "sha256:8c32874f704a996ff4baf5410c8350c3b8fe6291fd466d381c9a165728426266"
+      "digest": "sha256:24c5800844f7ab1c7d583c70b3650070dc714be5c2224cab30c78f1025275d15"
     },
     {
       "target": "migrate",
       "repository": "ghcr.io/rhianb14/stakeframe-migrate",
-      "digest": "sha256:1bc641b2fbbda6416479faa8cc35aa0707232f31ab4d665e8374b64479073e2c"
+      "digest": "sha256:409df4d093beaa2b37bb98cbd575b4a4ee40b87dc5547b8d81d11e3d4e5688a7"
     },
     {
       "target": "web-production",
       "repository": "ghcr.io/rhianb14/stakeframe-web-production",
-      "digest": "sha256:125e74bd64095c0f77dd1428b01b2dfc3f1eab44535398af74aae6e1b5f31fcc"
+      "digest": "sha256:d30806ccf60918c7695fb2c4a0d8b9d5657204a4baab2de4bcdcfa87583038e7"
     },
     {
       "target": "operations",
       "repository": "ghcr.io/rhianb14/stakeframe-operations",
-      "digest": "sha256:ad3f5d09734d3010bd6f9cff019f5f519d2897d69ea26195411060205ed9256a"
+      "digest": "sha256:448aa6505457860abb363ecaf78c31dc61a06b2a3d4b4f01be8564fc067526e8"
     }
   ]
 }
