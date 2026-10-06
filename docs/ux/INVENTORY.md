@@ -83,6 +83,8 @@ Sete declarações abaixo de 10px, medidas por `grep` em `apps/web/src`:
 - **Três fundos diferentes** convivem: `#101318` (shell), `#101216` (acesso), `#07101f` (Mini App).
 - **Seis azuis de ação diferentes**: `#94afff` (botão e `outline`), `#92adff` (rótulo e série do gráfico), `#7d9eff` (acesso), `#739bff` (focus), `#9fb4ff`/`#8ca9ff` (acesso), `#2878ff` (Mini App `--mini-blue`).
 
+> Nota: os achados de cor desta seção são históricos; o sistema de tokens em vigor está em `apps/web/src/product/tokens.css`.
+
 ### 3.3 Breakpoints
 
 Cinco breakpoints sem escada aparente: `430`, `760`, `960`, `1100`, `1180`.
@@ -334,6 +336,8 @@ O arquivo foi localizado em `C:/Users/Rhian Batista/.codex/worktrees/7740/NEW-TR
 | §4 descreve os 3 fluxos como `visão geral, revisão e edição MiniApp` | **Divergente do pedido atual**, que manda `visão geral, apostas (lista/detalhe) e edição no Mini App`, e proíbe recriar a antiga página de revisão de importações. **Prevalece o pedido atual.**                                                                 |
 | §5 lista `UX-03..UX-06`                                              | Fora do escopo desta tarefa; não tocados.                                                                                                                                                                                                                        |
 | §9 diz `Artefatos propostos ainda não foram criados`                 | Confirmado: nenhum artefato existia antes desta tarefa.                                                                                                                                                                                                          |
+
+> Nota: as cores comparadas nesta seção registram o estado histórico do inventário; o sistema de tokens em vigor está em `apps/web/src/product/tokens.css`.
 
 ---
 

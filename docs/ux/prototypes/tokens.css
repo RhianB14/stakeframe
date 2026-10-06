@@ -1,6 +1,6 @@
-/* STK-UX-02 — tokens do protótipo.
-   Derivados do produto real em 6be4f0e, conforme docs/ux/DESIGN-DECISIONS.md.
-   Nenhuma regra financeira é alterada: isto é apresentação. */
+/* PROTÓTIPO LEGADO — não é o sistema em vigor.
+   Fonte vigente: apps/web/src/product/tokens.css.
+   Nenhum valor foi alterado. */
 
 :root {
   /* superfície — escada derivada de #101318 (real) */
