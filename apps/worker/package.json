@@ -15,7 +15,7 @@
     "@stakeframe/shared": "workspace:*",
     "pg-boss": "12.30.0",
     "posthog-node": "5.54.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "zod": "4.5.4"
   }
 }
