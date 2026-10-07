@@ -19,7 +19,8 @@ PUBLISH_ENVIRONMENT = {"GITHUB_ACTOR": "RhianB14", "GITHUB_TOKEN": "token-value"
 def candidate(directory):
     directory.mkdir()
     (directory / "source-validation.json").write_text(json.dumps({"version": 1, "sourceSha": SHA, "ciRunId": 123, "checks": [
-        "format-check", "application-check", "application-arm64-check", "network-security-simulation", "recovery-check", "promotion-check"]}))
+        "format-check", "check-static", "integration-check", "browser-check", "browser-arm64-check",
+        "rehearsal-check", "arm64-images-check", "network-security-simulation", "recovery-check", "promotion-check"]}))
     for target in TARGETS:
         with tempfile.TemporaryDirectory() as tmp:
             archive, metadata = fixture(Path(tmp), target=target)

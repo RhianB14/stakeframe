@@ -11,7 +11,8 @@ def manifest(directory, sha, arch):
     require(source.get("version") == 1 and source.get("sourceSha") == sha, "RELEASE_SOURCE_MISMATCH")
     require(type(source.get("ciRunId")) is int and source["ciRunId"] > 0, "RELEASE_CI_REQUIRED")
     require(sorted(source.get("checks", [])) == sorted([
-        "format-check", "application-check", "application-arm64-check",
+        "format-check", "check-static", "integration-check", "browser-check",
+        "browser-arm64-check", "rehearsal-check", "arm64-images-check",
         "network-security-simulation", "recovery-check", "promotion-check"]), "RELEASE_CHECKS_REQUIRED")
     images = []
     for target in TARGETS:

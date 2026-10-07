@@ -132,14 +132,16 @@ recuperação de anexos imutáveis, com manifesto e checksums —
   ([.github/workflows/ci.yml](../.github/workflows/ci.yml)), Node.js v24.20.0
   fixado em [.nvmrc](../.nvmrc).
 
-- `application-check`: tipos, lint, auditoria de dependências, validação e
-  sincronização OpenAPI, unitários, build,
-  Docker Compose real, integração PostgreSQL 18/pg-boss/Better Auth e E2E Chromium
-  em desktop/mobile.
+- `check-static`: tipos, lint, auditoria de dependências, validação e
+  sincronização OpenAPI, testes unitários e build.
+- `integration-check`: Docker Compose real, integração PostgreSQL
+  18/pg-boss/Better Auth e reconciliação de dados fictícios.
+- `browser-check` e `browser-arm64-check`: E2E Chromium desktop/mobile em
+  runners AMD64 e ARM64 nativos.
+- `rehearsal-check`: imagens runtime, configuração de produção e recuperação
+  de backups criptografados.
+- `arm64-images-check`: build e subida das imagens runtime em runner ARM64.
 - `network-security-simulation`: simulações Python do guard de rede.
-- `application-arm64-check`: mesma suíte da aplicação e inspeção das imagens
-  executadas em runner Linux ARM64 nativo. O nome `application-check` continua
-  identificando a execução AMD64; as proteções existentes são preservadas.
 - `recovery-check`: dois clusters PostgreSQL descartáveis, dump custom e roles
   sem hashes de senha, snapshot Restic criptografado e restauração com conferência
   de dados, proprietários, permissões e falhas. Sem acesso à instância da aplicação;

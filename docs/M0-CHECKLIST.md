@@ -377,7 +377,7 @@ ou janela de rede; cada item exige a evidência descrita.
 - [x] Compose local com quatro serviços, Caddy HTTP em loopback, volume do
       banco e credenciais geradas fora do Git/contexto de build.
 - [x] Verificações de tipos, lint, unitários, build, integração PostgreSQL real
-      e navegador desktop/mobile adicionadas à CI como `application-check`.
+      e navegador desktop/mobile adicionadas à CI nos jobs de aplicação.
 - [x] STK-M0-08: código Google OAuth/Better Auth, identidade única por `sub`
       e e-mail verificado, sessão no PostgreSQL, logout e migração local.
       [Issue #16](https://github.com/RhianB14/stakeframe/issues/16).

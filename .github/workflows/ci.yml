@@ -39,23 +39,10 @@ jobs:
           python3 -B -m unittest discover -s scripts/release -p 'test_*.py' -v
           pnpm deployment:traceability
 
-  application-check:
-    name: ${{ matrix.check }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            check: application-check
-          - runner: ubuntu-24.04-arm
-            check: application-arm64-check
-    runs-on: ${{ matrix.runner }}
-    # 20 min foi dimensionado para uma perna so e o job x64 chegou a 20,3 min
-    # medidos (run 37661695334: killed em 20,0 durante o e2e, com 8,3 min gastos
-    # so na suite de integracao de banco). O teto de 30 mantem a funcao de
-    # aborto para travamento real sem cortar execucao legitima; a reducao do
-    # tempo real e trabalho separado (paralelizar a suite de integracao).
-    timeout-minutes: 30
+  check-static:
+    name: check-static
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # O maior job medido leva ~10,8 min; 20 min deixa margem sem esconder travamentos.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,6 +74,95 @@ jobs:
           pnpm monitor:check
           pnpm test
           pnpm build
+
+  integration-check:
+    name: integration-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # A integracao medida leva ~8,1 min; setup e teardown mantem o teto folgado.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Start the local stack with disposable credentials
+        run: |
+          pnpm local:init
+          pnpm local:up
+      - name: PostgreSQL 18, Google auth protocol and pg-boss integration
+        run: pnpm local:test-db
+      - name: Reconcile and measure 10000 fictional bets
+        run: pnpm validation:performance
+      - name: Stop the local stack
+        if: always()
+        run: |
+          if [ -f .env.local ]; then pnpm local:down; fi
+
+  browser-check:
+    name: ${{ matrix.check }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            check: browser-check
+          - runner: ubuntu-24.04-arm
+            check: browser-arm64-check
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20 # O E2E medido leva ~4,1 min; inclui inicializacao e cleanup do stack.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Start the local stack with disposable credentials
+        run: |
+          pnpm local:init
+          pnpm local:up
+      - name: Browser checks on desktop and mobile
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+      - name: Stop the local stack
+        if: always()
+        run: |
+          if [ -f .env.local ]; then pnpm local:down; fi
+
+  rehearsal-check:
+    name: rehearsal-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # Os ensaios medidos somam ~3,6 min, alem de setup, stack e cleanup.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Start the local stack with disposable credentials
         run: |
           pnpm local:init
@@ -97,14 +173,35 @@ jobs:
         run: pnpm deployment:rehearse
       - name: Verify encrypted backups, expiry and isolated recovery with fictional data
         run: pnpm operations:rehearse
-      - name: PostgreSQL 18, Google auth protocol and pg-boss integration
-        run: pnpm local:test-db
-      - name: Reconcile and measure 10000 fictional bets
-        run: pnpm validation:performance
-      - name: Browser checks on desktop and mobile
+      - name: Stop the local stack
+        if: always()
         run: |
-          pnpm exec playwright install --with-deps chromium
-          pnpm test:e2e
+          if [ -f .env.local ]; then pnpm local:down; fi
+
+  arm64-images-check:
+    name: arm64-images-check
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20 # Build e subida ARM64 levam menos de ~3 min nos dados atuais; margem para runner lento.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Start the local stack with disposable credentials
+        run: |
+          pnpm local:init
+          pnpm local:up
+      - name: Verify standalone runtime images without development dependencies
+        run: pnpm images:check
       - name: Stop the local stack
         if: always()
         run: |
