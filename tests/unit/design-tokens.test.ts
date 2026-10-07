@@ -407,6 +407,14 @@ describe('camada de tokens (STK-F2-18)', () => {
        prometia `#rgb`, e a promessa não era cumprida. O `toBe(6)` é exato
        porque dobrar dígito não tem perda nenhuma — qualquer tolerância aqui
        esconderia justamente o erro que o teste existe para pegar. */
+    /* E a MESMA cor em `oklab()`: o Chromium serializa alguns tokens assim, e
+       sem esta linha o medidor lanca "notacao nao suportada" em vez de medir -
+       o defeito que este arquivo existe para nao repetir. `oklch(L C H)` vira
+       `oklab(L C*cos(H) C*sin(H))`. */
+    expect(luminance('oklab(0.76 -0.00819 0.00574)')).toBeCloseTo(
+      luminance('oklch(0.76 0.01 145)'),
+      4,
+    );
     expect(luminance('#999')).toBe(luminance('#999999'));
     expect(luminance('#fff')).toBe(luminance('#ffffff'));
     // O par real do token mantém o piso mínimo de leitura.

@@ -814,6 +814,12 @@ test('first use requires explicit balance confirmation and preserves decimal str
   // DIAGNOSTICO TEMPORARIO (#272): a CI diz que o botao nao esta no DOM neste
   // estado. Este dump diz em que tela a pagina parou; sai depois que a causa
   // estiver identificada e corrigida.
+  // O CTA so existe depois que a consulta do workspace resolve; sem esta
+  // espera o diagnostico fotografa a tela de carregamento e nao diz nada.
+  await page
+    .locator('.product-topbar')
+    .waitFor({ state: 'attached', timeout: 15_000 })
+    .catch(() => undefined);
   console.log(
     'DIAG first-use:',
     JSON.stringify(
