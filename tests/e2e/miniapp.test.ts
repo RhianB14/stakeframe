@@ -199,8 +199,12 @@ test('percorre apostas, pendentes e ajustes pelos quatro fluxos', async ({ page 
 
   // Fluxo 2 — apostas: a tabela real da web, com o bilhete do fixture.
   await nav.getByRole('link', { name: 'Apostas' }).click();
-  await expect(page.getByRole('heading', { name: 'Apostas' })).toBeVisible();
-  await expect(page.getByText('Seus bilhetes')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Apostas', level: 1, exact: true })).toBeVisible();
+  // A lista carregada é identificada pelo heading real da tabela; "Seus
+  // bilhetes" só aparece como detalhe do estado vazio compacto.
+  await expect(
+    page.getByRole('heading', { name: 'Lista de apostas', level: 3, exact: true }),
+  ).toBeVisible();
 
   // Fluxo 3 — pendentes: a página real de importações.
   await nav.getByRole('link', { name: 'Pendentes' }).click();
@@ -226,7 +230,11 @@ test('envia o initData em toda chamada, inclusive ao trocar de fluxo', async ({ 
   await expect(page.getByRole('heading', { name: 'Painel' })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Navegação do aplicativo' });
   await nav.getByRole('link', { name: 'Apostas' }).click();
-  await expect(page.getByText('Seus bilhetes')).toBeVisible();
+  // A lista carregada é identificada pelo heading real da tabela; "Seus
+  // bilhetes" só aparece como detalhe do estado vazio compacto.
+  await expect(
+    page.getByRole('heading', { name: 'Lista de apostas', level: 3, exact: true }),
+  ).toBeVisible();
   await nav.getByRole('link', { name: 'Pendentes' }).click();
   await expect(page.getByText('Comprovantes e revisão')).toBeVisible();
   // Toda requisição autenticada do Mini App carrega a credencial validada no
@@ -286,11 +294,17 @@ test('a escrita financeira do Mini App exige confirmação e usa o comando canô
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   expect(commands).toHaveLength(0);
-  await page
+  await dialog.getByRole('button', { name: /Simples/ }).click();
+  await dialog.getByRole('button', { name: 'Continuar para seleções' }).click();
+  await dialog.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
+  await dialog.getByLabel('Mercado 1', { exact: true }).fill('Resultado');
+  await dialog.getByLabel('Palpite 1', { exact: true }).fill('Time A');
+  await dialog.getByRole('button', { name: 'Continuar para valor' }).click();
+  await dialog
     .getByLabel('Casa de aposta', { exact: true })
     .selectOption('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1');
-  await page.getByLabel('Valor apostado (R$)', { exact: true }).fill('25,00');
-  await page.getByLabel('Odd total', { exact: true }).fill('1,90');
+  await dialog.getByLabel('Valor apostado (R$)', { exact: true }).fill('25,00');
+  await dialog.getByLabel('Odd total', { exact: true }).fill('1,90');
   expect(commands).toHaveLength(0);
   // Fechar sem enviar: nenhuma escrita financeira acontece. O rótulo exato
   // importa porque o diálogo também traz o "×" de fecharJanela.
@@ -302,15 +316,18 @@ test('a escrita financeira do Mini App exige confirmação e usa o comando canô
   // versão otimista e chave de idempotência — exatamente como na web.
   await page.getByRole('button', { name: '+ Nova aposta', exact: true }).click();
   const again = page.getByRole('dialog');
-  await page
-    .getByLabel('Casa de aposta', { exact: true })
-    .selectOption('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1');
-  await page.getByLabel('Valor apostado (R$)', { exact: true }).fill('25,00');
-  await page.getByLabel('Odd total', { exact: true }).fill('1,90');
+  await again.getByRole('button', { name: /Simples/ }).click();
+  await again.getByRole('button', { name: 'Continuar para seleções' }).click();
   // Seleção 1 é obrigatória: evento, mercado e palpite.
   await again.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
   await again.getByLabel('Mercado 1', { exact: true }).fill('Resultado');
   await again.getByLabel('Palpite 1', { exact: true }).fill('Time A');
+  await again.getByRole('button', { name: 'Continuar para valor' }).click();
+  await again
+    .getByLabel('Casa de aposta', { exact: true })
+    .selectOption('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1');
+  await again.getByLabel('Valor apostado (R$)', { exact: true }).fill('25,00');
+  await again.getByLabel('Odd total', { exact: true }).fill('1,90');
   await again.getByRole('button', { name: 'Registrar aposta' }).click();
   await expect.poll(() => commands.length, { timeout: 10_000 }).toBe(1);
   expect(keys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);

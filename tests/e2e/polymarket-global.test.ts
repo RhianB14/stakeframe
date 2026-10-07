@@ -196,20 +196,25 @@ test('a cobertura truncada é VISÍVEL e a métrica dependente fica bloqueada', 
   // completa é. Um card inteiro "bloqueado" esconderia dado válido.
   await expect(cardTruncado.locator('[data-global-metric="P&L 30d"]')).toContainText('8.940');
 
-  // A borda de atenção é o sinal visual do estado, e ela é real: a cor
-  // computada precisa ser diferente da de um card normal.
-  const cores = await page.evaluate(() => {
-    const lista = Array.from(document.querySelectorAll('[data-testid="global-card"]'));
-    const truncado = lista.find((node) => node.className.includes('is-truncated'));
-    const normal = lista.find((node) => !node.className.includes('is-truncated'));
-    if (!truncado || !normal) return null;
+  // A borda de atenção pertence à métrica bloqueada, não ao card. Compara a
+  // ROI bloqueada com o P&L normal do MESMO card para provar o sinal visual.
+  const bordas = await page.evaluate(() => {
+    const truncado = Array.from(document.querySelectorAll('[data-testid="global-card"]')).find(
+      (node) => node.className.includes('is-truncated'),
+    );
+    const bloqueada = truncado?.querySelector('[data-global-metric="ROI"]')?.parentElement
+      ?.parentElement;
+    const normal = truncado?.querySelector('[data-global-metric="P&L 30d"]')?.parentElement
+      ?.parentElement;
+    if (!bloqueada || !normal) return null;
     return {
-      truncado: getComputedStyle(truncado).borderTopColor,
-      normal: getComputedStyle(normal).borderTopColor,
+      bloqueada: getComputedStyle(bloqueada).borderTopStyle,
+      normal: getComputedStyle(normal).borderTopStyle,
     };
   });
-  expect(cores, 'a tela precisa ter um card truncado e um normal').not.toBeNull();
-  expect(cores!.truncado).not.toBe(cores!.normal);
+  expect(bordas, 'o card truncado precisa ter métricas bloqueada e normal').not.toBeNull();
+  expect(bordas!.bloqueada).toBe('dashed');
+  expect(bordas!.bloqueada).not.toBe(bordas!.normal);
 
   await page.screenshot({
     path: testInfo.outputPath('polymarket-global-truncated.png'),

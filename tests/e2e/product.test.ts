@@ -738,7 +738,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   ).toBe(true);
   await page.screenshot({ path: info.outputPath('product-overview.png'), fullPage: true });
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  await expect(page.getByLabel('Situação')).toBeVisible();
+  await expect(page.getByRole('group', { name: /Filtrar apostas por situação/i })).toBeVisible();
   await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
   await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
@@ -924,7 +924,7 @@ test('an expired API session removes cached private records', async ({ page }) =
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
   await expect(
-    page.locator('.overview-accounts').getByText('R$ 1.000,00', { exact: true }),
+    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
   await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
   await page.route('**/api/v1/journal?*', (route) => route.fulfill({ status: 401, json: {} }));
