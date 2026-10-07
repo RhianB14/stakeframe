@@ -343,15 +343,29 @@ describe('camada de tokens (STK-F2-18)', () => {
        contraste absurdo numa tela que ninguém mexeu. */
     const surface = '#141714';
     const surfaceRgb = 'rgb(20, 23, 20)';
-    const tertiary = 'oklch(0.70 0.01 145)';
+    const tertiary = 'oklch(0.76 0.01 145)';
+    // O literal acima é uma cópia: se tokens.css mudar, este teste mede outra
+    // cor. Foi assim que --text-tertiary e --neg passaram a reprovar sem que
+    // ninguém visse — a âncora fica amarrada à fonte única.
+    expect(tokensCss).toMatch(/--text-tertiary:\s*oklch\(0\.76 0\.01 145\)/);
+    expect(tokensCss).toMatch(/--surface-1:\s*#141714/);
 
     const fromOklch = contrastRatio(tertiary, surface);
     // A MESMA cor pelo caminho que o Chromium usa em `getComputedStyle`.
     const [red, green, blue] = toSrgbChannels(tertiary);
     const asRgb = `rgb(${red}, ${green}, ${blue})`;
 
-    expect(asRgb).toMatch(/^rgb\(/);
-    expect(luminance(surface)).toBeCloseTo(luminance(surfaceRgb), 2);
+    // Forma exata do que o Chromium devolve, não apenas o prefixo: um canal
+    // fora de 0-255 ou um decimal passariam em /^rgb\(/.
+    expect(asRgb).toMatch(/^rgb\(\d{1,3}, \d{1,3}, \d{1,3}\)$/);
+    for (const channel of [red, green, blue]) {
+      expect(Number.isInteger(channel), `canal não inteiro: ${channel}`).toBe(true);
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(255);
+    }
+    // A mesma cor escrita em hex e em rgb() tem de medir o mesmo: aqui a
+    // comparação é entre as duas NOTAÇÕES, com precisão de 1/255.
+    expect(luminance(surface)).toBeCloseTo(luminance(surfaceRgb), 5);
     // Tolerância de 1/255 por canal: o arredondamento do rgb() é a única perda.
     expect(Math.abs(contrastRatio(asRgb, surfaceRgb) - fromOklch)).toBeLessThan(0.02);
 
@@ -564,16 +578,26 @@ describe('casca do produto (STK-F2-18)', () => {
   });
 
   it('a lista de navegação e o tipo Page concordam', () => {
-    const declared = quoted(productApp, /type Page =\n((?:\s*\|.*\n)+)/, /'([a-z]+)'/g);
+    const declared = quoted(productApp, /type Page =\n((?:\s*\|.*\n)+)/, /'([a-z-]+)'/g);
     const used = quoted(
       productApp,
       /const navigation = \[([\s\S]*?)\] as const/,
-      /id: '([a-z]+)'/g,
+      /id: '([a-z-]+)'/g,
     );
     for (const id of used) {
       expect(declared, `Page não declara '${id}'`).toContain(id);
     }
-    // `imports` é rota por hash e não aparece no menu — declarada, sem item.
+          // `sidebarGroups` é a OUTRA fonte de verdade da navegação (as categorias da
+      // sidebar) e nasceu sem teste: um id inexistente ali só apareceria em runtime.
+      const grouped = quoted(
+        productApp,
+        /const sidebarGroups = \[([\s\S]*?)\] as const/,
+        /'([a-z-]+)'/g,
+      );
+      for (const id of grouped) {
+        expect(declared, `Page não declara '${id}' (sidebarGroups)`).toContain(id);
+      }
+// `imports` é rota por hash e não aparece no menu — declarada, sem item.
     expect(declared).toContain('imports');
     expect(used).not.toContain('imports');
   });
