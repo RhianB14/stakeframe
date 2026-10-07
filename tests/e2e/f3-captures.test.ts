@@ -65,7 +65,7 @@ async function openOverview(page: Page, report: PerformanceReport): Promise<void
   await enabledProduct(page);
   await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Resultado realizado/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Resultado acumulado/i })).toBeVisible();
 }
 
 const destino = (page: Page, arquivo: string) =>

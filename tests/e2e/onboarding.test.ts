@@ -289,12 +289,17 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
   // Step 3 — first manual bet through the existing form.
   await page.getByRole('button', { name: 'Registrar aposta manual' }).click();
   await expect(page.getByRole('dialog')).toContainText('Nova aposta');
-  await page.getByLabel('Casa de aposta').selectOption({ label: 'Bet365' });
-  await page.getByLabel('Valor apostado (R$)').fill('100,00');
-  await page.getByLabel('Odd total').fill('1,85');
+  // O formulário foi convertido em wizard: primeiro se escolhe o tipo, depois
+  // são informadas as seleções obrigatórias, e só então aparecem valor e casa.
+  await page.getByRole('button', { name: /Simples/ }).click();
+  await page.getByRole('button', { name: 'Continuar para seleções' }).click();
   await page.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
   await page.getByLabel('Mercado 1', { exact: true }).fill('Gols');
   await page.getByLabel('Palpite 1', { exact: true }).fill('Mais de 2,5');
+  await page.getByRole('button', { name: 'Continuar para valor' }).click();
+  await page.getByLabel('Casa de aposta').selectOption({ label: 'Bet365' });
+  await page.getByLabel('Valor apostado (R$)').fill('100,00');
+  await page.getByLabel('Odd total').fill('1,85');
   await page.getByRole('button', { name: 'Registrar aposta' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Primeira aposta registrada')).toBeVisible();
