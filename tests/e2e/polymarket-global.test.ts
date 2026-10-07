@@ -184,6 +184,11 @@ test('a cobertura truncada é VISÍVEL e a métrica dependente fica bloqueada', 
   const cardTruncado = cards(page).filter({ hasText: 'Cobertura truncada' });
   const roi = cardTruncado.locator('[data-global-metric="ROI"]');
   await expect(roi).toHaveText('bloqueado');
+  const roiBloqueado = roi.locator('xpath=../..');
+  await expect(roiBloqueado).toHaveClass(/is-blocked/);
+  // O estado é expresso pela classe e pela borda tracejada, não por cor de
+  // fundo diferente da superfície padrão da métrica.
+  await expect(roiBloqueado).toHaveCSS('border-top-style', 'dashed');
   // E o `N` continua visível no bloqueio: a amostra é o que sabemos, e
   // escondê-la junto com o valor esconderia o motivo.
   await expect(cardTruncado.locator('[data-global-n="ROI"]')).toContainText('N=210');
@@ -216,9 +221,9 @@ test('valor desconhecido é "Sem base" — nunca zero, nunca célula vazia', asy
   await openGlobal(page);
 
   const desconhecidos = page.getByText('Sem base', { exact: true });
-  // O `@csgo_arb` tem três métricas desconhecidas: taxa de acerto,
-  // seguidores e open bets — e o mercado, que também é "Sem base".
-  expect(await desconhecidos.count()).toBeGreaterThanOrEqual(3);
+  // O card renderiza "Sem base" em dois lugares: taxa de acerto e mercado.
+  // Followers e open bets não aparecem no resumo visível.
+  expect(await desconhecidos.count()).toBe(2);
 
   // A distinção que a R2 exige: em OUTRO card, a mesma métrica tem número.
   // Se "Sem base" aparecesse onde há valor, a métrica estaria sempre
@@ -347,7 +352,7 @@ test('os FILTROS FUNCIONAM: categoria e ordenação mudam a lista de verdade', a
 test('o card é clicável, focável e fala as métricas com a amostra', async ({ page }) => {
   await openGlobal(page);
 
-  const primeiro = cards(page).first();
+  const primeiro = cards(page).first().locator('.global-card-link');
   // O card é uma ÂNCORA: tem `href` para o detalhe do tipster. Um `div` com
   // `onClick` seria clicável e não navegável, nem copiável.
   await expect(primeiro).toHaveAttribute('href', /#\/polymarket\/tipster\/0x[0-9a-f]{40}/);
@@ -368,7 +373,7 @@ test('o card é clicável, focável e fala as métricas com a amostra', async ({
   for (let passo = 0; passo < 12 && !alcanhouCard; passo += 1) {
     await page.keyboard.press('Tab');
     alcanhouCard = await page.evaluate(
-      () => document.activeElement?.getAttribute('data-testid') === 'global-card',
+      () => document.activeElement?.matches('.global-card-link') === true,
     );
   }
   expect(alcanhouCard, 'o card precisa ser alcançável pela tecla Tab').toBe(true);

@@ -669,7 +669,9 @@ function ProductShell({
               </p>
               <h1>
                 {page === 'overview' && !onboardingActive
-                  ? 'Dashboard'
+                  ? variant === 'mini'
+                    ? 'Painel'
+                    : 'Dashboard'
                   : onboardingActive
                     ? 'Primeiros passos'
                     : page === 'imports'

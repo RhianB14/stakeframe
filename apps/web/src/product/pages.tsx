@@ -583,7 +583,11 @@ export function BetsPage({
                   <td
                     key={column.key}
                     data-column={column.key}
-                    className={columnClassNames[column.key]}
+                    className={
+                      column.key === 'return'
+                        ? `tabular ${betFinancialDisplay(row.bet).tone}`
+                        : columnClassNames[column.key]
+                    }
                   >
                     <BetTableCell row={row} column={column.key} />
                   </td>

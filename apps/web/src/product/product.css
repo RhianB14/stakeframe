@@ -5922,7 +5922,7 @@
   margin-bottom: 5px;
 }
 .overview-running-panel .report-chart {
-  height: 245px;
+  height: 272px;
 }
 .overview-insights {
   padding: 18px 20px;
@@ -6007,7 +6007,7 @@
     top: 42px;
   }
   .overview-running-panel .report-chart {
-    height: 210px;
+    height: 272px;
   }
 }
 
@@ -6380,7 +6380,7 @@
     padding: 17px 16px 12px;
   }
   .product-web-theme .overview-running-panel .report-chart {
-    height: 155px;
+    height: 280px;
   }
   .product-web-theme .overview-insights {
     padding: 17px 16px;

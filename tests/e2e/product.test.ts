@@ -691,8 +691,10 @@ test('private workspace renders real fixture amounts, usable navigation and resp
 }, info) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
-  await expect(page.getByText('R$ 1.000,00', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+  ).toBeVisible();
   const smallText = await page
     .locator('.sidebar-caption, .product-eyebrow, .metric-card small, .product-footer')
     .evaluateAll((elements) =>
@@ -844,8 +846,9 @@ test('ambiguous network result is recovered with the same key and body after rel
     }
   });
   await page.goto('/#finance');
-  await page.getByRole('button', { name: '+ Entrada', exact: true }).click();
-  await page.getByLabel('Valor (R$)', { exact: true }).fill('25,50');
+  await page.getByLabel('Valor da movimentação', { exact: true }).fill('25,50');
+  await page.locator('.bankroll-move-card').getByRole('button', { name: 'Registrar' }).click();
+  await expect(page.getByLabel('Valor (R$)', { exact: true })).toHaveValue('25,50');
   await page.getByLabel('Motivo / observação').fill('Aporte conferido');
   await page.getByRole('button', { name: 'Registrar movimentação' }).click();
   await expect(
@@ -902,7 +905,9 @@ test('partial cashout sends closed principal independently from received money',
 test('an expired API session removes cached private records', async ({ page }) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await expect(page.getByText('R$ 1.000,00', { exact: true })).toBeVisible();
+  await expect(
+    page.locator('.overview-accounts').getByText('R$ 1.000,00', { exact: true }),
+  ).toBeVisible();
   await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
   await page.route('**/api/v1/journal?*', (route) => route.fulfill({ status: 401, json: {} }));
   await page.getByRole('link', { name: 'Financeiro', exact: true }).click();
@@ -2288,7 +2293,7 @@ test('the Mini App explains how to open it when Telegram is unavailable (R5)', a
 test('owner panel footer shows the stamped release version', async ({ page }) => {
   await enabledProduct(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
 });
 
