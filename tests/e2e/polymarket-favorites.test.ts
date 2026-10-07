@@ -278,11 +278,14 @@ test('a lista de favoritos mostra a carteira pública e nada derivado', async ({
   // Os cabeçalhos são só os da origem + a ação de remover. Nenhuma coluna de
   // pontuação, avaliação ou recomendação.
   const headers = await region.locator('th').allInnerTexts();
-  expect(headers.map((text) => text.trim())).toEqual([
-    'Trader',
-    'Carteira pública',
-    'Favoritado em',
-    'Ação',
+  // A folha aplica `text-transform: uppercase` nestes cabeçalhos, e o
+  // `innerText` devolve o texto RENDERIZADO: normalizar a caixa preserva a
+  // exigência do conjunto de colunas sem depender da apresentação.
+  expect(headers.map((text) => text.trim().toLowerCase())).toEqual([
+    'trader',
+    'carteira pública',
+    'favoritado em',
+    'ação',
   ]);
 });
 
@@ -332,11 +335,14 @@ test('Composite Score, badge e recomendação NÃO aparecem em lugar nenhum da t
   const favoritesTable = page.getByRole('region', { name: 'Favoritos do ranking Polymarket' });
   await expect(favoritesTable).toBeVisible();
   const headers = await favoritesTable.locator('th').allInnerTexts();
-  expect(headers.map((text) => text.trim())).toEqual([
-    'Trader',
-    'Carteira pública',
-    'Favoritado em',
-    'Ação',
+  // A folha aplica `text-transform: uppercase` nestes cabeçalhos, e o
+  // `innerText` devolve o texto RENDERIZADO: normalizar a caixa preserva a
+  // exigência do conjunto de colunas sem depender da apresentação.
+  expect(headers.map((text) => text.trim().toLowerCase())).toEqual([
+    'trader',
+    'carteira pública',
+    'favoritado em',
+    'ação',
   ]);
 
   // E o menu de navegação não oferece o destino como recomendação.
@@ -352,7 +358,8 @@ test('favoritos são um destino próprio da navegação', async ({ page }) => {
     favorites: favoritesPayload(1, false),
   });
   const nav = await page.locator('.product-sidebar nav a').allInnerTexts();
-  expect(nav.join(' ')).toContain('Favoritos');
+  // Os links da navegação também são renderizados em caixa alta.
+  expect(nav.join(' ').toLowerCase()).toContain('favoritos');
   await expect(page.getByRole('heading', { name: 'Seus favoritos da Polymarket' })).toBeVisible();
   // O link da navegação leva ao destino próprio, que também monta a seção real.
   await page.getByRole('link', { name: 'Favoritos', exact: true }).click();
