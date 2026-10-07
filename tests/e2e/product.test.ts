@@ -759,7 +759,11 @@ test('private workspace renders real fixture amounts, usable navigation and resp
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
     }));
-    const navTargets = await nav.locator('a').evaluateAll((links) =>
+    // Só alvos VISÍVEIS: a skin esconde o link #profile no mobile (product.css,
+    // @media max-width 760px) porque o perfil é alcançado pelo avatar do
+    // cabeçalho — e um link com `display: none` mede 0px sem ser alvo de
+    // toque. O piso de 44px continua exigido de todos os que aparecem.
+    const navTargets = await nav.locator('a:visible').evaluateAll((links) =>
       links.map((link) => ({
         texto: (link.textContent ?? '').trim().slice(0, 24),
         altura: Math.round(link.getBoundingClientRect().height),
