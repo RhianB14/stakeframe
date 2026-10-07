@@ -811,6 +811,24 @@ test('first use requires explicit balance confirmation and preserves decimal str
     return route.fulfill({ json: { id: 'initial', version: workspace.version } });
   });
   await page.goto('/');
+  // DIAGNOSTICO TEMPORARIO (#272): a CI diz que o botao nao esta no DOM neste
+  // estado. Este dump diz em que tela a pagina parou; sai depois que a causa
+  // estiver identificada e corrigida.
+  console.log(
+    'DIAG first-use:',
+    JSON.stringify(
+      await page.evaluate(() => ({
+        topbar: Boolean(document.querySelector('.product-topbar')),
+        loading: Boolean(document.querySelector('.product-loading')),
+        initialCard: Boolean(document.querySelector('.initial-card')),
+        botaoPorNome: Array.from(document.querySelectorAll('button'))
+          .map((elemento) => (elemento.textContent ?? '').trim())
+          .filter((texto) => texto.length > 0)
+          .slice(0, 25),
+        texto: document.body.innerText.slice(0, 400),
+      })),
+    ),
+  );
   await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Conferir saldos iniciais' }).click();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('1.234,56');
