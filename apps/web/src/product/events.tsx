@@ -169,8 +169,8 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
               : null;
             const resultIsNegative =
               resultMode === 'money'
-                ? dailyResult?.profit.startsWith('-') ?? false
-                : dailyResult?.profitUnits?.startsWith('-') ?? false;
+                ? (dailyResult?.profit.startsWith('-') ?? false)
+                : (dailyResult?.profitUnits?.startsWith('-') ?? false);
             // A agenda não soma valor por SELEÇÃO: um mesmo bilhete pode ter
             // duas seleções no mesmo dia e continuaria sendo uma aposta. A
             // contagem de chips é de seleções e a legenda diz isso.
@@ -179,17 +179,15 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
               <button
                 type="button"
                 key={value}
-                aria-label={
-                  [
-                    dayLabel(value),
-                    items.length > 0
-                      ? `${items.length} ${items.length === 1 ? 'seleção' : 'seleções'}`
-                      : '',
-                    displayedResult ? `resultado ${displayedResult}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(', ')
-                }
+                aria-label={[
+                  dayLabel(value),
+                  items.length > 0
+                    ? `${items.length} ${items.length === 1 ? 'seleção' : 'seleções'}`
+                    : '',
+                  displayedResult ? `resultado ${displayedResult}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
                 aria-pressed={selected}
                 className={[
                   'calendar-day',

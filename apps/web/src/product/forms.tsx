@@ -649,12 +649,15 @@ export function BetForm({
         <div className="bet-wizard-progress" aria-label="Etapas do cadastro">
           {['Tipo', 'Seleções', 'Valor e origem'].map((label, index) => (
             <button
-              className={manualBetStep === index ? 'is-current' : manualBetStep > index ? 'is-complete' : ''}
+              className={
+                manualBetStep === index ? 'is-current' : manualBetStep > index ? 'is-complete' : ''
+              }
               key={label}
               type="button"
               onClick={() => index < manualBetStep && setManualBetStep(index)}
             >
-              <span>{index + 1}</span>{label}
+              <span>{index + 1}</span>
+              {label}
             </button>
           ))}
         </div>
@@ -679,7 +682,9 @@ export function BetForm({
               type="button"
               onClick={() => {
                 setManualBetType('parlay');
-                setSelections((current) => current.length > 1 ? current : [...current, newSelection()]);
+                setSelections((current) =>
+                  current.length > 1 ? current : [...current, newSelection()],
+                );
               }}
             >
               <strong>Múltipla</strong>
@@ -689,101 +694,300 @@ export function BetForm({
         </div>
       ) : null}
       {(!bet && !review && manualBetStep === 1) || bet || review ? (
-      <>
-      {bet || review ? (
-      <div className="form-grid">
-        <Field label="Casa de aposta">
-          <select
-            required
-            disabled={!!bet}
-            value={bookmakerId}
-            onChange={(event) => {
-              setBookmaker(event.target.value);
-              setFreebet('');
-              if (review) setReviewOrigin('unconfirmed');
-            }}
-          >
-            <option value="">Selecione</option>
-            {houses.map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Tipster">
-          <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
-            <option value="">Sem tipster</option>
-            {tipsters.map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {!bet ? (
-          <>
-            {review ? (
-              <>
-                <Field label="Origem da aposta">
-                  <select
-                    value={reviewOrigin}
-                    onChange={(event) => {
-                      const value = event.target.value as typeof reviewOrigin;
-                      setReviewOrigin(value);
-                      if (value === 'real') setFreebet('');
-                    }}
-                  >
-                    <option value="unconfirmed" disabled>
-                      Confirme a modalidade
-                    </option>
-                    <option value="real">Dinheiro real</option>
-                    <option value="freebet">Freebet</option>
-                    <option value="hibrida">Híbrida (real + freebet)</option>
-                  </select>
-                </Field>
-                {reviewOrigin === 'freebet' || reviewOrigin === 'hibrida' ? (
-                  <Field label="Crédito de freebet">
-                    <select value={freebetId} onChange={(event) => setFreebet(event.target.value)}>
-                      <option value="">Selecione o crédito</option>
-                      {workspace.freebets
-                        .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
-                        .map((item) => (
-                          <option value={item.id} key={item.id}>
-                            {`${formatBRL(item.amount)} · até ${item.expiresOn}`}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
-                ) : null}
-              </>
-            ) : (
-              <Field label="Origem da aposta">
+        <>
+          {bet || review ? (
+            <div className="form-grid">
+              <Field label="Casa de aposta">
                 <select
-                  value={freebetId}
+                  required
+                  disabled={!!bet}
+                  value={bookmakerId}
                   onChange={(event) => {
-                    setFreebet(event.target.value);
-                    const credit = workspace.freebets.find(
-                      (item) => item.id === event.target.value,
-                    );
-                    if (credit) setStake(credit.amount);
+                    setBookmaker(event.target.value);
+                    setFreebet('');
+                    if (review) setReviewOrigin('unconfirmed');
                   }}
                 >
-                  <option value="">Dinheiro real</option>
-                  {workspace.freebets
-                    .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
-                    .map((item) => (
-                      <option value={item.id} key={item.id}>
-                        Freebet {formatBRL(item.amount)} · até {item.expiresOn}
-                      </option>
-                    ))}
+                  <option value="">Selecione</option>
+                  {houses.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
                 </select>
               </Field>
-            )}
+              <Field label="Tipster">
+                <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
+                  <option value="">Sem tipster</option>
+                  {tipsters.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {!bet ? (
+                <>
+                  {review ? (
+                    <>
+                      <Field label="Origem da aposta">
+                        <select
+                          value={reviewOrigin}
+                          onChange={(event) => {
+                            const value = event.target.value as typeof reviewOrigin;
+                            setReviewOrigin(value);
+                            if (value === 'real') setFreebet('');
+                          }}
+                        >
+                          <option value="unconfirmed" disabled>
+                            Confirme a modalidade
+                          </option>
+                          <option value="real">Dinheiro real</option>
+                          <option value="freebet">Freebet</option>
+                          <option value="hibrida">Híbrida (real + freebet)</option>
+                        </select>
+                      </Field>
+                      {reviewOrigin === 'freebet' || reviewOrigin === 'hibrida' ? (
+                        <Field label="Crédito de freebet">
+                          <select
+                            value={freebetId}
+                            onChange={(event) => setFreebet(event.target.value)}
+                          >
+                            <option value="">Selecione o crédito</option>
+                            {workspace.freebets
+                              .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                              .map((item) => (
+                                <option value={item.id} key={item.id}>
+                                  {`${formatBRL(item.amount)} · até ${item.expiresOn}`}
+                                </option>
+                              ))}
+                          </select>
+                        </Field>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Field label="Origem da aposta">
+                      <select
+                        value={freebetId}
+                        onChange={(event) => {
+                          setFreebet(event.target.value);
+                          const credit = workspace.freebets.find(
+                            (item) => item.id === event.target.value,
+                          );
+                          if (credit) setStake(credit.amount);
+                        }}
+                      >
+                        <option value="">Dinheiro real</option>
+                        {workspace.freebets
+                          .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                          .map((item) => (
+                            <option value={item.id} key={item.id}>
+                              Freebet {formatBRL(item.amount)} · até {item.expiresOn}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                  )}
+                  <Field label="Valor apostado (R$)">
+                    <input
+                      required
+                      disabled={!!freebetId && (!review || reviewOrigin === 'freebet')}
+                      inputMode="decimal"
+                      value={stake}
+                      onChange={(event) => setStake(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Odd total">
+                    <input
+                      required
+                      inputMode="decimal"
+                      placeholder="1,85"
+                      value={odds}
+                      onChange={(event) => setOdds(event.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    label="Data e hora da aposta"
+                    hint="Horário de São Paulo. É diferente da data do evento."
+                  >
+                    <input
+                      required
+                      type="datetime-local"
+                      step="1"
+                      value={placedAt}
+                      onChange={(event) => setPlaced(event.target.value)}
+                    />
+                  </Field>
+                </>
+              ) : null}
+              <Field label="Referência do bilhete (opcional)">
+                <input
+                  maxLength={150}
+                  value={reference}
+                  onChange={(event) => setReference(event.target.value)}
+                />
+              </Field>
+            </div>
+          ) : null}
+          <div className="section-heading">
+            <h3>Seleções</h3>
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={selections.length >= 40 || (!bet && !review && manualBetType === 'single')}
+              onClick={() => setSelections([...selections, newSelection()])}
+            >
+              Adicionar seleção
+            </Button>
+          </div>
+          {selections.map((item, index) => (
+            <section className="selection-form" key={item.key}>
+              <div className="selection-heading">
+                <strong>Seleção {index + 1}</strong>
+                {selections.length > 1 ? (
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => setSelections(selections.filter((_, i) => i !== index))}
+                    aria-label={`Remover seleção ${index + 1}`}
+                  >
+                    Remover
+                  </Button>
+                ) : null}
+              </div>
+              <div className="form-grid">
+                <Field label={`Evento ${index + 1}`}>
+                  <input
+                    required
+                    maxLength={300}
+                    value={item.event}
+                    onChange={(event) => updateSelection(index, { event: event.target.value })}
+                    placeholder="Time A × Time B"
+                  />
+                </Field>
+                <Field label={`Esporte ${index + 1}`}>
+                  <input
+                    maxLength={100}
+                    value={item.sport ?? ''}
+                    onChange={(event) => updateSelection(index, { sport: event.target.value })}
+                  />
+                </Field>
+                <Field label={`Mercado ${index + 1}`}>
+                  <input
+                    required
+                    maxLength={300}
+                    value={item.market}
+                    onChange={(event) => updateSelection(index, { market: event.target.value })}
+                  />
+                </Field>
+                <Field label={`Palpite ${index + 1}`}>
+                  <input
+                    required
+                    maxLength={300}
+                    value={item.selection}
+                    onChange={(event) => updateSelection(index, { selection: event.target.value })}
+                  />
+                </Field>
+                <Field label={`Data do evento ${index + 1}`} hint="Pode ficar pendente.">
+                  <input
+                    type="date"
+                    value={item.eventDate ?? ''}
+                    onChange={(event) =>
+                      updateSelection(index, { eventDate: event.target.value || null })
+                    }
+                  />
+                </Field>
+                <Field
+                  label={`Horário do evento ${index + 1}`}
+                  hint="Deixe vazio quando não for conhecido."
+                >
+                  <input
+                    type="time"
+                    step="1"
+                    value={item.time}
+                    onChange={(event) => updateSelection(index, { time: event.target.value })}
+                  />
+                </Field>
+                <Field label={`Confirmação da data ${index + 1}`}>
+                  <select
+                    value={item.dateStatus === 'estimated' ? 'estimated' : 'confirmed'}
+                    onChange={(event) =>
+                      updateSelection(index, {
+                        dateStatus: event.target.value === 'estimated' ? 'estimated' : 'confirmed',
+                      })
+                    }
+                  >
+                    <option value="confirmed">Confirmada pelo proprietário</option>
+                    <option value="estimated">Estimada, requer conferência</option>
+                  </select>
+                </Field>
+                <Field label={`Odd da seleção ${index + 1} (opcional)`}>
+                  <input
+                    inputMode="decimal"
+                    value={item.odds ?? ''}
+                    onChange={(event) =>
+                      updateSelection(index, { odds: event.target.value || null })
+                    }
+                  />
+                </Field>
+              </div>
+            </section>
+          ))}
+        </>
+      ) : null}
+      {!bet && !review && manualBetStep === 2 ? (
+        <>
+          <div className="form-grid">
+            <Field label="Casa de aposta">
+              <select
+                required
+                value={bookmakerId}
+                onChange={(event) => {
+                  setBookmaker(event.target.value);
+                  setFreebet('');
+                }}
+              >
+                <option value="">Selecione</option>
+                {houses.map((item) => (
+                  <option value={item.id} key={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tipster">
+              <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
+                <option value="">Sem tipster</option>
+                {tipsters.map((item) => (
+                  <option value={item.id} key={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Origem da aposta">
+              <select
+                value={freebetId}
+                onChange={(event) => {
+                  setFreebet(event.target.value);
+                  const credit = workspace.freebets.find((item) => item.id === event.target.value);
+                  if (credit) setStake(credit.amount);
+                }}
+              >
+                <option value="">Dinheiro real</option>
+                {workspace.freebets
+                  .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                  .map((item) => (
+                    <option value={item.id} key={item.id}>
+                      Freebet {formatBRL(item.amount)} · até {item.expiresOn}
+                    </option>
+                  ))}
+              </select>
+            </Field>
             <Field label="Valor apostado (R$)">
               <input
                 required
-                disabled={!!freebetId && (!review || reviewOrigin === 'freebet')}
+                disabled={!!freebetId}
                 inputMode="decimal"
                 value={stake}
                 onChange={(event) => setStake(event.target.value)}
@@ -810,166 +1014,23 @@ export function BetForm({
                 onChange={(event) => setPlaced(event.target.value)}
               />
             </Field>
-          </>
-        ) : null}
-        <Field label="Referência do bilhete (opcional)">
-          <input
-            maxLength={150}
-            value={reference}
-            onChange={(event) => setReference(event.target.value)}
-          />
-        </Field>
-      </div>
-      ) : null}
-      <div className="section-heading">
-        <h3>Seleções</h3>
-        <Button
-          variant="secondary"
-          size="small"
-          disabled={selections.length >= 40 || (!bet && !review && manualBetType === 'single')}
-          onClick={() => setSelections([...selections, newSelection()])}
-        >
-          Adicionar seleção
-        </Button>
-      </div>
-      {selections.map((item, index) => (
-        <section className="selection-form" key={item.key}>
-          <div className="selection-heading">
-            <strong>Seleção {index + 1}</strong>
-            {selections.length > 1 ? (
-              <Button
-                variant="ghost"
-                size="small"
-                onClick={() => setSelections(selections.filter((_, i) => i !== index))}
-                aria-label={`Remover seleção ${index + 1}`}
-              >
-                Remover
-              </Button>
-            ) : null}
-          </div>
-          <div className="form-grid">
-            <Field label={`Evento ${index + 1}`}>
+            <Field label="Referência do bilhete (opcional)">
               <input
-                required
-                maxLength={300}
-                value={item.event}
-                onChange={(event) => updateSelection(index, { event: event.target.value })}
-                placeholder="Time A × Time B"
-              />
-            </Field>
-            <Field label={`Esporte ${index + 1}`}>
-              <input
-                maxLength={100}
-                value={item.sport ?? ''}
-                onChange={(event) => updateSelection(index, { sport: event.target.value })}
-              />
-            </Field>
-            <Field label={`Mercado ${index + 1}`}>
-              <input
-                required
-                maxLength={300}
-                value={item.market}
-                onChange={(event) => updateSelection(index, { market: event.target.value })}
-              />
-            </Field>
-            <Field label={`Palpite ${index + 1}`}>
-              <input
-                required
-                maxLength={300}
-                value={item.selection}
-                onChange={(event) => updateSelection(index, { selection: event.target.value })}
-              />
-            </Field>
-            <Field label={`Data do evento ${index + 1}`} hint="Pode ficar pendente.">
-              <input
-                type="date"
-                value={item.eventDate ?? ''}
-                onChange={(event) =>
-                  updateSelection(index, { eventDate: event.target.value || null })
-                }
-              />
-            </Field>
-            <Field
-              label={`Horário do evento ${index + 1}`}
-              hint="Deixe vazio quando não for conhecido."
-            >
-              <input
-                type="time"
-                step="1"
-                value={item.time}
-                onChange={(event) => updateSelection(index, { time: event.target.value })}
-              />
-            </Field>
-            <Field label={`Confirmação da data ${index + 1}`}>
-              <select
-                value={item.dateStatus === 'estimated' ? 'estimated' : 'confirmed'}
-                onChange={(event) =>
-                  updateSelection(index, {
-                    dateStatus: event.target.value === 'estimated' ? 'estimated' : 'confirmed',
-                  })
-                }
-              >
-                <option value="confirmed">Confirmada pelo proprietário</option>
-                <option value="estimated">Estimada, requer conferência</option>
-              </select>
-            </Field>
-            <Field label={`Odd da seleção ${index + 1} (opcional)`}>
-              <input
-                inputMode="decimal"
-                value={item.odds ?? ''}
-                onChange={(event) => updateSelection(index, { odds: event.target.value || null })}
+                maxLength={150}
+                value={reference}
+                onChange={(event) => setReference(event.target.value)}
               />
             </Field>
           </div>
-        </section>
-      ))}
-      </>
-      ) : null}
-      {!bet && !review && manualBetStep === 2 ? (
-      <>
-      <div className="form-grid">
-        <Field label="Casa de aposta">
-          <select required value={bookmakerId} onChange={(event) => { setBookmaker(event.target.value); setFreebet(''); }}>
-            <option value="">Selecione</option>
-            {houses.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Tipster">
-          <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
-            <option value="">Sem tipster</option>
-            {tipsters.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Origem da aposta">
-          <select value={freebetId} onChange={(event) => {
-            setFreebet(event.target.value);
-            const credit = workspace.freebets.find((item) => item.id === event.target.value);
-            if (credit) setStake(credit.amount);
-          }}>
-            <option value="">Dinheiro real</option>
-            {workspace.freebets.filter((item) => item.bookmakerId === bookmakerId && !item.usedBy).map((item) =>
-              <option value={item.id} key={item.id}>Freebet {formatBRL(item.amount)} · até {item.expiresOn}</option>)}
-          </select>
-        </Field>
-        <Field label="Valor apostado (R$)">
-          <input required disabled={!!freebetId} inputMode="decimal" value={stake} onChange={(event) => setStake(event.target.value)} />
-        </Field>
-        <Field label="Odd total">
-          <input required inputMode="decimal" placeholder="1,85" value={odds} onChange={(event) => setOdds(event.target.value)} />
-        </Field>
-        <Field label="Data e hora da aposta" hint="Horário de São Paulo. É diferente da data do evento.">
-          <input required type="datetime-local" step="1" value={placedAt} onChange={(event) => setPlaced(event.target.value)} />
-        </Field>
-        <Field label="Referência do bilhete (opcional)">
-          <input maxLength={150} value={reference} onChange={(event) => setReference(event.target.value)} />
-        </Field>
-      </div>
-      <div className="bet-wizard-payout">
-        <span>Retorno potencial</span>
-        <strong>{potentialPayout}</strong>
-      </div>
-      <p className="bet-wizard-note">Confira o valor, a odd total e a casa antes de registrar. O bilhete será lançado como aberto.</p>
-      </>
+          <div className="bet-wizard-payout">
+            <span>Retorno potencial</span>
+            <strong>{potentialPayout}</strong>
+          </div>
+          <p className="bet-wizard-note">
+            Confira o valor, a odd total e a casa antes de registrar. O bilhete será lançado como
+            aberto.
+          </p>
+        </>
       ) : null}
       {bet ? (
         <Field label="Motivo da correção">
