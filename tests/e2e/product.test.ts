@@ -817,16 +817,30 @@ test('first use requires explicit balance confirmation and preserves decimal str
   console.log(
     'DIAG first-use:',
     JSON.stringify(
-      await page.evaluate(() => ({
-        topbar: Boolean(document.querySelector('.product-topbar')),
-        loading: Boolean(document.querySelector('.product-loading')),
-        initialCard: Boolean(document.querySelector('.initial-card')),
-        botaoPorNome: Array.from(document.querySelectorAll('button'))
-          .map((elemento) => (elemento.textContent ?? '').trim())
-          .filter((texto) => texto.length > 0)
-          .slice(0, 25),
-        texto: document.body.innerText.slice(0, 400),
-      })),
+      await page.evaluate(async () => {
+        const status = await fetch('/api/v1/system/status')
+          .then((r) => r.json())
+          .catch((erro) => ({ erro: String(erro) }));
+        const me = await fetch('/api/v1/me')
+          .then(async (r) => ({ status: r.status, corpo: (await r.text()).slice(0, 120) }))
+          .catch((erro) => ({ erro: String(erro) }));
+        return {
+          caminho: window.location.pathname + window.location.hash,
+          productEnabled: status?.productEnabled,
+          stage: status?.stage,
+          authentication: status?.authentication,
+          me,
+          topbar: Boolean(document.querySelector('.product-topbar')),
+          loading: Boolean(document.querySelector('.product-loading')),
+          initialCard: Boolean(document.querySelector('.initial-card')),
+          mainClass: document.querySelector('main')?.className ?? null,
+          botoes: Array.from(document.querySelectorAll('button'))
+            .map((elemento) => (elemento.textContent ?? '').trim())
+            .filter((texto) => texto.length > 0)
+            .slice(0, 20),
+          texto: document.body.innerText.slice(0, 220),
+        };
+      }),
     ),
   );
   await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
