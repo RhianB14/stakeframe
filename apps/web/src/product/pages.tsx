@@ -66,18 +66,6 @@ function betScheduledDate(bet: Bet) {
   return dates.sort()[0] ?? null;
 }
 
-function outcomeLabel(outcome: string) {
-  return (
-    {
-      open: 'EM ABERTO',
-      won: 'GANHOU',
-      lost: 'PERDEU',
-      void: 'ANULADA',
-      cashout: 'RESGATE',
-    }[outcome] ?? outcome.toUpperCase()
-  );
-}
-
 function unitsValue(amount: string, unitAmount: string | null) {
   if (/^-?0+(?:\.0{1,2})?$/.test(amount)) return '0.00U';
   if (!unitAmount || !/^\d+(?:\.\d{1,2})?$/.test(unitAmount)) return null;
@@ -496,19 +484,23 @@ export function BetsPage({
   // aparece quando `scrollWidth` realmente passa de `clientWidth`, que é a
   // condição de fato. Redimensionar a janela ou trocar colunas reavalia.
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const historyScrollRef = useRef<HTMLDivElement | null>(null);
   const [overflows, setOverflows] = useState(false);
   useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || compact) {
+    const elements = [scrollRef.current, historyScrollRef.current].filter(
+      (element): element is HTMLDivElement => element !== null,
+    );
+    if (elements.length === 0 || compact) {
       setOverflows(false);
       return;
     }
-    const measure = () => setOverflows(element.scrollWidth > element.clientWidth);
+    const measure = () =>
+      setOverflows(elements.some((element) => element.scrollWidth > element.clientWidth));
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(element);
+    elements.forEach((element) => observer.observe(element));
     return () => observer.disconnect();
-  }, [compact, columns.length, sortedRows.length]);
+  }, [compact, columns.length, sortedRows.length, historyOutcome]);
 
   if (!compact) {
     const today = saoPauloDate(new Date());
@@ -534,16 +526,84 @@ export function BetsPage({
         const compared = left.bet.placedAt.localeCompare(right.bet.placedAt);
         return dateDescending ? -compared : compared;
       });
+    const displayedScheduledRows = sort
+      ? sortBetRows(scheduledRows, sort.column, sort.direction)
+      : scheduledRows;
+    const displayedHistoryRows = sort
+      ? sortBetRows(filteredHistory, sort.column, sort.direction)
+      : filteredHistory;
     const currentMonth = today.slice(0, 7);
     const currentUnit = workspace.units.find((unit) => unit.month === currentMonth)?.amount ?? null;
-    const amountText = (money: string | null, units: string | null) => {
-      if (hideAmounts) return '••••';
-      return amountMode === 'money' ? formatBRLWhenPresent(money) : (units ?? '—');
-    };
     const exposure =
       amountMode === 'money'
         ? formatBRL(workspace.exposure)
         : (unitsValue(workspace.exposure, currentUnit) ?? '—');
+    const renderBetTable = (tableRows: BetTableRow[], history = false) => (
+      <div
+        ref={history ? historyScrollRef : scrollRef}
+        className="bets-reference-table-wrap bet-table-desktop"
+        role="region"
+        aria-label={history ? 'Tabela do histórico de apostas' : 'Tabela de apostas de hoje'}
+        tabIndex={0}
+      >
+        <table
+          className={`product-table bet-detail-table bets-reference-table${history ? ' bets-history-table' : ''}`}
+          style={{ '--bet-columns': String(columns.length) } as CSSProperties}
+        >
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th
+                  key={column.key}
+                  data-column={column.key}
+                  aria-sort={column.key === sort?.column ? sort.direction : 'none'}
+                >
+                  <button
+                    type="button"
+                    className="table-sort"
+                    onClick={() => toggleSort(column.key)}
+                  >
+                    {column.label}
+                  </button>
+                </th>
+              ))}
+              <th data-column="open">
+                <span className="sr-only">Abrir</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map((row) => (
+              <tr
+                key={row.bet.id}
+                data-state={row.bet.state}
+                data-outcome={row.bet.latestOutcome ?? undefined}
+              >
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    data-column={column.key}
+                    className={columnClassNames[column.key]}
+                  >
+                    <BetTableCell row={row} column={column.key} />
+                  </td>
+                ))}
+                <td data-column="open" className="bet-actions-cell">
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    aria-label={`Ver aposta ${betAccessibleTitle(row.bet)}`}
+                    onClick={() => open({ kind: 'detail', id: row.bet.id })}
+                  >
+                    Ver
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
     return (
       <section className="bets-reference-page" aria-label="Apostas">
         <header className="bets-reference-heading">
@@ -587,6 +647,7 @@ export function BetsPage({
             >
               ＋ NOVA APOSTA
             </Button>
+            <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
           </div>
         </header>
 
@@ -598,6 +659,12 @@ export function BetsPage({
             <span>EM RISCO</span> <strong>{hideAmounts ? '••••' : exposure}</strong>
           </p>
         </div>
+        {overflows ? (
+          <p className="bet-table-scroll-hint">
+            A tabela é mais larga que a tela. Deslize horizontalmente para ver as demais colunas, ou
+            use o painel de colunas para escolher quais exibir.
+          </p>
+        ) : null}
         {scheduledRows.length === 0 ? (
           <div className="bets-reference-empty">
             <svg className="bets-reference-pitch" viewBox="0 0 100 100" aria-hidden="true">
@@ -623,64 +690,14 @@ export function BetsPage({
             </Button>
           </div>
         ) : (
-          <div className="bets-reference-table-wrap">
-            <table className="product-table bets-reference-table">
-              <thead>
-                <tr>
-                  <th>ESPORTE</th>
-                  <th>SELEÇÃO</th>
-                  <th>ODD</th>
-                  <th>VALOR</th>
-                  <th>SITUAÇÃO</th>
-                  <th>RESULTADO</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scheduledRows.map(({ bet }) => {
-                  const row = rows.find((item) => item.bet.id === bet.id)!;
-                  const financial = betFinancialDisplay(bet);
-                  return (
-                    <tr key={bet.id} data-outcome={bet.latestOutcome ?? undefined}>
-                      <td className="bets-sport-cell">
-                        {bet.selections[0]?.sport?.slice(0, 3).toUpperCase() ||
-                          bet.ticketKind.slice(0, 3).toUpperCase()}
-                      </td>
-                      <td>
-                        <button
-                          className="table-title"
-                          onClick={() => open({ kind: 'detail', id: bet.id })}
-                        >
-                          {bet.selections[0]?.event ?? bet.reference ?? `Bet #${bet.ticketNumber}`}
-                        </button>
-                        <small>{bet.selections[0]?.selection ?? row.details.selection}</small>
-                      </td>
-                      <td className="tabular">{bet.odds ?? '—'}</td>
-                      <td className="tabular">
-                        {amountText(
-                          bet.stake,
-                          bet.stakeUnits ? `${Number(bet.stakeUnits).toFixed(2)}U` : null,
-                        )}
-                      </td>
-                      <td>
-                        <span className={`bets-result-tag is-${outcomeFor(bet)}`}>
-                          {outcomeLabel(outcomeFor(bet))}
-                        </span>
-                      </td>
-                      <td className={`tabular ${financial.tone}`}>
-                        {hideAmounts
-                          ? '••••'
-                          : amountMode === 'money'
-                            ? financial.profitText
-                            : financial.profitText === '—'
-                              ? '—'
-                              : (unitsValue(bet.profit, bet.unitAmount) ?? '—')
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="bet-list-cards">
+              {displayedScheduledRows.map((row) => (
+                <BetListDetails key={row.bet.id} bet={row.bet} workspace={workspace} open={open} />
+              ))}
+            </div>
+            {renderBetTable(displayedScheduledRows)}
+          </>
         )}
 
         <div className="bets-reference-section-heading bets-history-heading">
@@ -727,70 +744,12 @@ export function BetsPage({
           </div>
         ) : (
           <>
-            <div className="bets-reference-table-wrap">
-              <table className="product-table bets-reference-table bets-history-table">
-                <thead>
-                  <tr>
-                    <th>ESPORTE</th>
-                    <th>SELEÇÃO</th>
-                    <th>ODD</th>
-                    <th>VALOR</th>
-                    <th>SITUAÇÃO</th>
-                    <th>RESULTADO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredHistory.map(({ bet, details }) => {
-                    const financial = betFinancialDisplay(bet);
-                    const outcome = outcomeFor(bet);
-                    return (
-                      <tr key={bet.id} data-outcome={bet.latestOutcome ?? undefined}>
-                        <td className="bets-sport-cell">
-                          {bet.selections[0]?.sport?.slice(0, 3).toUpperCase() ||
-                            bet.ticketKind.slice(0, 3).toUpperCase()}
-                        </td>
-                        <td>
-                          <button
-                            className="table-title"
-                            onClick={() => open({ kind: 'detail', id: bet.id })}
-                          >
-                            {details.event}
-                            {bet.selections.length > 1
-                              ? ` · ${bet.selections.length} seleções`
-                              : ''}
-                          </button>
-                          <small>
-                            {bet.selections[0]?.selection ?? details.selection} ·{' '}
-                            {dateLabel(bet.placedAt)}
-                          </small>
-                        </td>
-                        <td className="tabular">{bet.odds ?? '—'}</td>
-                        <td className="tabular">
-                          {amountText(
-                            bet.stake,
-                            bet.stakeUnits ? `${Number(bet.stakeUnits).toFixed(2)}U` : null,
-                          )}
-                        </td>
-                        <td>
-                          <span className={`bets-result-tag is-${outcome}`}>
-                            {outcomeLabel(outcome)}
-                          </span>
-                        </td>
-                        <td className={`tabular ${financial.tone}`}>
-                          {hideAmounts
-                            ? '••••'
-                            : amountMode === 'money'
-                              ? financial.profitText
-                              : financial.profitText === '—'
-                                ? '—'
-                                : (unitsValue(bet.profit, bet.unitAmount) ?? '—')
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="bet-list-cards">
+              {displayedHistoryRows.map((row) => (
+                <BetListDetails key={row.bet.id} bet={row.bet} workspace={workspace} open={open} />
+              ))}
             </div>
+            {renderBetTable(displayedHistoryRows, true)}
           </>
         )}
         {query.data && query.data.total > query.data.items.length ? (
