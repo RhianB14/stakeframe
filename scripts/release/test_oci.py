@@ -60,7 +60,8 @@ class OciTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             source = {"version": 1, "sourceSha": SHA, "ciRunId": 123, "checks": [
-                "format-check", "application-check", "application-arm64-check",
+                "format-check", "check-static", "integration-check", "browser-check",
+                "browser-arm64-check", "rehearsal-check", "arm64-images-check",
                 "network-security-simulation", "recovery-check", "promotion-check"]}
             (directory / "source-validation.json").write_text(json.dumps(source))
             for target in TARGETS:

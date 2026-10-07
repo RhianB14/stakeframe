@@ -153,8 +153,10 @@ coloque em argumentos, histórico ou documentação.
 2. Faça alterações com commits convencionais
    (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`...).
 3. Rode formatação, tipos, lint, testes, build e as integrações pertinentes antes do push.
-4. Abra a PR para `main`. A CI executa `format-check`, `application-check` e
-   `network-security-simulation`, além do ensaio `recovery-check`.
+4. Abra a PR para `main`. A CI executa `format-check`, os jobs paralelos
+   `check-static`, `integration-check`, `browser-check`, `browser-arm64-check`,
+   `rehearsal-check` e `arm64-images-check`, além de
+   `network-security-simulation` e `recovery-check`.
 5. O merge é autorizado pelo Codex conforme [docs/GOVERNANCE.md](GOVERNANCE.md).
 
 Regras:

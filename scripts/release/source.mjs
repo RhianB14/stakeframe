@@ -5,8 +5,12 @@ import { resolve } from 'node:path';
 
 export const requiredChecks = [
   'format-check',
-  'application-check',
-  'application-arm64-check',
+  'check-static',
+  'integration-check',
+  'browser-check',
+  'browser-arm64-check',
+  'rehearsal-check',
+  'arm64-images-check',
   'network-security-simulation',
   'recovery-check',
   'promotion-check',
