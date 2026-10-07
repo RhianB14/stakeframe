@@ -82,12 +82,44 @@ const PALETTE = new Set(['#0d0f0d', '#141714', '#f4f5ef', '#a0a69b', '#2a3029', 
  * paletas; impede paleta NÃO registrada. Cor nova aqui exige registro aqui.
  */
 const SKIN_PALETTE = new Set([
-  '#0b0b0b', '#0c0c0c', '#101010', '#111111', '#121212', '#1a1a1a', '#1b1b1b',
-  '#202020', '#20231a', '#292929', '#2b2b2b', '#302315', '#666666', '#444444',
-  '#555555', '#565656', '#8b939b', '#777777', '#899198', '#aaaaaa', '#b8b8b4',
-  '#c5f622', '#f1f1ed', '#ff9d2e', '#ffffff', '#154de0', '#2859ff',
-  '#10110d', '#858783', '#1859ed', '#31c8a0', '#f59b19', '#ed4552', '#8655e8',
-  '#e54a9b', '#04b5d1', '#17b8a6', '#8bc927',
+  '#0b0b0b',
+  '#0c0c0c',
+  '#101010',
+  '#111111',
+  '#121212',
+  '#1a1a1a',
+  '#1b1b1b',
+  '#202020',
+  '#20231a',
+  '#292929',
+  '#2b2b2b',
+  '#302315',
+  '#666666',
+  '#444444',
+  '#555555',
+  '#565656',
+  '#8b939b',
+  '#777777',
+  '#899198',
+  '#aaaaaa',
+  '#b8b8b4',
+  '#c5f622',
+  '#f1f1ed',
+  '#ff9d2e',
+  '#ffffff',
+  '#154de0',
+  '#2859ff',
+  '#10110d',
+  '#858783',
+  '#1859ed',
+  '#31c8a0',
+  '#f59b19',
+  '#ed4552',
+  '#8655e8',
+  '#e54a9b',
+  '#04b5d1',
+  '#17b8a6',
+  '#8bc927',
 ]);
 
 /**
@@ -198,7 +230,7 @@ describe('camada de tokens (STK-F2-18)', () => {
   it('a paleta registrada é a do sistema de design, sem deriva', () => {
     for (const value of hexLiterals(rootBlock(tokensCss))) {
       expect(
-        (PALETTE.has(value) || SKIN_PALETTE.has(value)),
+        PALETTE.has(value) || SKIN_PALETTE.has(value),
         `${value} em tokens.css :root não pertence a nenhuma paleta registrada (contrato ou skin)`,
       ).toBe(true);
     }
@@ -587,17 +619,17 @@ describe('casca do produto (STK-F2-18)', () => {
     for (const id of used) {
       expect(declared, `Page não declara '${id}'`).toContain(id);
     }
-          // `sidebarGroups` é a OUTRA fonte de verdade da navegação (as categorias da
-      // sidebar) e nasceu sem teste: um id inexistente ali só apareceria em runtime.
-      const grouped = quoted(
-        productApp,
-        /const sidebarGroups = \[([\s\S]*?)\] as const/,
-        /'([a-z-]+)'/g,
-      );
-      for (const id of grouped) {
-        expect(declared, `Page não declara '${id}' (sidebarGroups)`).toContain(id);
-      }
-// `imports` é rota por hash e não aparece no menu — declarada, sem item.
+    // `sidebarGroups` é a OUTRA fonte de verdade da navegação (as categorias da
+    // sidebar) e nasceu sem teste: um id inexistente ali só apareceria em runtime.
+    const grouped = quoted(
+      productApp,
+      /const sidebarGroups = \[([\s\S]*?)\] as const/,
+      /'([a-z-]+)'/g,
+    );
+    for (const id of grouped) {
+      expect(declared, `Page não declara '${id}' (sidebarGroups)`).toContain(id);
+    }
+    // `imports` é rota por hash e não aparece no menu — declarada, sem item.
     expect(declared).toContain('imports');
     expect(used).not.toContain('imports');
   });
