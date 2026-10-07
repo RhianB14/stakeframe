@@ -529,8 +529,8 @@ function ProductShell({
      a largura reservada (`.sidebar-mode-*`). O `metrics` não vai para a
      marcação: publicá-lo exigiria estilo inline (proibido) ou `attr()`
      tipado, que ainda não é confiável entre os navegadores do projeto. A
-     folha repete os mesmos dois números de `sidebarMetrics`, e o teste de
-     tokens confere que as duas cópias concordam. */
+     folha é dona da largura (`--sidebar-w` em tokens.css, com o override do
+     tema web em product.css); o componente só publica o modo escolhido. */
   const shellClass =
     variant === 'mini'
       ? 'product-shell miniapp-shell'

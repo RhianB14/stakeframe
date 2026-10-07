@@ -154,6 +154,11 @@ export function CommandForm({
     event.preventDefault();
     setValidation(null);
     if (onAdvance) {
+      /* Avanço de PASSO do wizard: não há comando a executar aqui. A validação
+         do passo é a nativa do formulário (reportValidity); a guarda de operação
+         pendente, o schema Zod e a superfície de erro pertencem ao envio final,
+         no ramo de baixo. Quem chama com `onAdvance` não pode esperar que este
+         caminho execute comando. */
       if (event.currentTarget instanceof HTMLFormElement && !event.currentTarget.reportValidity())
         return;
       onAdvance();

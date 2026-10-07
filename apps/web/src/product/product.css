@@ -412,10 +412,11 @@
 .mini-return,
 .mini-return-preview {
   padding: 12px;
-  border: 1px solid var(--pos);
+  /* D8: retorno POTENCIAL não é resultado realizado — não recebe verde. */
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--pos-soft);
-  color: var(--pos);
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 .mini-return strong,
 .mini-return-preview strong {
@@ -1984,7 +1985,9 @@
   color: var(--neg);
 }
 .positive {
-  color: var(--text-tertiary);
+  /* D2: lucro realizado positivo tem a cor de resultado; antes era o mesmo
+     cinza de .neutral, e ganho ficava indistinguível de zero. */
+  color: var(--pos);
 }
 .neutral {
   color: var(--text-tertiary);
@@ -2002,7 +2005,8 @@
 }
 .status-settled {
   color: var(--text-tertiary);
-  background: var(--pos-soft);
+  /* D2/D8: liquidada não é sinônimo de lucro — o estado não pinta resultado. */
+  background: var(--surface-3);
 }
 .status-cancelled {
   color: var(--text-tertiary);
@@ -4010,7 +4014,8 @@
 }
 .product-web-theme .bets-result-tag.is-lost {
   background: var(--web-negative);
-  color: var(--web-white);
+  /* Contraste: branco sobre o laranja media 2,08:1; a tinta escura passa de 4,5:1. */
+  color: var(--web-ink);
 }
 .product-web-theme .bets-result-tag.is-cashout {
   color: var(--web-orange);
@@ -4480,7 +4485,7 @@
   white-space: nowrap;
 }
 .calendar-day-result.is-negative {
-  color: var(--danger, var(--warn));
+  color: var(--neg);
 }
 .calendar-grid button[aria-pressed='true'] .calendar-day-result {
   color: var(--bg);
@@ -4512,7 +4517,8 @@
   background: var(--warn);
 }
 .calendar-chip.chip-settled {
-  background: var(--pos);
+  /* D2: o chip diz "liquidada", não "ganha" — por isso é neutro. */
+  background: var(--surface-3);
 }
 .calendar-chip.chip-cancelled {
   background: var(--muted);
@@ -4550,7 +4556,7 @@
   background: var(--warn);
 }
 .calendar-legend i.chip-settled {
-  background: var(--pos);
+  background: var(--surface-3);
 }
 .calendar-weekday abbr {
   text-decoration: none;
@@ -5294,10 +5300,10 @@
 .global-favorite-error {
   max-width: 170px;
   padding: 6px 8px;
-  border: 1px solid var(--danger, var(--warn));
+  border: 1px solid var(--neg);
   border-radius: var(--radius-sm);
   background: var(--surface-1);
-  color: var(--danger, var(--warn));
+  color: var(--neg);
   font-size: var(--text-xs);
 }
 .bet-wizard-progress {
@@ -5727,7 +5733,8 @@
 .tipster-redeemable {
   justify-self: start;
   padding: 4px 6px;
-  color: var(--web-accent);
+  /* D8: resgatavel e potencial, nao realizado - o lime fica reservado ao ganho. */
+  color: var(--web-text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
