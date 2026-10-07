@@ -759,16 +759,24 @@ test('private workspace renders real fixture amounts, usable navigation and resp
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
     }));
-    const navTargetHeights = await nav
-      .locator('a')
-      .evaluateAll((links) => links.map((link) => link.getBoundingClientRect().height));
+    const navTargets = await nav.locator('a').evaluateAll((links) =>
+      links.map((link) => ({
+        texto: (link.textContent ?? '').trim().slice(0, 24),
+        altura: Math.round(link.getBoundingClientRect().height),
+      })),
+    );
     const labelLayout = await configLabel.evaluate((element) => ({
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
       height: element.getBoundingClientRect().height,
     }));
     expect(navLayout.scrollWidth).toBeLessThanOrEqual(navLayout.width);
-    expect(navTargetHeights.every((height) => height >= 44)).toBe(true);
+    // A falha precisa dizer QUAL alvo está abaixo do piso e por quanto: um
+    // `every(...) === true` só diz "não".
+    expect(
+      navTargets.filter((alvo) => alvo.altura < 44),
+      'alvos de toque abaixo de 44px',
+    ).toEqual([]);
     expect(labelLayout.scrollWidth).toBeLessThanOrEqual(labelLayout.width);
     expect(labelLayout.height).toBeGreaterThan(12);
 
@@ -811,73 +819,7 @@ test('first use requires explicit balance confirmation and preserves decimal str
     return route.fulfill({ json: { id: 'initial', version: workspace.version } });
   });
   await page.goto('/');
-  // DIAGNOSTICO TEMPORARIO (#272): a CI diz que o botao nao esta no DOM neste
-  // estado. Este dump diz em que tela a pagina parou; sai depois que a causa
-  // estiver identificada e corrigida.
-  // O CTA so existe depois que a consulta do workspace resolve; sem esta
-  // espera o diagnostico fotografa a tela de carregamento e nao diz nada.
-  await page
-    .locator('.product-topbar')
-    .waitFor({ state: 'attached', timeout: 15_000 })
-    .catch(() => undefined);
-  console.log(
-    'DIAG first-use:',
-    JSON.stringify(
-      await page.evaluate(async () => {
-        const status = await fetch('/api/v1/system/status')
-          .then((r) => r.json())
-          .catch((erro) => ({ erro: String(erro) }));
-        const me = await fetch('/api/v1/me')
-          .then(async (r) => ({ status: r.status, corpo: (await r.text()).slice(0, 120) }))
-          .catch((erro) => ({ erro: String(erro) }));
-        return {
-          caminho: window.location.pathname + window.location.hash,
-          productEnabled: status?.productEnabled,
-          stage: status?.stage,
-          authentication: status?.authentication,
-          me,
-          topbar: Boolean(document.querySelector('.product-topbar')),
-          loading: Boolean(document.querySelector('.product-loading')),
-          initialCard: Boolean(document.querySelector('.initial-card')),
-          mainClass: document.querySelector('main')?.className ?? null,
-          botoes: Array.from(document.querySelectorAll('button'))
-            .map((elemento) => (elemento.textContent ?? '').trim())
-            .filter((texto) => texto.length > 0)
-            .slice(0, 20),
-          cta: (() => {
-            const botao = Array.from(document.querySelectorAll('button')).find((node) =>
-              (node.textContent ?? '').includes('Nova aposta'),
-            );
-            if (!botao) return null;
-            const estilo = getComputedStyle(botao);
-            let escondidoPor = null;
-            let node: HTMLElement | null = botao;
-            for (; node; node = node.parentElement) {
-              const atual = getComputedStyle(node);
-              if (
-                atual.display === 'none' ||
-                atual.visibility === 'hidden' ||
-                node.getAttribute('aria-hidden') === 'true' ||
-                node.inert
-              ) {
-                escondidoPor = (node.className || node.tagName).toString().slice(0, 60);
-                break;
-              }
-            }
-            return {
-              outerHTML: botao.outerHTML.slice(0, 220),
-              display: estilo.display,
-              visibility: estilo.visibility,
-              disabled: botao.disabled,
-              ariaLabel: botao.getAttribute('aria-label'),
-              escondidoPor,
-            };
-          })(),
-          texto: document.body.innerText.slice(0, 220),
-        };
-      }),
-    ),
-  );
+
   await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Conferir saldos iniciais' }).click();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('1.234,56');
