@@ -6170,7 +6170,9 @@
     padding-top: 0;
   }
   .product-web-theme .product-sidebar nav a {
-    min-height: 30px;
+    /* O piso de toque do produto e 44px (--tap), e o e2e mede a ALTURA
+       renderizada no mobile: 30px reprovava o proprio contrato da folha. */
+    min-height: var(--tap);
     padding: 4px 8px;
     border-radius: 0;
     color: var(--web-nav);

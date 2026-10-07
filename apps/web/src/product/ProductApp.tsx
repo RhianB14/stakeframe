@@ -552,6 +552,8 @@ function ProductShell({
           collapsed={sidebarMode === 'collapsed'}
           ownerName={owner.name}
           signingOut={logout.isPending}
+          newBetDisabled={!workspace.initialized || !!actions.pending}
+          onNewBet={() => open({ kind: 'bet' })}
           onSignOut={() => logout.mutate()}
           onToggleSidebar={() => {
             const next: SidebarMode = sidebarMode === 'collapsed' ? 'expanded' : 'collapsed';
@@ -646,12 +648,18 @@ function ProductShell({
             {/* STK-F2-12: dentro do Telegram não existe "conta" do navegador para
                 encerrar — o vínculo é desfeito no site (F2-04), e a seção
                 "Ajustes" aponta para lá. */}
-            <Button
-              disabled={!workspace.initialized || !!actions.pending}
-              onClick={() => open({ kind: 'bet' })}
-            >
-              + Nova aposta
-            </Button>
+            {/* No WEB este CTA vive no TopBar (cabecalho da skin, visivel em
+                todas as larguras): aqui ele fica so para o Mini App, que nao
+                monta o TopBar — assim existe exatamente UM controle com este
+                nome acessivel por tela. */}
+            {variant === 'mini' ? (
+              <Button
+                disabled={!workspace.initialized || !!actions.pending}
+                onClick={() => open({ kind: 'bet' })}
+              >
+                + Nova aposta
+              </Button>
+            ) : null}
           </div>
         </header>
         <main className="product-main" id="product-main" tabIndex={-1}>

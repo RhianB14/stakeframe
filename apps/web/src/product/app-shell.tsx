@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '../components/ui/button.js';
 import { NavGlyph } from './nav-icons.js';
 import { SIDEBAR_MODES, writeSidebarMode, type SidebarMode } from './sidebar-mode.js';
 
@@ -10,12 +11,16 @@ export function TopBar({
   ownerName,
   onSignOut,
   signingOut,
+  newBetDisabled,
+  onNewBet,
 }: {
   collapsed: boolean;
   onToggleSidebar: () => void;
   ownerName: string;
   onSignOut: () => void;
   signingOut: boolean;
+  newBetDisabled: boolean;
+  onNewBet: () => void;
 }) {
   const initials = ownerName
     .trim()
@@ -44,6 +49,13 @@ export function TopBar({
         <span>STAKEFRAME</span>
       </a>
       <div className="product-topbar-spacer" />
+      {/* O cabecalho da skin e o unico visivel em todas as larguras (ela
+          esconde .product-topbar a partir de 761px, e o CTA da sidebar saiu por
+          decisao do dono): a acao principal mora aqui, com o mesmo estado
+          desabilitado de antes. */}
+      <Button disabled={newBetDisabled} onClick={onNewBet}>
+        + Nova aposta
+      </Button>
       <a className="product-topbar-profile" href="#profile" aria-label={`Perfil de ${ownerName}`}>
         <span className="product-topbar-profile-name">{ownerName}</span>
         <span className="product-topbar-avatar" aria-hidden="true">
