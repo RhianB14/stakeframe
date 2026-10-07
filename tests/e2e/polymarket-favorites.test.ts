@@ -177,7 +177,7 @@ async function openRanking(
     }),
   );
   await page.goto('about:blank');
-  await page.goto('/#ranking');
+  await page.goto('/#pm-favorites');
   // A listagem de favoritos é reconsultada quando a tela monta, e o teste
   // espera o dado: sem esta espera, a asserção pode rodar contra a casca de
   // carregamento e falhar por motivo que não é o do card.
