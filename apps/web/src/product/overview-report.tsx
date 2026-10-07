@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { reportSchema, saoPauloDate, formatReportBRL } from '@stakeframe/shared';
+import { reportSchema, saoPauloDate, formatReportBRL, type Workspace } from '@stakeframe/shared';
 import { request } from './api.js';
 import { Button } from '../components/ui/button.js';
 import { readChartTokens } from './chart-tokens.js';
@@ -36,7 +36,7 @@ import { axisTick, chartHasSample, lowChartSampleMessage, resultDomain } from '.
  *    diferentes sobre o mesmo número é a classe de defeito mais cara num
  *    produto de contabilidade.
  */
-export function OverviewReport({ version }: { version: number }) {
+export function OverviewReport({ version, workspace }: { version: number; workspace: Workspace }) {
   const today = saoPauloDate(new Date());
   const month = today.slice(0, 7);
   const query = useQuery({
@@ -72,20 +72,54 @@ export function OverviewReport({ version }: { version: number }) {
      Aplicar o mínimo automático aqui inverteria o sinal do resultado, que é
      o defeito mais caro que um gráfico de dinheiro pode ter. */
   const domain = resultDomain(series.map((row) => row.accumulated));
+  const monthDays = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+  const bucketsByDate = new Map((query.data?.timeline ?? []).map((bucket) => [bucket.date, bucket]));
+  const todayBucket = bucketsByDate.get(today);
+  const unit = workspace.units.find((value) => value.month === month);
 
   return (
-    <div className="panel">
+    <div className="overview-report">
+      <div className="panel overview-timeline-panel">
+        <div className="overview-timeline-heading">
+          <div>
+            <p className="product-eyebrow">ATIVIDADE DO MÊS</p>
+            <span>{new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(`${month}-15T12:00:00`))}</span>
+          </div>
+          <span className="overview-today-label">HOJE · {today.split('-').reverse().slice(0, 1)[0]}/{month.slice(5)}</span>
+        </div>
+        <div className="overview-timeline" role="img" aria-label={`Calendário de atividade de ${month}. Os marcadores indicam dias com apostas registradas.`}>
+          <div className="overview-timeline-track" />
+          {Array.from({ length: monthDays }, (_, index) => {
+            const day = index + 1;
+            const key = `${month}-${String(day).padStart(2, '0')}`;
+            const bucket = bucketsByDate.get(key);
+            const isToday = key === today;
+            return (
+              <div className={`overview-timeline-day${isToday ? ' is-today' : ''}`} key={key} style={{ left: `${((day - 1) / Math.max(1, monthDays - 1)) * 100}%` }}>
+                {bucket && bucket.metrics.bets > 0 ? <span className="overview-day-marker" title={`${bucket.metrics.bets} aposta(s) · ${formatReportBRL(bucket.metrics.profit)}`} /> : null}
+                {isToday ? <span className="overview-today-marker" /> : null}
+              </div>
+            );
+          })}
+        </div>
+        <div className="overview-timeline-labels"><span>01/{month.slice(5)}</span><span>15/{month.slice(5)}</span><span>{monthDays}/{month.slice(5)}</span></div>
+      </div>
+      <div className="overview-dashboard-metrics">
+        <Metric label="Banca" value={formatReportBRL(workspace.bankroll)} detail={`${workspace.accounts.length} conta(s) · saldo consolidado`} featured />
+        <Metric label="Em jogo agora" value={formatReportBRL(workspace.exposure)} detail="Exposição em apostas abertas" />
+        <Metric label="Resultado de hoje" value={query.data && todayBucket ? formatReportBRL(todayBucket.metrics.profit) : query.data ? '—' : '…'} detail={todayBucket ? `${todayBucket.metrics.settledBets} liquidada(s) · por data do evento` : 'Nenhuma aposta liquidada hoje'} tone={todayBucket ? signTone(todayBucket.metrics.profit) : 'neutral'} />
+      </div>
+      <div className="overview-running-layout">
+      <div className="panel overview-running-panel">
       <div className="section-heading">
         <div>
-          <h2>Resultado realizado do mês</h2>
+          <h2>Resultado acumulado</h2>
           <p>
             01/{month.slice(5)} a {today.split('-').reverse().join('/')} · por data de evento ·{' '}
             atualizado pela última aposta liquidada
           </p>
         </div>
-        <a className="text-link" href="#analytics">
-          Ver análises
-        </a>
+        <a className="text-link" href="#analytics">Ver análises</a>
       </div>
       {query.isError ? (
         <p role="alert">
@@ -98,40 +132,6 @@ export function OverviewReport({ version }: { version: number }) {
         <p role="status">Calculando resultado…</p>
       ) : (
         <>
-          <div className="metric-grid report-metrics">
-            <Metric
-              label="Resultado realizado"
-              value={formatReportBRL(query.data.metrics.profit)}
-              detail={`${query.data.metrics.settledBets} liquidadas · ${query.data.metrics.openBets} em aberto`}
-              tone={signTone(query.data.metrics.profit)}
-              featured
-            />
-            <Metric
-              label="Dinheiro real"
-              value={formatReportBRL(query.data.metrics.realProfit)}
-              detail={`Freebets: ${formatReportBRL(query.data.metrics.freebetProfit)}`}
-              tone={signTone(query.data.metrics.realProfit)}
-            />
-            <Metric
-              label="Freebets"
-              value={formatReportBRL(query.data.metrics.freebetProfit)}
-              detail={`${formatReportBRL(query.data.metrics.freebetStake)} em crédito promocional`}
-              tone={signTone(query.data.metrics.freebetProfit)}
-            />
-            <Metric
-              label="Unidades do mês"
-              value={
-                query.data.metrics.profitUnits === null
-                  ? 'A conferir'
-                  : unitsLabel(query.data.metrics.profitUnits)
-              }
-              detail={
-                query.data.metrics.missingUnitBets > 0
-                  ? `${query.data.metrics.missingUnitBets} aposta(s) sem unidade aplicável`
-                  : 'Unidade congelada durante o mês'
-              }
-            />
-          </div>
           {drawable ? (
             <div
               className="report-chart"
@@ -234,6 +234,19 @@ export function OverviewReport({ version }: { version: number }) {
           ) : null}
         </>
       )}
+      </div>
+      <aside className="panel overview-insights">
+        <div className="section-heading"><div><h2>Leitura rápida</h2><p>Recorte do mês · até hoje</p></div></div>
+        {query.data ? <>
+          <div className="overview-insight-row"><span>Resultado realizado</span><strong className={`metric-tone-${signTone(query.data.metrics.profit)}`}>{formatReportBRL(query.data.metrics.profit)}</strong></div>
+          <div className="overview-insight-row"><span>Apostas liquidadas</span><strong>{query.data.metrics.settledBets}</strong></div>
+          <div className="overview-insight-row"><span>Apostas em aberto</span><strong>{query.data.metrics.openBets}</strong></div>
+          <div className="overview-insight-row"><span>Unidade do mês</span><strong>{unit ? formatReportBRL(unit.amount) : 'A conferir'}</strong></div>
+          <div className="overview-insight-row"><span>Lucro em dinheiro real</span><strong>{formatReportBRL(query.data.metrics.realProfit)}</strong></div>
+          <div className="overview-insight-row"><span>Resultado de freebets</span><strong>{formatReportBRL(query.data.metrics.freebetProfit)}</strong></div>
+        </> : <p className="panel-footnote">Carregando dados reais do período…</p>}
+      </aside>
+      </div>
     </div>
   );
 }

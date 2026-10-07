@@ -1,8 +1,9 @@
 /* ==========================================================================
    STAKEFRAME — camada de tokens (Fase 0 do redesign web)
    --------------------------------------------------------------------------
-   Direção visual: sistema Framer. A paleta registrada é o contrato:
-   #000000 #0a0a0a #ffffff #737373 #242424 #0099ff.
+   Direção visual: carvão, verde-lima e tipografia condensada de placar.
+   A paleta registrada é o contrato:
+   #0d0f0d #141714 #f4f5ef #a0a69b #2a3029 #c5f36b.
 
    Este arquivo é a ÚNICA fonte de cor do produto. `product.css` e
    `style.css` consomem `var(--*)`; literal hex fora de `:root` é defeito e
@@ -17,70 +18,79 @@
 
 :root {
   /* ---------------------------------------------------------------------
-     Paleta registrada — literais hex, inalterados
+     Paleta registrada — literais hex
      --------------------------------------------------------------------- */
-  --bg: #000000;
-  --surface: #0a0a0a;
-  --fg: #ffffff;
-  --muted: #737373; /* 4,43:1 em --bg. ABAIXO de 4,5:1 — decorativo apenas. */
-  --border: #242424; /* divisor, não componente: não exige 3:1 */
-  --accent: #0099ff; /* preenchimento. Sobre ele, texto preto = 7,00:1 */
+  --bg: #0d0f0d;
+  --surface: #141714;
+  --fg: #f4f5ef;
+  --muted: #a0a69b;
+  --border: #2a3029;
+  --accent: #c5f36b;
+
+  /* Skin de referência para as páginas web. Mantida aqui para que a folha
+     de componentes continue consumindo tokens, inclusive no tema BetTrack. */
+  --web-bg: #0b0b0b;
+  --web-sidebar: #0c0c0c;
+  --web-surface: #101010;
+  --web-panel: #1a1a1a;
+  --web-panel-raised: #1b1b1b;
+  --web-panel-hover: #202020;
+  --web-field: #121212;
+  --web-table-head: #111111;
+  --web-text: #f1f1ed;
+  --web-text-secondary: #b8b8b4;
+  --web-text-tertiary: #71808a;
+  --web-text-muted: #899198;
+  --web-border: #292929;
+  --web-border-strong: #3d3d3d;
+  --web-border-soft: #2b2b2b;
+  --web-border-timeline: #444444;
+  --web-tick: #555555;
+  --web-today: #565656;
+  --web-accent: #c5f622;
+  --web-accent-soft: #20231a;
+  --web-negative: #ff9d2e;
+  --web-negative-soft: #302315;
+  --web-blue: #2859ff;
+  --web-blue-deep: #154de0;
+  --web-white: #ffffff;
+  --web-gray: #777777;
+  --web-nav: #aaaaaa;
 
   /* ---------------------------------------------------------------------
      Superfícies — 4 degraus de profundidade.
-     A mais clara é --surface-3 (rgb 19), e é ela que dita o piso de
-     contraste de TODO token de texto e de toda borda de componente.
-     Foi a medição dela que reprovou --text-tertiary e --border-strong na
-     primeira versão desta camada.
+     Superfícies aninhadas dão profundidade à sidebar, cartões e campos.
      --------------------------------------------------------------------- */
-  --surface-1: #0a0a0a; /* canvas do painel, cartão, sidebar */
-  --surface-2: oklch(0.16 0 0); /* painel aninhado, linha de tabela, campo */
-  --surface-3: oklch(0.185 0 0); /* chip, avatar, hover, estado ativo */
-  --surface-sunken: oklch(0.13 0 0); /* trilho de tabela, área de código */
+  --surface-1: #141714; /* canvas do painel, cartão, sidebar */
+  --surface-2: oklch(0.19 0.008 145); /* painel aninhado, linha de tabela, campo */
+  --surface-3: oklch(0.23 0.012 145); /* chip, avatar, hover, estado ativo */
+  --surface-sunken: oklch(0.15 0.006 145); /* trilho de tabela, área de código */
 
   /* ---------------------------------------------------------------------
-     Texto — 3 níveis, todos ≥ 4,5:1 nas 4 superfícies.
-     --muted (#737373) fica FORA desta lista de propósito: em texto
-     pequeno mede 4,43:1 em --bg e 1,48:1 em --surface-3.
+     Texto — níveis principal, secundário e terciário. `--muted` fica
+     reservado para uso decorativo.
      --------------------------------------------------------------------- */
-  --text-primary: var(--fg); /* 8,54:1 em --surface-3 */
-  --text-secondary: oklch(0.76 0 0); /* 6,05:1 em --surface-3 · rgb 177 */
-  --text-tertiary: oklch(0.68 0 0); /* 5,26:1 em --surface-3 · rgb 152 */
+  --text-primary: var(--fg);
+  --text-secondary: oklch(0.78 0.008 145);
+  --text-tertiary: oklch(0.7 0.01 145);
 
   /* ---------------------------------------------------------------------
      Acento — 2 papéis, porque 1 não basta.
      --accent é preenchimento (o CTA). --accent-ink é o acento usado como
-     TEXTO ou borda de estado ativo: o #0099ff puro mede 2,34:1 em
-     --surface-3, abaixo dos 3:1 de componente. O ink sobe para 5,88:1 sem
-     sair da família. Regra de uso: no máximo 2 usos de acento por tela.
+     texto ou borda de estado ativo. Os papéis mantêm contraste claro nos
+     dois contextos.
      --------------------------------------------------------------------- */
-  --accent-ink: oklch(0.76 0.13 245); /* 5,88:1 em --surface-3 · rgb 99,185,254 */
+  --accent-ink: oklch(0.88 0.17 130);
   --focus: var(--accent-ink);
 
-  /* STK-F3-01 — a SUPERFÍCIE de acento, para marcar seleção sem inverter a
-     hierarquia do menu. Ela é necessária porque o papel de acento como
-     fundo e o papel de acento como texto não podem ser o mesmo token:
-     `--accent-ink` é token de TEXTO (o teste de tokens barra usá-lo como
-     fundo, e com razão — um item de menu selecionado 30% mais claro que o
-     resto da lista é hierarquia invertida), e `--accent` é preenchimento de
-     CTA, que mede 2,34:1 e reprovaria em texto.
-
-     É derivada do próprio acento por canal alfa, e não um matiz novo: é a
-     mesma família, vista como superfície.
-
-     A proporção é 34%, e não algo menor: o primeiro valor testado (22%)
-     ficava indistinguível do fundo em um disco de 5px — a marcação de
-     "modo vigente" era invisível justamente onde ela precisa ser lida. Uma
-     superfície de acento que precisa ser vista é uma cor clara demais para
-     ser misturada até desaparecer. */
-  --accent-soft: color-mix(in oklab, var(--accent) 34%, var(--surface-3));
+  /* Superfície acentuada para o item ativo da navegação. */
+  --accent-soft: color-mix(in oklab, var(--accent) 20%, var(--surface-3));
 
   /* ---------------------------------------------------------------------
-     Sinal de resultado — uma carteira de apostas não codifica lucro sem
-     cor semântica, e a paleta Framer não tem uma. Derivados por propósito.
+     Sinal de resultado — tons com papéis separados para ganho, perda e alerta.
      --------------------------------------------------------------------- */
-  --pos: oklch(0.82 0.14 158); /* 6,59:1 em --surface-3 */
-  --pos-soft: oklch(0.22 0.05 158); /* fundo de pilha; --pos sobre ele = 5,43:1 */
+  --pos: oklch(0.84 0.16 130);
+  --pos-soft: oklch(0.22 0.05 130);
   --neg: oklch(0.78 0.15 26); /* 5,68:1 em --surface-3 */
   --neg-soft: oklch(0.22 0.05 26); /* --neg sobre ele = 5,10:1 */
   --warn: oklch(0.84 0.13 82); /* 6,70:1 em --surface-3 */
@@ -98,53 +108,27 @@
   --border-focus: var(--accent-ink);
 
   /* ---------------------------------------------------------------------
-     Tipografia — Inter em display e corpo, 3 pesos, 7 tamanhos.
-     Nenhum tamanho abaixo de 12px: a versão anterior tinha 51 das 150
-     declarações de `font-size` abaixo de 12px, e a interface tinha virado
-     listagem de terminal.
-
-     STK-F2-18 (PR-2): `--text-xs` era 11,5px. Duas suítes discordavam sobre
-     o piso e AMBAS passavam no próprio domínio — o unit legitimava 11,5px
-     enquanto o E2E exigia 12px. Duas asserções que discordam não são piso: uma
-     delas é só um número que ninguém questionou. O piso real é 12px, e agora
-     é o mesmo número dos dois lados.
+     Tipografia — títulos condensados e corpo de sistema sem serifa.
      --------------------------------------------------------------------- */
-  --font-display: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-body: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-display: Impact, Haettenschweiler, 'Arial Narrow Bold', 'Segoe UI', sans-serif;
+  --font-body: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
 
-  /* STK-F2-18 (PR-2): `--text-xs` e `--text-sm` valem 12px agora, e continuam
-     separados de propósito. Eles não são tamanhos diferentes — são INTENÇÕES
-     diferentes, e as 46 e 40 regras que os consomem não são intercambiáveis:
-     `--text-xs` é rótulo em CAPS, cabeçalho de tabela, legenda de calendário
-     e o texto dos eixos do gráfico de análises; `--text-sm` é texto corrido
-     pequeno. Colapsar os dois deixaria a folha sem forma de dizer "isto é um
-     rótulo", e a próxima pessoa que precisasse de um rótulo menor voltaria
-     inventando um hex cru. Dois nomes, mesmo valor, uma intenção cada.
-
-     A exceção de "legenda de eixo pode ficar abaixo de 12px" foi avaliada e
-     NÃO foi usada: havia um caso abaixo de 12px de verdade, e subir o token
-     resolveu.
-     `.report-chart { font-size: var(--text-xs) }` alimenta os `<XAxis>` e
-     `<YAxis>` do recharts, que herdaram 11,5px na base — abaixo do piso que o
-     próprio E2E exige, e invisível para ele: o seletor de `smallText` do E2E
-     não casa nó de SVG. A diferença só apareceu ao ler quem consome o token
-     em vez de procurar a palavra "eixo" no CSS. */
-  --text-xs: 12px; /* rótulo em CAPS, cabeçalho de tabela, legenda, eixo */
-  --text-sm: 12px; /* auxiliar, caption */
-  --text-md: 13.5px; /* célula de tabela, label de campo */
-  --text-body: 15px; /* corpo */
-  --text-h3: 16px;
-  --text-h2: 21px;
-  --text-h1: 30px;
+  /* Rótulos, auxiliares, controle, corpo e display mantêm papéis separados. */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-body: 15px;
+  --text-h3: 18px;
+  --text-h2: 24px;
+  --text-h1: 38px;
 
   /* ---------------------------------------------------------------------
-     Geometria — raio 8px como token base; 6 e 14 derivam dele como escala
-     de superfície, não como exceção.
+     Geometria — cantos compactos e alvos de toque confortáveis.
      --------------------------------------------------------------------- */
-  --radius: 8px;
-  --radius-sm: 6px; /* controle pequeno */
-  --radius-lg: 14px; /* painel */
+  --radius: 3px;
+  --radius-sm: 2px;
+  --radius-lg: 4px;
   --hairline: 1px;
   --gap: 8px;
   --tap: 44px; /* alvo de toque mínimo, vale em toda superfície interativa */
@@ -163,20 +147,11 @@
      Layout da casca
      --------------------------------------------------------------------- */
   --shell-w: 248px;
-  --content-max: 1240px;
+  --content-max: 1480px;
   --topbar-h: 76px;
-  /* ---------------------------------------------------------------------
-     STK-F3-01 — a casca nova: barra superior de 52px e sidebar de 232px.
-
-     A barra superior é a do PADRÃO GitHub (52px) e a sidebar passa a 232px
-     em vez de 248px. Nenhuma das duas medidas é escrita no componente:
-     elas vivem aqui, e `sidebarMetrics` em sidebar-mode.ts devolve os
-     mesmos números que `--sidebar-w`/`--sidebar-w-collapsed`, para que a
-     lógica e a folha nunca discordem. `--sidebar-w` continua valendo 248px
-     como valor do Mini App, que não tem sidebar nenhuma.
-     --------------------------------------------------------------------- */
-  --topbar-github-h: 52px;
-  --sidebar-w: 232px;
+  /* Casca desktop compacta; a barra inferior mobile reserva seu espaço. */
+  --topbar-github-h: 56px;
+  --sidebar-w: 208px;
   --sidebar-w-collapsed: 56px;
 }
 

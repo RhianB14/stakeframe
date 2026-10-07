@@ -267,7 +267,7 @@ export function globalView(
     ESPORTS: all.filter((card) => globalCategoryMatches(card, 'ESPORTS')).length,
   } as Record<PolymarketGlobalFilter, number>;
   return {
-    title: 'Ranking global de tipsters',
+    title: 'Tipsters',
     subtitle:
       'Somente esportes e e-sports. Cada métrica derivada traz a contagem de ' +
       'amostras ao lado, e valor desconhecido aparece como "Sem base" — nunca ' +

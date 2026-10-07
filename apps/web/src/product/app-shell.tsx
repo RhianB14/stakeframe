@@ -2,38 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import { NavGlyph } from './nav-icons.js';
 import { SIDEBAR_MODES, writeSidebarMode, type SidebarMode } from './sidebar-mode.js';
 
-/**
- * STK-F3-01 — a barra superior no padrão GitHub.
- *
- * Ela é fixa, tem 52px e ocupa a largura toda, INCLUDING a faixa da sidebar:
- * é a barra do aplicativo, não da área de conteúdo. Por isso `z-index` acima
- * da sidebar e por isso a sidebar e o conteúdo começam ABAIXO dela — o
- * deslocamento vertical é o que faz o topo da sidebar alinhar com a borda
- * inferior da barra em vez de passar por baixo.
- *
- * Nenhum item aqui é um botão de ação real: o breadcrumb, a busca e os três
- * ícones são a CASCA do padrão visual, e um controle que parece fazer algo e
- * não faz é pior do que um controle ausente. Por isso cada um carrega o
- * `aria-label` do que é — "Issues", "Pull requests", "Ações" — e o conjunto
- * do grupo direito é declarado como decorativo para o leitor de tela
- * (`aria-hidden`), que ouve uma lista de botões que não abrem nada. O que
- * precisa ser navegável aqui, e é, é a busca: ela é um campo de verdade.
- *
- * A busca recebe o atalho "/" porque é o que o padrão entrega, e o campo é
- * um `<input type="search">` de verdade — buscar nada é melhor que buscar
- * por engano quando se digita num campo que finge filtrar.
- */
-
-/** O nome acessível do campo. O texto visível já diz "Buscar". */
-const SEARCH_LABEL = 'Buscar no aplicativo';
+/** Cabeçalho do produto: marca, identidade conectada e saída de sessão. */
 
 export function TopBar({
   collapsed,
   onToggleSidebar,
+  ownerName,
+  onSignOut,
+  signingOut,
 }: {
   collapsed: boolean;
   onToggleSidebar: () => void;
+  ownerName: string;
+  onSignOut: () => void;
+  signingOut: boolean;
 }) {
+  const initials = ownerName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
   return (
     <header className="product-topbar-github">
       {/* STK-F3-01: o hamburger alterna o modo recolhido e diz qual é o
@@ -48,56 +37,29 @@ export function TopBar({
       >
         <NavGlyph icon="menu" size={18} />
       </button>
-      <span className="product-topbar-logo" aria-hidden="true">
-        <span className="product-topbar-logo-mark">S</span>
-      </span>
-      <nav aria-label="Contexto" className="product-topbar-crumb">
-        <span className="product-topbar-crumb-owner">RhianB14</span>
-        <span className="product-topbar-crumb-sep" aria-hidden="true">
-          /
+      <a href="#overview" className="product-topbar-brand" aria-label="Stakeframe, visão geral">
+        <span className="product-topbar-logo" aria-hidden="true">
+          <span className="product-topbar-logo-mark">S</span>
         </span>
-        <span className="product-topbar-crumb-repo">stakeframe</span>
-        <span className="product-topbar-caret" aria-hidden="true">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            aria-hidden="true"
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </span>
-      </nav>
+        <span>STAKEFRAME</span>
+      </a>
       <div className="product-topbar-spacer" />
-      <div className="product-topbar-search">
-        <NavGlyph icon="search" size={14} />
-        <label className="sr-only" htmlFor="topbar-search-input">
-          {SEARCH_LABEL}
-        </label>
-        <input id="topbar-search-input" type="search" className="product-topbar-search-input" />
-        <kbd aria-hidden="true">/</kbd>
-      </div>
-      <span className="product-topbar-divider" aria-hidden="true" />
-      {/* STK-F3-01: o grupo direito é a casca do padrão, não ação do produto.
-          Declarado decorativo para o leitor de tela — três botões que não
-          abrem nada seriam lidos como navegação quebrada. */}
-      <div className="product-topbar-icons" aria-hidden="true">
-        <span className="product-topbar-icon" tabIndex={-1}>
-          <NavGlyph icon="issue" size={17} />
+      <a className="product-topbar-profile" href="#profile" aria-label={`Perfil de ${ownerName}`}>
+        <span className="product-topbar-profile-name">{ownerName}</span>
+        <span className="product-topbar-avatar" aria-hidden="true">
+          {initials}
         </span>
-        <span className="product-topbar-icon" tabIndex={-1}>
-          <NavGlyph icon="pull-request" size={17} />
-        </span>
-        <span className="product-topbar-icon" tabIndex={-1}>
-          <NavGlyph icon="actions" size={17} />
-        </span>
-      </div>
-      <span className="product-topbar-avatar" aria-hidden="true">
-        RB
-      </span>
+      </a>
+      <button
+        type="button"
+        className="product-topbar-signout"
+        aria-label={signingOut ? 'Saindo da conta' : 'Sair da conta'}
+        title="Sair da conta"
+        disabled={signingOut}
+        onClick={onSignOut}
+      >
+        <NavGlyph icon="exit" size={18} />
+      </button>
     </header>
   );
 }
@@ -117,9 +79,9 @@ export function TopBar({
  * precisa conseguir sair com o teclado.
  */
 const MODE_LABELS: Record<SidebarMode, string> = {
-  expanded: 'Expanded',
-  collapsed: 'Collapsed',
-  hover: 'Expand on hover',
+  expanded: 'Expandida',
+  collapsed: 'Recolhida',
+  hover: 'Expandir ao passar o cursor',
 };
 
 export function SidebarFooter({
@@ -173,13 +135,13 @@ export function SidebarFooter({
            do texto. Sem este `aria-label` explícito, o botão deixaria de ter
            nome — o leitor de tela anunciaria "botão" sem dizer o que ele
            controla. A regra vale para todo botão que vira só ícone. */
-        aria-label="Sidebar control"
+        aria-label="Controle da barra lateral"
         onClick={() => setOpen((value) => !value)}
       >
         <span className="nav-icon">
           <NavGlyph icon="panel" size={18} />
         </span>
-        <span className="nav-label">Sidebar control</span>
+        <span className="nav-label">Barra lateral</span>
       </button>
       {open ? (
         <div
@@ -188,7 +150,7 @@ export function SidebarFooter({
           role="group"
           aria-label="Modo da barra lateral"
         >
-          <p className="sidebar-control-title">Sidebar control</p>
+          <p className="sidebar-control-title">Barra lateral</p>
           {SIDEBAR_MODES.map((value) => (
             <button
               key={value}

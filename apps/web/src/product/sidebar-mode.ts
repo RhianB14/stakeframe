@@ -37,7 +37,7 @@ export const SIDEBAR_MODE_STORAGE_KEY = 'stakeframe.sidebar-mode';
  * escolha.
  */
 export const SIDEBAR_WIDTHS = {
-  expanded: 232,
+  expanded: 208,
   collapsed: 56,
 } as const;
 

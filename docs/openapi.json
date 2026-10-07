@@ -3131,370 +3131,6 @@
         "required": ["enabled"],
         "additionalProperties": false
       },
-      "CalendarPageInput": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "selection": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "event": { "type": "string", "minLength": 1, "maxLength": 300 },
-                    "sport": {
-                      "nullable": true,
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 100
-                    },
-                    "market": { "type": "string", "minLength": 1, "maxLength": 300 },
-                    "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
-                    "odds": {
-                      "nullable": true,
-                      "type": "string",
-                      "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
-                    },
-                    "eventDate": {
-                      "nullable": true,
-                      "type": "string",
-                      "format": "date",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
-                    },
-                    "eventAt": {
-                      "nullable": true,
-                      "type": "string",
-                      "format": "date-time",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                    },
-                    "dateStatus": {
-                      "type": "string",
-                      "enum": ["confirmed", "estimated", "pending"]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "event",
-                    "sport",
-                    "market",
-                    "selection",
-                    "odds",
-                    "eventDate",
-                    "eventAt",
-                    "dateStatus"
-                  ],
-                  "additionalProperties": false
-                },
-                "betId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                },
-                "betReference": { "type": "string" },
-                "bookmaker": { "type": "string" },
-                "betState": { "type": "string", "enum": ["open", "settled", "cancelled"] },
-                "dateSource": { "type": "string", "enum": ["manual", "thesportsdb", "tavily"] },
-                "dateEvidence": {
-                  "nullable": true,
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-                    "title": { "type": "string", "maxLength": 300 },
-                    "url": { "type": "string", "maxLength": 2000, "format": "uri" },
-                    "excerpt": { "type": "string", "maxLength": 3000 },
-                    "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
-                    "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
-                    "suggestedAt": {
-                      "nullable": true,
-                      "type": "string",
-                      "format": "date-time",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                    },
-                    "postponed": { "type": "boolean" }
-                  },
-                  "required": [
-                    "id",
-                    "provider",
-                    "title",
-                    "url",
-                    "excerpt",
-                    "rawDate",
-                    "rawTime",
-                    "suggestedAt",
-                    "postponed"
-                  ]
-                },
-                "scheduleStatus": {
-                  "type": "string",
-                  "enum": ["scheduled", "postponed", "cancelled"]
-                }
-              },
-              "required": [
-                "selection",
-                "betId",
-                "betReference",
-                "bookmaker",
-                "betState",
-                "dateSource",
-                "dateEvidence",
-                "scheduleStatus"
-              ]
-            }
-          },
-          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "distinctBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "pendingSelections": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "page": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
-          "pageSize": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["items", "total", "distinctBets", "pendingSelections", "page", "pageSize"]
-      },
-      "EventSearchInput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "selectionId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-          "query": { "type": "string" },
-          "dateHint": {
-            "nullable": true,
-            "type": "string",
-            "format": "date",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
-          },
-          "state": { "type": "string", "enum": ["pending", "processing", "complete", "failed"] },
-          "candidates": {
-            "maxItems": 5,
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                },
-                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-                "title": { "type": "string", "maxLength": 300 },
-                "url": { "type": "string", "maxLength": 2000, "format": "uri" },
-                "excerpt": { "type": "string", "maxLength": 3000 },
-                "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
-                "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
-                "suggestedAt": {
-                  "nullable": true,
-                  "type": "string",
-                  "format": "date-time",
-                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                },
-                "postponed": { "type": "boolean" }
-              },
-              "required": [
-                "id",
-                "provider",
-                "title",
-                "url",
-                "excerpt",
-                "rawDate",
-                "rawTime",
-                "suggestedAt",
-                "postponed"
-              ]
-            }
-          },
-          "errorCode": { "nullable": true, "type": "string" },
-          "cached": { "type": "boolean" },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-          }
-        },
-        "required": [
-          "id",
-          "selectionId",
-          "provider",
-          "query",
-          "dateHint",
-          "state",
-          "candidates",
-          "errorCode",
-          "cached",
-          "createdAt"
-        ]
-      },
-      "EventSearchStatusInput": {
-        "type": "object",
-        "properties": {
-          "providers": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-                "enabled": { "type": "boolean" },
-                "dailyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-                "dailyLimit": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true,
-                  "maximum": 9007199254740991
-                },
-                "monthlyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-                "monthlyLimit": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true,
-                  "maximum": 9007199254740991
-                }
-              },
-              "required": [
-                "provider",
-                "enabled",
-                "dailyUsed",
-                "dailyLimit",
-                "monthlyUsed",
-                "monthlyLimit"
-              ]
-            }
-          }
-        },
-        "required": ["providers"]
-      },
-      "EffectiveValueInput": {
-        "type": "object",
-        "properties": {
-          "freebetId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "status": { "type": "string", "enum": ["available", "used", "expired", "revoked"] },
-          "faceValue": { "type": "string" },
-          "effectiveValue": { "type": "string" },
-          "totalReturn": { "type": "string" },
-          "effectiveLoss": { "type": "string" },
-          "blockers": { "type": "array", "items": { "type": "string" } },
-          "eligible": { "type": "boolean" },
-          "requirements": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "min_odds",
-                    "min_odds_per_selection",
-                    "min_selections",
-                    "single_only",
-                    "no_exchange",
-                    "sports_restriction",
-                    "market_restriction",
-                    "new_customer_only",
-                    "other"
-                  ]
-                },
-                "detail": { "type": "string" },
-                "satisfied": { "type": "boolean" },
-                "actual": { "nullable": true, "type": "string" },
-                "required": { "type": "string" }
-              },
-              "required": ["kind", "detail", "satisfied", "actual", "required"]
-            }
-          },
-          "lines": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "label": { "type": "string" },
-                "amount": { "type": "string" },
-                "rule": { "type": "string" }
-              },
-              "required": ["label", "amount", "rule"]
-            }
-          }
-        },
-        "required": [
-          "freebetId",
-          "status",
-          "faceValue",
-          "effectiveValue",
-          "totalReturn",
-          "effectiveLoss",
-          "blockers",
-          "eligible",
-          "requirements",
-          "lines"
-        ]
-      },
-      "NotificationPreferencesInput": {
-        "type": "object",
-        "properties": {
-          "userId": { "type": "string", "minLength": 1 },
-          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "topics": {
-            "type": "object",
-            "additionalProperties": { "type": "boolean" },
-            "required": ["bet_settled", "review_pending", "freebet_expiring"]
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-          }
-        },
-        "required": [
-          "userId",
-          "timezone",
-          "quietHoursStart",
-          "quietHoursEnd",
-          "topics",
-          "updatedAt"
-        ]
-      },
-      "NotificationPreferencesRequestInput": {
-        "type": "object",
-        "properties": {
-          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "topics": {
-            "type": "object",
-            "properties": {
-              "bet_settled": { "default": true, "type": "boolean" },
-              "review_pending": { "default": true, "type": "boolean" },
-              "freebet_expiring": { "default": true, "type": "boolean" }
-            }
-          }
-        },
-        "required": ["timezone", "quietHoursStart", "quietHoursEnd", "topics"]
-      },
       "PerformanceReportInput": {
         "type": "object",
         "properties": {
@@ -4672,6 +4308,391 @@
           }
         },
         "required": ["sports"]
+      },
+      "CalendarPageInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "selection": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "event": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "sport": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "market": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "odds": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
+                    },
+                    "eventDate": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "eventAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "dateStatus": {
+                      "type": "string",
+                      "enum": ["confirmed", "estimated", "pending"]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "event",
+                    "sport",
+                    "market",
+                    "selection",
+                    "odds",
+                    "eventDate",
+                    "eventAt",
+                    "dateStatus"
+                  ],
+                  "additionalProperties": false
+                },
+                "betId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "betReference": { "type": "string" },
+                "bookmaker": { "type": "string" },
+                "betState": { "type": "string", "enum": ["open", "settled", "cancelled"] },
+                "dateSource": { "type": "string", "enum": ["manual", "thesportsdb", "tavily"] },
+                "dateEvidence": {
+                  "nullable": true,
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+                    "title": { "type": "string", "maxLength": 300 },
+                    "url": { "type": "string", "maxLength": 2000, "format": "uri" },
+                    "excerpt": { "type": "string", "maxLength": 3000 },
+                    "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
+                    "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
+                    "suggestedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "postponed": { "type": "boolean" }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "title",
+                    "url",
+                    "excerpt",
+                    "rawDate",
+                    "rawTime",
+                    "suggestedAt",
+                    "postponed"
+                  ]
+                },
+                "scheduleStatus": {
+                  "type": "string",
+                  "enum": ["scheduled", "postponed", "cancelled"]
+                }
+              },
+              "required": [
+                "selection",
+                "betId",
+                "betReference",
+                "bookmaker",
+                "betState",
+                "dateSource",
+                "dateEvidence",
+                "scheduleStatus"
+              ]
+            }
+          },
+          "dailyResults": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "profitUnits": {
+                  "nullable": true,
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                }
+              },
+              "required": ["date", "profit", "profitUnits"]
+            }
+          },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "distinctBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "pendingSelections": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "page": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "total", "distinctBets", "pendingSelections", "page", "pageSize"]
+      },
+      "EventSearchInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "selectionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+          "query": { "type": "string" },
+          "dateHint": {
+            "nullable": true,
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "state": { "type": "string", "enum": ["pending", "processing", "complete", "failed"] },
+          "candidates": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+                "title": { "type": "string", "maxLength": 300 },
+                "url": { "type": "string", "maxLength": 2000, "format": "uri" },
+                "excerpt": { "type": "string", "maxLength": 3000 },
+                "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
+                "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
+                "suggestedAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "postponed": { "type": "boolean" }
+              },
+              "required": [
+                "id",
+                "provider",
+                "title",
+                "url",
+                "excerpt",
+                "rawDate",
+                "rawTime",
+                "suggestedAt",
+                "postponed"
+              ]
+            }
+          },
+          "errorCode": { "nullable": true, "type": "string" },
+          "cached": { "type": "boolean" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "id",
+          "selectionId",
+          "provider",
+          "query",
+          "dateHint",
+          "state",
+          "candidates",
+          "errorCode",
+          "cached",
+          "createdAt"
+        ]
+      },
+      "EventSearchStatusInput": {
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+                "enabled": { "type": "boolean" },
+                "dailyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "dailyLimit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "monthlyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "monthlyLimit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "provider",
+                "enabled",
+                "dailyUsed",
+                "dailyLimit",
+                "monthlyUsed",
+                "monthlyLimit"
+              ]
+            }
+          }
+        },
+        "required": ["providers"]
+      },
+      "EffectiveValueInput": {
+        "type": "object",
+        "properties": {
+          "freebetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": { "type": "string", "enum": ["available", "used", "expired", "revoked"] },
+          "faceValue": { "type": "string" },
+          "effectiveValue": { "type": "string" },
+          "totalReturn": { "type": "string" },
+          "effectiveLoss": { "type": "string" },
+          "blockers": { "type": "array", "items": { "type": "string" } },
+          "eligible": { "type": "boolean" },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "min_odds",
+                    "min_odds_per_selection",
+                    "min_selections",
+                    "single_only",
+                    "no_exchange",
+                    "sports_restriction",
+                    "market_restriction",
+                    "new_customer_only",
+                    "other"
+                  ]
+                },
+                "detail": { "type": "string" },
+                "satisfied": { "type": "boolean" },
+                "actual": { "nullable": true, "type": "string" },
+                "required": { "type": "string" }
+              },
+              "required": ["kind", "detail", "satisfied", "actual", "required"]
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": { "type": "string" },
+                "amount": { "type": "string" },
+                "rule": { "type": "string" }
+              },
+              "required": ["label", "amount", "rule"]
+            }
+          }
+        },
+        "required": [
+          "freebetId",
+          "status",
+          "faceValue",
+          "effectiveValue",
+          "totalReturn",
+          "effectiveLoss",
+          "blockers",
+          "eligible",
+          "requirements",
+          "lines"
+        ]
+      },
+      "NotificationPreferencesInput": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string", "minLength": 1 },
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "topics": {
+            "type": "object",
+            "additionalProperties": { "type": "boolean" },
+            "required": ["bet_settled", "review_pending", "freebet_expiring"]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "userId",
+          "timezone",
+          "quietHoursStart",
+          "quietHoursEnd",
+          "topics",
+          "updatedAt"
+        ]
+      },
+      "NotificationPreferencesRequestInput": {
+        "type": "object",
+        "properties": {
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "topics": {
+            "type": "object",
+            "properties": {
+              "bet_settled": { "default": true, "type": "boolean" },
+              "review_pending": { "default": true, "type": "boolean" },
+              "freebet_expiring": { "default": true, "type": "boolean" }
+            }
+          }
+        },
+        "required": ["timezone", "quietHoursStart", "quietHoursEnd", "topics"]
       },
       "OperationsHealthInput": {
         "type": "object",
@@ -9043,375 +9064,6 @@
         "required": ["enabled"],
         "additionalProperties": false
       },
-      "CalendarPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "selection": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "event": { "type": "string", "minLength": 1, "maxLength": 300 },
-                    "sport": {
-                      "nullable": true,
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 100
-                    },
-                    "market": { "type": "string", "minLength": 1, "maxLength": 300 },
-                    "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
-                    "odds": {
-                      "nullable": true,
-                      "type": "string",
-                      "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
-                    },
-                    "eventDate": {
-                      "nullable": true,
-                      "type": "string",
-                      "format": "date",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
-                    },
-                    "eventAt": {
-                      "nullable": true,
-                      "type": "string",
-                      "format": "date-time",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                    },
-                    "dateStatus": {
-                      "type": "string",
-                      "enum": ["confirmed", "estimated", "pending"]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "event",
-                    "sport",
-                    "market",
-                    "selection",
-                    "odds",
-                    "eventDate",
-                    "eventAt",
-                    "dateStatus"
-                  ],
-                  "additionalProperties": false
-                },
-                "betId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                },
-                "betReference": { "type": "string" },
-                "bookmaker": { "type": "string" },
-                "betState": { "type": "string", "enum": ["open", "settled", "cancelled"] },
-                "dateSource": { "type": "string", "enum": ["manual", "thesportsdb", "tavily"] },
-                "dateEvidence": {
-                  "nullable": true,
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-                    "title": { "type": "string", "maxLength": 300 },
-                    "url": { "type": "string", "maxLength": 2000, "format": "uri" },
-                    "excerpt": { "type": "string", "maxLength": 3000 },
-                    "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
-                    "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
-                    "suggestedAt": {
-                      "nullable": true,
-                      "type": "string",
-                      "format": "date-time",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                    },
-                    "postponed": { "type": "boolean" }
-                  },
-                  "required": [
-                    "id",
-                    "provider",
-                    "title",
-                    "url",
-                    "excerpt",
-                    "rawDate",
-                    "rawTime",
-                    "suggestedAt",
-                    "postponed"
-                  ],
-                  "additionalProperties": false
-                },
-                "scheduleStatus": {
-                  "type": "string",
-                  "enum": ["scheduled", "postponed", "cancelled"]
-                }
-              },
-              "required": [
-                "selection",
-                "betId",
-                "betReference",
-                "bookmaker",
-                "betState",
-                "dateSource",
-                "dateEvidence",
-                "scheduleStatus"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "distinctBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "pendingSelections": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "page": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
-          "pageSize": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["items", "total", "distinctBets", "pendingSelections", "page", "pageSize"],
-        "additionalProperties": false
-      },
-      "EventSearch": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "selectionId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-          "query": { "type": "string" },
-          "dateHint": {
-            "nullable": true,
-            "type": "string",
-            "format": "date",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
-          },
-          "state": { "type": "string", "enum": ["pending", "processing", "complete", "failed"] },
-          "candidates": {
-            "maxItems": 5,
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                },
-                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-                "title": { "type": "string", "maxLength": 300 },
-                "url": { "type": "string", "maxLength": 2000, "format": "uri" },
-                "excerpt": { "type": "string", "maxLength": 3000 },
-                "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
-                "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
-                "suggestedAt": {
-                  "nullable": true,
-                  "type": "string",
-                  "format": "date-time",
-                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-                },
-                "postponed": { "type": "boolean" }
-              },
-              "required": [
-                "id",
-                "provider",
-                "title",
-                "url",
-                "excerpt",
-                "rawDate",
-                "rawTime",
-                "suggestedAt",
-                "postponed"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "errorCode": { "nullable": true, "type": "string" },
-          "cached": { "type": "boolean" },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-          }
-        },
-        "required": [
-          "id",
-          "selectionId",
-          "provider",
-          "query",
-          "dateHint",
-          "state",
-          "candidates",
-          "errorCode",
-          "cached",
-          "createdAt"
-        ],
-        "additionalProperties": false
-      },
-      "EventSearchStatus": {
-        "type": "object",
-        "properties": {
-          "providers": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
-                "enabled": { "type": "boolean" },
-                "dailyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-                "dailyLimit": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true,
-                  "maximum": 9007199254740991
-                },
-                "monthlyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-                "monthlyLimit": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true,
-                  "maximum": 9007199254740991
-                }
-              },
-              "required": [
-                "provider",
-                "enabled",
-                "dailyUsed",
-                "dailyLimit",
-                "monthlyUsed",
-                "monthlyLimit"
-              ],
-              "additionalProperties": false
-            }
-          }
-        },
-        "required": ["providers"],
-        "additionalProperties": false
-      },
-      "EffectiveValue": {
-        "type": "object",
-        "properties": {
-          "freebetId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "status": { "type": "string", "enum": ["available", "used", "expired", "revoked"] },
-          "faceValue": { "type": "string" },
-          "effectiveValue": { "type": "string" },
-          "totalReturn": { "type": "string" },
-          "effectiveLoss": { "type": "string" },
-          "blockers": { "type": "array", "items": { "type": "string" } },
-          "eligible": { "type": "boolean" },
-          "requirements": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "min_odds",
-                    "min_odds_per_selection",
-                    "min_selections",
-                    "single_only",
-                    "no_exchange",
-                    "sports_restriction",
-                    "market_restriction",
-                    "new_customer_only",
-                    "other"
-                  ]
-                },
-                "detail": { "type": "string" },
-                "satisfied": { "type": "boolean" },
-                "actual": { "nullable": true, "type": "string" },
-                "required": { "type": "string" }
-              },
-              "required": ["kind", "detail", "satisfied", "actual", "required"],
-              "additionalProperties": false
-            }
-          },
-          "lines": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "label": { "type": "string" },
-                "amount": { "type": "string" },
-                "rule": { "type": "string" }
-              },
-              "required": ["label", "amount", "rule"],
-              "additionalProperties": false
-            }
-          }
-        },
-        "required": [
-          "freebetId",
-          "status",
-          "faceValue",
-          "effectiveValue",
-          "totalReturn",
-          "effectiveLoss",
-          "blockers",
-          "eligible",
-          "requirements",
-          "lines"
-        ],
-        "additionalProperties": false
-      },
-      "NotificationPreferences": {
-        "type": "object",
-        "properties": {
-          "userId": { "type": "string", "minLength": 1 },
-          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "topics": {
-            "type": "object",
-            "additionalProperties": { "type": "boolean" },
-            "required": ["bet_settled", "review_pending", "freebet_expiring"]
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-          }
-        },
-        "required": [
-          "userId",
-          "timezone",
-          "quietHoursStart",
-          "quietHoursEnd",
-          "topics",
-          "updatedAt"
-        ],
-        "additionalProperties": false
-      },
-      "NotificationPreferencesRequest": {
-        "type": "object",
-        "properties": {
-          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
-          "topics": {}
-        },
-        "required": ["timezone", "quietHoursStart", "quietHoursEnd", "topics"],
-        "additionalProperties": false
-      },
       "PerformanceReport": {
         "type": "object",
         "properties": {
@@ -10615,6 +10267,405 @@
           }
         },
         "required": ["sports"],
+        "additionalProperties": false
+      },
+      "CalendarPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "selection": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "event": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "sport": {
+                      "nullable": true,
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "market": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "selection": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "odds": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$"
+                    },
+                    "eventDate": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "eventAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "dateStatus": {
+                      "type": "string",
+                      "enum": ["confirmed", "estimated", "pending"]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "event",
+                    "sport",
+                    "market",
+                    "selection",
+                    "odds",
+                    "eventDate",
+                    "eventAt",
+                    "dateStatus"
+                  ],
+                  "additionalProperties": false
+                },
+                "betId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "betReference": { "type": "string" },
+                "bookmaker": { "type": "string" },
+                "betState": { "type": "string", "enum": ["open", "settled", "cancelled"] },
+                "dateSource": { "type": "string", "enum": ["manual", "thesportsdb", "tavily"] },
+                "dateEvidence": {
+                  "nullable": true,
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+                    "title": { "type": "string", "maxLength": 300 },
+                    "url": { "type": "string", "maxLength": 2000, "format": "uri" },
+                    "excerpt": { "type": "string", "maxLength": 3000 },
+                    "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
+                    "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
+                    "suggestedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "postponed": { "type": "boolean" }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "title",
+                    "url",
+                    "excerpt",
+                    "rawDate",
+                    "rawTime",
+                    "suggestedAt",
+                    "postponed"
+                  ],
+                  "additionalProperties": false
+                },
+                "scheduleStatus": {
+                  "type": "string",
+                  "enum": ["scheduled", "postponed", "cancelled"]
+                }
+              },
+              "required": [
+                "selection",
+                "betId",
+                "betReference",
+                "bookmaker",
+                "betState",
+                "dateSource",
+                "dateEvidence",
+                "scheduleStatus"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "dailyResults": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+                "profitUnits": {
+                  "nullable": true,
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{6}$"
+                }
+              },
+              "required": ["date", "profit", "profitUnits"],
+              "additionalProperties": false
+            }
+          },
+          "total": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "distinctBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "pendingSelections": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "page": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "dailyResults",
+          "total",
+          "distinctBets",
+          "pendingSelections",
+          "page",
+          "pageSize"
+        ],
+        "additionalProperties": false
+      },
+      "EventSearch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "selectionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+          "query": { "type": "string" },
+          "dateHint": {
+            "nullable": true,
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "state": { "type": "string", "enum": ["pending", "processing", "complete", "failed"] },
+          "candidates": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+                "title": { "type": "string", "maxLength": 300 },
+                "url": { "type": "string", "maxLength": 2000, "format": "uri" },
+                "excerpt": { "type": "string", "maxLength": 3000 },
+                "rawDate": { "nullable": true, "type": "string", "maxLength": 100 },
+                "rawTime": { "nullable": true, "type": "string", "maxLength": 100 },
+                "suggestedAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "postponed": { "type": "boolean" }
+              },
+              "required": [
+                "id",
+                "provider",
+                "title",
+                "url",
+                "excerpt",
+                "rawDate",
+                "rawTime",
+                "suggestedAt",
+                "postponed"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "errorCode": { "nullable": true, "type": "string" },
+          "cached": { "type": "boolean" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "id",
+          "selectionId",
+          "provider",
+          "query",
+          "dateHint",
+          "state",
+          "candidates",
+          "errorCode",
+          "cached",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "EventSearchStatus": {
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": { "type": "string", "enum": ["thesportsdb", "tavily"] },
+                "enabled": { "type": "boolean" },
+                "dailyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "dailyLimit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                },
+                "monthlyUsed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "monthlyLimit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "provider",
+                "enabled",
+                "dailyUsed",
+                "dailyLimit",
+                "monthlyUsed",
+                "monthlyLimit"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["providers"],
+        "additionalProperties": false
+      },
+      "EffectiveValue": {
+        "type": "object",
+        "properties": {
+          "freebetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": { "type": "string", "enum": ["available", "used", "expired", "revoked"] },
+          "faceValue": { "type": "string" },
+          "effectiveValue": { "type": "string" },
+          "totalReturn": { "type": "string" },
+          "effectiveLoss": { "type": "string" },
+          "blockers": { "type": "array", "items": { "type": "string" } },
+          "eligible": { "type": "boolean" },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "min_odds",
+                    "min_odds_per_selection",
+                    "min_selections",
+                    "single_only",
+                    "no_exchange",
+                    "sports_restriction",
+                    "market_restriction",
+                    "new_customer_only",
+                    "other"
+                  ]
+                },
+                "detail": { "type": "string" },
+                "satisfied": { "type": "boolean" },
+                "actual": { "nullable": true, "type": "string" },
+                "required": { "type": "string" }
+              },
+              "required": ["kind", "detail", "satisfied", "actual", "required"],
+              "additionalProperties": false
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": { "type": "string" },
+                "amount": { "type": "string" },
+                "rule": { "type": "string" }
+              },
+              "required": ["label", "amount", "rule"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "freebetId",
+          "status",
+          "faceValue",
+          "effectiveValue",
+          "totalReturn",
+          "effectiveLoss",
+          "blockers",
+          "eligible",
+          "requirements",
+          "lines"
+        ],
+        "additionalProperties": false
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string", "minLength": 1 },
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "topics": {
+            "type": "object",
+            "additionalProperties": { "type": "boolean" },
+            "required": ["bet_settled", "review_pending", "freebet_expiring"]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "userId",
+          "timezone",
+          "quietHoursStart",
+          "quietHoursEnd",
+          "topics",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "NotificationPreferencesRequest": {
+        "type": "object",
+        "properties": {
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "quietHoursStart": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "quietHoursEnd": { "type": "integer", "minimum": 0, "maximum": 1439 },
+          "topics": {}
+        },
+        "required": ["timezone", "quietHoursStart", "quietHoursEnd", "topics"],
         "additionalProperties": false
       },
       "OperationsHealth": {

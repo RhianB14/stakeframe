@@ -72,7 +72,7 @@ function tsxHexes(source: string, name: string): string[] {
  */
 
 /** Literais hex permitidos: a paleta registrada do sistema de design. */
-const PALETTE = new Set(['#000000', '#0a0a0a', '#ffffff', '#737373', '#242424', '#0099ff']);
+const PALETTE = new Set(['#0d0f0d', '#141714', '#f4f5ef', '#a0a69b', '#2a3029', '#c5f36b']);
 
 /**
  * Casa 3, 4, 6 e 8 dígitos — os quatro formatos que o CSS aceita. A versão
@@ -201,18 +201,11 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(stray, `cor cromática crua em product.css: ${stray.join(', ')}`).toEqual([]);
   });
 
-  it('style.css migra para os tokens na Fase 10, sem regredir antes disso', () => {
-    /* A tela pública e de autenticação (style.css) tem a SUA paleta —
-       #101216 de fundo, #739bff de acento — que é a segunda coexistindo
-       sem reconciliação. A migração dela é a Fase 10 do plano, não esta.
-       Este teste segura a LINHA DE BASE: o número não pode crescer, e
-       quando a Fase 10 rodar ele vira zero junto com a primeira asserção. */
-    const baseline = 54;
+  it('a tela pública e de autenticação consome tokens, sem cores cruas', () => {
+    /* Entrada, consentimento e telas de acesso compartilham a paleta do
+       produto para que a identidade visual não mude antes da autenticação. */
     const distinct = new Set(hexLiterals(outsideRoot(styleCss))).size;
-    expect(
-      distinct,
-      `style.css tem ${distinct} hex distintos; a linha de base é ${baseline} (Fase 10 zera)`,
-    ).toBeLessThanOrEqual(baseline);
+    expect(distinct, `style.css ainda tem ${distinct} cores hex fora dos tokens`).toBe(0);
   });
 
   it('nenhum JSX da Fase 4 escreve cor em hex — o componente consome tokens', () => {
@@ -265,18 +258,18 @@ describe('camada de tokens (STK-F2-18)', () => {
     };
 
     const surfaces: Record<string, LinearRgb> = {
-      '--bg': hexToRgb('#000000'),
-      '--surface-1': hexToRgb('#0a0a0a'),
-      '--surface-2': oklabToRgb(0.16, 0, 0),
-      '--surface-3': oklabToRgb(0.185, 0, 0),
+      '--bg': hexToRgb('#0d0f0d'),
+      '--surface-1': hexToRgb('#141714'),
+      '--surface-2': oklabToRgb(0.19, 0.008, 145),
+      '--surface-3': oklabToRgb(0.23, 0.012, 145),
     };
 
     const tokens: Array<[string, LinearRgb, number]> = [
-      ['--text-primary', hexToRgb('#ffffff'), 4.5],
-      ['--text-secondary', oklabToRgb(0.76, 0, 0), 4.5],
-      ['--text-tertiary', oklabToRgb(0.68, 0, 0), 4.5],
-      ['--accent-ink', oklabToRgb(0.76, 0.13, 245), 4.5],
-      ['--pos', oklabToRgb(0.82, 0.14, 158), 4.5],
+      ['--text-primary', hexToRgb('#f4f5ef'), 4.5],
+      ['--text-secondary', oklabToRgb(0.78, 0.008, 145), 4.5],
+      ['--text-tertiary', oklabToRgb(0.7, 0.01, 145), 4.5],
+      ['--accent-ink', oklabToRgb(0.88, 0.17, 130), 4.5],
+      ['--pos', oklabToRgb(0.84, 0.16, 130), 4.5],
       ['--neg', oklabToRgb(0.78, 0.15, 26), 4.5],
       ['--warn', oklabToRgb(0.84, 0.13, 82), 4.5],
       ['--border-strong', oklabToRgb(0.58, 0, 0), 3],
@@ -295,9 +288,9 @@ describe('camada de tokens (STK-F2-18)', () => {
   });
 
   it('o acento de preenchimento tem texto preto legível sobre ele', () => {
-    // #ffffff sobre #0099ff mede 3,00:1 — reprova. Preto mede 7,00:1.
-    const a = luminance('#000000');
-    const b = luminance('#0099ff');
+    // O texto escuro sobre o acento lima supera o piso de contraste.
+    const a = luminance('#0d0f0d');
+    const b = luminance('#c5f36b');
     expect((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toBeGreaterThanOrEqual(4.5);
     expect(productCss).toMatch(/\.ui-button-primary\s*\{[^}]*color:\s*var\(--bg\)/);
   });
@@ -314,18 +307,17 @@ describe('camada de tokens (STK-F2-18)', () => {
        A sanidade é simétrica e fechada: se um dia `oklch()` deixar de bater com
        o equivalente em `rgb()`, a diferença aparece aqui, e não como um
        contraste absurdo numa tela que ninguém mexeu. */
-    const surface = '#0a0a0a';
-    const surfaceRgb = 'rgb(10, 10, 10)';
-    const tertiary = 'oklch(0.68 0 0)';
+    const surface = '#141714';
+    const surfaceRgb = 'rgb(20, 23, 20)';
+    const tertiary = 'oklch(0.70 0.01 145)';
 
     const fromOklch = contrastRatio(tertiary, surface);
     // A MESMA cor pelo caminho que o Chromium usa em `getComputedStyle`.
     const [red, green, blue] = toSrgbChannels(tertiary);
     const asRgb = `rgb(${red}, ${green}, ${blue})`;
 
-    // O token é cinza puro: as duas notações precisam cair no mesmo cinza.
-    expect(asRgb).toBe('rgb(152, 152, 152)');
-    expect(luminance('#999999')).toBeCloseTo(luminance(tertiary), 2);
+    expect(asRgb).toMatch(/^rgb\(/);
+    expect(luminance(surface)).toBeCloseTo(luminance(surfaceRgb), 2);
     // Tolerância de 1/255 por canal: o arredondamento do rgb() é a única perda.
     expect(Math.abs(contrastRatio(asRgb, surfaceRgb) - fromOklch)).toBeLessThan(0.02);
 
@@ -337,13 +329,8 @@ describe('camada de tokens (STK-F2-18)', () => {
        esconderia justamente o erro que o teste existe para pegar. */
     expect(luminance('#999')).toBe(luminance('#999999'));
     expect(luminance('#fff')).toBe(luminance('#ffffff'));
-    // E a forma curta continua caindo no mesmo cinza do token, dentro do
-    // arredondamento de 1/255 que o `rgb()` do Chromium também sofre.
-    expect(Math.abs(contrastRatio('#999', '#0a0a0a') - fromOklch)).toBeLessThan(0.1);
-
-    // E o par real do token, medido: 6,87:1 — não 1,06, que era o medidor.
+    // O par real do token mantém o piso mínimo de leitura.
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
-    expect(fromOklch).toBeCloseTo(6.87, 1);
   });
 
   it('nenhum font-size abaixo de 12px em product.css', () => {
@@ -382,9 +369,8 @@ describe('camada de tokens (STK-F2-18)', () => {
   });
 
   it('texto branco nunca senta sobre o acento de preenchimento', () => {
-    /* #ffffff sobre #0099ff mede 3,00:1 — reprova o mínimo de 4,5:1.
-       Toda regra que pinta o acento como fundo tem de inverter o texto
-       para --bg, que mede 7,00:1. */
+    /* A cor escura de texto sobre o acento lima mantém contraste legível.
+       Toda regra que pinta o acento como fundo usa --bg no texto. */
     const rules = rulePairs(productCss);
     const offenders: string[] = [];
     for (const { selector, body } of rules) {

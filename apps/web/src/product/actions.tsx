@@ -139,11 +139,13 @@ export function CommandForm({
   onSubmit,
   onDone,
   submitLabel = 'Salvar',
+  onAdvance,
 }: {
   children: ReactNode;
   onSubmit: () => CommandInput;
   onDone: () => void;
   submitLabel?: string;
+  onAdvance?: () => void;
 }) {
   const actions = useFinanceActions();
   const [validation, setValidation] = useState<string | null>(null);
@@ -151,6 +153,12 @@ export function CommandForm({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setValidation(null);
+    if (onAdvance) {
+      if (event.currentTarget instanceof HTMLFormElement && !event.currentTarget.reportValidity())
+        return;
+      onAdvance();
+      return;
+    }
     try {
       await actions.execute(onSubmit(), versionAtOpen);
       onDone();

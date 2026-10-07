@@ -9,6 +9,7 @@ import { ProductApp } from './product/ProductApp.js';
 import { MiniAppPage } from './product/MiniApp.js';
 import { MiniApp } from './product/MiniAppEntry.js';
 import { AdminPanel } from './admin/AdminPanel.js';
+import './product/tokens.css';
 
 async function loadStatus() {
   const response = await fetch('/api/v1/system/status', { signal: AbortSignal.timeout(5_000) });

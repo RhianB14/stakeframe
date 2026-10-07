@@ -38,7 +38,8 @@ export type NavIcon =
   | 'search'
   | 'issue'
   | 'pull-request'
-  | 'actions';
+  | 'actions'
+  | 'exit';
 
 const paths: Record<NavIcon, string> = {
   // 4 painéis + barra de título
@@ -85,6 +86,7 @@ const paths: Record<NavIcon, string> = {
     'M6.5 4.8a2.4 2.4 0 100 4.8 2.4 2.4 0 000-4.8M6.5 14.4a2.4 2.4 0 100 4.8 2.4 2.4 0 000-4.8M17.5 6.8a2.4 2.4 0 100 4.8 2.4 2.4 0 000-4.8M6.5 9.6v4.8M17.5 11.6v2.6a2.6 2.6 0 01-2.6 2.6H8.9',
   // círculo com sinal de mais (ações)
   actions: 'M12 3.6a8.4 8.4 0 100 16.8 8.4 8.4 0 000-16.8M12 8.4v7.2M8.4 12h7.2',
+  exit: 'M10 4H5v16h5M14 8l4 4-4 4M8 12h10',
 };
 
 export function NavGlyph({ icon, size = 20 }: { icon: NavIcon; size?: number }) {

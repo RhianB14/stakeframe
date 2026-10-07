@@ -1,41 +1,31 @@
 # Sistema de design em vigor
 
-Fase 0 do redesign web (STK-F2-18). A fonte única de cor do produto é `apps/web/src/product/tokens.css`; este resumo registra seus valores atuais.
+Atualizado no redesign web iniciado em outubro de 2026. Os tokens do produto ficam em `apps/web/src/product/tokens.css`; a casca e os padrões compartilhados ficam em `apps/web/src/product/product.css`.
 
-Direção visual: sistema Framer. Paleta registrada (literais hex): `#000000 #0a0a0a #ffffff #737373 #242424 #0099ff`.
+## Direção
 
-| Token                    | Valor vigente literal                                      |
-| ------------------------ | ---------------------------------------------------------- |
-| `--bg`                   | `#000000`                                                  |
-| `--surface`              | `#0a0a0a`                                                  |
-| `--fg`                   | `#ffffff`                                                  |
-| `--muted`                | `#737373` — decorativo apenas                              |
-| `--border`               | `#242424`                                                  |
-| `--accent`               | `#0099ff` — preenchimento                                  |
-| `--surface-1`            | `#0a0a0a`                                                  |
-| `--surface-2`            | `oklch(0.16 0 0)`                                          |
-| `--surface-3`            | `oklch(0.185 0 0)`                                         |
-| `--surface-sunken`       | `oklch(0.13 0 0)`                                          |
-| `--text-primary`         | `var(--fg)`                                                |
-| `--text-secondary`       | `oklch(0.76 0 0)`                                          |
-| `--text-tertiary`        | `oklch(0.68 0 0)`                                          |
-| `--accent-ink`           | `oklch(0.76 0.13 245)`                                     |
-| `--focus`                | `var(--accent-ink)`                                        |
-| `--accent-soft`          | `color-mix(in oklab, var(--accent) 34%, var(--surface-3))` |
-| `--pos` / `--pos-soft`   | `oklch(0.82 0.14 158)` / `oklch(0.22 0.05 158)`            |
-| `--neg` / `--neg-soft`   | `oklch(0.78 0.15 26)` / `oklch(0.22 0.05 26)`              |
-| `--warn` / `--warn-soft` | `oklch(0.84 0.13 82)` / `oklch(0.23 0.04 82)`              |
-| `--border-strong`        | `oklch(0.58 0 0)`                                          |
-| `--border-focus`         | `var(--accent-ink)`                                        |
+Interface escura para leitura de registros financeiros, com carvão em camadas, verde-lima para ação e resultado positivo, âmbar para atenção e vermelho para perda. Títulos condensados criam hierarquia e aproximam a linguagem visual de placares esportivos; textos corridos usam uma família de sistema sem serifa. Números continuam tabulares para alinhar valores monetários.
 
-Os contrastes foram medidos no arquivo de origem; `--muted` mede 4,43:1 sobre `--bg` e é decorativo, não texto pequeno.
+| Papel                         | Token                        |
+| ----------------------------- | ---------------------------- |
+| Fundo                         | `--bg: #0d0f0d`              |
+| Superfície base               | `--surface: #141714`         |
+| Texto principal               | `--fg: #f4f5ef`              |
+| Texto auxiliar                | `--muted: #a0a69b`           |
+| Divisor                       | `--border: #2a3029`          |
+| Ação lima                     | `--accent: #c5f36b`          |
+| Positivo / negativo / atenção | `--pos` / `--neg` / `--warn` |
 
-## Decisões semânticas
+## Tipografia e geometria
 
-As decisões D1–D9 estão em `DESIGN-DECISIONS.md` §3. D2 (verde somente para resultado realizado) e D8 (sem resultado realizado, exibir “—”/“Não liquidado”) continuam válidas como princípios semânticos; tokens e tons antigos não são vigentes. D3–D7 e D9 seguem como decisões de tipografia, fluxo, responsividade, feedback e hierarquia, sem conflito com a fonte atual. D1 continua válida como princípio de consistência, mas sua nomenclatura e tons `--action`/`--action-mini` descritos ali foram superados por esta implementação.
+- Display: `Impact`, `Haettenschweiler` e fontes estreitas equivalentes; títulos em caixa alta.
+- Corpo: Segoe UI com fallback para fontes de sistema; valores usam números tabulares.
+- Escala: 12 px rótulo, 13 px auxiliar, 14 px controle, 15 px corpo, 18/24/38 px títulos.
+- Raio base de 3 px, superfícies com cantos quase retos e alvo interativo mínimo de 44 px.
+- Sidebar desktop de 208 px, recolhida de 56 px; os três modos continuam persistidos por dispositivo. Em telas estreitas, a navegação passa para a barra inferior.
 
-## Ainda não migrado
+## Componentes e acessibilidade
 
-- Tela pública/acesso: `apps/web/src/style.css`.
-- Telas/componentes: `onboarding.tsx`, `forms.tsx`, `imports.tsx`, `dashboard.tsx`, `splits.tsx`, `reports.tsx`, `MiniApp*.tsx`, `bet-drawer.tsx` e `bet-columns-panel.tsx`.
-- `polymarket-simulation.tsx` ainda contém `#23262e`: único hex em `.tsx` do produto, atualmente fora da guarda de `tests/unit/design-tokens.test.ts`.
+O cabeçalho identifica a marca, apresenta o perfil conectado e oferece saída de sessão em uma ação separada. Perfil mostra apenas identidade disponível e provedor de autenticação; edição de e-mail, avatar e dados não fornecidos pela API não são simulados. Estados de foco usam o acento lima; tons semânticos mantêm papéis separados. O menu respeita os modos Expandida, Recolhida e Expandir ao passar o cursor.
+
+O sistema de tokens segue como fonte de cores para as telas do produto. A interface autenticada usa a camada `--web-*`, inspirada na referência BetTrack, em todas as rotas web: dashboard, apostas, calendário, análises, relatórios, financeiro, perfil, configurações e áreas do Polymarket. Essa camada preserva a marca, os dados e as ações do Stakeframe, e muda a apresentação para preto/carvão, painéis retos, verde-lima, avatar azul e títulos condensados. O Mini App e a entrada pública continuam usando os tokens-base. Na aplicação web, a sidebar expandida mede 202 px; modos e comportamento mobile continuam responsivos.
