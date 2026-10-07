@@ -46,7 +46,7 @@ capaz de atualizar o registro financeiro.
       diff-check, OpenSpec strict
 - [x] 15. Diff-review dos 6 arquivos alterados (883 inserções / 26 remoções)
 - [x] 16. Regressão de CI encontrada e corrigida: no head `48d1f93` os jobs
-      `application-check` e `application-arm64-check` falharam só em
+      os jobs de aplicação AMD64 e ARM64 falharam só em
       `product.test.ts:1399` ("preserva quando salvo sem mudança"), porque o
       PATCH tinha deixado de levar os campos inalterados. Corrigido para
       enviá-los iguais e continuar omitindo os alterados; origem/crédito/data

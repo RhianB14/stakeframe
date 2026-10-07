@@ -104,7 +104,7 @@ git), conforme prática já registrada no repositório.
 A primeira rodada (head `a03e23a…`) falhou na CI: `format-check` (Prettier do
 repo, `printWidth 100`, acusou o arquivo de testes — a validação local havia
 usado o Prettier de outro diretório, sem o `.prettierrc.json` do repo) e
-`application-check`/`application-arm64-check` (o teste POSIX-only
+jobs de aplicação AMD64/ARM64 (o teste POSIX-only
 `refuses an insecure runtime root mode` quebrou porque o spread de um `Stats`
 real descarta os métodos de protótipo `isDirectory`/`isSymbolicLink` — o teste
 é pulado no Windows, o que mascarou a regressão localmente). O commit

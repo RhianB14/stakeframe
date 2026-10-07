@@ -76,9 +76,9 @@ O container é removido após confirmar nome e label exclusivos, inclusive em er
 O comando não acessa a configuração privada nem os containers da aplicação.
 
 A integração com PostgreSQL/pg-boss/Google simulado e os testes de navegador
-continuam no job da aplicação, usando as imagens efetivamente construídas.
-A CI executa a suíte em AMD64 (`application-check`) e ARM64 nativo
-(`application-arm64-check`, runner `ubuntu-24.04-arm`). Consulte os
+rodam em jobs separados, usando as imagens efetivamente construídas. A CI
+valida imagens em AMD64 no `rehearsal-check` e em ARM64 nativo no
+`arm64-images-check` (runner `ubuntu-24.04-arm`). Consulte os
 [runners oficiais do GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
 ## Limites

@@ -14,8 +14,21 @@ const run = {
   conclusion: 'success',
 };
 const jobs = requiredChecks.map((name) => ({ name, status: 'completed', conclusion: 'success' }));
+const expectedChecks = [
+  'format-check',
+  'check-static',
+  'integration-check',
+  'browser-check',
+  'browser-arm64-check',
+  'rehearsal-check',
+  'arm64-images-check',
+  'network-security-simulation',
+  'recovery-check',
+  'promotion-check',
+];
 
-test('binds a candidate to current main and all six successful jobs in its push CI', () => {
+test('binds a candidate to current main and all ten successful jobs in its push CI', () => {
+  assert.deepEqual(requiredChecks, expectedChecks);
   assert.equal(validateSource(sha, branch, [run], jobs).ciRunId, 123);
   assert.throws(() => validateSource('b'.repeat(40), branch, [run], jobs));
   for (const change of [
@@ -38,7 +51,7 @@ test('refuses missing, skipped, duplicate and unsuccessful architecture evidence
         sha,
         branch,
         [run],
-        jobs.map((job) => (job.name === 'application-arm64-check' ? { ...job, conclusion } : job)),
+        jobs.map((job) => (job.name === 'browser-arm64-check' ? { ...job, conclusion } : job)),
       ),
     );
 });
