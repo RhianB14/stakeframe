@@ -84,7 +84,7 @@ async function openGlobal(page: Page) {
     }),
   );
   await page.goto('/#pm-global');
-  await expect(page.getByRole('heading', { name: 'Ranking global de tipsters' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tipsters' })).toBeVisible();
 }
 
 const cards = (page: Page) => page.getByTestId('global-card');
@@ -95,9 +95,8 @@ test('a tela Global é uma GRADE DE CARDS de tipster, com as métricas do card',
   await openGlobal(page);
 
   // É uma GRADE: `<ul>` de cards, e não tabela. A asserção de que não existe
-  // `<table>` nesta tela é o que separa esta entrega da tela de ranking, que é
-  // uma tabela — e é a complaint "eu queria em cards, não gráficos
-  // pequenos" que precisa de uma prova estrutural.
+  // `<table>` nesta tela prova que a listagem atual continua em cards, não em
+  // tabela — a tela própria de ranking foi aposentada.
   await expect(page.getByTestId('global-grid')).toBeVisible();
   await expect(page.locator('table')).toHaveCount(0);
   // A grade tem colunas proporcionais à largura. No DESKTOP ela tem mais de
@@ -122,28 +121,18 @@ test('a tela Global é uma GRADE DE CARDS de tipster, com as métricas do card',
   await expect(cards(page)).toHaveCount(6);
   await expect(page.getByTestId('global-count')).toHaveText('6 de 6 tipsters');
 
-  // O card carrega TODAS as métricas que o dono nomeou, e cada uma delas
-  // mostra a amostra ao lado (R1). A contagem de métricas com `N` é a
-  // asserção: ela quebra se alguém acrescentar uma métrica e esquecer o N.
+  // O redesign mantém quatro métricas resumidas visíveis no card; cada uma
+  // mostra a amostra ao lado (R1). As métricas auxiliares não são mais linhas
+  // visuais do card.
   const primeiro = cards(page).first();
-  for (const metrica of [
-    'P&L 30d',
-    'ROI',
-    'Taxa de acerto',
-    'Odd média',
-    'Seguidores',
-    'Wins',
-    'Losses',
-    'Open bets',
-    'Unidades/mês',
-  ]) {
+  for (const metrica of ['P&L 30d', 'ROI', 'Taxa de acerto', 'Unidades/mês']) {
     await expect(primeiro.getByText(metrica, { exact: true })).toBeVisible();
   }
   // R1 medida na TELA: para cada métrica, existe um `N=` visível no mesmo
   // card. Não se conta pelo atributo — o texto é o que o usuário lê.
   const comN = primeiro.locator('[data-global-n]');
   const totalN = await comN.count();
-  expect(totalN, 'toda métrica precisa do seu N').toBeGreaterThanOrEqual(9);
+  expect(totalN, 'cada métrica resumida precisa do seu N').toBe(4);
   for (let index = 0; index < totalN; index += 1) {
     await expect(comN.nth(index)).toContainText('N=');
   }

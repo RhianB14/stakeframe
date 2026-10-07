@@ -301,7 +301,7 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
 
   // Finish explicitly and land on the regular overview.
   await page.getByRole('button', { name: 'Concluir primeiros passos' }).click();
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await noHorizontalOverflow(page);
   expect(harness.finishChoices).toEqual(['registered']);
 });
@@ -317,7 +317,7 @@ test('concluding without a bet requires the explicit deferral choice', async ({ 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
   expect(harness.onboarding.steps.firstBet).toEqual({
     completed: true,
@@ -430,7 +430,7 @@ test('a finished onboarding opens the regular overview without the first-steps f
   workspace.initialized = true;
   await enableOnboarding(page, { onboarding: finishedOnboarding(), workspace });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Primeiros passos' })).toHaveCount(0);
 });
 
@@ -570,7 +570,7 @@ test('the onboarding is fully operable by keyboard with visible focus', async ({
   const defer = page.getByRole('button', { name: 'Continuar sem registrar aposta' });
   await defer.focus();
   await defer.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
 });
 
@@ -632,10 +632,10 @@ test('a finish failure keeps the step open, is announced and offers an explicit 
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível concluir a solicitação.');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toHaveCount(0);
   failing = false;
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
 });
 
