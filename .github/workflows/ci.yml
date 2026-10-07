@@ -50,7 +50,12 @@ jobs:
           - runner: ubuntu-24.04-arm
             check: application-arm64-check
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    # 20 min foi dimensionado para uma perna so e o job x64 chegou a 20,3 min
+    # medidos (run 37661695334: killed em 20,0 durante o e2e, com 8,3 min gastos
+    # so na suite de integracao de banco). O teto de 30 mantem a funcao de
+    # aborto para travamento real sem cortar execucao legitima; a reducao do
+    # tempo real e trabalho separado (paralelizar a suite de integracao).
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
