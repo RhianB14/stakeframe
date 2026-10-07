@@ -738,7 +738,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   ).toBe(true);
   await page.screenshot({ path: info.outputPath('product-overview.png'), fullPage: true });
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  await expect(page.getByRole('group', { name: /Filtrar apostas por situação/i })).toBeVisible();
+  await expect(page.getByRole('group', { name: /Filtrar histórico por resultado/i })).toBeVisible();
   await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
   await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
@@ -838,6 +838,35 @@ test('first use requires explicit balance confirmation and preserves decimal str
             .map((elemento) => (elemento.textContent ?? '').trim())
             .filter((texto) => texto.length > 0)
             .slice(0, 20),
+          cta: (() => {
+            const botao = Array.from(document.querySelectorAll('button')).find((node) =>
+              (node.textContent ?? '').includes('Nova aposta'),
+            );
+            if (!botao) return null;
+            const estilo = getComputedStyle(botao);
+            let escondidoPor = null;
+            let node: HTMLElement | null = botao;
+            for (; node; node = node.parentElement) {
+              const atual = getComputedStyle(node);
+              if (
+                atual.display === 'none' ||
+                atual.visibility === 'hidden' ||
+                node.getAttribute('aria-hidden') === 'true' ||
+                node.inert
+              ) {
+                escondidoPor = (node.className || node.tagName).toString().slice(0, 60);
+                break;
+              }
+            }
+            return {
+              outerHTML: botao.outerHTML.slice(0, 220),
+              display: estilo.display,
+              visibility: estilo.visibility,
+              disabled: botao.disabled,
+              ariaLabel: botao.getAttribute('aria-label'),
+              escondidoPor,
+            };
+          })(),
           texto: document.body.innerText.slice(0, 220),
         };
       }),
@@ -942,7 +971,7 @@ test('an expired API session removes cached private records', async ({ page }) =
   ).toBeVisible();
   await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
   await page.route('**/api/v1/journal?*', (route) => route.fulfill({ status: 401, json: {} }));
-  await page.getByRole('link', { name: 'Financeiro', exact: true }).click();
+  await page.getByRole('link', { name: 'Banca', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Entrar com Google' })).toBeVisible();
   await expect(page.getByText('R$ 1.000,00', { exact: true })).toHaveCount(0);
 });

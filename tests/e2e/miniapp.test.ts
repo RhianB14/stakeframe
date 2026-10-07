@@ -200,11 +200,10 @@ test('percorre apostas, pendentes e ajustes pelos quatro fluxos', async ({ page 
   // Fluxo 2 — apostas: a tabela real da web, com o bilhete do fixture.
   await nav.getByRole('link', { name: 'Apostas' }).click();
   await expect(page.getByRole('heading', { name: 'Apostas', level: 1, exact: true })).toBeVisible();
-  // A lista carregada é identificada pelo heading real da tabela; "Seus
-  // bilhetes" só aparece como detalhe do estado vazio compacto.
-  await expect(
-    page.getByRole('heading', { name: 'Lista de apostas', level: 3, exact: true }),
-  ).toBeVisible();
+  // Marcador ESTÁTICO da tela de apostas: a seção de histórico existe sempre,
+  // tenha ou não bilhete carregado — mesmo nível de prova que o antigo "Seus
+  // bilhetes".
+  await expect(page.getByRole('heading', { name: /HISTÓRICO/i, level: 3 })).toBeVisible();
 
   // Fluxo 3 — pendentes: a página real de importações.
   await nav.getByRole('link', { name: 'Pendentes' }).click();
@@ -230,11 +229,10 @@ test('envia o initData em toda chamada, inclusive ao trocar de fluxo', async ({ 
   await expect(page.getByRole('heading', { name: 'Painel' })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Navegação do aplicativo' });
   await nav.getByRole('link', { name: 'Apostas' }).click();
-  // A lista carregada é identificada pelo heading real da tabela; "Seus
-  // bilhetes" só aparece como detalhe do estado vazio compacto.
-  await expect(
-    page.getByRole('heading', { name: 'Lista de apostas', level: 3, exact: true }),
-  ).toBeVisible();
+  // Marcador ESTÁTICO da tela de apostas: a seção de histórico existe sempre,
+  // tenha ou não bilhete carregado — mesmo nível de prova que o antigo "Seus
+  // bilhetes".
+  await expect(page.getByRole('heading', { name: /HISTÓRICO/i, level: 3 })).toBeVisible();
   await nav.getByRole('link', { name: 'Pendentes' }).click();
   await expect(page.getByText('Comprovantes e revisão')).toBeVisible();
   // Toda requisição autenticada do Mini App carrega a credencial validada no
