@@ -57,6 +57,25 @@
   --web-gray: #777777;
   --web-nav: #aaaaaa;
 
+  /* Selos e avatares da skin BetTrack (app.bet-track.com). Estavam como hex cru
+     em product.css e passam a ser tokens registrados para a guarda de tokens. */
+  --web-ink: #10110d;
+  --web-gray-soft: #858783;
+  --web-avatar-blue: #1859ed;
+  --web-avatar-teal: #31c8a0;
+  --web-avatar-amber: #f59b19;
+  --web-avatar-red: #ed4552;
+  --web-avatar-violet: #8655e8;
+  --web-avatar-pink: #e54a9b;
+  --web-avatar-cyan: #04b5d1;
+  --web-avatar-green: #17b8a6;
+  --web-avatar-lime: #8bc927;
+
+  /* Tomas que faltavam e deixavam declaracao invalida em computed-value time
+     (a barra de unidades ficava transparente). Apontam para tokens registrados. */
+  --web-warning: var(--warn);
+  --web-orange: var(--web-negative);
+
   /* ---------------------------------------------------------------------
      Superfícies — 4 degraus de profundidade.
      Superfícies aninhadas dão profundidade à sidebar, cartões e campos.
@@ -72,7 +91,7 @@
      --------------------------------------------------------------------- */
   --text-primary: var(--fg);
   --text-secondary: oklch(0.78 0.008 145);
-  --text-tertiary: oklch(0.7 0.01 145);
+  --text-tertiary: oklch(0.76 0.01 145);
 
   /* ---------------------------------------------------------------------
      Acento — 2 papéis, porque 1 não basta.
@@ -91,7 +110,7 @@
      --------------------------------------------------------------------- */
   --pos: oklch(0.84 0.16 130);
   --pos-soft: oklch(0.22 0.05 130);
-  --neg: oklch(0.78 0.15 26); /* 5,68:1 em --surface-3 */
+  --neg: oklch(0.82 0.14 26); /* 5,68:1 em --surface-3 */
   --neg-soft: oklch(0.22 0.05 26); /* --neg sobre ele = 5,10:1 */
   --warn: oklch(0.84 0.13 82); /* 6,70:1 em --surface-3 */
   --warn-soft: oklch(0.23 0.04 82); /* --warn sobre ele = 5,20:1 */

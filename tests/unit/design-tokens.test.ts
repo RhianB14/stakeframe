@@ -75,6 +75,22 @@ function tsxHexes(source: string, name: string): string[] {
 const PALETTE = new Set(['#0d0f0d', '#141714', '#f4f5ef', '#a0a69b', '#2a3029', '#c5f36b']);
 
 /**
+ * Paleta da skin BetTrack (app.bet-track.com) — registrada deliberadamente.
+ *
+ * O produto tem DUAS paletas nomeadas: o contrato (carvão + lima acima) e a skin
+ * que pinta as páginas web (--web-* em tokens.css). A guarda não impede duas
+ * paletas; impede paleta NÃO registrada. Cor nova aqui exige registro aqui.
+ */
+const SKIN_PALETTE = new Set([
+  '#0b0b0b', '#0c0c0c', '#101010', '#111111', '#121212', '#1a1a1a', '#1b1b1b',
+  '#202020', '#20231a', '#292929', '#2b2b2b', '#302315', '#3d3d3d', '#444444',
+  '#555555', '#565656', '#71808a', '#777777', '#899198', '#aaaaaa', '#b8b8b4',
+  '#c5f622', '#f1f1ed', '#ff9d2e', '#ffffff', '#154de0', '#2859ff',
+  '#10110d', '#858783', '#1859ed', '#31c8a0', '#f59b19', '#ed4552', '#8655e8',
+  '#e54a9b', '#04b5d1', '#17b8a6', '#8bc927',
+]);
+
+/**
  * Casa 3, 4, 6 e 8 dígitos — os quatro formatos que o CSS aceita. A versão
  * anterior (3 e 6) deixou passar `#060910b8` no overlay do diálogo e `#0007`
  * na sombra: com alfa, um hex sai da paleta registrada sem que nenhuma
@@ -182,8 +198,8 @@ describe('camada de tokens (STK-F2-18)', () => {
   it('a paleta registrada é a do sistema de design, sem deriva', () => {
     for (const value of hexLiterals(rootBlock(tokensCss))) {
       expect(
-        PALETTE.has(value),
-        `${value} em tokens.css :root não pertence à paleta registrada`,
+        (PALETTE.has(value) || SKIN_PALETTE.has(value)),
+        `${value} em tokens.css :root não pertence a nenhuma paleta registrada (contrato ou skin)`,
       ).toBe(true);
     }
   });
@@ -257,22 +273,40 @@ describe('camada de tokens (STK-F2-18)', () => {
       return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
     };
 
+    /* STK-F2-18 (hardening): os valores abaixo eram RECOPIADOS aqui e podiam
+       divergir de tokens.css sem ninguém notar — foi assim que --text-tertiary e
+       --neg ficaram reprovando contra a nova --surface-3. Agora o teste LÊ a
+       fonte única: o número no CSS é o que é medido, e a leitura falha alto se
+       o token não existir (nada de fallback silencioso). */
+    const tokenColor = (token: string, depth = 0): LinearRgb => {
+      const oklch = new RegExp(`--${token}:\\s*oklch\\(([^)]+)\\)`).exec(tokensCss);
+      if (oklch?.[1] !== undefined) {
+        const [l, c, h] = oklch[1].trim().split(/\\s+/).map(Number);
+        return oklabToRgb(l ?? 0, c ?? 0, h ?? 0);
+      }
+      const hex = new RegExp(`--${token}:\\s*(#[0-9a-fA-F]{3,8})`).exec(tokensCss);
+      if (hex?.[1] !== undefined) return hexToRgb(hex[1]);
+      const alias = new RegExp(`--${token}:\\s*var\\(--([a-z0-9-]+)\\)`).exec(tokensCss);
+      if (alias?.[1] !== undefined && depth < 3) return tokenColor(alias[1], depth + 1);
+      throw new Error(`token --${token} não encontrado em tokens.css`);
+    };
+
     const surfaces: Record<string, LinearRgb> = {
-      '--bg': hexToRgb('#0d0f0d'),
-      '--surface-1': hexToRgb('#141714'),
-      '--surface-2': oklabToRgb(0.19, 0.008, 145),
-      '--surface-3': oklabToRgb(0.23, 0.012, 145),
+      '--bg': tokenColor('bg'),
+      '--surface-1': tokenColor('surface-1'),
+      '--surface-2': tokenColor('surface-2'),
+      '--surface-3': tokenColor('surface-3'),
     };
 
     const tokens: Array<[string, LinearRgb, number]> = [
-      ['--text-primary', hexToRgb('#f4f5ef'), 4.5],
-      ['--text-secondary', oklabToRgb(0.78, 0.008, 145), 4.5],
-      ['--text-tertiary', oklabToRgb(0.7, 0.01, 145), 4.5],
-      ['--accent-ink', oklabToRgb(0.88, 0.17, 130), 4.5],
-      ['--pos', oklabToRgb(0.84, 0.16, 130), 4.5],
-      ['--neg', oklabToRgb(0.78, 0.15, 26), 4.5],
-      ['--warn', oklabToRgb(0.84, 0.13, 82), 4.5],
-      ['--border-strong', oklabToRgb(0.58, 0, 0), 3],
+      ['--text-primary', tokenColor('text-primary'), 4.5],
+      ['--text-secondary', tokenColor('text-secondary'), 4.5],
+      ['--text-tertiary', tokenColor('text-tertiary'), 4.5],
+      ['--accent-ink', tokenColor('accent-ink'), 4.5],
+      ['--pos', tokenColor('pos'), 4.5],
+      ['--neg', tokenColor('neg'), 4.5],
+      ['--warn', tokenColor('warn'), 4.5],
+      ['--border-strong', tokenColor('border-strong'), 3],
     ];
 
     const failures: string[] = [];

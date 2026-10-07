@@ -2912,7 +2912,7 @@
   margin: -7px 0 38px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.15em;
 }
 .product-web-theme .profile-reference-layout {
@@ -2935,7 +2935,7 @@
   margin: 0 0 9px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
 }
 .product-web-theme .profile-avatar-editor {
@@ -2952,7 +2952,7 @@
   margin: 0;
   border: 0;
   background: var(--web-blue);
-  color: #fff;
+  color: var(--web-white);
   font-family: var(--font-display);
   font-size: 30px;
 }
@@ -2962,31 +2962,31 @@
   object-fit: cover;
 }
 .product-web-theme .profile-avatar-blue {
-  background: #1859ed !important;
+  background: var(--web-avatar-blue) !important;
 }
 .product-web-theme .profile-avatar-mint {
-  background: #31c8a0 !important;
+  background: var(--web-avatar-teal) !important;
 }
 .product-web-theme .profile-avatar-orange {
-  background: #f59b19 !important;
+  background: var(--web-avatar-amber) !important;
 }
 .product-web-theme .profile-avatar-red {
-  background: #ed4552 !important;
+  background: var(--web-avatar-red) !important;
 }
 .product-web-theme .profile-avatar-purple {
-  background: #8655e8 !important;
+  background: var(--web-avatar-violet) !important;
 }
 .product-web-theme .profile-avatar-pink {
-  background: #e54a9b !important;
+  background: var(--web-avatar-pink) !important;
 }
 .product-web-theme .profile-avatar-cyan {
-  background: #04b5d1 !important;
+  background: var(--web-avatar-cyan) !important;
 }
 .product-web-theme .profile-avatar-teal {
-  background: #17b8a6 !important;
+  background: var(--web-avatar-green) !important;
 }
 .product-web-theme .profile-avatar-lime {
-  background: #8bc927 !important;
+  background: var(--web-avatar-lime) !important;
 }
 .product-web-theme .profile-avatar-actions {
   display: grid;
@@ -2995,7 +2995,7 @@
 }
 .product-web-theme .profile-avatar-actions button,
 .product-web-theme .profile-upload-image {
-  min-height: 36px;
+  min-height: var(--tap);
   display: grid;
   place-items: center;
   padding: 0 12px;
@@ -3003,7 +3003,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text-secondary);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .product-web-theme .profile-avatar-actions button.is-active {
@@ -3031,31 +3031,31 @@
   outline-offset: 2px;
 }
 .product-web-theme .profile-avatar-swatch-blue {
-  background: #1859ed;
+  background: var(--web-avatar-blue);
 }
 .product-web-theme .profile-avatar-swatch-mint {
-  background: #31c8a0;
+  background: var(--web-avatar-teal);
 }
 .product-web-theme .profile-avatar-swatch-orange {
-  background: #f59b19;
+  background: var(--web-avatar-amber);
 }
 .product-web-theme .profile-avatar-swatch-red {
-  background: #ed4552;
+  background: var(--web-avatar-red);
 }
 .product-web-theme .profile-avatar-swatch-purple {
-  background: #8655e8;
+  background: var(--web-avatar-violet);
 }
 .product-web-theme .profile-avatar-swatch-pink {
-  background: #e54a9b;
+  background: var(--web-avatar-pink);
 }
 .product-web-theme .profile-avatar-swatch-cyan {
-  background: #04b5d1;
+  background: var(--web-avatar-cyan);
 }
 .product-web-theme .profile-avatar-swatch-teal {
-  background: #17b8a6;
+  background: var(--web-avatar-green);
 }
 .product-web-theme .profile-avatar-swatch-lime {
-  background: #8bc927;
+  background: var(--web-avatar-lime);
 }
 .product-web-theme .profile-reference-form {
   max-width: 450px;
@@ -3079,7 +3079,7 @@
 .product-web-theme .profile-reference-form > p {
   margin: 8px 0 22px;
   color: var(--web-text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 .product-web-theme .profile-locked-field {
@@ -3101,13 +3101,13 @@
   color: var(--web-negative) !important;
 }
 .product-web-theme .profile-save-button {
-  min-height: 38px;
+  min-height: var(--tap);
   padding: 0 16px;
   border: 0;
   background: var(--web-accent);
-  color: #10110d;
+  color: var(--web-ink);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .product-web-theme .profile-save-button:disabled {
@@ -3125,7 +3125,7 @@
 .product-web-theme .profile-reference-access-row > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.13em;
 }
 .product-web-theme .profile-reference-access-row > strong {
@@ -3139,9 +3139,9 @@
 .product-web-theme .profile-reference-access-row > b {
   padding: 5px 7px;
   background: var(--web-accent);
-  color: #10110d;
+  color: var(--web-ink);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.08em;
 }
 .product-web-theme .profile-reference-access-row > a {
@@ -3152,7 +3152,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text);
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-decoration: none;
 }
 .product-web-theme .profile-reference-access-row > a:hover {
@@ -3162,7 +3162,7 @@
   max-width: 68ch;
   margin: 20px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 .product-web-theme .bankroll-summary {
@@ -3184,7 +3184,7 @@
 .product-web-theme .bankroll-rule-values > div > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
 }
 .product-web-theme .bankroll-summary > div > strong {
@@ -3195,7 +3195,7 @@
 }
 .product-web-theme .bankroll-summary > div > small {
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .product-web-theme .bankroll-rules {
   margin-bottom: 14px;
@@ -3241,21 +3241,21 @@
 .product-web-theme .profile-danger-content p {
   margin: 5px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .product-web-theme .profile-danger-content button {
-  min-height: 36px;
+  min-height: var(--tap);
   padding: 0 14px;
   border: 1px solid var(--web-negative);
   background: transparent;
   color: var(--web-negative);
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .product-web-theme .profile-danger-content button:hover {
   background: var(--web-negative);
-  color: #fff;
+  color: var(--web-white);
 }
 .product-web-theme .profile-danger-content button:disabled {
   opacity: 0.6;
@@ -3299,7 +3299,7 @@
     grid-column: 1 / -1;
   }
   .product-web-theme .profile-reference-access-row > strong {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .product-web-theme .profile-danger-content {
     align-items: flex-start;
@@ -3349,7 +3349,7 @@
   margin: 8px 0 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.16em;
 }
 .product-web-theme .bankroll-reference-actions {
@@ -3373,7 +3373,7 @@
 .product-web-theme .bankroll-kicker {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.16em;
   line-height: 1.5;
 }
@@ -3403,7 +3403,7 @@
 .product-web-theme .bankroll-composition-row b {
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 .product-web-theme .bankroll-move-card {
@@ -3427,7 +3427,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text-tertiary);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -3448,7 +3448,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .product-web-theme .bankroll-move-controls input {
   width: 100%;
@@ -3530,11 +3530,11 @@
 .product-web-theme .bankroll-rule-card-bottom > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
 }
 .product-web-theme .bankroll-rule-card-bottom button {
-  min-height: 27px;
+  min-height: var(--tap);
   padding: 0 12px;
 }
 .product-web-theme .bankroll-reference-page > section.panel:nth-of-type(2) {
@@ -3572,7 +3572,7 @@
 .product-web-theme .bankroll-transactions-heading span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -3586,7 +3586,7 @@
 .product-web-theme .bankroll-transactions-table th {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 400;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3604,20 +3604,20 @@
   display: block;
   margin-top: 3px;
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .product-web-theme .bankroll-reverse-action {
   min-height: 24px;
   margin-top: 4px;
   padding: 0 6px;
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .product-web-theme .bankroll-history-note {
   order: 8;
   margin: 12px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: var(--text-xs);
   line-height: 1.5;
 }
 @media (max-width: 760px) {
@@ -3645,7 +3645,7 @@
   }
   .product-web-theme .bankroll-reference-heading p {
     max-width: 34ch;
-    font-size: 7px;
+    font-size: var(--text-xs);
     line-height: 1.6;
   }
   .product-web-theme .bankroll-reference-rules {
@@ -3673,7 +3673,7 @@
   display: block;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
 }
 .unit-settings-field .form-field {
@@ -3793,7 +3793,7 @@
   padding: 0 19px;
   border-radius: 0;
   background: var(--web-accent);
-  color: #10110d;
+  color: var(--web-ink);
   font-family: var(--font-display);
   font-size: 14px;
   font-weight: 700;
@@ -3835,7 +3835,7 @@
 .product-web-theme .bets-reference-section-heading p > span {
   margin-right: 8px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
 }
 .product-web-theme .bets-reference-section-heading p strong {
@@ -3856,7 +3856,7 @@
   height: 112px;
   display: block;
   margin: -5px 0 18px;
-  color: #858783;
+  color: var(--web-gray-soft);
   transform: rotate(0);
   opacity: 0.8;
 }
@@ -3874,7 +3874,7 @@
   line-height: 1.55;
 }
 .product-web-theme .bets-reference-empty .ui-button {
-  min-height: 40px;
+  min-height: var(--tap);
   padding: 0 20px;
   border: 0;
   border-radius: 0;
@@ -3898,7 +3898,7 @@
   margin: 0;
 }
 .product-web-theme .bets-reference-toolbar .bet-state-tabs button {
-  min-height: 33px;
+  min-height: var(--tap);
   padding: 0 16px;
   background: var(--web-panel-hover);
   color: var(--web-text-secondary);
@@ -3915,7 +3915,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .product-web-theme .bets-date-sort span {
@@ -3939,7 +3939,7 @@
   background: transparent;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 400;
   letter-spacing: 0.12em;
   text-align: left;
@@ -3966,7 +3966,7 @@
 .product-web-theme .bets-reference-table .bets-sport-cell {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.08em;
 }
 .product-web-theme .bets-reference-table .table-title {
@@ -3990,7 +3990,7 @@
   overflow: hidden;
   margin-top: 3px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
 }
 .product-web-theme .bets-result-tag {
@@ -4002,15 +4002,15 @@
   background: var(--web-panel-hover);
   color: var(--web-text-secondary);
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .product-web-theme .bets-result-tag.is-won {
   background: var(--web-accent);
-  color: #10110d;
+  color: var(--web-ink);
 }
 .product-web-theme .bets-result-tag.is-lost {
   background: var(--web-negative);
-  color: #fff;
+  color: var(--web-white);
 }
 .product-web-theme .bets-result-tag.is-cashout {
   color: var(--web-orange);
@@ -4056,7 +4056,7 @@
     font-size: 12px;
   }
   .product-web-theme .bets-reference-section-heading p {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .product-web-theme .bets-reference-empty {
     min-height: 320px;
@@ -4187,7 +4187,7 @@
 }
 .product-sidebar nav a {
   position: relative;
-  min-height: 42px;
+  min-height: var(--tap);
   border-radius: 2px;
   font-size: var(--text-sm);
   letter-spacing: 0.015em;
@@ -4201,6 +4201,8 @@
   inset: 7px auto 7px 0;
   width: 2px;
   background: var(--accent);
+  /* guarda de tokens: acento como fundo sempre com texto --bg */
+  color: var(--bg);
   content: '';
 }
 .sidebar-control {
@@ -5333,7 +5335,7 @@
 .bet-wizard-progress button.is-current span,
 .bet-wizard-progress button.is-complete span {
   border-color: var(--accent-ink);
-  background: var(--accent-ink);
+  background: var(--border-strong);
   color: var(--bg);
 }
 .bet-wizard-type > p {
@@ -5609,7 +5611,7 @@
 .tipster-position-label {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -5635,7 +5637,7 @@
   margin: 0 0 12px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
 }
 .tipster-position-tabs {
@@ -5673,7 +5675,7 @@
 .tipster-position-tabs button span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .tipster-position-panel {
   min-height: 180px;
@@ -5727,7 +5729,7 @@
   padding: 4px 6px;
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--text-xs);
   letter-spacing: 0.08em;
 }
 .tipster-position-state {
@@ -5745,7 +5747,7 @@
   color: var(--web-negative);
 }
 .tipster-position-error button {
-  min-height: 34px;
+  min-height: var(--tap);
   padding: 0 12px;
   border: 1px solid var(--web-border-strong);
   background: transparent;
@@ -5846,6 +5848,8 @@
   height: 24px;
   border-radius: 5px;
   background: var(--accent);
+  /* guarda de tokens: acento como fundo sempre com texto --bg */
+  color: var(--bg);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 14%, transparent);
 }
 .overview-today-marker {
@@ -5854,7 +5858,7 @@
   left: -1px;
   width: 2px;
   height: 69px;
-  background: var(--text-tertiary);
+  background: var(--border-strong);
 }
 .overview-timeline-day.is-today::after {
   z-index: 2;
@@ -6125,7 +6129,7 @@
     padding: 0 8px;
     color: var(--web-text-tertiary);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: var(--text-xs);
     font-weight: 500;
     letter-spacing: 0.13em;
     line-height: 1.2;
@@ -6191,7 +6195,7 @@
     background: var(--web-panel-hover);
     color: var(--web-text-tertiary);
     font-family: var(--font-mono);
-    font-size: 8px;
+    font-size: var(--text-xs);
     letter-spacing: 0.03em;
     line-height: 1;
     white-space: nowrap;
@@ -6248,7 +6252,7 @@
   }
   .product-web-theme .page-heading .dashboard-date {
     margin: 0 0 5px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     letter-spacing: 0.12em;
   }
   .product-web-theme .product-main h1 {
@@ -6280,7 +6284,7 @@
     right: 84px;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-xs);
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
@@ -6323,7 +6327,7 @@
   .product-web-theme .overview-timeline-labels {
     padding: 0 21% 0 24%;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: var(--text-xs);
     letter-spacing: 0.09em;
   }
   .product-web-theme .overview-dashboard-metrics {
@@ -6339,7 +6343,7 @@
   }
   .product-web-theme .overview-dashboard-metrics .metric-card > span {
     color: var(--text-tertiary);
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
   .product-web-theme .overview-dashboard-metrics .metric-card > strong {
     margin: 4px 0 6px;
@@ -6347,7 +6351,7 @@
   }
   .product-web-theme .overview-dashboard-metrics .metric-card > small {
     color: var(--web-text-muted);
-    font-size: 10px;
+    font-size: var(--text-xs);
     letter-spacing: 0.09em;
   }
   .product-web-theme .overview-dashboard-metrics .metric-card.featured {
@@ -6542,7 +6546,7 @@
   .product-web-theme .bets-exposure span {
     color: var(--web-text-tertiary);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-xs);
     letter-spacing: 0.1em;
   }
   .product-web-theme .bets-exposure strong {
@@ -6611,7 +6615,7 @@
     margin-left: auto;
     color: var(--web-accent);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .product-web-theme .bet-advanced-filters .filter-grid {
     padding: 5px 0 14px;
@@ -6668,7 +6672,7 @@
     background: var(--web-panel-hover);
     color: var(--web-text-secondary);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     text-align: center;
   }
   .product-web-theme .bet-detail-table th {
