@@ -671,7 +671,9 @@ export function BetsPage({
                           ? '••••'
                           : amountMode === 'money'
                             ? financial.profitText
-                            : (unitsValue(bet.profit, bet.unitAmount) ?? '—')}
+                            : financial.profitText === '—'
+                              ? '—'
+                              : (unitsValue(bet.profit, bet.unitAmount) ?? '—')
                       </td>
                     </tr>
                   );
@@ -779,7 +781,9 @@ export function BetsPage({
                             ? '••••'
                             : amountMode === 'money'
                               ? financial.profitText
-                              : (unitsValue(bet.profit, bet.unitAmount) ?? '—')}
+                              : financial.profitText === '—'
+                                ? '—'
+                                : (unitsValue(bet.profit, bet.unitAmount) ?? '—')
                         </td>
                       </tr>
                     );

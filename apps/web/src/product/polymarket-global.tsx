@@ -437,9 +437,23 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
                     <span className="tipster-position-label">
                       {status === 'OPEN' ? 'VALOR ATUAL' : 'RESULTADO'}
                     </span>
-                    <strong className={pnl == null ? '' : pnl >= 0 ? 'is-positive' : 'is-negative'}>
+                    {/* D8: valor de posição ABERTA é não realizado — nunca verde.
+                        R2: `current_value` desconhecido é ausência ('—'), não US$ 0,00. */}
+                    <strong
+                      className={
+                        status === 'OPEN'
+                          ? ''
+                          : pnl == null
+                            ? ''
+                            : pnl >= 0
+                              ? 'is-positive'
+                              : 'is-negative'
+                      }
+                    >
                       {status === 'OPEN'
-                        ? usd.format(position.current_value ?? 0)
+                        ? position.current_value == null
+                          ? '—'
+                          : usd.format(position.current_value)
                         : pnl == null
                           ? '—'
                           : usd.format(pnl)}

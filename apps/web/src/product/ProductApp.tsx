@@ -565,15 +565,9 @@ function ProductShell({
           <a href="#overview" className="product-brand">
             stakeframe<span>.</span>
           </a>
-          {variant === 'web' ? (
-            <Button
-              className="product-new-bet"
-              disabled={!workspace.initialized || !!actions.pending}
-              onClick={() => open({ kind: 'bet' })}
-            >
-              + Nova aposta
-            </Button>
-          ) : null}
+          {/* Hardening: o CTA "+ Nova aposta" da sidebar saiu — o cabeçalho já
+              tem o botão, e dois controles com o mesmo nome acessível quebram o
+              alvo (strict mode do Playwright) e confundem quem usa leitor de tela. */}
           {/* STK-F3-01 — a sidebar tem UM `nav` só, com as categorias
               dentro dele. Não são quatro `nav`: os quatro seriam quatro listas
               de mesmo peso para o leitor de tela, e a barra inferior do mobile
@@ -1090,8 +1084,40 @@ function Overview({
   open: OpenModal;
   owner: string;
 }) {
+  const unit = workspace.units.find(
+    (value) => value.month === saoPauloDate(new Date()).slice(0, 7),
+  );
   return (
     <>
+      {/* STK-F2-18 (Fase 4): as 4 métricas de POSIÇÃO. Saldo, disponível e
+          exposição são três leituras do mesmo instante e ficam no mesmo plano;
+          `exposure` é o único que é promessa — dinheiro que só volta se a aposta
+          ganhar. Restauradas no hardening do redesign: a Visão geral tinha
+          ficado sem estes rótulos, que são contrato das specs e2e e do Mini App. */}
+      <div className="metric-grid">
+        <Metric
+          label="Saldo em conta"
+          value={formatBRL(workspace.bankroll)}
+          detail="Reserva e saldo somados nas casas"
+          featured
+        />
+        <Metric
+          label="Disponível para apostar"
+          value={formatBRL(workspace.available)}
+          detail="Saldo menos o que está em jogo"
+        />
+        <Metric
+          label="Exposição em aberto"
+          value={formatBRL(workspace.exposure)}
+          detail="Principal real ainda no jogo"
+          commitment
+        />
+        <Metric
+          label="Unidade do mês"
+          value={unit ? formatBRL(unit.amount) : 'A conferir'}
+          detail={unit ? 'Valor congelado durante o mês' : 'Cadastre os saldos para começar'}
+        />
+      </div>
       <OverviewReport version={workspace.version} workspace={workspace} />
       <div className="panel overview-accounts">
         <div className="section-heading">
