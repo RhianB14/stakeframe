@@ -84,7 +84,7 @@ async function openGlobal(page: Page) {
     }),
   );
   await page.goto('/#pm-global');
-  await expect(page.getByRole('heading', { name: 'Ranking global de tipsters' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tipsters' })).toBeVisible();
 }
 
 const cards = (page: Page) => page.getByTestId('global-card');
@@ -95,9 +95,8 @@ test('a tela Global é uma GRADE DE CARDS de tipster, com as métricas do card',
   await openGlobal(page);
 
   // É uma GRADE: `<ul>` de cards, e não tabela. A asserção de que não existe
-  // `<table>` nesta tela é o que separa esta entrega da tela de ranking, que é
-  // uma tabela — e é a complaint "eu queria em cards, não gráficos
-  // pequenos" que precisa de uma prova estrutural.
+  // `<table>` nesta tela prova que a listagem atual continua em cards, não em
+  // tabela — a tela própria de ranking foi aposentada.
   await expect(page.getByTestId('global-grid')).toBeVisible();
   await expect(page.locator('table')).toHaveCount(0);
   // A grade tem colunas proporcionais à largura. No DESKTOP ela tem mais de
@@ -122,28 +121,18 @@ test('a tela Global é uma GRADE DE CARDS de tipster, com as métricas do card',
   await expect(cards(page)).toHaveCount(6);
   await expect(page.getByTestId('global-count')).toHaveText('6 de 6 tipsters');
 
-  // O card carrega TODAS as métricas que o dono nomeou, e cada uma delas
-  // mostra a amostra ao lado (R1). A contagem de métricas com `N` é a
-  // asserção: ela quebra se alguém acrescentar uma métrica e esquecer o N.
+  // O redesign mantém quatro métricas resumidas visíveis no card; cada uma
+  // mostra a amostra ao lado (R1). As métricas auxiliares não são mais linhas
+  // visuais do card.
   const primeiro = cards(page).first();
-  for (const metrica of [
-    'P&L 30d',
-    'ROI',
-    'Taxa de acerto',
-    'Odd média',
-    'Seguidores',
-    'Wins',
-    'Losses',
-    'Open bets',
-    'Unidades/mês',
-  ]) {
+  for (const metrica of ['P&L 30d', 'ROI', 'Taxa de acerto', 'Unidades/mês']) {
     await expect(primeiro.getByText(metrica, { exact: true })).toBeVisible();
   }
   // R1 medida na TELA: para cada métrica, existe um `N=` visível no mesmo
   // card. Não se conta pelo atributo — o texto é o que o usuário lê.
   const comN = primeiro.locator('[data-global-n]');
   const totalN = await comN.count();
-  expect(totalN, 'toda métrica precisa do seu N').toBeGreaterThanOrEqual(9);
+  expect(totalN, 'cada métrica resumida precisa do seu N').toBe(4);
   for (let index = 0; index < totalN; index += 1) {
     await expect(comN.nth(index)).toContainText('N=');
   }
@@ -195,6 +184,11 @@ test('a cobertura truncada é VISÍVEL e a métrica dependente fica bloqueada', 
   const cardTruncado = cards(page).filter({ hasText: 'Cobertura truncada' });
   const roi = cardTruncado.locator('[data-global-metric="ROI"]');
   await expect(roi).toHaveText('bloqueado');
+  const roiBloqueado = roi.locator('xpath=../..');
+  await expect(roiBloqueado).toHaveClass(/is-blocked/);
+  // O estado é expresso pela classe e pela borda tracejada, não por cor de
+  // fundo diferente da superfície padrão da métrica.
+  await expect(roiBloqueado).toHaveCSS('border-top-style', 'dashed');
   // E o `N` continua visível no bloqueio: a amostra é o que sabemos, e
   // escondê-la junto com o valor esconderia o motivo.
   await expect(cardTruncado.locator('[data-global-n="ROI"]')).toContainText('N=210');
@@ -202,20 +196,25 @@ test('a cobertura truncada é VISÍVEL e a métrica dependente fica bloqueada', 
   // completa é. Um card inteiro "bloqueado" esconderia dado válido.
   await expect(cardTruncado.locator('[data-global-metric="P&L 30d"]')).toContainText('8.940');
 
-  // A borda de atenção é o sinal visual do estado, e ela é real: a cor
-  // computada precisa ser diferente da de um card normal.
-  const cores = await page.evaluate(() => {
-    const lista = Array.from(document.querySelectorAll('[data-testid="global-card"]'));
-    const truncado = lista.find((node) => node.className.includes('is-truncated'));
-    const normal = lista.find((node) => !node.className.includes('is-truncated'));
-    if (!truncado || !normal) return null;
+  // A borda de atenção pertence à métrica bloqueada, não ao card. Compara a
+  // ROI bloqueada com o P&L normal do MESMO card para provar o sinal visual.
+  const bordas = await page.evaluate(() => {
+    const truncado = Array.from(document.querySelectorAll('[data-testid="global-card"]')).find(
+      (node) => node.className.includes('is-truncated'),
+    );
+    const bloqueada = truncado?.querySelector('[data-global-metric="ROI"]')?.parentElement
+      ?.parentElement;
+    const normal = truncado?.querySelector('[data-global-metric="P&L 30d"]')?.parentElement
+      ?.parentElement;
+    if (!bloqueada || !normal) return null;
     return {
-      truncado: getComputedStyle(truncado).borderTopColor,
-      normal: getComputedStyle(normal).borderTopColor,
+      bloqueada: getComputedStyle(bloqueada).borderTopStyle,
+      normal: getComputedStyle(normal).borderTopStyle,
     };
   });
-  expect(cores, 'a tela precisa ter um card truncado e um normal').not.toBeNull();
-  expect(cores!.truncado).not.toBe(cores!.normal);
+  expect(bordas, 'o card truncado precisa ter métricas bloqueada e normal').not.toBeNull();
+  expect(bordas!.bloqueada).toBe('dashed');
+  expect(bordas!.bloqueada).not.toBe(bordas!.normal);
 
   await page.screenshot({
     path: testInfo.outputPath('polymarket-global-truncated.png'),
@@ -227,9 +226,9 @@ test('valor desconhecido é "Sem base" — nunca zero, nunca célula vazia', asy
   await openGlobal(page);
 
   const desconhecidos = page.getByText('Sem base', { exact: true });
-  // O `@csgo_arb` tem três métricas desconhecidas: taxa de acerto,
-  // seguidores e open bets — e o mercado, que também é "Sem base".
-  expect(await desconhecidos.count()).toBeGreaterThanOrEqual(3);
+  // O card renderiza "Sem base" em dois lugares: taxa de acerto e mercado.
+  // Followers e open bets não aparecem no resumo visível.
+  expect(await desconhecidos.count()).toBe(2);
 
   // A distinção que a R2 exige: em OUTRO card, a mesma métrica tem número.
   // Se "Sem base" aparecesse onde há valor, a métrica estaria sempre
@@ -358,7 +357,7 @@ test('os FILTROS FUNCIONAM: categoria e ordenação mudam a lista de verdade', a
 test('o card é clicável, focável e fala as métricas com a amostra', async ({ page }) => {
   await openGlobal(page);
 
-  const primeiro = cards(page).first();
+  const primeiro = cards(page).first().locator('.global-card-link');
   // O card é uma ÂNCORA: tem `href` para o detalhe do tipster. Um `div` com
   // `onClick` seria clicável e não navegável, nem copiável.
   await expect(primeiro).toHaveAttribute('href', /#\/polymarket\/tipster\/0x[0-9a-f]{40}/);
@@ -379,7 +378,7 @@ test('o card é clicável, focável e fala as métricas com a amostra', async ({
   for (let passo = 0; passo < 12 && !alcanhouCard; passo += 1) {
     await page.keyboard.press('Tab');
     alcanhouCard = await page.evaluate(
-      () => document.activeElement?.getAttribute('data-testid') === 'global-card',
+      () => document.activeElement?.matches('.global-card-link') === true,
     );
   }
   expect(alcanhouCard, 'o card precisa ser alcançável pela tecla Tab').toBe(true);

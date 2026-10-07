@@ -29,7 +29,6 @@ import {
 } from '@stakeframe/shared';
 import { BetColumnsPanel, loadBetColumns } from './bet-columns-panel.js';
 import { betStatusLabel, betStatusNeedsReview, betStatusTone } from './bet-status.js';
-import { readConsent, updateTelemetryConsent } from '../lib/telemetry.js';
 
 const stateLabels = { open: 'Em aberto', settled: 'Liquidada', cancelled: 'Cancelada' };
 const outcomeLabels: Record<string, string> = {
@@ -57,6 +56,32 @@ const catalogName = (workspace: Workspace, id: string | null) =>
 
 const betAccessibleTitle = (bet: Bet) =>
   bet.selections[0]?.event?.trim() || bet.reference?.trim() || 'sem título';
+
+function betScheduledDate(bet: Bet) {
+  const dates = bet.selections.flatMap((selection) => {
+    if (selection.dateStatus !== 'confirmed') return [];
+    if (selection.eventAt) return [saoPauloDate(new Date(selection.eventAt))];
+    return selection.eventDate ? [selection.eventDate] : [];
+  });
+  return dates.sort()[0] ?? null;
+}
+
+function unitsValue(amount: string, unitAmount: string | null) {
+  if (/^-?0+(?:\.0{1,2})?$/.test(amount)) return '0.00U';
+  if (!unitAmount || !/^\d+(?:\.\d{1,2})?$/.test(unitAmount)) return null;
+  const cents = (value: string) => {
+    const [whole, fraction = ''] = value.split('.');
+    return BigInt(whole!) * 100n + BigInt(fraction.padEnd(2, '0'));
+  };
+  const divisor = cents(unitAmount);
+  if (divisor <= 0n) return null;
+  const negative = amount.startsWith('-');
+  const raw = cents(negative ? amount.slice(1) : amount);
+  const hundredths = (raw * 100n + divisor / 2n) / divisor;
+  const whole = hundredths / 100n;
+  const fraction = String(hundredths % 100n).padStart(2, '0');
+  return `${negative && hundredths > 0n ? '-' : ''}${whole}.${fraction}U`;
+}
 
 function selectionScheduleText(selection: Bet['selections'][number]) {
   const label = selection.eventAt
@@ -396,6 +421,10 @@ export function BetsPage({
   const [tipster, setTipster] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [amountMode, setAmountMode] = useState<'money' | 'units'>('units');
+  const [hideAmounts, setHideAmounts] = useState(false);
+  const [historyOutcome, setHistoryOutcome] = useState('all');
+  const [dateDescending, setDateDescending] = useState(true);
   // STK-F2-18 (Fase 3): as 14 colunas aprovadas não cabem na largura útil.
   // O painel escolhe quais aparecem; a ordem continua sendo a do produto.
   const [visibleColumns, setVisibleColumns] = useState<BetTableColumnKey[]>(() =>
@@ -409,7 +438,7 @@ export function BetsPage({
     column: BetTableColumnKey;
     direction: BetTableSortDirection;
   } | null>(null);
-  const params = new URLSearchParams({ page: String(page), pageSize: compact ? '5' : '25' });
+  const params = new URLSearchParams({ page: String(page), pageSize: compact ? '5' : '100' });
   if (state) params.set('state', state);
   if (house) params.set('bookmakerId', house);
   if (tipster) params.set('tipsterId', tipster);
@@ -447,6 +476,7 @@ export function BetsPage({
     setter(value);
     setPage(1);
   };
+  const advancedFilterCount = [house, tipster, from, to].filter(Boolean).length;
   // STK-F2-18 (PR-3): a dica de rolagem passa a ser medida, não estimada.
   // Antes ela dependia de `columns.length > 8`, um proxy que mentia: oito
   // colunas cabem na largura útil em algumas janelas e não cabem em outras,
@@ -454,81 +484,394 @@ export function BetsPage({
   // aparece quando `scrollWidth` realmente passa de `clientWidth`, que é a
   // condição de fato. Redimensionar a janela ou trocar colunas reavalia.
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const historyScrollRef = useRef<HTMLDivElement | null>(null);
   const [overflows, setOverflows] = useState(false);
   useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || compact) {
+    const elements = [scrollRef.current, historyScrollRef.current].filter(
+      (element): element is HTMLDivElement => element !== null,
+    );
+    if (elements.length === 0 || compact) {
       setOverflows(false);
       return;
     }
-    const measure = () => setOverflows(element.scrollWidth > element.clientWidth);
+    const measure = () =>
+      setOverflows(elements.some((element) => element.scrollWidth > element.clientWidth));
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(element);
+    elements.forEach((element) => observer.observe(element));
     return () => observer.disconnect();
-  }, [compact, columns.length, sortedRows.length]);
+  }, [compact, columns.length, sortedRows.length, historyOutcome]);
+
+  if (!compact) {
+    const today = saoPauloDate(new Date());
+    const scheduledRows = rows.filter((row) => {
+      const scheduled = betScheduledDate(row.bet);
+      return scheduled !== null && scheduled >= today;
+    });
+    const historyRows = rows.filter((row) => {
+      const scheduled = betScheduledDate(row.bet);
+      return scheduled === null || scheduled < today;
+    });
+    const outcomeFor = (bet: Bet) => {
+      if (bet.state === 'cancelled' || bet.latestOutcome === 'void') return 'void';
+      if (bet.latestOutcome === 'cashout' || bet.latestOutcome === 'partial_cashout')
+        return 'cashout';
+      if (bet.latestOutcome === 'win' || bet.latestOutcome === 'half_win') return 'won';
+      if (bet.latestOutcome === 'loss' || bet.latestOutcome === 'half_loss') return 'lost';
+      return 'open';
+    };
+    const filteredHistory = historyRows
+      .filter((row) => historyOutcome === 'all' || outcomeFor(row.bet) === historyOutcome)
+      .sort((left, right) => {
+        const compared = left.bet.placedAt.localeCompare(right.bet.placedAt);
+        return dateDescending ? -compared : compared;
+      });
+    const displayedScheduledRows = sort
+      ? sortBetRows(scheduledRows, sort.column, sort.direction)
+      : scheduledRows;
+    const displayedHistoryRows = sort
+      ? sortBetRows(filteredHistory, sort.column, sort.direction)
+      : filteredHistory;
+    const currentMonth = today.slice(0, 7);
+    const currentUnit = workspace.units.find((unit) => unit.month === currentMonth)?.amount ?? null;
+    const exposure =
+      amountMode === 'money'
+        ? formatBRL(workspace.exposure)
+        : (unitsValue(workspace.exposure, currentUnit) ?? '—');
+    const renderBetTable = (tableRows: BetTableRow[], history = false) => (
+      <div
+        ref={history ? historyScrollRef : scrollRef}
+        className="bets-reference-table-wrap bet-table-desktop"
+        role="region"
+        aria-label={history ? 'Tabela do histórico de apostas' : 'Tabela de apostas de hoje'}
+        tabIndex={0}
+      >
+        <table
+          className={`product-table bet-detail-table bets-reference-table${history ? ' bets-history-table' : ''}`}
+          style={{ '--bet-columns': String(columns.length) } as CSSProperties}
+        >
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th
+                  key={column.key}
+                  data-column={column.key}
+                  aria-sort={column.key === sort?.column ? sort.direction : 'none'}
+                >
+                  <button
+                    type="button"
+                    className="table-sort"
+                    onClick={() => toggleSort(column.key)}
+                  >
+                    {column.label}
+                  </button>
+                </th>
+              ))}
+              <th data-column="open">
+                <span className="sr-only">Abrir</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map((row) => (
+              <tr
+                key={row.bet.id}
+                data-state={row.bet.state}
+                data-outcome={row.bet.latestOutcome ?? undefined}
+              >
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    data-column={column.key}
+                    className={
+                      column.key === 'return'
+                        ? `tabular ${betFinancialDisplay(row.bet).tone}`
+                        : columnClassNames[column.key]
+                    }
+                  >
+                    <BetTableCell row={row} column={column.key} />
+                  </td>
+                ))}
+                <td data-column="open" className="bet-actions-cell">
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    aria-label={`Ver aposta ${betAccessibleTitle(row.bet)}`}
+                    onClick={() => open({ kind: 'detail', id: row.bet.id })}
+                  >
+                    Ver
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+    return (
+      <section className="bets-reference-page" aria-label="Apostas">
+        <header className="bets-reference-heading">
+          <h2>APOSTAS</h2>
+          <div className="bets-reference-actions">
+            <div
+              className="bets-mode-toggle"
+              role="group"
+              aria-label="Exibir valores em dinheiro ou unidades"
+            >
+              <button
+                type="button"
+                className={amountMode === 'money' ? 'is-active' : ''}
+                aria-pressed={amountMode === 'money'}
+                onClick={() => setAmountMode('money')}
+              >
+                $
+              </button>
+              <button
+                type="button"
+                className={amountMode === 'units' ? 'is-active' : ''}
+                aria-pressed={amountMode === 'units'}
+                onClick={() => setAmountMode('units')}
+              >
+                U
+              </button>
+            </div>
+            <button
+              className="bets-visibility-toggle"
+              type="button"
+              aria-label={hideAmounts ? 'Mostrar valores' : 'Ocultar valores'}
+              aria-pressed={hideAmounts}
+              onClick={() => setHideAmounts((hidden) => !hidden)}
+            >
+              <span aria-hidden="true">◉</span>
+            </button>
+            <Button
+              className="bet-new-action"
+              disabled={!workspace.initialized}
+              onClick={() => open({ kind: 'bet' })}
+            >
+              ＋ NOVA APOSTA
+            </Button>
+            <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
+          </div>
+        </header>
+
+        <div className="bets-reference-section-heading">
+          <h3>
+            APOSTAS DE HOJE <span>{scheduledRows.length}</span>
+          </h3>
+          <p>
+            <span>EM RISCO</span> <strong>{hideAmounts ? '••••' : exposure}</strong>
+          </p>
+        </div>
+        {overflows ? (
+          <p className="bet-table-scroll-hint">
+            A tabela é mais larga que a tela. Deslize horizontalmente para ver as demais colunas, ou
+            use o painel de colunas para escolher quais exibir.
+          </p>
+        ) : null}
+        {scheduledRows.length === 0 ? (
+          <div className="bets-reference-empty">
+            <svg className="bets-reference-pitch" viewBox="0 0 100 100" aria-hidden="true">
+              <g transform="rotate(42 50 50)" fill="none" stroke="currentColor" strokeWidth="1">
+                <rect x="20" y="9" width="60" height="82" />
+                <path d="M20 50h60M34 9v16h32V9M34 91V75h32v16M41 9v5h18V9M41 91v-5h18v5" />
+                <circle cx="50" cy="50" r="8" />
+                <circle cx="50" cy="50" r=".8" fill="currentColor" />
+                <path d="M43 9a7 7 0 0 0 14 0M43 91a7 7 0 0 1 14 0M20 14a5 5 0 0 0 5-5M75 9a5 5 0 0 0 5 5M20 86a5 5 0 0 1 5 5M75 91a5 5 0 0 1 5-5" />
+              </g>
+            </svg>
+            <h3>NENHUMA APOSTA PARA HOJE</h3>
+            <p>
+              As apostas com data de hoje ou futura aparecem aqui — abertas ou já encerradas, cada
+              uma com seu resultado. As anteriores ficam no histórico.
+            </p>
+            <Button
+              variant="secondary"
+              disabled={!workspace.initialized}
+              onClick={() => open({ kind: 'bet' })}
+            >
+              REGISTRAR A PRIMEIRA APOSTA
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="bet-list-cards">
+              {displayedScheduledRows.map((row) => (
+                <BetListDetails key={row.bet.id} bet={row.bet} workspace={workspace} open={open} />
+              ))}
+            </div>
+            {renderBetTable(displayedScheduledRows)}
+          </>
+        )}
+
+        <div className="bets-reference-section-heading bets-history-heading">
+          <h3>
+            HISTÓRICO <span>{filteredHistory.length}</span>
+          </h3>
+        </div>
+        <div className="bets-reference-toolbar">
+          <div className="bet-state-tabs" role="group" aria-label="Filtrar histórico por resultado">
+            {[
+              ['all', 'TODAS'],
+              ['won', 'GANHAS'],
+              ['lost', 'PERDIDAS'],
+              ['void', 'ANULADAS'],
+              ['cashout', 'RESGATE'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={historyOutcome === value ? 'is-active' : ''}
+                aria-pressed={historyOutcome === value}
+                onClick={() => setHistoryOutcome(value!)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="bets-date-sort"
+            type="button"
+            onClick={() => setDateDescending((descending) => !descending)}
+            aria-label={`Ordenar por data, ${dateDescending ? 'mais recentes primeiro' : 'mais antigas primeiro'}`}
+          >
+            DATA <span aria-hidden="true">{dateDescending ? '▼' : '▲'}</span>
+          </button>
+        </div>
+        {historyRows.length === 0 ? (
+          <div className="bets-reference-history-empty">
+            Seu histórico de apostas aparecerá aqui.
+          </div>
+        ) : filteredHistory.length === 0 ? (
+          <div className="bets-reference-history-empty">
+            Nenhuma aposta encontrada para este resultado.
+          </div>
+        ) : (
+          <>
+            <div className="bet-list-cards">
+              {displayedHistoryRows.map((row) => (
+                <BetListDetails key={row.bet.id} bet={row.bet} workspace={workspace} open={open} />
+              ))}
+            </div>
+            {renderBetTable(displayedHistoryRows, true)}
+          </>
+        )}
+        {query.data && query.data.total > query.data.items.length ? (
+          <Pagination page={page} total={query.data.total} size={100} change={setPage} />
+        ) : null}
+        <QueryNotice
+          error={query.isError}
+          loading={query.isPending}
+          retry={() => {
+            void query.refetch();
+          }}
+        />
+      </section>
+    );
+  }
   return (
-    <section className="panel">
+    <section className={`panel bets-page-panel${compact ? ' is-compact' : ''}`}>
       <div className="section-heading">
         <div>
-          <h2>{compact ? 'Últimas apostas' : 'Seus bilhetes'}</h2>
-          <p>Valores e datas conforme seus registros</p>
+          <h2>{compact ? 'Últimas apostas' : 'Suas apostas'}</h2>
+          <p>
+            {compact
+              ? 'Valores e datas conforme seus registros'
+              : 'Bilhetes, estado e resultado financeiro'}
+          </p>
         </div>
         {compact ? (
           <a className="text-link" href="#bets">
             Ver todas
           </a>
         ) : (
-          <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
+          <div className="bets-heading-actions">
+            <div className="bets-exposure">
+              <span>EM JOGO</span>
+              <strong>{formatBRL(workspace.exposure)}</strong>
+            </div>
+            <Button
+              variant="secondary"
+              className="bet-new-action"
+              disabled={!workspace.initialized}
+              onClick={() => open({ kind: 'bet' })}
+            >
+              Nova aposta
+            </Button>
+            <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
+          </div>
         )}
       </div>
       {!compact ? (
-        <div className="filter-grid">
-          <Field label="Situação">
-            <select value={state} onChange={(event) => change(setState, event.target.value)}>
-              <option value="">Todas</option>
-              {Object.entries(stateLabels).map(([key, value]) => (
-                <option key={key} value={key}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Casa">
-            <select value={house} onChange={(event) => change(setHouse, event.target.value)}>
-              <option value="">Todas as casas</option>
-              {workspace.catalog
-                .filter((item) => item.kind === 'bookmaker')
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-            </select>
-          </Field>
-          <Field label="Tipster">
-            <select value={tipster} onChange={(event) => change(setTipster, event.target.value)}>
-              <option value="">Todos</option>
-              {workspace.catalog
-                .filter((item) => item.kind === 'tipster')
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-            </select>
-          </Field>
-          <Field label="Data da aposta desde">
-            <input
-              type="date"
-              value={from}
-              onChange={(event) => change(setFrom, event.target.value)}
-            />
-          </Field>
-          <Field label="Data da aposta até">
-            <input type="date" value={to} onChange={(event) => change(setTo, event.target.value)} />
-          </Field>
-        </div>
+        <>
+          <div className="bet-state-tabs" role="group" aria-label="Filtrar apostas por situação">
+            {[
+              { value: '', label: 'Todas' },
+              { value: 'open', label: 'Em aberto' },
+              { value: 'settled', label: 'Liquidadas' },
+              { value: 'cancelled', label: 'Canceladas' },
+            ].map((option) => (
+              <button
+                key={option.value || 'all'}
+                type="button"
+                className={state === option.value ? 'is-active' : undefined}
+                aria-pressed={state === option.value}
+                onClick={() => change(setState, option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <details className="bet-advanced-filters" open={advancedFilterCount > 0}>
+            <summary>
+              Filtros avançados
+              {advancedFilterCount > 0 ? <span>{advancedFilterCount} ativos</span> : null}
+            </summary>
+            <div className="filter-grid">
+              <Field label="Casa">
+                <select value={house} onChange={(event) => change(setHouse, event.target.value)}>
+                  <option value="">Todas as casas</option>
+                  {workspace.catalog
+                    .filter((item) => item.kind === 'bookmaker')
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label="Tipster">
+                <select
+                  value={tipster}
+                  onChange={(event) => change(setTipster, event.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {workspace.catalog
+                    .filter((item) => item.kind === 'tipster')
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label="Data da aposta desde">
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(event) => change(setFrom, event.target.value)}
+                />
+              </Field>
+              <Field label="Data da aposta até">
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(event) => change(setTo, event.target.value)}
+                />
+              </Field>
+            </div>
+          </details>
+        </>
       ) : null}
       <QueryNotice
         error={query.isError}
@@ -537,16 +880,29 @@ export function BetsPage({
           void query.refetch();
         }}
       />
+      {!compact && query.data && !query.isError && query.data.total > 0 ? (
+        <div className="bet-results-heading">
+          <h3>Lista de apostas</h3>
+          <span>{query.data.total}</span>
+        </div>
+      ) : null}
       {query.data && !query.isError ? (
         query.data.total === 0 ? (
-          <Empty
-            title="Nenhuma aposta por aqui"
-            detail={
-              compact
-                ? 'Seus bilhetes aparecerão aqui depois do primeiro registro.'
-                : 'Registre uma aposta ou ajuste os filtros para consultar seu histórico.'
-            }
-          />
+          <div className="bet-empty-state">
+            <Empty
+              title="Nenhuma aposta por aqui"
+              detail={
+                compact
+                  ? 'Seus bilhetes aparecerão aqui depois do primeiro registro.'
+                  : 'Registre uma aposta ou ajuste os filtros para consultar seu histórico.'
+              }
+            />
+            {!compact ? (
+              <Button variant="secondary" onClick={() => open({ kind: 'bet' })}>
+                Registrar a primeira aposta
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <>
             {!compact ? (
@@ -635,7 +991,11 @@ export function BetsPage({
                     const financial = betFinancialDisplay(bet);
                     if (!compact) {
                       return (
-                        <tr key={bet.id}>
+                        <tr
+                          key={bet.id}
+                          data-state={bet.state}
+                          data-outcome={bet.latestOutcome ?? undefined}
+                        >
                           {columns.map((column) => (
                             <td
                               key={column.key}
@@ -960,24 +1320,159 @@ export function BetDetails({
 }
 export function FinancePage({ workspace, open }: { workspace: Workspace; open: OpenModal }) {
   const [page, setPage] = useState(1);
+  const [moveKind, setMoveKind] = useState<'deposit' | 'withdrawal'>('deposit');
+  const [moveAmount, setMoveAmount] = useState('');
+  const currentMonth = saoPauloDate(new Date()).slice(0, 7);
+  const currentUnit = workspace.units.find((unit) => unit.month === currentMonth) ?? null;
+  const unitPercent =
+    currentUnit && Number(workspace.bankroll) > 0
+      ? ((Number(currentUnit.amount) / Number(workspace.bankroll)) * 100)
+          .toFixed(2)
+          .replace('.', ',')
+      : null;
   const journal = useQuery({
     queryKey: ['product', 'journal', workspace.version, page],
-    queryFn: () => request(`/api/v1/journal?page=${page}&pageSize=25`, journalPageSchema),
+    queryFn: async () => {
+      const current = await request(`/api/v1/journal?page=${page}&pageSize=25`, journalPageSchema);
+      if (page === 1) return { ...current, newerNet: 0n };
+      const newerPages = await Promise.all(
+        Array.from({ length: page - 1 }, (_, index) =>
+          request(`/api/v1/journal?page=${index + 1}&pageSize=25`, journalPageSchema),
+        ),
+      );
+      const newerNet = newerPages
+        .flatMap((result) => result.items)
+        .reduce((total, item) => total + journalNetEffect(item.postings), 0n);
+      return { ...current, newerNet };
+    },
   });
+  const historyRows = (() => {
+    if (!journal.data?.items) return [];
+    let balance = BigInt(workspace.bankroll.replace('.', '')) - journal.data.newerNet;
+    return journal.data.items.map((item) => {
+      const after = balance;
+      balance -= journalNetEffect(item.postings);
+      return { item, after };
+    });
+  })();
   return (
-    <>
-      <div className="button-row page-actions">
-        {(['deposit', 'withdrawal', 'transfer'] as const).map((kind) => (
-          <Button
-            key={kind}
-            variant={kind === 'deposit' ? 'default' : 'secondary'}
-            disabled={!workspace.initialized}
-            onClick={() => open({ kind: 'cash', operation: kind })}
-          >
-            {kind === 'deposit' ? '+ Entrada' : kind === 'withdrawal' ? 'Retirada' : 'Transferir'}
-          </Button>
-        ))}
+    <div className="bankroll-reference-page">
+      <header className="bankroll-reference-heading">
+        <div>
+          <h1>Banca</h1>
+          <p>SUA BANCA, SUAS MOVIMENTAÇÕES E AS REGRAS QUE A ORIENTAM</p>
+        </div>
+      </header>
+
+      <div className="bankroll-overview-grid">
+        <section className="bankroll-reference-card bankroll-current-card">
+          <span className="bankroll-kicker">BANCA ATUAL</span>
+          <strong className="bankroll-current-value">{formatBRL(workspace.bankroll)}</strong>
+          <div className="bankroll-card-divider" />
+          <span className="bankroll-kicker">COMPOSIÇÃO DA BANCA</span>
+          <div className="bankroll-composition-row">
+            <span>Disponível</span>
+            <b>{formatBRL(workspace.available)}</b>
+          </div>
+          <div className="bankroll-composition-row">
+            <span>Em apostas abertas</span>
+            <b>{formatBRL(workspace.exposure)}</b>
+          </div>
+        </section>
+        <section className="bankroll-reference-card bankroll-move-card">
+          <span className="bankroll-kicker">MOVIMENTAR DINHEIRO</span>
+          <p>
+            Registre o que entrou ou saiu da sua banca. Os lançamentos ficam no histórico para você
+            acompanhar a origem de cada valor.
+          </p>
+          <div className="bankroll-move-tabs" role="group" aria-label="Tipo de movimentação">
+            <button
+              type="button"
+              className={moveKind === 'deposit' ? 'is-active' : ''}
+              onClick={() => setMoveKind('deposit')}
+            >
+              Depósito
+            </button>
+            <button
+              type="button"
+              className={moveKind === 'withdrawal' ? 'is-active' : ''}
+              onClick={() => setMoveKind('withdrawal')}
+            >
+              Retirada
+            </button>
+          </div>
+          <div className="bankroll-move-controls">
+            <label>
+              <span>R$</span>
+              <input
+                aria-label="Valor da movimentação"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={moveAmount}
+                onChange={(event) => setMoveAmount(event.target.value)}
+              />
+            </label>
+            <Button
+              disabled={
+                !workspace.initialized || workspace.accounts.length === 0 || !moveAmount.trim()
+              }
+              onClick={() => open({ kind: 'cash', operation: moveKind, amount: moveAmount })}
+            >
+              Registrar
+            </Button>
+          </div>
+        </section>
       </div>
+
+      <section className="bankroll-reference-rules">
+        <div className="bankroll-reference-section-title">
+          <h2>Regras da banca</h2>
+          <p>
+            O limite diário é um percentual da banca e se recalcula quando ela muda. A unidade é um
+            valor fixo e não muda sozinha: você não aumenta a unidade apenas porque a banca cresceu.
+            Aqui você vê que percentual ela representa hoje e se saiu da faixa; aumentá-la é uma
+            decisão sua, não um efeito automático.
+          </p>
+        </div>
+        <div className="bankroll-rules-grid">
+          <article className="bankroll-reference-card bankroll-rule-card">
+            <div className="bankroll-rule-card-top">
+              <span className="bankroll-kicker">TAMANHO DA UNIDADE</span>
+              <span className="bankroll-kicker">DA BANCA</span>
+            </div>
+            <div className="bankroll-rule-card-values">
+              <strong>{currentUnit ? formatBRL(currentUnit.amount) : 'A definir'}</strong>
+              <b>{unitPercent ? `${unitPercent}%` : '—'}</b>
+            </div>
+            <div className="bankroll-unit-track" aria-hidden="true">
+              <span className={currentUnit ? 'has-unit' : ''} />
+            </div>
+            <div className="bankroll-rule-card-bottom">
+              <span>
+                {currentUnit
+                  ? `UNIDADE DE ${currentMonth.split('-').reverse().join('/')}`
+                  : 'NENHUMA UNIDADE DEFINIDA'}
+              </span>
+              <Button variant="secondary" size="small" onClick={() => open({ kind: 'settings' })}>
+                Alterar
+              </Button>
+            </div>
+          </article>
+          <article className="bankroll-reference-card bankroll-rule-card">
+            <div className="bankroll-rule-card-top">
+              <span className="bankroll-kicker">LIMITE DIÁRIO</span>
+              <span className="bankroll-kicker">DA BANCA</span>
+            </div>
+            <div className="bankroll-rule-card-values">
+              <strong>Não configurado</strong>
+              <b>—</b>
+            </div>
+            <div className="bankroll-rule-card-bottom">
+              <span>O STAKEFRAME NÃO POSSUI LIMITE DIÁRIO</span>
+            </div>
+          </article>
+        </div>
+      </section>
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -987,6 +1482,14 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
               colunas é a conciliação que ainda não foi feita.
             </p>
           </div>
+          <Button
+            variant="secondary"
+            size="small"
+            disabled={!workspace.initialized}
+            onClick={() => open({ kind: 'cash', operation: 'transfer' })}
+          >
+            Transferir
+          </Button>
         </div>
         <div className="account-grid">
           {workspace.accounts.map((account) => (
@@ -1064,15 +1567,10 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
           </div>
         )}
       </section>
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <h2>Movimentações</h2>
-            <p>
-              Razão de acréscimo. Cada linha é um lançamento: corrigir uma aposta cria uma nova
-              linha e estorna a anterior — nada é apagado.
-            </p>
-          </div>
+      <section className="bankroll-transactions" aria-labelledby="bankroll-transactions-title">
+        <div className="bankroll-transactions-heading">
+          <h2 id="bankroll-transactions-title">Movimentações da banca</h2>
+          <span>Mais recentes primeiro</span>
         </div>
         <QueryNotice
           error={journal.isError}
@@ -1089,35 +1587,25 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
             />
           ) : (
             <>
-              {/*
-                STK-F2-18 (Fase 4): o razão era uma lista de cartões. Isso
-                quebra a propriedade que um razão precisa ter — a de ser lido
-                LINHA A LINHA e conferido. Numa lista, a coluna de valor não
-                alinha, o "lançamento" e o "motivo" competem pela mesma linha
-                e comparar dois lançamentos exige memória visual. Tabela com
-                data, lançamento, contas afetadas e valor.
-              */}
               <div className="table-scroll">
-                <table className="product-table journal-table">
+                <table className="product-table journal-table bankroll-transactions-table">
                   <caption className="sr-only">
                     Movimentações do razão, da mais recente para a mais antiga
                   </caption>
                   <thead>
                     <tr>
-                      <th scope="col">Data</th>
-                      <th scope="col">Lançamento</th>
-                      <th scope="col">Motivo</th>
-                      <th scope="col">Contas afetadas</th>
+                      <th scope="col">Movimentação</th>
                       <th scope="col" className="num">
                         Valor
                       </th>
-                      <th scope="col">
-                        <span className="sr-only">Ações</span>
+                      <th scope="col" className="num">
+                        Banca após
                       </th>
+                      <th scope="col">Quando</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {journal.data.items.map((item) => {
+                    {historyRows.map(({ item, after }) => {
                       const net = journalNetEffect(item.postings);
                       const reversible =
                         ['deposit', 'withdrawal', 'transfer', 'reconcile'].includes(item.kind) &&
@@ -1128,41 +1616,17 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
                           key={item.id}
                           className={item.reversed ? 'journal-reversed' : undefined}
                         >
-                          <td className="journal-date">{dateLabel(item.effectiveAt)}</td>
                           <td>
                             <strong>
                               {journalLabels[item.kind] ?? item.kind}
                               {item.reversed ? ' · estornado' : ''}
                             </strong>
-                          </td>
-                          <td className="journal-reason">{item.reason}</td>
-                          <td>
-                            <span className="posting-list">
-                              {item.postings.map((posting, index) => (
-                                <span key={index}>
-                                  {posting.accountName}{' '}
-                                  <b className={posting.amount.startsWith('-') ? 'negative' : ''}>
-                                    {formatBRL(posting.amount)}
-                                  </b>
-                                </span>
-                              ))}
-                            </span>
-                          </td>
-                          <td className="num">
-                            <b
-                              className={net < 0n ? 'negative' : net > 0n ? 'positive' : undefined}
-                            >
-                              {centsLabel(net)}
-                            </b>
-                            <small className="journal-sign">
-                              {net < 0n ? 'saída' : net > 0n ? 'entrada' : 'sem efeito'}
-                            </small>
-                          </td>
-                          <td>
+                            <small className="bankroll-history-reason">{item.reason}</small>
                             {reversible ? (
                               <Button
                                 variant="ghost"
                                 size="small"
+                                className="bankroll-reverse-action"
                                 onClick={() =>
                                   open({
                                     kind: 'correction',
@@ -1180,6 +1644,17 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
                               </Button>
                             ) : null}
                           </td>
+                          <td className="num">
+                            <b
+                              className={net < 0n ? 'negative' : net > 0n ? 'positive' : undefined}
+                            >
+                              {centsLabel(net)}
+                            </b>
+                          </td>
+                          <td className="num">
+                            <b>{centsLabel(after)}</b>
+                          </td>
+                          <td className="journal-date">{dateLabel(item.effectiveAt)}</td>
                         </tr>
                       );
                     })}
@@ -1191,12 +1666,14 @@ export function FinancePage({ workspace, open }: { workspace: Workspace; open: O
           )
         ) : null}
       </section>
-    </>
+      <p className="bankroll-history-note">
+        O histórico mostra os lançamentos registrados no Stakeframe. Movimentações feitas fora do
+        aplicativo não aparecem aqui.
+      </p>
+    </div>
   );
 }
 export function SettingsPage({ workspace, open }: { workspace: Workspace; open: OpenModal }) {
-  // STK-F1-10: preferências de telemetria (opt-in explícito, por dispositivo).
-  const [consent, setConsent] = useState(readConsent());
   return (
     <>
       <TelegramLinkPanel />
@@ -1300,46 +1777,6 @@ export function SettingsPage({ workspace, open }: { workspace: Workspace; open: 
         <p className="panel-footnote">
           A unidade permanece fixa durante o mês. Datas financeiras seguem o horário de São Paulo.
         </p>
-      </section>
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <h2>Privacidade e análises</h2>
-            <p>
-              Telemetria é opcional e desligada por padrão. Quando ativada, usa apenas
-              identificadores pseudônimos — bilhetes, valores, prompts e imagens nunca são enviados.
-            </p>
-          </div>
-        </div>
-        <label className="consent-row">
-          <input
-            type="checkbox"
-            checked={consent.analytics}
-            onChange={(event) =>
-              setConsent(updateTelemetryConsent('analytics', event.target.checked))
-            }
-          />
-          <span>
-            <strong>Análises de uso</strong>
-            <small>
-              Métricas de navegação (PostHog Cloud EU) para melhorar o produto. Sem gravação de
-              tela.
-            </small>
-          </span>
-        </label>
-        <label className="consent-row">
-          <input
-            type="checkbox"
-            checked={consent.replay}
-            onChange={(event) => setConsent(updateTelemetryConsent('replay', event.target.checked))}
-          />
-          <span>
-            <strong>Gravação de sessão</strong>
-            <small>
-              Replay mascarado (Sentry), nunca nas telas de bilhetes, finanças ou configurações.
-            </small>
-          </span>
-        </label>
       </section>
     </>
   );

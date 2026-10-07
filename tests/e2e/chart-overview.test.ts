@@ -75,7 +75,7 @@ async function openOverview(page: Page, report: PerformanceReport): Promise<void
      traz a evolução e os splits, e o cabeçalho deste nunca aparece — foi o
      que fez a primeira versão esperar 15s por um elemento inexistente. */
   await page.goto('/#overview');
-  await expect(page.getByRole('heading', { name: 'Resultado realizado do mês' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Resultado acumulado' })).toBeVisible();
 }
 
 test.describe('STK-F3-03 — gráfico de resultado no padrão SharkTrack', () => {

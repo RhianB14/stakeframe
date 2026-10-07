@@ -88,15 +88,15 @@ const favoritesPayload = (
 });
 
 /**
- * Monta a casca do produto e as rotas que a tela de ranking consome.
+ * Monta a casca do produto e as rotas usadas pela página de favoritos.
  *
  * As rotas são DESREGISTRADAS antes de cada montagem (`unroute`) porque o
  * Playwright mantém o primeiro handler registrado para um padrão: um segundo
- * `openRanking` na mesma página continuaria vendo o payload do primeiro, e o
+ * `openFavorites` na mesma página continuaria vendo o payload do primeiro, e o
  * teste passaria a provar a fixture errada. `unrouteAll` deixa a página em
  * branco para a remontagem, que é o que a asserção seguinte espera.
  */
-async function openRanking(
+async function openFavorites(
   page: Page,
   body: { ranking: PolymarketRanking; favorites: ReturnType<typeof favoritesPayload> },
 ) {
@@ -177,19 +177,19 @@ async function openRanking(
     }),
   );
   await page.goto('about:blank');
-  await page.goto('/#ranking');
+  await page.goto('/#pm-favorites');
   // A listagem de favoritos é reconsultada quando a tela monta, e o teste
   // espera o dado: sem esta espera, a asserção pode rodar contra a casca de
   // carregamento e falhar por motivo que não é o do card.
   await page
-    .getByRole('heading', { name: 'Favoritos do ranking Polymarket' })
+    .getByRole('heading', { name: 'Seus favoritos da Polymarket' })
     .waitFor({ state: 'visible' });
 }
 
 test('a tela mostra o uso do teto de favoritos e diz que o excedente é RECUSADO', async ({
   page,
 }) => {
-  await openRanking(page, {
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(3, false),
   });
@@ -205,7 +205,7 @@ test('a tela mostra o uso do teto de favoritos e diz que o excedente é RECUSADO
   await expect(page.getByText(/Limite de 10 favoritos atingido/)).toHaveCount(0);
 
   // Com os dez ocupados, o aviso aparece e promete REMOVER, nunca "carregar mais".
-  await openRanking(page, {
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(POLYMARKET_FAVORITES_LIMIT, false),
   });
@@ -224,7 +224,7 @@ test('a tela mostra o uso do teto de favoritos e diz que o excedente é RECUSADO
 test('favoritar NÃO liga o alerta: a tela mostra os dois estados separados', async ({ page }) => {
   // Dez favoritos e o alerta DESLIGADO ao mesmo tempo: é o estado que o card
   // chama de legítimo, e a tela precisa descrever as duas coisas sem fundir.
-  await openRanking(page, {
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(POLYMARKET_FAVORITES_LIMIT, false),
   });
@@ -244,7 +244,7 @@ test('favoritar NÃO liga o alerta: a tela mostra os dois estados separados', as
 test('o alerta LIGADO é descrito com a cota diária, e a lista continua à parte', async ({
   page,
 }) => {
-  await openRanking(page, {
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(2, true, '2500.50'),
   });
@@ -267,7 +267,7 @@ test('o alerta LIGADO é descrito com a cota diária, e a lista continua à part
 });
 
 test('a lista de favoritos mostra a carteira pública e nada derivado', async ({ page }) => {
-  await openRanking(page, {
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(2, false),
   });
@@ -278,18 +278,21 @@ test('a lista de favoritos mostra a carteira pública e nada derivado', async ({
   // Os cabeçalhos são só os da origem + a ação de remover. Nenhuma coluna de
   // pontuação, avaliação ou recomendação.
   const headers = await region.locator('th').allInnerTexts();
-  expect(headers.map((text) => text.trim())).toEqual([
-    'Trader',
-    'Carteira pública',
-    'Favoritado em',
-    'Ação',
+  // A folha aplica `text-transform: uppercase` nestes cabeçalhos, e o
+  // `innerText` devolve o texto RENDERIZADO: normalizar a caixa preserva a
+  // exigência do conjunto de colunas sem depender da apresentação.
+  expect(headers.map((text) => text.trim().toLowerCase())).toEqual([
+    'trader',
+    'carteira pública',
+    'favoritado em',
+    'ação',
   ]);
 });
 
 test('Composite Score, badge e recomendação NÃO aparecem em lugar nenhum da tela', async ({
   page,
 }) => {
-  await openRanking(page, {
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(3, true),
   });
@@ -326,18 +329,20 @@ test('Composite Score, badge e recomendação NÃO aparecem em lugar nenhum da t
     expect(sentence, `recomendação afirmada em: …${sentence}recomendação`).toMatch(/\bsem\b[^.]*$/);
   }
 
-  // A tabela do ranking ganhou UMA coluna (Favoritar) e nada mais: nenhuma
-  // pontuação, nenhum selo, nenhuma recomendação no cabeçalho.
-  const rankingTable = page.getByRole('region', { name: 'Ranking oficial Polymarket' });
-  await expect(rankingTable).toBeVisible();
-  const headers = await rankingTable.locator('th').allInnerTexts();
-  expect(headers.map((text) => text.trim())).toEqual([
-    'Posição',
-    'Trader',
-    'Carteira pública',
-    'P&L',
-    'Volume',
-    'Favoritar',
+  // Premissa anterior aposentada: favoritos já não ficam dentro da tabela do
+  // ranking. A lista própria conserva apenas identidade, data e ação, sem
+  // colunas de pontuação ou recomendação.
+  const favoritesTable = page.getByRole('region', { name: 'Favoritos do ranking Polymarket' });
+  await expect(favoritesTable).toBeVisible();
+  const headers = await favoritesTable.locator('th').allInnerTexts();
+  // A folha aplica `text-transform: uppercase` nestes cabeçalhos, e o
+  // `innerText` devolve o texto RENDERIZADO: normalizar a caixa preserva a
+  // exigência do conjunto de colunas sem depender da apresentação.
+  expect(headers.map((text) => text.trim().toLowerCase())).toEqual([
+    'trader',
+    'carteira pública',
+    'favoritado em',
+    'ação',
   ]);
 
   // E o menu de navegação não oferece o destino como recomendação.
@@ -345,28 +350,20 @@ test('Composite Score, badge e recomendação NÃO aparecem em lugar nenhum da t
   expect(nav.toLowerCase()).not.toContain('score');
 });
 
-test('favoritos viraram DESTINO e continuam dentro da tela de ranking', async ({ page }) => {
-  // STK-F3-01 inverte este teste, e a inversão é o registro da decisão: o
-  // dono pediu Favoritos e Simulação na navegação, e o argumento que os
-  // mantinha fora — "a barra inferior tem um número LITERAL de colunas e um
-  // destino a mais a quebraria" — foi resolvido ATUALIZANDO a contagem com a
-  // justificativa escrita, não relaxando o teste. A asserção que este teste
-  // fazia era a de AUSÊNCIA de um destino; ela prova agora a PRESENÇA dele
-  // e que a SEÇÃO continua na tela de ranking, que é a parte da regra da
-  // F2-16 que este card não revoga.
-  await openRanking(page, {
+test('favoritos são um destino próprio da navegação', async ({ page }) => {
+  // Premissa aposentada: a tela de ranking não existe mais e favoritos têm
+  // página própria; verificamos a rota e o cabeçalho dessa página.
+  await openFavorites(page, {
     ranking: rankingPayload(),
     favorites: favoritesPayload(1, false),
   });
   const nav = await page.locator('.product-sidebar nav a').allInnerTexts();
-  expect(nav.join(' ')).toContain('Favoritos');
-  // E a seção continua onde estava: favoritar pela linha da tabela do ranking
-  // continua sendo o caminho, e a tela de ranking não perdeu nada.
-  await expect(
-    page.getByRole('heading', { name: 'Favoritos do ranking Polymarket' }),
-  ).toBeVisible();
-  // E o destino novo abre a MESMA tela — não uma segunda implementação.
+  // Os links da navegação também são renderizados em caixa alta.
+  expect(nav.join(' ').toLowerCase()).toContain('favoritos');
+  await expect(page.getByRole('heading', { name: 'Seus favoritos da Polymarket' })).toBeVisible();
+  // O link da navegação leva ao destino próprio, que também monta a seção real.
   await page.getByRole('link', { name: 'Favoritos', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Seus favoritos da Polymarket' })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Favoritos do ranking Polymarket' }),
   ).toBeVisible();

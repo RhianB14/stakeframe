@@ -27,19 +27,14 @@ export type SidebarMode = (typeof SIDEBAR_MODES)[number];
 export const SIDEBAR_MODE_STORAGE_KEY = 'stakeframe.sidebar-mode';
 
 /**
- * STK-F3-01 — as medidas dos modos.
+ * STK-F3-01 — a LARGURA dos modos vive na folha: `--sidebar-w` em
+ * `tokens.css` (208px) e o override do tema web em `product.css` (202px).
  *
- * Estes números são declarados UMA VEZ e conferidos pelo teste de tokens de
- * design, que exige que `--sidebar-w` e `--sidebar-w-collapsed` em
- * `tokens.css` tenham exatamente estes valores: a sidebar seria uma largura
- * na folha e outra no código que escolheu o modo. Eles não são lidos em
- * tempo de execução — a folha é dona do layout, o componente é dono da
- * escolha.
+ * O componente é dono da ESCOLHA do modo, não do número. A constante
+ * `SIDEBAR_WIDTHS` que existia aqui não tinha nenhum importador e o
+ * comentário prometia uma conferência do teste de tokens que não existia —
+ * por isso ela saiu em vez de mentir sobre uma garantia.
  */
-export const SIDEBAR_WIDTHS = {
-  expanded: 232,
-  collapsed: 56,
-} as const;
 
 /**
  * Valida o valor GRAVADO. Isto roda na LEITURA, e não só na escrita: o

@@ -148,7 +148,7 @@ async function openSimulation(page: Page, body: PolymarketSimulation) {
     // impede que um stub responda a um GET que a aplicação nunca faz.
     route.fulfill({ json: body, headers: { allow: 'POST' } }),
   );
-  await page.goto('/#ranking');
+  await page.goto('/#pm-simulation');
   await page.getByRole('button', { name: 'Apurar simulação indicativa' }).click();
 }
 

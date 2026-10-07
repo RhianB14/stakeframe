@@ -18,36 +18,22 @@ import {
   rankingCompleteness,
   rankingSample,
   rankingStatusLabel,
-  type BackfillStatus,
   type PolymarketRanking,
 } from '../../packages/shared/src/index.js';
-import {
-  rankingRowView,
-  rankingSampleViews,
-  rankingView,
-} from '../../apps/web/src/product/ranking-view.js';
 
 /**
- * STK-F2-15 §15 — "Ranking oficial e Composite Score oculto".
+ * STK-F2-15 §15 — contrato compartilhado do ranking Polymarket.
  *
- * Este arquivo é o teste que o card pede, e ele tem TRÊS partes que precisam
- * ser provadas por vias diferentes:
+ * A página própria de ranking foi aposentada. Estes testes preservam o
+ * contrato compartilhado que continua usado por schemas e recursos próximos:
  *
- *  1) O RANKING É O OFICIAL. Os enums são os que a origem aceitou, os valores
- *     são os decimais exatos que ela publicou, e a posição é a que ela
- *     declarou. Nada aqui arredonda, reordena ou deriva.
+ *  1) Os enums, valores exatos, status de completude, política de agregado e
+ *     regra de amostra continuam cobertos como contrato, sem depender da
+ *     apresentação da tela removida.
  *
- *  2) A SÉRIE TRUNCADA É VISÍVEL, e ela vem do status GRAVADO. Este é o
- *     ponto em que a interface pode mentir com muita naturalidade: mil
- *     traders na tela com a série truncada parecem um ranking inteiro. O
- *     teste monta as DUAS situações — 100 linhas com status `truncated` e 3
- *     linhas com status `complete` — e exige o aviso em uma e não na outra.
- *
- *  3) O COMPOSITE SCORE ESTÁ AUSENTE DA UI. E esta parte é verificada de três
- *     formas, porque "não achei o termo no grep" não é prova: o schema
- *     RECUSA um campo de pontuação (§1), a função pura não produz texto de
- *     score (§2), e o RENDER não escreve score nem badge nem recomendação (§3,
- *     no e2e).
+ *  2) Composite Score continua proibido pelo schema compartilhado e pela
+ *     varredura de código executável dos arquivos de contrato/API. A ausência
+ *     renderizada na nova rota global é verificada no teste e2e correspondente.
  */
 
 /** Uma linha observada, com os literais que a origem publicou. */
@@ -82,15 +68,6 @@ const ranking = (over: Partial<PolymarketRanking> = {}): PolymarketRanking =>
     rows: [row()],
     ...over,
   });
-
-/** As N linhas de um top truncado, com posições e carteiras distintas. */
-const manyRows = (n: number) =>
-  Array.from({ length: n }, (_, index) =>
-    row({
-      rank: String(index + 1),
-      proxyWallet: `0x${String(index).padStart(40, '0')}`,
-    }),
-  );
 
 describe('STK-F2-15 §15 — os enums são os OFICIAIS da API', () => {
   it('as categorias são exatamente as onze que a documentação declara', () => {
@@ -231,38 +208,24 @@ describe('STK-F2-15 §15 — os valores são os OFICIAIS e exatos', () => {
   });
 });
 
-describe('STK-F2-15 §15 — série TRUNCADA é visível, e vem do status gravado', () => {
-  it('cem linhas com a série truncada AINDA exibem o aviso', () => {
-    // Este é o caso perigoso, e é o que o card pede para evitar: mil traders
-    // na tela parecem o ranking inteiro. A contagem de linhas não muda nada —
-    // quem decide é o status GRAVADO pela ingestão.
+describe('STK-F2-15 §15 — a completude vem do status gravado', () => {
+  it('o status truncado produz completude truncada independentemente da contagem', () => {
+    // O status GRAVADO pela ingestão, e não a contagem de linhas, decide a
+    // completude da série.
     const series = {
-      status: 'truncated' as BackfillStatus,
+      status: 'truncated' as const,
       available: true,
       ingested: 1800,
       backfillFrom: '2026-04-01',
       pages: 36,
       failedPages: 0,
     };
-    const view = rankingView(
-      ranking({
-        series,
-        completeness: rankingCompleteness({ series }),
-        aggregate: { blocked: true, reason: rankingAggregatePolicy(series).reason },
-        requested: 100,
-        returned: 100,
-        rows: manyRows(100),
-        sample: rankingSample({ n: 100, minSample: 30 }),
-      }),
-    );
-    expect(view.completeness.truncated).toBe(true);
-    expect(view.rows).toHaveLength(100);
-    // O texto visível diz TRUNCADA e diz que não é o ranking inteiro.
-    expect(view.completeness.label).toBe('Série truncada');
-    expect(view.completeness.detail).toContain('TRUNCADA');
-    expect(view.completeness.detail).toContain('NÃO representa o ranking inteiro');
-    // E a métrica dependente da série completa aparece BLOQUEADA.
-    expect(view.completeness.aggregate).toContain('bloqueados');
+    const completeness = rankingCompleteness({ series });
+    expect(completeness.truncated).toBe(true);
+    expect(completeness.label).toBe('Série truncada');
+    expect(completeness.detail).toContain('TRUNCADA');
+    expect(completeness.detail).toContain('NÃO representa o ranking inteiro');
+    expect(rankingAggregatePolicy(series).allowed).toBe(false);
   });
 
   it('a completude NUNCA é inferida da contagem: 3 linhas com `complete` não avisam', () => {
@@ -270,30 +233,20 @@ describe('STK-F2-15 §15 — série TRUNCADA é visível, e vem do status gravad
     // resposta legítima (o fim foi observado), e tratá-la como truncada seria
     // um aviso falso — que também é uma mentira, do outro lado.
     const series = {
-      status: 'complete' as BackfillStatus,
+      status: 'complete' as const,
       available: true,
       ingested: 3,
       backfillFrom: '2026-04-01',
       pages: 1,
       failedPages: 0,
     };
-    const view = rankingView(
-      ranking({
-        series,
-        completeness: rankingCompleteness({ series }),
-        aggregate: { blocked: false, reason: null },
-        requested: 100,
-        returned: 3,
-        rows: manyRows(3),
-        sample: rankingSample({ n: 3, minSample: 30 }),
-      }),
-    );
-    expect(view.completeness.truncated).toBe(false);
-    expect(view.completeness.label).toBe('Cobertura completa');
+    const completeness = rankingCompleteness({ series });
+    expect(completeness.truncated).toBe(false);
+    expect(completeness.label).toBe('Cobertura completa');
   });
 
   it('cada estado gravado produz um rótulo DISTINTO, e nenhum se confunde com completo', () => {
-    const statuses: BackfillStatus[] = ['truncated', 'partial', 'unknown'];
+    const statuses = ['truncated', 'partial', 'unknown'] as const;
     const labels = statuses.map((status) =>
       rankingCompleteness({
         series: { status, available: true, ingested: 10, pages: 1, failedPages: 0 },
@@ -318,29 +271,18 @@ describe('STK-F2-15 §15 — série TRUNCADA é visível, e vem do status gravad
     // opostas — esta é a divergência entre o enum oficial (onze categorias) e
     // a ingestão da F2-14 (uma).
     const series = {
-      status: 'unknown' as BackfillStatus,
+      status: 'unknown' as const,
       available: false,
       ingested: 0,
       backfillFrom: '0001-01-01',
       pages: 0,
       failedPages: 0,
     };
-    const view = rankingView(
-      ranking({
-        series,
-        completeness: rankingCompleteness({ series }),
-        aggregate: { blocked: true, reason: rankingAggregatePolicy(series).reason },
-        requested: 100,
-        returned: 0,
-        rows: [],
-        sample: rankingSample({ n: 0, minSample: 30 }),
-      }),
-    );
-    expect(view.emptyTitle).toBe('Janela ainda não coletada');
-    expect(view.completeness.truncated).toBe(true);
-    expect(view.completeness.detail).toContain('ainda não publicizou');
-    // E a lista vazia carrega a explicação, e não um "0 trader" mudo.
-    expect(view.emptyDetail).toContain('ainda não publicizou');
+    const completeness = rankingCompleteness({ series });
+    expect(completeness.truncated).toBe(true);
+    expect(completeness.label).toBe('Janela ainda não coletada');
+    expect(completeness.detail).toContain('ainda não publicizou');
+    expect(rankingAggregatePolicy(series).reason).toContain('ainda não foi coletada');
   });
 });
 
@@ -373,22 +315,20 @@ describe('STK-F2-15 §15 — a métrica dependente de série completa é BLOQUEA
 });
 
 describe('STK-F2-15 §15 — a amostra é a que o produto já usa', () => {
-  it('N é o número EXIBIDO, não o ingerido nem o estimado', () => {
+  it('N é o número exibido e a amostra baixa segue o limiar compartilhado', () => {
     // A tela mostra 100 linhas; a ingestão gravou 1.800. O `N` honesto é o que
-    // o usuário pode conferir — o outro é um número que ele não vê.
-    const view = rankingSampleViews(ranking({ sample: rankingSample({ n: 100, minSample: 30 }) }));
-    expect(view.sample).toBe('N = 100 traders');
-  });
-
-  it('abaixo do limiar, o aviso cita a regra e promete nenhum número derivado', () => {
-    const view = rankingSampleViews(ranking({ sample: rankingSample({ n: 12, minSample: 30 }) }));
-    expect(view.lowSampleNotice).toContain('Baixa amostra');
-    expect(view.lowSampleNotice).toContain('sem interpretação, comparação ou recomendação');
-    // No limiar ou acima, não há aviso: a regra é a mesma do dashboard.
-    expect(
-      rankingSampleViews(ranking({ sample: rankingSample({ n: 30, minSample: 30 }) }))
-        .lowSampleNotice,
-    ).toBeNull();
+    // o usuário pode conferir — a função compartilhada devolve N e o estado.
+    expect(rankingSample({ n: 100, minSample: 30 })).toEqual({
+      n: 100,
+      minSample: 30,
+      lowSample: false,
+    });
+    expect(rankingSample({ n: 12, minSample: 30 })).toEqual({
+      n: 12,
+      minSample: 30,
+      lowSample: true,
+    });
+    expect(rankingSample({ n: 30, minSample: 30 }).lowSample).toBe(false);
   });
 
   it('um limiar inválido é recusado, e não tratado como zero', () => {
@@ -420,36 +360,6 @@ describe('STK-F2-15 §15 — Composite Score AUSENTE da UI', () => {
     ).toBe(false);
   });
 
-  it('a linha da tabela não produz texto de score, badge nem recomendação', () => {
-    const view = rankingRowView(row());
-    const text = Object.values(view).join(' ');
-    for (const forbidden of ['score', 'Score', 'badge', 'Badge', 'recomend', 'selo', 'rating'])
-      expect(text).not.toContain(forbidden);
-    // E o que ela carrega é só o que a origem publicou.
-    expect(Object.keys(view).sort()).toEqual(
-      ['key', 'negative', 'pnl', 'rank', 'trader', 'vol', 'wallet'].sort(),
-    );
-  });
-
-  it('a view completa não escreve score, badge, recomendação nem leitura', () => {
-    const view = rankingView(ranking({ sample: rankingSample({ n: 100, minSample: 30 }) }));
-    const text = JSON.stringify(view);
-    for (const forbidden of [
-      'compositeScore',
-      'composite',
-      'score',
-      'badge',
-      'recomend',
-      'recomendaç',
-      'selo',
-      'rating',
-      'melhor',
-      'pior',
-      'destaque',
-    ])
-      expect(text).not.toContain(forbidden);
-  });
-
   it('os ARQUIVOS desta tarefa não nomeiam Composite Score em código de produto', () => {
     // Complemento de leitura: os arquivos de PRODUTO (schema, leitura, rota e
     // componente) não podem conter o termo fora de comentário. Eles o citam
@@ -461,8 +371,6 @@ describe('STK-F2-15 §15 — Composite Score AUSENTE da UI', () => {
       '../../packages/db/src/polymarket-ranking.ts',
       '../../apps/api/src/polymarket-ranking-routes.ts',
       '../../apps/api/src/openapi.ts',
-      '../../apps/web/src/product/ranking-view.ts',
-      '../../apps/web/src/product/polymarket-ranking.tsx',
     ];
     for (const file of files) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8');
@@ -485,30 +393,5 @@ describe('STK-F2-15 §15 — Composite Score AUSENTE da UI', () => {
       'utf8',
     );
     expect(source).not.toMatch(/organizationId|userId|tenantId/);
-  });
-});
-
-describe('STK-F2-15 §15 — a tela não calcula o que a origem não publicou', () => {
-  it('a view mostra P&L e volume crus, sem ROI, razão ou variação', () => {
-    // Um "índice de desempenho" derivado de `pnl / vol` seria uma métrica
-    // nossa apresentada como da Polymarket. Não existe campo para isso.
-    const view = rankingRowView(row());
-    expect(Object.keys(view)).not.toContain('roi');
-    expect(Object.keys(view)).not.toContain('ratio');
-    // Os valores exibidos são os literais, apenas com separador de milhar.
-    expect(view.pnl).toBe('US$ 792.578,3948993701');
-    expect(view.vol).toBe('US$ 2.666.493,7190210004');
-  });
-
-  it('um trader sem nome mostra a carteira, nunca um nome inventado', () => {
-    const view = rankingRowView(row({ userName: '   ' }));
-    expect(view.trader).toBe('(sem nome informado)');
-    expect(view.wallet).toBe('0x224a89dbe0db0d6124b335edabd15b3f877da3d5');
-  });
-
-  it('P&L negativo é marcado como negativo, com o sinal da origem', () => {
-    const view = rankingRowView(row({ pnl: '-4200.5' }));
-    expect(view.negative).toBe(true);
-    expect(view.pnl).toContain('−');
   });
 });

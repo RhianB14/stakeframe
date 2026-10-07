@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { pageQuerySchema, selectionInputSchema } from './finance.js';
+import { reportMoneySchema, reportUnitsSchema } from './reports.js';
 
 export const eventProviderSchema = z.enum(['thesportsdb', 'tavily']);
 export type EventProvider = z.infer<typeof eventProviderSchema>;
@@ -36,6 +37,15 @@ export type CalendarItem = z.infer<typeof calendarItemSchema>;
 export const calendarPageSchema = z
   .object({
     items: z.array(calendarItemSchema),
+    dailyResults: z
+      .array(
+        z.object({
+          date: z.iso.date(),
+          profit: reportMoneySchema,
+          profitUnits: reportUnitsSchema.nullable(),
+        }),
+      )
+      .default([]),
     total: z.number().int().nonnegative(),
     distinctBets: z.number().int().nonnegative(),
     pendingSelections: z.number().int().nonnegative(),

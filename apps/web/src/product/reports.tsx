@@ -96,7 +96,11 @@ function BreakdownTable({ payload }: { payload: ReportSnapshotPayload }) {
                 <td>{row.labelKey}</td>
                 <td className="tabular">{row.bets}</td>
                 <td
-                  className={`tabular ${row.profit.startsWith('-') ? 'negative' : row.profit === '0.00' ? '' : 'positive'}`}
+                  /* D2: zero e lucro não dividem cor — a decisão é numérica, não
+                     por igualdade de string ('0.00' deixava '0' e '0.0' caírem em verde). */
+                  className={`tabular ${
+                    Number(row.profit) > 0 ? 'positive' : Number(row.profit) < 0 ? 'negative' : ''
+                  }`}
                 >
                   {formatReportBRL(row.profit)}
                   {row.lowSample ? <small>amostra pequena</small> : null}

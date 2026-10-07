@@ -174,6 +174,24 @@ export function createEventService(
             [query.betState ?? null],
           )
         ).rows[0]!.count;
+        const dailyResults = (
+          await client.query<{ date: string; profit: string; profit_units: string | null }>(
+            `
+          select (s.settled_at at time zone 'America/Sao_Paulo')::date::text as date,
+            coalesce(sum(s.return_amount-s.real_principal_closed),0)::numeric(31,2)::text as profit,
+            case when bool_and(b.unit_amount is not null and b.unit_amount>0)
+              then coalesce(sum((s.return_amount-s.real_principal_closed)/b.unit_amount),0)::numeric(35,6)::text
+              else null end as profit_units
+          from finance.settlement s
+          join finance.bet b on b.id=s.bet_id and b.organization_id=s.organization_id
+          left join finance.settlement_reversal r on r.settlement_id=s.id and r.organization_id=s.organization_id
+          where s.organization_id=current_setting($$app.organization_id$$, true)::uuid
+            and r.settlement_id is null
+            and (s.settled_at at time zone 'America/Sao_Paulo')::date between $1::date and $2::date
+          group by 1 order by 1`,
+            [query.from, query.to],
+          )
+        ).rows;
         const rows = (
           await client.query<SelectionRow>(
             `
@@ -186,6 +204,11 @@ export function createEventService(
         ).rows;
         return calendarPageSchema.parse({
           items: rows.map(calendarDto),
+          dailyResults: dailyResults.map((item) => ({
+            date: item.date,
+            profit: item.profit,
+            profitUnits: item.profit_units,
+          })),
           total: totals.total,
           distinctBets: totals.bets,
           pendingSelections: pending,

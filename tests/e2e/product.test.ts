@@ -691,8 +691,10 @@ test('private workspace renders real fixture amounts, usable navigation and resp
 }, info) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
-  await expect(page.getByText('R$ 1.000,00', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+  ).toBeVisible();
   const smallText = await page
     .locator('.sidebar-caption, .product-eyebrow, .metric-card small, .product-footer')
     .evaluateAll((elements) =>
@@ -736,7 +738,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   ).toBe(true);
   await page.screenshot({ path: info.outputPath('product-overview.png'), fullPage: true });
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  await expect(page.getByLabel('Situação')).toBeVisible();
+  await expect(page.getByRole('group', { name: /Filtrar histórico por resultado/i })).toBeVisible();
   await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
   await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
@@ -757,16 +759,28 @@ test('private workspace renders real fixture amounts, usable navigation and resp
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
     }));
-    const navTargetHeights = await nav
-      .locator('a')
-      .evaluateAll((links) => links.map((link) => link.getBoundingClientRect().height));
+    // Só alvos VISÍVEIS: a skin esconde o link #profile no mobile (product.css,
+    // @media max-width 760px) porque o perfil é alcançado pelo avatar do
+    // cabeçalho — e um link com `display: none` mede 0px sem ser alvo de
+    // toque. O piso de 44px continua exigido de todos os que aparecem.
+    const navTargets = await nav.locator('a:visible').evaluateAll((links) =>
+      links.map((link) => ({
+        texto: (link.textContent ?? '').trim().slice(0, 24),
+        altura: Math.round(link.getBoundingClientRect().height),
+      })),
+    );
     const labelLayout = await configLabel.evaluate((element) => ({
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
       height: element.getBoundingClientRect().height,
     }));
     expect(navLayout.scrollWidth).toBeLessThanOrEqual(navLayout.width);
-    expect(navTargetHeights.every((height) => height >= 44)).toBe(true);
+    // A falha precisa dizer QUAL alvo está abaixo do piso e por quanto: um
+    // `every(...) === true` só diz "não".
+    expect(
+      navTargets.filter((alvo) => alvo.altura < 44),
+      'alvos de toque abaixo de 44px',
+    ).toEqual([]);
     expect(labelLayout.scrollWidth).toBeLessThanOrEqual(labelLayout.width);
     expect(labelLayout.height).toBeGreaterThan(12);
 
@@ -809,6 +823,7 @@ test('first use requires explicit balance confirmation and preserves decimal str
     return route.fulfill({ json: { id: 'initial', version: workspace.version } });
   });
   await page.goto('/');
+
   await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Conferir saldos iniciais' }).click();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('1.234,56');
@@ -844,8 +859,9 @@ test('ambiguous network result is recovered with the same key and body after rel
     }
   });
   await page.goto('/#finance');
-  await page.getByRole('button', { name: '+ Entrada', exact: true }).click();
-  await page.getByLabel('Valor (R$)', { exact: true }).fill('25,50');
+  await page.getByLabel('Valor da movimentação', { exact: true }).fill('25,50');
+  await page.locator('.bankroll-move-card').getByRole('button', { name: 'Registrar' }).click();
+  await expect(page.getByLabel('Valor (R$)', { exact: true })).toHaveValue('25,50');
   await page.getByLabel('Motivo / observação').fill('Aporte conferido');
   await page.getByRole('button', { name: 'Registrar movimentação' }).click();
   await expect(
@@ -902,10 +918,12 @@ test('partial cashout sends closed principal independently from received money',
 test('an expired API session removes cached private records', async ({ page }) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await expect(page.getByText('R$ 1.000,00', { exact: true })).toBeVisible();
+  await expect(
+    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+  ).toBeVisible();
   await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
   await page.route('**/api/v1/journal?*', (route) => route.fulfill({ status: 401, json: {} }));
-  await page.getByRole('link', { name: 'Financeiro', exact: true }).click();
+  await page.getByRole('link', { name: 'Banca', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Entrar com Google' })).toBeVisible();
   await expect(page.getByText('R$ 1.000,00', { exact: true })).toHaveCount(0);
 });
@@ -2288,7 +2306,7 @@ test('the Mini App explains how to open it when Telegram is unavailable (R5)', a
 test('owner panel footer shows the stamped release version', async ({ page }) => {
   await enabledProduct(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
 });
 

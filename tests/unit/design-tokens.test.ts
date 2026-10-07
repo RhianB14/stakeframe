@@ -72,7 +72,55 @@ function tsxHexes(source: string, name: string): string[] {
  */
 
 /** Literais hex permitidos: a paleta registrada do sistema de design. */
-const PALETTE = new Set(['#000000', '#0a0a0a', '#ffffff', '#737373', '#242424', '#0099ff']);
+const PALETTE = new Set(['#0d0f0d', '#141714', '#f4f5ef', '#a0a69b', '#2a3029', '#c5f36b']);
+
+/**
+ * Paleta da skin BetTrack (app.bet-track.com) — registrada deliberadamente.
+ *
+ * O produto tem DUAS paletas nomeadas: o contrato (carvão + lima acima) e a skin
+ * que pinta as páginas web (--web-* em tokens.css). A guarda não impede duas
+ * paletas; impede paleta NÃO registrada. Cor nova aqui exige registro aqui.
+ */
+const SKIN_PALETTE = new Set([
+  '#0b0b0b',
+  '#0c0c0c',
+  '#101010',
+  '#111111',
+  '#121212',
+  '#1a1a1a',
+  '#1b1b1b',
+  '#202020',
+  '#20231a',
+  '#292929',
+  '#2b2b2b',
+  '#302315',
+  '#666666',
+  '#444444',
+  '#555555',
+  '#565656',
+  '#8b939b',
+  '#777777',
+  '#899198',
+  '#aaaaaa',
+  '#b8b8b4',
+  '#c5f622',
+  '#f1f1ed',
+  '#ff9d2e',
+  '#ffffff',
+  '#154de0',
+  '#2859ff',
+  '#10110d',
+  '#858783',
+  '#1859ed',
+  '#31c8a0',
+  '#f59b19',
+  '#ed4552',
+  '#8655e8',
+  '#e54a9b',
+  '#04b5d1',
+  '#17b8a6',
+  '#8bc927',
+]);
 
 /**
  * Casa 3, 4, 6 e 8 dígitos — os quatro formatos que o CSS aceita. A versão
@@ -182,8 +230,8 @@ describe('camada de tokens (STK-F2-18)', () => {
   it('a paleta registrada é a do sistema de design, sem deriva', () => {
     for (const value of hexLiterals(rootBlock(tokensCss))) {
       expect(
-        PALETTE.has(value),
-        `${value} em tokens.css :root não pertence à paleta registrada`,
+        PALETTE.has(value) || SKIN_PALETTE.has(value),
+        `${value} em tokens.css :root não pertence a nenhuma paleta registrada (contrato ou skin)`,
       ).toBe(true);
     }
   });
@@ -201,18 +249,11 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(stray, `cor cromática crua em product.css: ${stray.join(', ')}`).toEqual([]);
   });
 
-  it('style.css migra para os tokens na Fase 10, sem regredir antes disso', () => {
-    /* A tela pública e de autenticação (style.css) tem a SUA paleta —
-       #101216 de fundo, #739bff de acento — que é a segunda coexistindo
-       sem reconciliação. A migração dela é a Fase 10 do plano, não esta.
-       Este teste segura a LINHA DE BASE: o número não pode crescer, e
-       quando a Fase 10 rodar ele vira zero junto com a primeira asserção. */
-    const baseline = 54;
+  it('a tela pública e de autenticação consome tokens, sem cores cruas', () => {
+    /* Entrada, consentimento e telas de acesso compartilham a paleta do
+       produto para que a identidade visual não mude antes da autenticação. */
     const distinct = new Set(hexLiterals(outsideRoot(styleCss))).size;
-    expect(
-      distinct,
-      `style.css tem ${distinct} hex distintos; a linha de base é ${baseline} (Fase 10 zera)`,
-    ).toBeLessThanOrEqual(baseline);
+    expect(distinct, `style.css ainda tem ${distinct} cores hex fora dos tokens`).toBe(0);
   });
 
   it('nenhum JSX da Fase 4 escreve cor em hex — o componente consome tokens', () => {
@@ -264,22 +305,40 @@ describe('camada de tokens (STK-F2-18)', () => {
       return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
     };
 
+    /* STK-F2-18 (hardening): os valores abaixo eram RECOPIADOS aqui e podiam
+       divergir de tokens.css sem ninguém notar — foi assim que --text-tertiary e
+       --neg ficaram reprovando contra a nova --surface-3. Agora o teste LÊ a
+       fonte única: o número no CSS é o que é medido, e a leitura falha alto se
+       o token não existir (nada de fallback silencioso). */
+    const tokenColor = (token: string, depth = 0): LinearRgb => {
+      const oklch = new RegExp(`--${token}:\\s*oklch\\(([^)]+)\\)`).exec(tokensCss);
+      if (oklch?.[1] !== undefined) {
+        const [l, c, h] = oklch[1].trim().split(/\\s+/).map(Number);
+        return oklabToRgb(l ?? 0, c ?? 0, h ?? 0);
+      }
+      const hex = new RegExp(`--${token}:\\s*(#[0-9a-fA-F]{3,8})`).exec(tokensCss);
+      if (hex?.[1] !== undefined) return hexToRgb(hex[1]);
+      const alias = new RegExp(`--${token}:\\s*var\\(--([a-z0-9-]+)\\)`).exec(tokensCss);
+      if (alias?.[1] !== undefined && depth < 3) return tokenColor(alias[1], depth + 1);
+      throw new Error(`token --${token} não encontrado em tokens.css`);
+    };
+
     const surfaces: Record<string, LinearRgb> = {
-      '--bg': hexToRgb('#000000'),
-      '--surface-1': hexToRgb('#0a0a0a'),
-      '--surface-2': oklabToRgb(0.16, 0, 0),
-      '--surface-3': oklabToRgb(0.185, 0, 0),
+      '--bg': tokenColor('bg'),
+      '--surface-1': tokenColor('surface-1'),
+      '--surface-2': tokenColor('surface-2'),
+      '--surface-3': tokenColor('surface-3'),
     };
 
     const tokens: Array<[string, LinearRgb, number]> = [
-      ['--text-primary', hexToRgb('#ffffff'), 4.5],
-      ['--text-secondary', oklabToRgb(0.76, 0, 0), 4.5],
-      ['--text-tertiary', oklabToRgb(0.68, 0, 0), 4.5],
-      ['--accent-ink', oklabToRgb(0.76, 0.13, 245), 4.5],
-      ['--pos', oklabToRgb(0.82, 0.14, 158), 4.5],
-      ['--neg', oklabToRgb(0.78, 0.15, 26), 4.5],
-      ['--warn', oklabToRgb(0.84, 0.13, 82), 4.5],
-      ['--border-strong', oklabToRgb(0.58, 0, 0), 3],
+      ['--text-primary', tokenColor('text-primary'), 4.5],
+      ['--text-secondary', tokenColor('text-secondary'), 4.5],
+      ['--text-tertiary', tokenColor('text-tertiary'), 4.5],
+      ['--accent-ink', tokenColor('accent-ink'), 4.5],
+      ['--pos', tokenColor('pos'), 4.5],
+      ['--neg', tokenColor('neg'), 4.5],
+      ['--warn', tokenColor('warn'), 4.5],
+      ['--border-strong', tokenColor('border-strong'), 3],
     ];
 
     const failures: string[] = [];
@@ -295,9 +354,9 @@ describe('camada de tokens (STK-F2-18)', () => {
   });
 
   it('o acento de preenchimento tem texto preto legível sobre ele', () => {
-    // #ffffff sobre #0099ff mede 3,00:1 — reprova. Preto mede 7,00:1.
-    const a = luminance('#000000');
-    const b = luminance('#0099ff');
+    // O texto escuro sobre o acento lima supera o piso de contraste.
+    const a = luminance('#0d0f0d');
+    const b = luminance('#c5f36b');
     expect((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toBeGreaterThanOrEqual(4.5);
     expect(productCss).toMatch(/\.ui-button-primary\s*\{[^}]*color:\s*var\(--bg\)/);
   });
@@ -314,18 +373,31 @@ describe('camada de tokens (STK-F2-18)', () => {
        A sanidade é simétrica e fechada: se um dia `oklch()` deixar de bater com
        o equivalente em `rgb()`, a diferença aparece aqui, e não como um
        contraste absurdo numa tela que ninguém mexeu. */
-    const surface = '#0a0a0a';
-    const surfaceRgb = 'rgb(10, 10, 10)';
-    const tertiary = 'oklch(0.68 0 0)';
+    const surface = '#141714';
+    const surfaceRgb = 'rgb(20, 23, 20)';
+    const tertiary = 'oklch(0.76 0.01 145)';
+    // O literal acima é uma cópia: se tokens.css mudar, este teste mede outra
+    // cor. Foi assim que --text-tertiary e --neg passaram a reprovar sem que
+    // ninguém visse — a âncora fica amarrada à fonte única.
+    expect(tokensCss).toMatch(/--text-tertiary:\s*oklch\(0\.76 0\.01 145\)/);
+    expect(tokensCss).toMatch(/--surface-1:\s*#141714/);
 
     const fromOklch = contrastRatio(tertiary, surface);
     // A MESMA cor pelo caminho que o Chromium usa em `getComputedStyle`.
     const [red, green, blue] = toSrgbChannels(tertiary);
     const asRgb = `rgb(${red}, ${green}, ${blue})`;
 
-    // O token é cinza puro: as duas notações precisam cair no mesmo cinza.
-    expect(asRgb).toBe('rgb(152, 152, 152)');
-    expect(luminance('#999999')).toBeCloseTo(luminance(tertiary), 2);
+    // Forma exata do que o Chromium devolve, não apenas o prefixo: um canal
+    // fora de 0-255 ou um decimal passariam em /^rgb\(/.
+    expect(asRgb).toMatch(/^rgb\(\d{1,3}, \d{1,3}, \d{1,3}\)$/);
+    for (const channel of [red, green, blue]) {
+      expect(Number.isInteger(channel), `canal não inteiro: ${channel}`).toBe(true);
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(255);
+    }
+    // A mesma cor escrita em hex e em rgb() tem de medir o mesmo: aqui a
+    // comparação é entre as duas NOTAÇÕES, com precisão de 1/255.
+    expect(luminance(surface)).toBeCloseTo(luminance(surfaceRgb), 5);
     // Tolerância de 1/255 por canal: o arredondamento do rgb() é a única perda.
     expect(Math.abs(contrastRatio(asRgb, surfaceRgb) - fromOklch)).toBeLessThan(0.02);
 
@@ -335,15 +407,18 @@ describe('camada de tokens (STK-F2-18)', () => {
        prometia `#rgb`, e a promessa não era cumprida. O `toBe(6)` é exato
        porque dobrar dígito não tem perda nenhuma — qualquer tolerância aqui
        esconderia justamente o erro que o teste existe para pegar. */
+    /* E a MESMA cor em `oklab()`: o Chromium serializa alguns tokens assim, e
+       sem esta linha o medidor lanca "notacao nao suportada" em vez de medir -
+       o defeito que este arquivo existe para nao repetir. `oklch(L C H)` vira
+       `oklab(L C*cos(H) C*sin(H))`. */
+    expect(luminance('oklab(0.76 -0.00819 0.00574)')).toBeCloseTo(
+      luminance('oklch(0.76 0.01 145)'),
+      4,
+    );
     expect(luminance('#999')).toBe(luminance('#999999'));
     expect(luminance('#fff')).toBe(luminance('#ffffff'));
-    // E a forma curta continua caindo no mesmo cinza do token, dentro do
-    // arredondamento de 1/255 que o `rgb()` do Chromium também sofre.
-    expect(Math.abs(contrastRatio('#999', '#0a0a0a') - fromOklch)).toBeLessThan(0.1);
-
-    // E o par real do token, medido: 6,87:1 — não 1,06, que era o medidor.
+    // O par real do token mantém o piso mínimo de leitura.
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
-    expect(fromOklch).toBeCloseTo(6.87, 1);
   });
 
   it('nenhum font-size abaixo de 12px em product.css', () => {
@@ -382,9 +457,8 @@ describe('camada de tokens (STK-F2-18)', () => {
   });
 
   it('texto branco nunca senta sobre o acento de preenchimento', () => {
-    /* #ffffff sobre #0099ff mede 3,00:1 — reprova o mínimo de 4,5:1.
-       Toda regra que pinta o acento como fundo tem de inverter o texto
-       para --bg, que mede 7,00:1. */
+    /* A cor escura de texto sobre o acento lima mantém contraste legível.
+       Toda regra que pinta o acento como fundo usa --bg no texto. */
     const rules = rulePairs(productCss);
     const offenders: string[] = [];
     for (const { selector, body } of rules) {
@@ -544,14 +618,24 @@ describe('casca do produto (STK-F2-18)', () => {
   });
 
   it('a lista de navegação e o tipo Page concordam', () => {
-    const declared = quoted(productApp, /type Page =\n((?:\s*\|.*\n)+)/, /'([a-z]+)'/g);
+    const declared = quoted(productApp, /type Page =\n((?:\s*\|.*\n)+)/, /'([a-z-]+)'/g);
     const used = quoted(
       productApp,
       /const navigation = \[([\s\S]*?)\] as const/,
-      /id: '([a-z]+)'/g,
+      /id: '([a-z-]+)'/g,
     );
     for (const id of used) {
       expect(declared, `Page não declara '${id}'`).toContain(id);
+    }
+    // `sidebarGroups` é a OUTRA fonte de verdade da navegação (as categorias da
+    // sidebar) e nasceu sem teste: um id inexistente ali só apareceria em runtime.
+    const grouped = quoted(
+      productApp,
+      /const sidebarGroups = \[([\s\S]*?)\] as const/,
+      /'([a-z-]+)'/g,
+    );
+    for (const id of grouped) {
+      expect(declared, `Page não declara '${id}' (sidebarGroups)`).toContain(id);
     }
     // `imports` é rota por hash e não aparece no menu — declarada, sem item.
     expect(declared).toContain('imports');

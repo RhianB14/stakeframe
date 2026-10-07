@@ -1,4 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { capturePageView, identifyOwner, setSensitiveSurface } from '../lib/telemetry.js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -40,15 +48,13 @@ import { CalendarPage, EventReview } from './events.js';
 import { ReportsPage } from './reports.js';
 import { OverviewReport } from './overview-report.js';
 import { OnboardingPage } from './onboarding.js';
-import { PolymarketRankingPage } from './polymarket-ranking.js';
 // STK-F3-04: a tela Global em cards de tipster (esportes e e-sports).
-import { PolymarketGlobalPage } from './polymarket-global.js';
+import { PolymarketGlobalPage, PolymarketTipsterPage } from './polymarket-global.js';
 import { PolymarketFavoritesPage } from './polymarket-favorites.js';
 import { PolymarketSimulationPage } from './polymarket-simulation.js';
 import { NavGlyph, type NavIcon } from './nav-icons.js';
 import { SidebarFooter, TopBar } from './app-shell.js';
 import { readSidebarMode, writeSidebarMode, type SidebarMode } from './sidebar-mode.js';
-import './tokens.css';
 import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
 
@@ -60,6 +66,7 @@ export type Modal =
       kind: 'cash';
       operation: 'deposit' | 'withdrawal' | 'transfer' | 'reconcile';
       accountId?: string;
+      amount?: string;
     }
   | { kind: 'catalog'; catalogKind: 'bookmaker' | 'tipster'; item?: CatalogItem }
   | { kind: 'bet'; bet?: Bet }
@@ -75,12 +82,9 @@ type Owner = { id: string; name: string };
  * A lista abaixo e a constante precisam concordar; o teste
  * tests/unit/design-tokens.test.ts confere as duas.
  *
- * STK-F3-01 acrescenta as quatro rotas da categoria Polymarket. `pm-favorites`
- * e `pm-simulation` têm item na navegação e tela. `pm-global` e `pm-telegram`
- * são declaradas aqui e NÃO têm item nem tela: o card é explícito ao dizer
- * que implementá-las está fora de escopo, e elas continuam sendo ROTA — um
- * link guardado para o futuro que cai na tela errada é pior que um 404
- * honesto.
+ * A categoria Polymarket tem telas de ranking global, Favoritos e Simulação.
+ * `pm-telegram` permanece como destino reservado até a tela ser implementada.
+ * A rota antiga `#ranking` encaminha para o ranking global.
  *
  * A união é mantida CONTÍGUA, sem comentário no meio, porque o teste de
  * tokens a lê com um regex que para na primeira linha fora do padrão. Um
@@ -93,14 +97,15 @@ type Page =
   | 'calendar'
   | 'analytics'
   | 'reports'
-  | 'ranking'
   | 'finance'
+  | 'profile'
   | 'settings'
   | 'imports'
   | 'pm-global'
   | 'pm-favorites'
   | 'pm-telegram'
-  | 'pm-simulation';
+  | 'pm-simulation'
+  | 'pm-tipster';
 // STK-F2-18: `icon` é um identificador do traçado em nav-icons.tsx, não um
 // glifo. Um caractere Unicode como ícone varia entre plataformas, não aceita
 // `currentColor` e some em algumas fontes — e o desenho passava a ser a única
@@ -111,13 +116,8 @@ const navigation = [
   { id: 'calendar', title: 'Calendário', icon: 'calendar' },
   { id: 'analytics', title: 'Análises', icon: 'analytics' },
   { id: 'reports', title: 'Relatórios', icon: 'reports' },
-  // STK-F2-15: o ranking oficial Polymarket. Entra na navegação da web (não do
-  // Mini App), e a coluna da barra inferior no mobile é explícita por causa
-  // dele — o teste de navegador exige que a barra não role e que cada destino
-  // mantenha 44px de altura, e um `auto-fit` faria a contagem depender da
-  // largura em vez de ser verificada.
-  { id: 'ranking', title: 'Ranking', icon: 'ranking' },
-  { id: 'finance', title: 'Financeiro', icon: 'finance' },
+  { id: 'finance', title: 'Banca', icon: 'finance' },
+  { id: 'profile', title: 'Perfil', icon: 'settings' },
   { id: 'settings', title: 'Configurações', icon: 'settings' },
   /* STK-F3-01: Favoritos e Simulação NÃO estão nesta lista. Eles são
      destinos de primeira classe (as telas da F2-16 e da F2-17, promovidas a
@@ -136,17 +136,17 @@ const navigation = [
  * `currentPage` resolve. Se as duas tivessem os títulos, uma delas
  * passaria a ser a verdade e a outra uma cópia.
  *
- * Os dois destinos que o card pede e cujas telas estão FORA DE ESCOPO
- * (Global, Telegram) NÃO entram em `sidebarGroups` — eles são renderizados
- * como itens reservados dentro da categoria Polymarket. Um item ausente
- * some da decisão do dono; um item clicável que leva a lugar nenhum é pior
- * que os dois. Eles ficam desligados e VISÍVEIS, e cada um diz por quê.
+ * `pm-telegram` não entra em `sidebarGroups`: ele é renderizado como item
+ * reservado dentro da categoria Polymarket. As telas disponíveis ficam
+ * visíveis como destinos normais da navegação.
  */
 const sidebarGroups = [
-  { caption: 'SEU ESPAÇO PESSOAL', ids: ['overview', 'bets', 'calendar', 'analytics', 'reports'] },
-  { caption: 'MERCADO', ids: ['ranking', 'finance'] },
+  { caption: 'PAINEL', ids: ['overview'] },
+  { caption: 'APOSTAS', ids: ['bets', 'calendar'] },
+  { caption: 'ANÁLISES', ids: ['analytics', 'reports'] },
+  { caption: 'BANCA', ids: ['finance'] },
   { caption: 'POLYMARKET', ids: ['pm-favorites', 'pm-simulation'] },
-  { caption: 'CONTA', ids: ['settings'] },
+  { caption: 'CONTA', ids: ['profile', 'settings'] },
 ] as const satisfies ReadonlyArray<{ caption: string; ids: ReadonlyArray<Page> }>;
 /**
  * STK-F2-12 — os MESMOS quatro destinos dentro do Mini App, sobre as mesmas
@@ -162,17 +162,17 @@ const miniAppNavigation = [
   { id: 'settings', title: 'Ajustes', icon: 'settings' },
 ] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: NavIcon }>;
 /**
- * STK-F3-01 — os quatro destinos da categoria Polymarket, NA ORDEM DO CARD:
- * Global, Favoritos, Telegram, Simulação.
+ * A categoria Polymarket guarda Ranking global, Favoritos, Telegram e
+ * Simulação, nesta ordem. Ranking global, Favoritos e Simulação têm telas;
+ * Telegram permanece reservado.
  *
  * A lista guarda a ordem porque a ordem é parte do que o dono pediu, e ela
  * é o tipo de coisa que se perde em uma refatoração: os dois destinos
- * existentes estavam na `navigation` e os dois reservados eram
- * condicionais espalhadas dentro do mapa. Qualquer um dos dois caminhos
- * produzia a ordem errada sem quebrar nada.
+ * Cada destino é declarado uma única vez para que a ordem não dependa de
+ * condicionais espalhadas pelo componente.
  *
- * `reserved: true` marca os dois cujas telas estão FORA DE ESCOPO. Eles
- * aparecem declarados e desligados: um item ausente some da decisão do dono,
+ * `reserved: true` marca o destino cuja tela está FORA DE ESCOPO. Ele
+ * aparece declarado e desligado: um item ausente some da decisão do dono,
  * e um item clicável que leva a lugar nenhum é pior que os dois.
  *
  * `count: true` marca o único item com badge de contagem (Favoritos) — e a
@@ -185,7 +185,7 @@ const polymarketItems = [
   // desligado para uma rota que agora funciona. `pm-telegram` continua
   // reservado: nenhuma tela dele foi pedida aqui, e continua sendo o
   // destino honesto para "ainda não existe".
-  { id: 'pm-global', title: 'Global', icon: 'global' },
+  { id: 'pm-global', title: 'Ranking global', icon: 'global' },
   { id: 'pm-favorites', title: 'Favoritos', icon: 'favorite', count: true },
   { id: 'pm-telegram', title: 'Telegram', icon: 'telegram', reserved: true },
   { id: 'pm-simulation', title: 'Simulação', icon: 'simulation' },
@@ -225,7 +225,8 @@ const reservedPages = new Set<Page>(['pm-telegram']);
 const pageTitles: Partial<Record<Page, { title: string }>> = {
   // `pm-global` deixou de ser reserva no STK-F3-04, e o `h1` da tela nova
   // continua precisando do rótulo.
-  'pm-global': { title: 'Global' },
+  'pm-global': { title: 'Ranking global' },
+  'pm-tipster': { title: 'Tipster' },
   'pm-telegram': { title: 'Telegram' },
 };
 
@@ -275,7 +276,7 @@ function ReservedPage({ title }: { title: string }) {
  * STK-F3-01 — um destino do card cuja tela está FORA DE ESCOPO.
  *
  * Ele é um item VISÍVEL e DESLIGADO, não um link: existe para que a decisão
- * do dono (Global e Telegram foram pedidos) fique à vista sem prometer uma
+ * decisão do dono fique à vista sem prometer uma
  * tela que não existe. Um link que leva a lugar nenhum seria pior que
  * silencioso; um item cinza sem explicação seria pior que ausente.
  *
@@ -290,7 +291,7 @@ function ReservedDestination({ icon, title }: { icon: NavIcon; title: string }) 
         <NavGlyph icon={icon} />
       </span>
       <span className="nav-label">{title}</span>
-      <span className="sidebar-reserved-note">em breve</span>
+      <span className="sidebar-reserved-note">EM BREVE</span>
     </span>
   );
 }
@@ -361,7 +362,11 @@ function FavoritesBadge() {
 const favoritesPending = { favoritesPending: true } as unknown as PolymarketFavoritesResponse;
 
 function currentPage(): Page {
+  const tipster = location.hash.match(/^#\/polymarket\/tipster\/(0x[a-f\d]{40})$/i);
+  if (tipster) return 'pm-tipster';
   const id = location.hash.slice(1);
+  // Link legado: leva à tela que agora concentra o ranking.
+  if (id === 'ranking') return 'pm-global';
   if (id === 'imports') return 'imports';
   const known = navigation.find((item) => item.id === id)?.id;
   if (known) return known;
@@ -381,6 +386,9 @@ function currentPage(): Page {
   // As rotas reservadas caem na explicação de "ainda não existe" — nunca em
   // "Visão geral" em silêncio.
   return reservedPages.has(id as Page) ? (id as Page) : 'overview';
+}
+function currentTipsterWallet() {
+  return location.hash.match(/^#\/polymarket\/tipster\/(0x[a-f\d]{40})$/i)?.[1] ?? '';
 }
 
 export function ProductApp({
@@ -437,6 +445,7 @@ function ProductShell({
 }) {
   const releaseLabel = release && release.version !== 'unversioned' ? ` · v${release.version}` : '';
   const [page, setPage] = useState(currentPage);
+  const [tipsterWallet, setTipsterWallet] = useState(currentTipsterWallet);
   const [modal, setModal] = useState<Modal | null>(null);
   // STK-F3-01 — o modo da sidebar é estado do CASCA, não do conteúdo: sobrevive
   // à troca de página e é lido do storage uma vez, na montagem. A leitura é
@@ -468,7 +477,10 @@ function ProductShell({
     },
   });
   useEffect(() => {
-    const changed = () => setPage(currentPage());
+    const changed = () => {
+      setPage(currentPage());
+      setTipsterWallet(currentTipsterWallet());
+    };
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
   }, []);
@@ -485,11 +497,10 @@ function ProductShell({
         page === 'finance' ||
         page === 'reports' ||
         page === 'analytics' ||
-        // STK-F2-15: o ranking também é uma tela de número externo — posição,
-        // P&L e volume de terceiros. Uma sessão gravada aqui registrararia
-        // a carteira pública que o dono estava consultando, e isso é dado de
-        // interesse, não ruído de navegação.
-        page === 'ranking' ||
+        // Ranking global e perfis exibem posições e resultados públicos de
+        // terceiros, então essa navegação também não entra em replay.
+        page === 'pm-global' ||
+        page === 'pm-tipster' ||
         page === 'settings' ||
         modal !== null,
     );
@@ -518,12 +529,12 @@ function ProductShell({
      a largura reservada (`.sidebar-mode-*`). O `metrics` não vai para a
      marcação: publicá-lo exigiria estilo inline (proibido) ou `attr()`
      tipado, que ainda não é confiável entre os navegadores do projeto. A
-     folha repete os mesmos dois números de `sidebarMetrics`, e o teste de
-     tokens confere que as duas cópias concordam. */
+     folha é dona da largura (`--sidebar-w` em tokens.css, com o override do
+     tema web em product.css); o componente só publica o modo escolhido. */
   const shellClass =
     variant === 'mini'
       ? 'product-shell miniapp-shell'
-      : `product-shell sidebar-mode-${sidebarMode}`;
+      : `product-shell product-web-theme sidebar-mode-${sidebarMode}`;
   return (
     <div className={shellClass}>
       {/*
@@ -539,6 +550,11 @@ function ProductShell({
       {variant === 'web' ? (
         <TopBar
           collapsed={sidebarMode === 'collapsed'}
+          ownerName={owner.name}
+          signingOut={logout.isPending}
+          newBetDisabled={!workspace.initialized || !!actions.pending}
+          onNewBet={() => open({ kind: 'bet' })}
+          onSignOut={() => logout.mutate()}
           onToggleSidebar={() => {
             const next: SidebarMode = sidebarMode === 'collapsed' ? 'expanded' : 'collapsed';
             writeSidebarMode(typeof window === 'undefined' ? null : window.localStorage, next);
@@ -551,7 +567,10 @@ function ProductShell({
           <a href="#overview" className="product-brand">
             stakeframe<span>.</span>
           </a>
-          {/* STK-F3-01 — a sidebar tem UM `nav` só, com as quatro categorias
+          {/* Hardening: o CTA "+ Nova aposta" da sidebar saiu — o cabeçalho já
+              tem o botão, e dois controles com o mesmo nome acessível quebram o
+              alvo (strict mode do Playwright) e confundem quem usa leitor de tela. */}
+          {/* STK-F3-01 — a sidebar tem UM `nav` só, com as categorias
               dentro dele. Não são quatro `nav`: os quatro seriam quatro listas
               de mesmo peso para o leitor de tela, e a barra inferior do mobile
               (que é este mesmo `nav`) precisa de UM elemento com a grade
@@ -563,10 +582,9 @@ function ProductShell({
               <section className="sidebar-group" key={group.caption} aria-label={group.caption}>
                 <p className="sidebar-caption">{group.caption}</p>
                 {/* STK-F3-01 — a categoria Polymarket é a única que NÃO é uma
-                    lista de ids, porque os quatro destinos do card não são
-                    quatro Rotas iguais: dois existem (Favoritos, Simulação) e
-                    dois estão declarados e desligados (Global, Telegram). A
-                    ordem é a do card — Global, Favoritos, Telegram, Simulação
+                    lista de ids. Ranking global, Favoritos e Simulação têm
+                    telas; Telegram fica reservado. A ordem é a do card —
+                    Ranking global, Favoritos, Telegram, Simulação
                     — e a lista `polymarketItems` é a que a garante; deixá-la
                     espalhada por condicionais dentro do mapa era a forma de a
                     ordem depender de onde alguém-editaria o arquivo. */}
@@ -578,7 +596,11 @@ function ProductShell({
                         <a
                           key={entry.id}
                           href={`#${entry.id}`}
-                          aria-current={page === entry.id ? 'page' : undefined}
+                          aria-current={
+                            page === entry.id || (entry.id === 'pm-global' && page === 'pm-tipster')
+                              ? 'page'
+                              : undefined
+                          }
                         >
                           <span className="nav-icon">
                             <NavGlyph icon={entry.icon} />
@@ -626,28 +648,26 @@ function ProductShell({
             {/* STK-F2-12: dentro do Telegram não existe "conta" do navegador para
                 encerrar — o vínculo é desfeito no site (F2-04), e a seção
                 "Ajustes" aponta para lá. */}
-            {variant === 'web' ? (
+            {/* No WEB este CTA vive no TopBar (cabecalho da skin, visivel em
+                todas as larguras): aqui ele fica so para o Mini App, que nao
+                monta o TopBar — assim existe exatamente UM controle com este
+                nome acessivel por tela. */}
+            {variant === 'mini' ? (
               <Button
-                variant="ghost"
-                size="small"
-                onClick={() => logout.mutate()}
-                disabled={logout.isPending}
+                disabled={!workspace.initialized || !!actions.pending}
+                onClick={() => open({ kind: 'bet' })}
               >
-                Sair da conta
+                + Nova aposta
               </Button>
             ) : null}
-            <Button
-              disabled={!workspace.initialized || !!actions.pending}
-              onClick={() => open({ kind: 'bet' })}
-            >
-              + Nova aposta
-            </Button>
           </div>
         </header>
         <main className="product-main" id="product-main" tabIndex={-1}>
-          <div className="page-heading">
+          <div
+            className={`page-heading${page === 'bets' ? ' bets-page-heading' : ''}${page === 'finance' ? ' finance-page-heading' : ''}`}
+          >
             <div>
-              <p className="product-eyebrow">
+              <p className={`product-eyebrow${page === 'overview' ? ' dashboard-date' : ''}`}>
                 STAKEFRAME /{' '}
                 {new Intl.DateTimeFormat('pt-BR', {
                   timeZone: 'America/Sao_Paulo',
@@ -656,22 +676,26 @@ function ProductShell({
                 }).format(new Date())}
               </p>
               <h1>
-                {onboardingActive
-                  ? 'Primeiros passos'
-                  : page === 'imports'
-                    ? 'Recebimentos técnicos'
-                    : // STK-F3-01: uma rota da categoria Polymarket não tem item
-                      // em `navigation` (ela vive em `polymarketItems`, para
-                      // não aparecer duas vezes), então o título vem de
-                      // `pageTitles` — e, no caso de uma rota RESERVADA, a
-                      // página logo abaixo diz que ela ainda não existe. Um
-                      // `!` aqui derrubaria a tela inteira para quem abrir um
-                      // link guardado para o futuro, e um `?? ''` mostraria
-                      // um `h1` vazio numa tela que existe.
-                      (items.find((item) => item.id === page) ?? pageTitles[page as Page])?.title}
+                {page === 'overview' && !onboardingActive
+                  ? variant === 'mini'
+                    ? 'Painel'
+                    : 'Dashboard'
+                  : onboardingActive
+                    ? 'Primeiros passos'
+                    : page === 'imports'
+                      ? 'Recebimentos técnicos'
+                      : // STK-F3-01: uma rota da categoria Polymarket não tem item
+                        // em `navigation` (ela vive em `polymarketItems`, para
+                        // não aparecer duas vezes), então o título vem de
+                        // `pageTitles` — e, no caso de uma rota RESERVADA, a
+                        // página logo abaixo diz que ela ainda não existe. Um
+                        // `!` aqui derrubaria a tela inteira para quem abrir um
+                        // link guardado para o futuro, e um `?? ''` mostraria
+                        // um `h1` vazio numa tela que existe.
+                        (items.find((item) => item.id === page) ?? pageTitles[page as Page])?.title}
               </h1>
             </div>
-            <span className="live-label">
+            <span className={`live-label${page === 'overview' ? ' dashboard-live-label' : ''}`}>
               <span className="private-dot" /> Registros pessoais
             </span>
           </div>
@@ -716,14 +740,6 @@ function ProductShell({
             <Suspense fallback={<p role="status">Carregando análises…</p>}>
               <AnalyticsPage workspace={workspace} open={open} />
             </Suspense>
-          ) : page === 'ranking' ? (
-            // STK-F2-15: o ranking oficial Polymarket. Não recebe `workspace`
-            // porque é a única tela que NÃO lê dado da organização: o ranking
-            // é público e idêntico para qualquer conta, e passar o workspace
-            // aqui abriria espaço para alguém ligar a lista pública a um
-            // tenant — que é impersonação, e a rota não aceita nem usuário nem
-            // organização justamente por isso.
-            <PolymarketRankingPage />
           ) : page === 'pm-favorites' ? (
             // STK-F3-01: Favoritos deixa de ser SEÇÃO do ranking e vira
             // DESTINO. A tela é a MESMA seção da F2-16 — nenhuma regra foi
@@ -748,6 +764,8 @@ function ProductShell({
                 limit: POLYMARKET_RANKING_LIMIT,
               }}
             />
+          ) : page === 'pm-tipster' ? (
+            <PolymarketTipsterPage wallet={tipsterWallet} />
           ) : page === 'pm-global' ? (
             // STK-F3-04: a tela Global do Polymarket em CARDS de tipster, só
             // esportes e e-sports. Sem `workspace` pelo mesmo motivo do
@@ -766,6 +784,12 @@ function ProductShell({
             // congelado em vez do estado atual — e é autenticada pelo mesmo
             // caminho das demais.
             <ReportsPage />
+          ) : page === 'profile' ? (
+            <ProfilePage
+              name={owner.name}
+              signingOut={logout.isPending}
+              onSignOut={() => logout.mutate()}
+            />
           ) : (
             <SettingsPage workspace={workspace} open={open} />
           )}
@@ -808,6 +832,259 @@ function ProductShell({
     </div>
   );
 }
+
+const profileAvatarColors = [
+  'blue',
+  'mint',
+  'orange',
+  'red',
+  'purple',
+  'pink',
+  'cyan',
+  'teal',
+  'lime',
+] as const;
+type ProfileAvatarColor = (typeof profileAvatarColors)[number];
+const profileAvatarColorNames: Record<ProfileAvatarColor, string> = {
+  blue: 'azul',
+  mint: 'menta',
+  orange: 'laranja',
+  red: 'vermelho',
+  purple: 'roxo',
+  pink: 'rosa',
+  cyan: 'ciano',
+  teal: 'turquesa',
+  lime: 'lima',
+};
+const profileAvatarColorKey = 'stakeframe.profile.avatar-color';
+const profileAvatarImageKey = 'stakeframe.profile.avatar-image';
+
+function ProfilePage({
+  name,
+  signingOut,
+  onSignOut,
+}: {
+  name: string;
+  signingOut: boolean;
+  onSignOut: () => void;
+}) {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+  const client = useQueryClient();
+  const [displayName, setDisplayName] = useState(name);
+  const [avatarColor, setAvatarColor] = useState<ProfileAvatarColor>(() => {
+    try {
+      const saved = window.localStorage.getItem(profileAvatarColorKey);
+      return profileAvatarColors.find((color) => color === saved) ?? 'blue';
+    } catch {
+      return 'blue';
+    }
+  });
+  const [avatarImage, setAvatarImage] = useState(() => {
+    try {
+      return window.localStorage.getItem(profileAvatarImageKey) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const value = displayName.trim();
+    if (!value) {
+      setError('Informe o nome que deve aparecer no seu perfil.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await request('/api/v1/onboarding', onboardingStatusSchema, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ step: 'profile', displayName: value, timezone }),
+      });
+      await client.invalidateQueries({ queryKey: ['owner-session'] });
+      setMessage('Perfil atualizado.');
+    } catch {
+      setError('Não foi possível salvar o perfil. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const chooseAvatarColor = (color: ProfileAvatarColor) => {
+    setAvatarColor(color);
+    try {
+      window.localStorage.setItem(profileAvatarColorKey, color);
+    } catch {
+      setMessage('A cor foi aplicada nesta sessão, mas não pôde ser salva neste dispositivo.');
+    }
+  };
+  const chooseAvatarImage = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 600_000) {
+      setError('Escolha uma imagem de até 600 KB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      try {
+        window.localStorage.setItem(profileAvatarImageKey, reader.result);
+        setAvatarImage(reader.result);
+        setError('');
+        setMessage('Imagem salva neste dispositivo.');
+      } catch {
+        setError('Não foi possível salvar a imagem neste dispositivo.');
+      }
+    };
+    reader.onerror = () => setError('Não foi possível abrir essa imagem.');
+    reader.readAsDataURL(file);
+  };
+  const useInitials = () => {
+    setAvatarImage('');
+    try {
+      window.localStorage.removeItem(profileAvatarImageKey);
+    } catch {
+      // A imagem só muda nesta sessão se o navegador bloquear o armazenamento local.
+    }
+  };
+  return (
+    <div className="profile-reference-page">
+      <p className="profile-reference-subtitle">QUEM VOCÊ É E COMO ACESSA SUA CONTA</p>
+      <div className="profile-reference-layout">
+        <section className="profile-reference-identity" aria-labelledby="profile-identity-title">
+          <h2 id="profile-identity-title">IDENTIDADE</h2>
+          <div className="profile-reference-divider" />
+          <div className="profile-field-label">AVATAR</div>
+          <div className="profile-avatar-editor">
+            <div
+              className={`profile-avatar profile-avatar-${avatarColor}`}
+              aria-label={`Avatar de ${displayName}`}
+            >
+              {avatarImage ? <img src={avatarImage} alt="" /> : initials}
+            </div>
+            <div className="profile-avatar-actions">
+              <button
+                className={!avatarImage ? 'is-active' : ''}
+                type="button"
+                onClick={useInitials}
+                aria-pressed={!avatarImage}
+              >
+                INICIAIS
+              </button>
+              <label className="profile-upload-image">
+                ENVIAR IMAGEM
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={chooseAvatarImage}
+                />
+              </label>
+            </div>
+          </div>
+          <div className="profile-field-label">COR DO AVATAR</div>
+          <div className="profile-avatar-palette" role="group" aria-label="Cor do avatar">
+            {profileAvatarColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={`profile-avatar-swatch profile-avatar-swatch-${color}`}
+                aria-label={`Cor ${profileAvatarColorNames[color]}`}
+                aria-pressed={avatarColor === color}
+                onClick={() => chooseAvatarColor(color)}
+              />
+            ))}
+          </div>
+          <form className="profile-reference-form" onSubmit={(event) => void saveProfile(event)}>
+            <label className="profile-field-label" htmlFor="profile-display-name">
+              NOME
+            </label>
+            <input
+              id="profile-display-name"
+              maxLength={120}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+            />
+            <p>Este nome aparece na sua conta e nos registros compartilhados.</p>
+            <label className="profile-field-label" htmlFor="profile-username">
+              NOME DE USUÁRIO
+            </label>
+            <div className="profile-locked-field">
+              <input id="profile-username" value="Não definido" readOnly />
+              <span aria-hidden="true">⌑</span>
+            </div>
+            <p>O Stakeframe ainda não oferece um nome de usuário público.</p>
+            {error ? (
+              <p className="profile-feedback is-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {message ? (
+              <p className="profile-feedback" role="status">
+                {message}
+              </p>
+            ) : null}
+            <button className="profile-save-button" type="submit" disabled={saving}>
+              {saving ? 'SALVANDO…' : 'SALVAR ALTERAÇÕES'}
+            </button>
+          </form>
+        </section>
+        <section className="profile-reference-access" aria-labelledby="profile-access-title">
+          <h2 id="profile-access-title">ACESSO</h2>
+          <div className="profile-reference-divider" />
+          <div className="profile-reference-access-row">
+            <span>E-MAIL</span>
+            <strong>Protegido pelo provedor</strong>
+            <b>PRIVADO</b>
+          </div>
+          <div className="profile-reference-access-row">
+            <span>SENHA</span>
+            <strong>Gerenciada pela conta Google</strong>
+            <a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">
+              GERENCIAR
+            </a>
+          </div>
+          <div className="profile-reference-access-row">
+            <span>ÚLTIMO ACESSO</span>
+            <strong>Não informado</strong>
+          </div>
+          <div className="profile-reference-access-row">
+            <span>MEMBRO DESDE</span>
+            <strong>Data indisponível</strong>
+          </div>
+          <p className="profile-reference-note">
+            O Stakeframe não recebe seu e-mail nem a senha da conta Google. Esses dados são
+            gerenciados pelo provedor de acesso.
+          </p>
+        </section>
+      </div>
+      <section className="profile-danger-zone" aria-labelledby="profile-danger-title">
+        <h2 id="profile-danger-title">ZONA DE PERIGO</h2>
+        <div className="profile-danger-content">
+          <div>
+            <strong>Sair da conta</strong>
+            <p>Encerre sua sessão neste dispositivo. Seus registros permanecem na conta.</p>
+          </div>
+          <button type="button" disabled={signingOut} onClick={onSignOut}>
+            {signingOut ? 'SAINDO…' : 'SAIR DA CONTA'}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Overview({
   workspace,
   open,
@@ -824,10 +1101,9 @@ function Overview({
     <>
       {/* STK-F2-18 (Fase 4): as 4 métricas de POSIÇÃO. Saldo, disponível e
           exposição são três leituras do mesmo instante e ficam no mesmo plano;
-          o resultado do mês vem abaixo, no painel próprio, porque resultado é
-          uma dimensão diferente de posição e somá-los na mesma grade convidava
-          a leitura errada. `exposure` é o único que é promessa — dinheiro que
-          só volta se a aposta ganhar. */}
+          `exposure` é o único que é promessa — dinheiro que só volta se a aposta
+          ganhar. Restauradas no hardening do redesign: a Visão geral tinha
+          ficado sem estes rótulos, que são contrato das specs e2e e do Mini App. */}
       <div className="metric-grid">
         <Metric
           label="Saldo em conta"
@@ -852,7 +1128,8 @@ function Overview({
           detail={unit ? 'Valor congelado durante o mês' : 'Cadastre os saldos para começar'}
         />
       </div>
-      <div className="panel">
+      <OverviewReport version={workspace.version} workspace={workspace} />
+      <div className="panel overview-accounts">
         <div className="section-heading">
           <div>
             <h2>Onde está sua banca</h2>
@@ -878,7 +1155,6 @@ function Overview({
           ))}
         </div>
       </div>
-      <OverviewReport version={workspace.version} />
       <BetsPage workspace={workspace} open={open} owner={owner} compact />
     </>
   );
@@ -954,6 +1230,7 @@ function ModalContent({
           workspace={workspace}
           kind={modal.operation}
           {...(modal.accountId ? { accountId: modal.accountId } : {})}
+          {...(modal.amount ? { initialAmount: modal.amount } : {})}
           onDone={close}
         />
       );
@@ -1005,7 +1282,14 @@ function ModalContent({
       break;
   }
   return (
-    <Dialog title={title} open onClose={close}>
+    <Dialog
+      title={title}
+      {...(modal.kind === 'settings'
+        ? { description: 'Defina o percentual que vai orientar a unidade dos próximos meses.' }
+        : {})}
+      open
+      onClose={close}
+    >
       {content}
     </Dialog>
   );

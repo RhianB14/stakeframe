@@ -5,6 +5,7 @@ import {
   calendarItemSchema,
   eventSearchSchema,
   eventSearchStatusSchema,
+  formatBRL,
   eventSearchInputSchema,
   saoPauloDate,
   type Workspace,
@@ -29,6 +30,12 @@ function dayLabel(value: string) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: 'UTC' }).format(
     new Date(`${value}T12:00:00Z`),
   );
+}
+function formatUnits(value: string) {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? `${number.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U`
+    : `${value} U`;
 }
 /**
  * STK-F2-18 (Fase 4): a grade usava `['D','S','T','Q','Q','S','S']` — duas
@@ -62,6 +69,7 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
   const [day, setDay] = useState('');
   const [view, setView] = useState<'scheduled' | 'pending'>('scheduled');
   const [state, setState] = useState('open');
+  const [resultMode, setResultMode] = useState<'money' | 'units'>('units');
   const [page, setPage] = useState(1);
   const [year, monthNumber] = month.split('-').map(Number) as [number, number];
   const days = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
@@ -106,24 +114,39 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
     }
     return grouped;
   }, [monthQuery.data]);
+  const resultsByDay = useMemo(
+    () => new Map((monthQuery.data?.dailyResults ?? []).map((result) => [result.date, result])),
+    [monthQuery.data],
+  );
   return (
     <div className="calendar-layout">
       <section className="panel calendar-picker" aria-label="Escolher período">
-        <Field label="Mês do calendário">
-          <input
-            type="month"
-            value={month}
-            min="2000-01"
-            max="2100-12"
-            onChange={(event) => {
-              if (/^(20\d{2}|2100)-(0[1-9]|1[0-2])$/.test(event.target.value)) {
-                setMonth(event.target.value);
-                setDay('');
-                setPage(1);
-              }
-            }}
-          />
-        </Field>
+        <div className="calendar-picker-toolbar">
+          <Field label="Mês do calendário">
+            <input
+              type="month"
+              value={month}
+              min="2000-01"
+              max="2100-12"
+              onChange={(event) => {
+                if (/^(20\d{2}|2100)-(0[1-9]|1[0-2])$/.test(event.target.value)) {
+                  setMonth(event.target.value);
+                  setDay('');
+                  setPage(1);
+                }
+              }}
+            />
+          </Field>
+          <Field label="Resultado do dia">
+            <select
+              value={resultMode}
+              onChange={(event) => setResultMode(event.target.value as typeof resultMode)}
+            >
+              <option value="units">Unidades ganhas</option>
+              <option value="money">Valor em R$</option>
+            </select>
+          </Field>
+        </div>
         <div className="calendar-grid" aria-label="Dias do mês">
           {weekdayNames.map((label) => (
             <span className="calendar-weekday" aria-hidden="true" key={label.long}>
@@ -136,6 +159,18 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
           {Array.from({ length: days }, (_, index) => {
             const value = `${month}-${String(index + 1).padStart(2, '0')}`;
             const items = byDay.get(value) ?? [];
+            const dailyResult = resultsByDay.get(value);
+            const displayedResult = dailyResult
+              ? resultMode === 'money'
+                ? formatBRL(dailyResult.profit)
+                : dailyResult.profitUnits === null
+                  ? 'Unid. —'
+                  : formatUnits(dailyResult.profitUnits)
+              : null;
+            const resultIsNegative =
+              resultMode === 'money'
+                ? (dailyResult?.profit.startsWith('-') ?? false)
+                : (dailyResult?.profitUnits?.startsWith('-') ?? false);
             // A agenda não soma valor por SELEÇÃO: um mesmo bilhete pode ter
             // duas seleções no mesmo dia e continuaria sendo uma aposta. A
             // contagem de chips é de seleções e a legenda diz isso.
@@ -144,11 +179,15 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
               <button
                 type="button"
                 key={value}
-                aria-label={
-                  items.length === 0
-                    ? dayLabel(value)
-                    : `${dayLabel(value)}, ${items.length} ${items.length === 1 ? 'seleção' : 'seleções'}`
-                }
+                aria-label={[
+                  dayLabel(value),
+                  items.length > 0
+                    ? `${items.length} ${items.length === 1 ? 'seleção' : 'seleções'}`
+                    : '',
+                  displayedResult ? `resultado ${displayedResult}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
                 aria-pressed={selected}
                 className={[
                   'calendar-day',
@@ -165,6 +204,11 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
                 }}
               >
                 <span className="calendar-daynum">{index + 1}</span>
+                {displayedResult ? (
+                  <span className={`calendar-day-result${resultIsNegative ? ' is-negative' : ''}`}>
+                    {displayedResult}
+                  </span>
+                ) : null}
                 {items.length > 0 ? (
                   <span className="calendar-chips" aria-hidden="true">
                     {items.slice(0, 3).map((item) => (
@@ -205,7 +249,8 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
           Ver o mês inteiro
         </Button>
         <p className="muted">
-          Horários em São Paulo. Datas sem horário permanecem sem hora definida.
+          Resultados pela data da liquidação, no horário de São Paulo. Datas sem horário de evento
+          permanecem sem hora definida.
         </p>
       </section>
       <section className="panel calendar-agenda" aria-label="Agenda de eventos">
@@ -369,8 +414,8 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
           </>
         )}
         <p className="muted">
-          Os valores e resultados pertencem à aposta completa. Esta agenda não soma valores por
-          seleção.
+          O resultado diário soma o lucro líquido das liquidações. As seleções da agenda continuam
+          vinculadas às datas dos eventos.
         </p>
       </section>
     </div>

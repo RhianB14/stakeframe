@@ -133,14 +133,39 @@ function parseOklch(body: string): LinearRgb {
   return [linearize(encodedR), linearize(encodedG), linearize(encodedB)];
 }
 
+/**
+ * `oklab()` é a MESMA cor de `oklch()`, com eixos cartesianos no lugar de
+ * croma e matiz — e o Chromium serializa alguns tokens assim. Sem isto o
+ * medidor lança "notação não suportada" em vez de medir, que é o defeito que
+ * este arquivo existe para não repetir.
+ */
+function parseOklab(body: string): LinearRgb {
+  const parts = body
+    .split('/')[0]!
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  if (parts.length < 3) throw new Error(`oklab() incompleto: "${body}"`);
+  const lightness = clamp01(number(parts[0]!));
+  const aAxis = number(parts[1]!);
+  const bAxis = number(parts[2]!);
+  const hue = (Math.atan2(bAxis, aAxis) * 180) / Math.PI;
+  const [encodedR, encodedG, encodedB] = oklabToRgb(
+    lightness,
+    Math.hypot(aAxis, bAxis),
+    hue < 0 ? hue + 360 : hue,
+  );
+  return [linearize(encodedR), linearize(encodedG), linearize(encodedB)];
+}
+
 /** Converte qualquer notação suportada para canais sRGB linearizados. */
 export function parseCssColor(color: string): LinearRgb {
   const value = color.trim();
   if (value.startsWith('#')) return parseHex(value);
-  const call = /^(rgba?|oklch)\((.*)\)$/is.exec(value);
+  const call = /^(rgba?|oklch|oklab)\((.*)\)$/is.exec(value);
   if (!call) throw new Error(`Notação de cor não suportada: "${color}"`);
   const name = call[1]!.toLowerCase();
   if (name === 'oklch') return parseOklch(call[2]!);
+  if (name === 'oklab') return parseOklab(call[2]!);
   return parseRgb(call[2]!);
 }
 
