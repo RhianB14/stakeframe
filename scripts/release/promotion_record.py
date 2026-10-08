@@ -1,17 +1,17 @@
-"""Compose the promotion record from an approved candidate run (no deploy).
+"""Compose the promotion record from approved candidate evidence (no deploy).
 
-Verifies the run of the `Release candidate` workflow (main, dispatch,
-success), cross-checks the downloaded candidate evidence of the deployment
-architecture against its publication evidence, and emits the immutable
+Verifies a run of one of the explicitly reviewed candidate workflows (main,
+dispatch, success), cross-checks the downloaded candidate evidence of the
+deployment architecture against its publication evidence, and emits the immutable
 promotion record that the manual SSH window consumes: the fixed digests per
 target, the deployment identifier and the requester. This script never touches
 production.
 
-The candidate workflow is identified by its `path`, not by its display
+Candidate workflows are identified by their `path`, not by their display
 `name`: `name` is a human label that may be reworded without breaking any
-contract, while `path` is the reviewed file this repository ships. This
-mirrors scripts/release/download-approved.mjs, which already gates the
-publication side on the same `path`.
+contract, while `path` is the reviewed file this repository ships. The
+release-candidate path uses `publication-<run id>` evidence; candidate-images
+uses the candidate and candidate-evidence artifacts from that same run.
 
 The record is arm64-only, and deliberately so. Production runs on ARM64 and
 only the ARM64 indexes are approved and published: publication is a single
@@ -35,8 +35,10 @@ from pathlib import Path
 
 from verify_oci import TARGETS, require
 
-# The reviewed file that produces a candidate, not the display label.
+# Reviewed workflow files that may produce promotion evidence, not labels.
 CANDIDATE_WORKFLOW_PATH = ".github/workflows/release-candidate.yml"
+CANDIDATE_IMAGES_WORKFLOW_PATH = ".github/workflows/candidate-images.yml"
+CANDIDATE_WORKFLOW_PATHS = (CANDIDATE_WORKFLOW_PATH, CANDIDATE_IMAGES_WORKFLOW_PATH)
 # Where the approved digests live; the gate that names the build.
 APPROVAL_PATH = "infra/release/approved-arm64.json"
 # Production is ARM64; only this architecture is approved and published.
@@ -58,7 +60,7 @@ def read_json(path):
 
 
 def validate_run(run):
-    require(run.get("path") == CANDIDATE_WORKFLOW_PATH, "PROMOTION_RUN_WORKFLOW_REFUSED")
+    require(run.get("path") in CANDIDATE_WORKFLOW_PATHS, "PROMOTION_RUN_WORKFLOW_REFUSED")
     require(run.get("repository", {}).get("full_name") == REPOSITORY, "PROMOTION_RUN_REPOSITORY_REFUSED")
     require(run.get("event") == "workflow_dispatch", "PROMOTION_RUN_EVENT_REFUSED")
     require(run.get("head_branch") == "main", "PROMOTION_RUN_BRANCH_REFUSED")
@@ -80,48 +82,76 @@ def read_approval(path):
 def validate_approval(run, published, approval):
     """Bind the record to the approved build, not merely to some build.
 
-    The published evidence carries the candidate run that produced it. That
-    id must be the one the approval registry names, and the sha must agree.
-    Without this, a `published.json` from any other build would satisfy the
-    digest comparison and the record would attest to nothing.
+    The run id and sha must be the ones the approval registry names. The
+    release-candidate publication artifact also repeats candidateRunId and
+    must match it. candidate-images published.json has no candidateRunId; for
+    that explicit path, the workflow requires both input run ids to be equal
+    and the run itself must be the approved run.
     """
     require(run.get("id") == approval["candidateRunId"], "PROMOTION_RUN_NOT_APPROVED")
     require(run.get("head_sha") == approval["sourceSha"], "PROMOTION_RUN_NOT_APPROVED")
-    require(published.get("candidateRunId") == approval["candidateRunId"],
-            "PROMOTION_PUBLICATION_NOT_APPROVED")
+    if run["path"] == CANDIDATE_WORKFLOW_PATH:
+        require(published.get("candidateRunId") == approval["candidateRunId"],
+                "PROMOTION_PUBLICATION_NOT_APPROVED")
+    elif "candidateRunId" in published:
+        require(published.get("candidateRunId") == approval["candidateRunId"],
+                "PROMOTION_PUBLICATION_NOT_APPROVED")
     require(published.get("sourceSha") == approval["sourceSha"], "PROMOTION_PUBLICATION_NOT_APPROVED")
 
 
-def load_evidence(directory, sha):
+def load_evidence(directory, sha, workflow_path):
     """Cross-check what the build claimed against what the registry served.
 
-    `candidate.json` comes from the candidate run and carries the index digest
-    each built archive was verified to have. `published.json` comes from the
-    publication run and carries the digest the registry read back. They are
-    written by different workflows and meet here for the first time, so the
-    comparison below is the whole point of the record.
+    `candidate.json` carries the index digest each build verified. The
+    release-candidate publication artifact uses verified image records with
+    `indexDigest` and `provenanceVerified`; candidate-images retains a smaller
+    `published.json` with registry `digest` values. The latter path requires
+    provenance and non-root claims in candidate.json before accepting the
+    deliberately absent per-image fields in published.json.
     """
     candidate = read_json(Path(directory) / "candidate.json")
     require(candidate.get("version") == 1 and candidate.get("status") == "candidate", "PROMOTION_EVIDENCE_INVALID")
     require(candidate.get("sourceSha") == sha, "PROMOTION_EVIDENCE_MISMATCH")
     require(candidate.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
+    if workflow_path == CANDIDATE_IMAGES_WORKFLOW_PATH:
+        require(candidate.get("published") is False and candidate.get("productionAuthorized") is False,
+                "PROMOTION_EVIDENCE_INVALID")
     images = candidate.get("images", [])
     require([item.get("target") for item in images] == list(TARGETS), "PROMOTION_EVIDENCE_INVALID")
     for item in images:
         require(bool(DIGEST.fullmatch(item.get("indexDigest", ""))), "PROMOTION_EVIDENCE_INVALID")
+        if workflow_path == CANDIDATE_IMAGES_WORKFLOW_PATH:
+            require(item.get("sourceSha") == sha and item.get("architecture") == DEPLOYMENT_ARCHITECTURE,
+                    "PROMOTION_EVIDENCE_MISMATCH")
+            require(item.get("provenanceVerified") is True and item.get("nonRootVerified") is True,
+                    "PROMOTION_EVIDENCE_INVALID")
     published = read_json(Path(directory) / "published.json")
     require(published.get("published") is True and published.get("productionDeployed") is False, "PROMOTION_EVIDENCE_INVALID")
     require(published.get("sourceSha") == sha, "PROMOTION_EVIDENCE_MISMATCH")
     tag = "candidate-" + sha + "-" + DEPLOYMENT_ARCHITECTURE
     require(published.get("tag") == tag, "PROMOTION_TAG_REFUSED")
+    if workflow_path == CANDIDATE_IMAGES_WORKFLOW_PATH:
+        require(published.get("version") == 1, "PROMOTION_EVIDENCE_INVALID")
+        require(published.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
     registry_images = published.get("images", [])
     require([item.get("target") for item in registry_images] == list(TARGETS), "PROMOTION_EVIDENCE_INVALID")
     resolved = []
     for reviewed, actual in zip(images, registry_images):
         repository = REGISTRY + "/" + NAMESPACE + "/stakeframe-" + reviewed["target"]
-        require(actual.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
-        require(actual.get("indexDigest") == reviewed["indexDigest"], "PROMOTION_DIGEST_MISMATCH")
-        require(actual.get("provenanceVerified") is True, "PROMOTION_EVIDENCE_INVALID")
+        if workflow_path == CANDIDATE_WORKFLOW_PATH:
+            require(actual.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
+            require(actual.get("indexDigest") == reviewed["indexDigest"], "PROMOTION_DIGEST_MISMATCH")
+            require(actual.get("provenanceVerified") is True, "PROMOTION_EVIDENCE_INVALID")
+        else:
+            require(actual.get("repository") == repository, "PROMOTION_EVIDENCE_INVALID")
+            require(actual.get("tag") == tag, "PROMOTION_TAG_REFUSED")
+            require(actual.get("digest") == reviewed["indexDigest"], "PROMOTION_DIGEST_MISMATCH")
+            if "architecture" in actual:
+                require(actual.get("architecture") == DEPLOYMENT_ARCHITECTURE, "PROMOTION_EVIDENCE_MISMATCH")
+            if "provenanceVerified" in actual:
+                require(actual.get("provenanceVerified") is True, "PROMOTION_EVIDENCE_INVALID")
+            if "nonRootVerified" in actual:
+                require(actual.get("nonRootVerified") is True, "PROMOTION_EVIDENCE_INVALID")
         resolved.append({"target": reviewed["target"], "repository": repository, "tag": tag,
                          "digest": reviewed["indexDigest"]})
     return resolved
@@ -135,7 +165,7 @@ def prepare(run, evidence, deployment_id, requested_by, output, approval_path=AP
     approval = read_approval(Path(approval_path))
     # Bind to the approved build before trusting any digest comparison.
     validate_approval(run, read_json(Path(evidence) / "published.json"), approval)
-    images = load_evidence(evidence, sha)
+    images = load_evidence(evidence, sha, run["path"])
 
     # The registry digests must be exactly the approved ones: this is what
     # turns a verified build into an approved build.

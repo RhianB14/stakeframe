@@ -4,14 +4,16 @@ name: Promotion record
 # SSH and holds no production secrets: after the owner approves the
 # `production` environment, it verifies the promotion evidence of an approved
 # candidate run and emits the immutable promotion record with the fixed
-# digests. The deployment itself is manual, over restricted SSH, following
+# digests. It accepts evidence from the reviewed release-candidate or
+# candidate-images workflow paths only. The deployment itself is manual,
+# over restricted SSH, following
 # docs/deploy/promotion-runbook.md.
 
 on:
   workflow_dispatch:
     inputs:
       candidate_run_id:
-        description: Run id of the Release candidate workflow to promote
+        description: Run id of a reviewed Release candidate or Candidate images workflow
         required: true
         type: string
       deployment_id:
@@ -20,9 +22,9 @@ on:
         type: string
       publication_run_id:
         description: >-
-          Run id of the Publish approved candidate workflow that published this
-          candidate. Its published.json must name this same candidate run, so
-          infra/release/approved-arm64.json stays the gate that names the build.
+          For release-candidate, run id of the Publish approved candidate workflow.
+          For candidate-images, use the same run id as candidate_run_id. The
+          approval registry remains the gate that names the candidate and digests.
         required: true
         type: string
 
@@ -56,11 +58,28 @@ jobs:
           mkdir -p .cache/promotion/evidence
           gh api "repos/RhianB14/stakeframe/actions/runs/$RUN_ID" > .cache/promotion/run.json
           SOURCE_SHA="$(python3 -c 'import json;print(json.load(open(".cache/promotion/run.json"))["head_sha"])')"
-          # The two halves of the evidence are written by two different
-          # workflows and meet here for the first time: the candidate archive
-          # carries candidate.json (what the build claimed), the publication
-          # archive carries published.json (what the registry served). The
-          # record script cross-checks them by index digest.
+          RUN_PATH="$(python3 -c 'import json;print(json.load(open(".cache/promotion/run.json"))["path"])')"
+          case "$RUN_PATH" in
+            .github/workflows/release-candidate.yml)
+              PUBLICATION_ARTIFACT="publication-$PUBLICATION_RUN_ID"
+              ;;
+            .github/workflows/candidate-images.yml)
+              [[ "$PUBLICATION_RUN_ID" == "$RUN_ID" ]] || { echo "PROMOTION_RUN_ID_MISMATCH"; exit 1; }
+              PUBLICATION_ARTIFACT="candidate-evidence-$SOURCE_SHA-arm64"
+              ;;
+            *)
+              echo "PROMOTION_RUN_WORKFLOW_REFUSED"
+              exit 1
+              ;;
+          esac
+          # Candidate archives carry candidate.json. The publication evidence
+          # is either publication-<run id> (release-candidate) or
+          # candidate-evidence-<sha>-arm64 from the same candidate-images run.
+          # infra/release/approved-arm64.json remains the source of the approved
+          # candidate run id and digests; neither evidence path bypasses it.
+          # The record script cross-checks the candidate claims and registry
+          # digests; the candidate-images path also requires equal run ids.
+          # The production environment gate above remains mandatory.
           # Production is arm64 and only arm64 is published, so only arm64 is
           # composed — the record must not assert anything the evidence lacks.
           CANDIDATE_DIR="$(mktemp -d)"
@@ -70,7 +89,10 @@ jobs:
           rm -rf "$CANDIDATE_DIR"
           PUBLICATION_DIR="$(mktemp -d)"
           gh run download "$PUBLICATION_RUN_ID" -R RhianB14/stakeframe \
-            -n "publication-$PUBLICATION_RUN_ID" -D "$PUBLICATION_DIR"
+            -n "$PUBLICATION_ARTIFACT" -D "$PUBLICATION_DIR"
+          if [[ "$RUN_PATH" == ".github/workflows/candidate-images.yml" ]]; then
+            cmp .cache/promotion/evidence/candidate.json "$PUBLICATION_DIR/candidate.json"
+          fi
           cp "$PUBLICATION_DIR/published.json" .cache/promotion/evidence/published.json
           rm -rf "$PUBLICATION_DIR"
           echo "PROMOTION_EVIDENCE_DOWNLOADED $SOURCE_SHA"
