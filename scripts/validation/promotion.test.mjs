@@ -8,7 +8,8 @@ const read = (relative) => readFileSync(new URL(relative, base), 'utf8');
 const promotionRunbook = read('docs/deploy/promotion-runbook.md');
 const migrationRunbook = read('docs/deploy/migration-runbook.md');
 const migrationCompose = read('compose.migration.yml');
-const candidateImages = read('.github/workflows/release-candidate.yml');
+const releaseCandidate = read('.github/workflows/release-candidate.yml');
+const candidateImages = read('.github/workflows/candidate-images.yml');
 const promotionRecord = read('.github/workflows/promotion-record.yml');
 const ci = read('.github/workflows/ci.yml');
 
@@ -80,25 +81,43 @@ test('release candidate workflow builds the five targets for review without any 
     'candidate-${{ inputs.source_sha }}-${{ matrix.arch }}',
     'for target in api worker migrate web-production operations',
   ]) {
-    assert.ok(candidateImages.includes(marker), `release-candidate.yml is missing: ${marker}`);
+    assert.ok(releaseCandidate.includes(marker), `release-candidate.yml is missing: ${marker}`);
   }
   assert.ok(
-    !lineStarts(candidateImages, 'environment'),
+    !lineStarts(releaseCandidate, 'environment'),
     'candidate build must not use a production environment gate',
   );
   for (const forbidden of ['ssh', 'secrets', 'PRIVATE KEY']) {
     assert.ok(
-      !lineStarts(candidateImages, forbidden),
+      !lineStarts(releaseCandidate, forbidden),
       `release-candidate.yml must not contain: ${forbidden}`,
     );
   }
-  assert.ok(!candidateImages.includes(':latest'), 'release-candidate.yml must never use latest');
+  assert.ok(!releaseCandidate.includes(':latest'), 'release-candidate.yml must never use latest');
+});
+
+test('candidate-images publishes immutable indexes and retains explicit promotion evidence', () => {
+  for (const marker of [
+    'workflow_dispatch',
+    'source_sha',
+    'registry_publish.py publish',
+    'candidate-${{ inputs.source_sha }}-${{ matrix.arch }}',
+    'candidate-evidence-${{ inputs.source_sha }}-${{ matrix.arch }}',
+  ]) {
+    assert.ok(candidateImages.includes(marker), `candidate-images.yml is missing: ${marker}`);
+  }
+  assert.ok(!candidateImages.includes(':latest'), 'candidate-images.yml must never use latest');
+  assert.ok(
+    !lineStarts(candidateImages, 'environment'),
+    'candidate build itself must not consume the production environment gate',
+  );
 });
 
 test('promotion record workflow is the approval gate and never deploys', () => {
   for (const marker of [
     'workflow_dispatch',
     'candidate_run_id',
+    'publication_run_id',
     'deployment_id',
     'environment: production',
     'actions/runs/',
@@ -138,6 +157,9 @@ test('promotion record composes the two halves of the evidence it never sees tog
     'publication_run_id',
     'candidate-$SOURCE_SHA-arm64',
     'publication-$PUBLICATION_RUN_ID',
+    'candidate-evidence-$SOURCE_SHA-arm64',
+    'PROMOTION_RUN_ID_MISMATCH',
+    'PROMOTION_RUN_WORKFLOW_REFUSED',
     'approved-arm64.json',
   ]) {
     assert.ok(promotionRecord.includes(marker), `promotion-record.yml is missing: ${marker}`);
@@ -165,7 +187,8 @@ test('promotion artifacts carry no secret material', () => {
     'docs/deploy/promotion-runbook.md': promotionRunbook,
     'docs/deploy/migration-runbook.md': migrationRunbook,
     'compose.migration.yml': migrationCompose,
-    '.github/workflows/release-candidate.yml': candidateImages,
+    '.github/workflows/release-candidate.yml': releaseCandidate,
+    '.github/workflows/candidate-images.yml': candidateImages,
     '.github/workflows/promotion-record.yml': promotionRecord,
     'scripts/release/registry_publish.py': read('scripts/release/registry_publish.py'),
     'scripts/release/promotion_record.py': read('scripts/release/promotion_record.py'),
