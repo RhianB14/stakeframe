@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { betPageSchema, saoPauloDate, type Workspace } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { NavGlyph } from './nav-icons.js';
 import { SIDEBAR_MODES, writeSidebarMode, type SidebarMode } from './sidebar-mode.js';
+import { request } from './api.js';
 
 /** Cabeçalho do produto: marca, identidade conectada e saída de sessão. */
 
 export function TopBar({
+  brand = 'stakeframe',
   collapsed,
   onToggleSidebar,
   ownerName,
@@ -13,7 +17,10 @@ export function TopBar({
   signingOut,
   newBetDisabled,
   onNewBet,
+  mobileNavOpen = false,
+  onToggleMobileNav,
 }: {
+  brand?: 'stakeframe' | 'bettrack';
   collapsed: boolean;
   onToggleSidebar: () => void;
   ownerName: string;
@@ -21,43 +28,76 @@ export function TopBar({
   signingOut: boolean;
   newBetDisabled: boolean;
   onNewBet: () => void;
+  mobileNavOpen?: boolean;
+  onToggleMobileNav?: () => void;
 }) {
-  const initials = ownerName
+  const displayName = ownerName.replace(/\s*\(prévia\)/i, '').trim();
+  const initials = displayName
     .trim()
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
   return (
-    <header className="product-topbar-github">
+    <header className={`product-topbar-github${brand === 'bettrack' ? ' bettrack-topbar' : ''}`}>
       {/* STK-F3-01: o hamburger alterna o modo recolhido e diz qual é o
           estado agora. Um botão que parece agir e não age é pior que um
           botão ausente — o `aria-expanded` aqui é o que impede isso. */}
       <button
         type="button"
         className="product-topbar-icon"
-        aria-label="Alternar barra lateral"
-        aria-expanded={!collapsed}
-        onClick={onToggleSidebar}
+        aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={window.matchMedia('(max-width: 760px)').matches ? mobileNavOpen : !collapsed}
+        onClick={() => {
+          if (window.matchMedia('(max-width: 760px)').matches && onToggleMobileNav)
+            onToggleMobileNav();
+          else onToggleSidebar();
+        }}
       >
         <NavGlyph icon="menu" size={18} />
       </button>
-      <a href="#overview" className="product-topbar-brand" aria-label="Stakeframe, visão geral">
+      <a href="#overview" className="product-topbar-brand" aria-label="StakeFrame, visão geral">
         <span className="product-topbar-logo" aria-hidden="true">
-          <span className="product-topbar-logo-mark">S</span>
+          {brand === 'bettrack' ? (
+            <span className="product-topbar-logo-mark bettrack-logo-mark">
+              <i />
+              <i />
+              <i />
+            </span>
+          ) : (
+            <span className="product-topbar-logo-mark">S</span>
+          )}
         </span>
-        <span>STAKEFRAME</span>
+        {brand === 'bettrack' ? (
+          <span className="product-topbar-brand-copy">
+            <strong>STAKEFRAME</strong>
+            <small>CONTROLE SEU JOGO</small>
+          </span>
+        ) : (
+          <span>STAKEFRAME</span>
+        )}
       </a>
       <div className="product-topbar-spacer" />
       {/* O cabecalho da skin e o unico visivel em todas as larguras (ela
           esconde .product-topbar a partir de 761px, e o CTA da sidebar saiu por
           decisao do dono): a acao principal mora aqui, com o mesmo estado
           desabilitado de antes. */}
-      <Button disabled={newBetDisabled} onClick={onNewBet}>
-        + Nova aposta
-      </Button>
-      <a className="product-topbar-profile" href="#profile" aria-label={`Perfil de ${ownerName}`}>
-        <span className="product-topbar-profile-name">{ownerName}</span>
+      {brand !== 'bettrack' ? (
+        <Button disabled={newBetDisabled} onClick={onNewBet}>
+          + Nova aposta
+        </Button>
+      ) : null}
+      <a className="product-topbar-profile" href="#profile" aria-label={`Perfil de ${displayName}`}>
+        <span className="product-topbar-profile-name">
+          {brand === 'bettrack' ? (
+            <>
+              <strong>{displayName.split(/\s+/)[0]}</strong>
+              <small>CONTA</small>
+            </>
+          ) : (
+            ownerName
+          )}
+        </span>
         <span className="product-topbar-avatar" aria-hidden="true">
           {initials}
         </span>
@@ -73,6 +113,124 @@ export function TopBar({
         <NavGlyph icon="exit" size={18} />
       </button>
     </header>
+  );
+}
+
+export function BetTrackSidebar({
+  page,
+  workspace,
+  disabled,
+  onNewBet,
+  mobileOpen = false,
+  onNavigate,
+}: {
+  page: string;
+  workspace: Workspace;
+  disabled: boolean;
+  onNewBet: () => void;
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
+}) {
+  const params = new URLSearchParams({ page: '1', pageSize: '100' }).toString();
+  const bets = useQuery({
+    queryKey: ['product', 'bets', workspace.version, params],
+    queryFn: () => request(`/api/v1/bets?${params}`, betPageSchema),
+    enabled: page === 'bets',
+  });
+  const today = saoPauloDate(new Date());
+  const scheduleDate = (bet: NonNullable<typeof bets.data>['items'][number]) => {
+    const dates = bet.selections.flatMap((selection) => {
+      if (selection.dateStatus !== 'confirmed') return [];
+      if (selection.eventAt) return [saoPauloDate(new Date(selection.eventAt))];
+      return selection.eventDate ? [selection.eventDate] : [];
+    });
+    return dates.sort()[0] ?? null;
+  };
+  const todayCount = bets.data?.items.filter((bet) => {
+    const date = scheduleDate(bet);
+    return date !== null && date >= today;
+  }).length;
+  const historyCount = bets.data?.items.filter((bet) => {
+    const date = scheduleDate(bet);
+    return date === null || date < today;
+  }).length;
+  const activePage = page === 'new-bet' ? 'bets' : page;
+  const items = [
+    ['overview', 'DASHBOARD'],
+    ['bets', 'BETS'],
+    ['calendar', 'CALENDAR'],
+    ['finance', 'BANKROLL'],
+    ['analytics', 'ANALYTICS'],
+    ['hedge', 'HEDGE'],
+    ['settings', 'SETTINGS'],
+  ] as const;
+  const scrollTo = (id: string) => {
+    if (page !== 'bets') window.location.hash = '#bets';
+    window.requestAnimationFrame(() =>
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }),
+    );
+  };
+  return (
+    <aside
+      className={`product-sidebar bettrack-sidebar${mobileOpen ? ' is-mobile-open' : ''}`}
+      aria-label="StakeFrame"
+    >
+      <nav aria-label="Main navigation">
+        {items.map(([id, label]) => (
+          <div className="bettrack-nav-item" key={id}>
+            <a
+              href={`#${id}`}
+              aria-current={activePage === id ? 'page' : undefined}
+              onClick={onNavigate}
+            >
+              {label}
+            </a>
+            {id === 'bets' && page === 'bets' ? (
+              <div className="bettrack-subnav" aria-label="Bet sections">
+                <button type="button" onClick={() => scrollTo('bets-today')}>
+                  <span>TODAY</span>
+                  <span>{todayCount ?? '—'}</span>
+                </button>
+                <button type="button" onClick={() => scrollTo('bets-history')}>
+                  <span>HISTORY</span>
+                  <span>{historyCount ?? '—'}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ))}
+        <section className="bettrack-nav-group" aria-label="Polymarket">
+          <h2>POLYMARKET</h2>
+          <div className="bettrack-subnav" aria-label="Polymarket navigation">
+            {[
+              ['pm-global', 'GLOBAL RANKING'],
+              ['pm-favorites', 'FAVORITES'],
+              ['pm-telegram', 'TELEGRAM'],
+              ['pm-simulation', 'SIMULATION'],
+            ].map(([id, label]) => (
+              <a
+                href={`#${id}`}
+                aria-current={activePage === id ? 'page' : undefined}
+                key={id}
+                onClick={onNavigate}
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+        </section>
+      </nav>
+      <Button
+        className="product-new-bet"
+        disabled={disabled}
+        onClick={() => {
+          onNavigate?.();
+          onNewBet();
+        }}
+      >
+        + NEW BET
+      </Button>
+    </aside>
   );
 }
 

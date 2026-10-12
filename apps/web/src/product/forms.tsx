@@ -1,8 +1,7 @@
-import { cloneElement, useId, useState, type ReactElement } from 'react';
+import { formatDisplayMoney } from './preferences.js';
+import { cloneElement, useEffect, useId, useState, type ReactElement } from 'react';
 import {
   cents,
-  formatBRL,
-  formatBRLWhenPresent,
   suggestedReturn,
   type Workspace,
   type CatalogItem,
@@ -15,10 +14,13 @@ import {
   decimalInput,
   decimalInputOdds,
   localNow,
+  localDateTime,
   localInstant,
   type CommandInput,
 } from './api.js';
 import { Button } from '../components/ui/button.js';
+import { ticketSportLabel } from './sports.js';
+import { BET_MARKET_TYPES } from './bet-types.js';
 
 export function Field({
   label,
@@ -150,7 +152,7 @@ export function CashForm({
           <select required value={account} onChange={(event) => setAccount(event.target.value)}>
             {workspace.accounts.map((item) => (
               <option value={item.id} key={item.id}>
-                {item.name} · {formatBRL(item.balance)}
+                {item.name} · {formatDisplayMoney(item.balance)}
               </option>
             ))}
           </select>
@@ -222,6 +224,7 @@ export function CatalogForm({
   const [active, setActive] = useState(item?.active ?? true);
   return (
     <CommandForm
+      className="catalog-form"
       onDone={onDone}
       onSubmit={() => {
         const values = {
@@ -236,19 +239,25 @@ export function CatalogForm({
           : { type: 'catalog.create', kind, ...values };
       }}
     >
-      <Field label="Nome">
+      <Field label="Nome da casa" hint="Esse nome será exibido nos bilhetes e no histórico.">
         <input
           required
           maxLength={100}
+          placeholder="Ex.: Bet365"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
       </Field>
       <Field
-        label="Outros nomes / aliases"
-        hint="Um por linha. Usados para reconhecer as legendas dos bilhetes."
+        label="Nomes alternativos"
+        hint="Um por linha. Eles ajudam a reconhecer a casa nas legendas dos bilhetes."
       >
-        <textarea rows={4} value={aliases} onChange={(event) => setAliases(event.target.value)} />
+        <textarea
+          rows={4}
+          placeholder="Um nome alternativo por linha"
+          value={aliases}
+          onChange={(event) => setAliases(event.target.value)}
+        />
       </Field>
       {item ? (
         <label className="checkbox-field">
@@ -467,11 +476,25 @@ export function BetForm({
   workspace,
   bet,
   review,
+  initialStake,
+  initialOdds,
+  referenceLayout = false,
+  amountMode = 'money',
+  financialEditAllowed = true,
+  onCancel,
+  onStepChange,
   onDone,
 }: {
   workspace: Workspace;
   bet?: Bet;
   review?: ImportDetail;
+  initialStake?: string;
+  initialOdds?: string;
+  referenceLayout?: boolean;
+  amountMode?: 'money' | 'units';
+  financialEditAllowed?: boolean;
+  onCancel?: () => void;
+  onStepChange?: (step: number) => void;
   onDone: () => void;
 }) {
   const [bookmakerId, setBookmaker] = useState(
@@ -485,12 +508,17 @@ export function BetForm({
     bet?.tipsterId ?? review?.tipsterOverrideId ?? review?.matches.tipsterId ?? '',
   );
   const [stake, setStake] = useState(
-    bet?.stake ?? review?.stakeOverride ?? review?.extraction?.stake ?? '',
+    bet?.stake ?? review?.stakeOverride ?? review?.extraction?.stake ?? initialStake ?? '',
   );
+  const [stakeUnitsDraft, setStakeUnitsDraft] = useState<string | null>(null);
   const [odds, setOdds] = useState(
-    bet?.odds ?? review?.oddsOverride ?? review?.extraction?.odds ?? '',
+    bet?.odds ?? review?.oddsOverride ?? review?.extraction?.odds ?? initialOdds ?? '',
   );
-  const [placedAt, setPlaced] = useState(() => (review ? '' : localNow()));
+  const [boostEnabled, setBoostEnabled] = useState(false);
+  const [boostedOdds, setBoostedOdds] = useState('');
+  const [placedAt, setPlaced] = useState(() =>
+    bet ? localDateTime(bet.placedAt) : review ? '' : localNow(),
+  );
   const [reviewOrigin, setReviewOrigin] = useState<'real' | 'freebet' | 'hibrida' | 'unconfirmed'>(
     () => (review ? (review.betOrigin ?? 'unconfirmed') : 'real'),
   );
@@ -498,7 +526,15 @@ export function BetForm({
   const [reference, setReference] = useState(bet?.reference ?? review?.extraction?.reference ?? '');
   const [duplicateReason, setDuplicateReason] = useState('');
   const [manualBetStep, setManualBetStep] = useState(0);
-  const [manualBetType, setManualBetType] = useState<'single' | 'parlay'>('single');
+  const [manualBetType, setManualBetType] = useState<'single' | 'parlay'>(() =>
+    bet?.ticketKind === 'multiple' || bet?.ticketKind === 'betbuild' ? 'parlay' : 'single',
+  );
+  const [manualBetTypeSelected, setManualBetTypeSelected] = useState(!!bet);
+  useEffect(() => {
+    if (!referenceLayout || manualBetStep !== 2 || stake) return;
+    const unit = workspace.units.find((item) => item.month === placedAt.slice(0, 7));
+    if (unit) setStake(unit.amount);
+  }, [manualBetStep, placedAt, referenceLayout, stake, workspace.units]);
   const reviewSelections = review?.selectionOverrides.length
     ? review.selectionOverrides
     : (review?.extraction?.selections ?? []).map(({ event, market, selection }) => ({
@@ -511,18 +547,10 @@ export function BetForm({
       return bet.selections.map((value) => ({
         ...value,
         key: crypto.randomUUID(),
-        time: value.eventAt
-          ? new Intl.DateTimeFormat('en-GB', {
-              timeZone: 'America/Sao_Paulo',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              hourCycle: 'h23',
-            }).format(new Date(value.eventAt))
-          : '',
+        time: value.eventAt ? localDateTime(value.eventAt).slice(11) : '',
       }));
     }
-    if (!review) return [newSelection()];
+    if (!review) return [referenceLayout ? { ...newSelection(), sport: null } : newSelection()];
     if (!reviewSelections.length)
       return [{ ...newSelection(), sport: review.sportOverride ?? null, dateStatus: 'pending' }];
     return reviewSelections.map((value) => ({
@@ -537,8 +565,20 @@ export function BetForm({
   });
   const [allowMissingUnit, setMissing] = useState(false);
   const [reason, setReason] = useState('');
+  const preferredBooks = (() => {
+    if (!referenceLayout) return null;
+    try {
+      const stored = window.localStorage.getItem('bettrack.preview.books');
+      return stored === null ? null : new Set(JSON.parse(stored) as string[]);
+    } catch {
+      return null;
+    }
+  })();
   const houses = workspace.catalog.filter(
-    (item) => item.kind === 'bookmaker' && (item.active || item.id === bookmakerId),
+    (item) =>
+      item.kind === 'bookmaker' &&
+      (item.active || item.id === bookmakerId) &&
+      (!preferredBooks || preferredBooks.has(item.id)),
   );
   const tipsters = workspace.catalog.filter(
     (item) => item.kind === 'tipster' && (item.active || item.id === tipsterId),
@@ -552,11 +592,11 @@ export function BetForm({
       ...(item.id ? { id: item.id } : {}),
       event: item.event,
       sport: item.sport || null,
-      market: item.market,
+      market: referenceLayout && !item.market ? item.selection : item.market,
       selection: item.selection,
       odds: item.odds ? item.odds.replace(',', '.') : null,
       eventDate: item.eventDate || null,
-      eventAt: item.time ? localInstant(`${item.eventDate ?? ''}T${item.time}`) : null,
+      eventAt: item.eventDate && item.time ? localInstant(`${item.eventDate}T${item.time}`) : null,
       dateStatus: item.eventDate
         ? item.dateStatus === 'estimated'
           ? ('estimated' as const)
@@ -564,29 +604,204 @@ export function BetForm({
         : ('pending' as const),
     }));
   const stakeNumber = Number(stake.replace(',', '.'));
-  const oddsNumber = Number(odds.replace(',', '.'));
+  const legOdds = selections.map((item) => Number((item.odds ?? '').replace(',', '.')));
+  const computedParlayOdds =
+    legOdds.length >= 2 && legOdds.every((value) => Number.isFinite(value) && value > 1)
+      ? legOdds.reduce((total, value) => total * value, 1)
+      : Number.NaN;
+  const rawOddsNumber = Number(odds.replace(',', '.'));
+  const oddsNumber =
+    manualBetType === 'parlay'
+      ? boostEnabled && Number(boostedOdds.replace(',', '.')) > 1
+        ? Number(boostedOdds.replace(',', '.'))
+        : boostEnabled
+          ? Number.NaN
+          : Number.isFinite(computedParlayOdds)
+            ? computedParlayOdds
+            : rawOddsNumber
+      : rawOddsNumber;
+  const effectiveOdds =
+    Number.isFinite(oddsNumber) && oddsNumber > 1
+      ? oddsNumber.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+      : '';
+  const stakeUnit =
+    workspace.units.find(
+      (unit) => unit.month === placedAt.slice(0, 7) && Number(unit.amount) > 0,
+    ) ??
+    (bet?.unitMonth === placedAt.slice(0, 7) && bet.unitAmount ? { amount: bet.unitAmount } : null);
+  const stakeUnitNumber = stakeUnit ? Number(stakeUnit.amount) : null;
+  const stakeUnitsValue =
+    stakeUnitNumber && stakeUnitNumber > 0 && stakeNumber > 0
+      ? stakeNumber / stakeUnitNumber
+      : null;
   const potentialPayout =
     Number.isFinite(stakeNumber) && stakeNumber > 0 && Number.isFinite(oddsNumber) && oddsNumber > 1
-      ? formatBRL((stakeNumber * oddsNumber).toFixed(2))
+      ? formatDisplayMoney((stakeNumber * oddsNumber).toFixed(2))
       : '—';
+  const previewAmount =
+    amountMode === 'units'
+      ? stakeUnitsValue === null
+        ? '—'
+        : `${stakeUnitsValue.toFixed(2)}U`
+      : stake
+        ? formatDisplayMoney((Number(stake.replace(',', '.')) || 0).toFixed(2))
+        : 'R$ 0,00';
+  const previewReturn =
+    amountMode === 'units'
+      ? stakeUnitNumber && stakeUnitNumber > 0 && Number.isFinite(stakeNumber * oddsNumber)
+        ? `${((stakeNumber * oddsNumber) / stakeUnitNumber).toFixed(2)}U`
+        : '—'
+      : potentialPayout === '—'
+        ? 'R$ 0,00'
+        : potentialPayout;
+  const previewSelection = selections[0];
+  const previewOdds = Number.isFinite(oddsNumber) && oddsNumber > 1 ? oddsNumber.toFixed(2) : '';
+  const previewIsParlay = manualBetType === 'parlay' && selections.length > 1;
+  const sportSuggestions = referenceLayout
+    ? [
+        'Football / Soccer',
+        'Basketball / NBA',
+        'American Football / NFL',
+        'College Football / NCAAF',
+        'College Basketball / NCAAB',
+        'NCAABB',
+        'Baseball / MLB',
+        'Ice Hockey / NHL',
+        'Tennis',
+        'MMA / UFC',
+        'Volleyball',
+        'Esports',
+        'Formula 1',
+        'Golf',
+        'Rugby',
+      ]
+    : [
+        'Futebol',
+        'Basquete / NBA',
+        'Futebol americano / NFL',
+        'Basquete universitário / NCAAB',
+        'Beisebol / MLB',
+        'Hóquei no gelo / NHL',
+        'Tênis',
+        'MMA / UFC',
+        'Vôlei',
+        'E-sports',
+        'Fórmula 1',
+        'Golfe',
+        'Rugby',
+      ];
+  const quickSportOptions = [
+    { label: 'NFL', value: 'American Football / NFL', tag: 'NFL' },
+    { label: 'NBA', value: 'Basketball / NBA', tag: 'NBA' },
+    { label: 'MLB', value: 'Baseball / MLB', tag: 'MLB' },
+    { label: 'NHL', value: 'Ice Hockey / NHL', tag: 'NHL' },
+    { label: 'NCAAF', value: 'College Football / NCAAF', tag: 'NCAAF' },
+    { label: 'NCAAB', value: 'College Basketball / NCAAB', tag: 'NCAAB' },
+    { label: 'NCAABB', value: 'NCAABB', tag: 'NCAABB' },
+    { label: 'Soccer', value: 'Football / Soccer', tag: 'FUT' },
+    { label: 'Other', value: 'Other', tag: 'OTH' },
+  ];
+  const additionalSportOptions = [
+    { label: 'Tennis', value: 'Tennis' },
+    { label: 'MMA', value: 'MMA / UFC' },
+    { label: 'Volleyball', value: 'Volleyball' },
+    { label: 'Esports', value: 'Esports' },
+    { label: 'Formula 1', value: 'Formula 1' },
+    { label: 'Golf', value: 'Golf' },
+    { label: 'Rugby', value: 'Rugby' },
+  ];
+  const knownSportValues = [...quickSportOptions, ...additionalSportOptions].map(
+    (option) => option.value,
+  );
+  const sportSuggestionsId = referenceLayout
+    ? 'bettrack-sports-suggestions'
+    : 'stakeframe-sports-suggestions';
+  const marketTypeSuggestionsId = referenceLayout
+    ? 'bettrack-market-suggestions'
+    : 'stakeframe-market-suggestions';
+  const ticketMarket = (() => {
+    const market = previewSelection?.market?.trim() ?? '';
+    const marketText = market.toLowerCase();
+    if (/spread|handicap/.test(marketText) || /[+-]\s?\d+(?:[.,]\d+)?/.test(marketText))
+      return 'SPREAD';
+    if (/total|over|under|more than|less than/.test(marketText)) return 'TOTAL';
+    if (/moneyline|winner|to win/.test(marketText)) return 'MONEYLINE';
+    return manualBetType === 'single' ? 'STRAIGHT' : 'PARLAY';
+  })();
   return (
     <CommandForm
+      {...(referenceLayout
+        ? {
+            className: bet
+              ? 'bettrack-bet-edit-form'
+              : `bettrack-new-bet-form bet-step-${manualBetStep}`,
+          }
+        : {})}
       onDone={onDone}
       submitLabel={
         !bet && !review && manualBetStep < 2
-          ? manualBetStep === 0
-            ? 'Continuar para seleções'
-            : 'Continuar para valor'
+          ? referenceLayout
+            ? 'CONTINUE'
+            : manualBetStep === 0
+              ? 'Continuar para seleções'
+              : 'Continuar para valor'
           : bet
-            ? 'Salvar correção'
+            ? referenceLayout
+              ? 'SAVE CHANGES'
+              : 'Salvar correção'
             : review
               ? 'Confirmar importação e registrar aposta'
-              : 'Registrar aposta'
+              : referenceLayout
+                ? 'SAVE BET'
+                : 'Registrar aposta'
       }
       {...(!bet && !review && manualBetStep < 2
-        ? { onAdvance: () => setManualBetStep((step) => step + 1) }
+        ? {
+            onAdvance: () => {
+              if (referenceLayout && manualBetType === 'parlay' && manualBetStep === 1) {
+                if (selections.length < 2)
+                  throw new Error('A parlay needs at least two selections.');
+                if (!Number.isFinite(computedParlayOdds))
+                  throw new Error('Enter decimal odds for every selection.');
+              }
+              const next = manualBetStep + 1;
+              setManualBetStep(next);
+              onStepChange?.(next);
+            },
+          }
         : {})}
+      footer={
+        referenceLayout && manualBetStep > 0 ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const previous = manualBetStep - 1;
+                setManualBetStep(previous);
+                onStepChange?.(previous);
+              }}
+            >
+              BACK
+            </Button>
+            <Button type="submit">{manualBetStep === 2 ? 'SAVE BET' : 'CONTINUE'}</Button>
+          </>
+        ) : referenceLayout && bet ? (
+          <>
+            <Button type="button" variant="secondary" onClick={onCancel ?? onDone}>
+              CANCEL
+            </Button>
+            <Button type="submit">SAVE CHANGES</Button>
+          </>
+        ) : undefined
+      }
       onSubmit={() => {
+        if (manualBetType === 'parlay') {
+          if (selections.length < 2 || !Number.isFinite(computedParlayOdds))
+            throw new Error('A parlay needs at least two selections with valid decimal odds.');
+          if (boostEnabled && (!Number.isFinite(oddsNumber) || oddsNumber <= 1))
+            throw new Error('Enter valid boosted total odds.');
+        }
         const confirmedReviewOrigin =
           reviewOrigin === 'real' || reviewOrigin === 'freebet' || reviewOrigin === 'hibrida'
             ? reviewOrigin
@@ -604,9 +819,14 @@ export function BetForm({
           ? {
               type: 'bet.update',
               id: bet.id,
+              bookmakerId,
               tipsterId: tipsterId || null,
               reference,
               selections: built(),
+              stake: decimalInput(stake),
+              odds: decimalInputOdds(effectiveOdds || odds),
+              placedAt: localInstant(placedAt),
+              allowMissingUnit,
               reason,
             }
           : review
@@ -622,7 +842,7 @@ export function BetForm({
                     bookmakerId,
                     tipsterId: tipsterId || null,
                     stake: decimalInput(stake),
-                    odds: decimalInputOdds(odds),
+                    odds: decimalInputOdds(effectiveOdds || odds),
                     placedAt: localInstant(placedAt),
                     freebetId: effectiveOrigin === 'real' ? null : freebetId || null,
                     reference,
@@ -636,7 +856,7 @@ export function BetForm({
                 bookmakerId,
                 tipsterId: tipsterId || null,
                 stake: decimalInput(stake),
-                odds: decimalInputOdds(odds),
+                odds: decimalInputOdds(effectiveOdds || odds),
                 placedAt: localInstant(placedAt),
                 freebetId: freebetId || null,
                 reference,
@@ -645,16 +865,34 @@ export function BetForm({
               };
       }}
     >
+      <datalist id={sportSuggestionsId}>
+        {sportSuggestions.map((sport) => (
+          <option key={sport} value={sport} />
+        ))}
+      </datalist>
+      <datalist id={marketTypeSuggestionsId}>
+        {BET_MARKET_TYPES.map((marketType) => (
+          <option key={marketType} value={marketType} />
+        ))}
+      </datalist>
       {!bet && !review ? (
         <div className="bet-wizard-progress" aria-label="Etapas do cadastro">
-          {['Tipo', 'Seleções', 'Valor e origem'].map((label, index) => (
+          {(referenceLayout
+            ? ['TYPE', 'DETAIL', 'AMOUNT']
+            : ['Tipo', 'Seleções', 'Valor e origem']
+          ).map((label, index) => (
             <button
               className={
                 manualBetStep === index ? 'is-current' : manualBetStep > index ? 'is-complete' : ''
               }
               key={label}
               type="button"
-              onClick={() => index < manualBetStep && setManualBetStep(index)}
+              onClick={() => {
+                if (index < manualBetStep) {
+                  setManualBetStep(index);
+                  onStepChange?.(index);
+                }
+              }}
             >
               <span>{index + 1}</span>
               {label}
@@ -664,48 +902,927 @@ export function BetForm({
       ) : null}
       {!bet && !review && manualBetStep === 0 ? (
         <div className="bet-wizard-type">
-          <p>Como este bilhete foi feito?</p>
+          <p>{referenceLayout ? 'What are you logging?' : 'Como este bilhete foi feito?'}</p>
           <div className="bet-wizard-type-options">
             <button
-              className={manualBetType === 'single' ? 'is-selected' : ''}
+              className={manualBetTypeSelected && manualBetType === 'single' ? 'is-selected' : ''}
               type="button"
               onClick={() => {
                 setManualBetType('single');
+                setManualBetTypeSelected(true);
                 setSelections((current) => [current[0] ?? newSelection()]);
+                if (referenceLayout) {
+                  setManualBetStep(1);
+                  onStepChange?.(1);
+                }
               }}
             >
-              <strong>Simples</strong>
-              <span>Uma seleção em um único evento.</span>
+              {referenceLayout ? (
+                <i className="bettrack-bet-type-icon" aria-hidden="true">
+                  ▱
+                </i>
+              ) : null}
+              <strong>{referenceLayout ? 'Straight' : 'Simples'}</strong>
+              <span>
+                {referenceLayout ? 'One selection, one price.' : 'Uma seleção em um único evento.'}
+              </span>
+              {referenceLayout ? (
+                <b className="bettrack-bet-type-arrow" aria-hidden="true">
+                  ›
+                </b>
+              ) : null}
             </button>
             <button
-              className={manualBetType === 'parlay' ? 'is-selected' : ''}
+              className={manualBetTypeSelected && manualBetType === 'parlay' ? 'is-selected' : ''}
               type="button"
               onClick={() => {
                 setManualBetType('parlay');
+                setManualBetTypeSelected(true);
                 setSelections((current) =>
-                  current.length > 1 ? current : [...current, newSelection()],
+                  current.length > 1
+                    ? current
+                    : [
+                        ...current,
+                        referenceLayout ? { ...newSelection(), sport: null } : newSelection(),
+                      ],
                 );
+                if (referenceLayout) {
+                  setManualBetStep(1);
+                  onStepChange?.(1);
+                }
               }}
             >
-              <strong>Múltipla</strong>
-              <span>Duas ou mais seleções no mesmo bilhete.</span>
+              {referenceLayout ? (
+                <i className="bettrack-bet-type-icon" aria-hidden="true">
+                  ▦
+                </i>
+              ) : null}
+              <strong>{referenceLayout ? 'Parlay' : 'Múltipla'}</strong>
+              <span>
+                {referenceLayout
+                  ? 'Two or more selections on the same ticket.'
+                  : 'Duas ou mais seleções no mesmo bilhete.'}
+              </span>
+              {referenceLayout ? (
+                <b className="bettrack-bet-type-arrow" aria-hidden="true">
+                  ›
+                </b>
+              ) : null}
             </button>
           </div>
+          {referenceLayout ? (
+            <button className="bettrack-ai-coming-soon" type="button" disabled>
+              <i className="bettrack-bet-type-icon" aria-hidden="true">
+                ▧
+              </i>
+              <strong>Analise seu bilhete com a IA StakeFrame</strong>
+              <small>EM BREVE</small>
+              <span>
+                A IA StakeFrame estará disponível em breve. Por enquanto, registre sua aposta
+                manualmente.
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : null}
       {(!bet && !review && manualBetStep === 1) || bet || review ? (
         <>
           {bet || review ? (
-            <div className="form-grid">
-              <Field label="Casa de aposta">
+            referenceLayout && bet ? null : (
+              <div className="form-grid">
+                <Field label={referenceLayout ? 'Sportsbook' : 'Casa de aposta'}>
+                  <select
+                    required
+                    disabled={!!bet && (!financialEditAllowed || !!freebetId)}
+                    value={bookmakerId}
+                    onChange={(event) => {
+                      setBookmaker(event.target.value);
+                      setFreebet('');
+                      if (review) setReviewOrigin('unconfirmed');
+                    }}
+                  >
+                    <option value="">Selecione</option>
+                    {houses.map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={referenceLayout ? 'Tipsters' : 'Tipster'}>
+                  <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
+                    <option value="">Sem tipster</option>
+                    {tipsters.map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {!bet ? (
+                  <>
+                    {review ? (
+                      <>
+                        <Field label="Origem da aposta">
+                          <select
+                            value={reviewOrigin}
+                            onChange={(event) => {
+                              const value = event.target.value as typeof reviewOrigin;
+                              setReviewOrigin(value);
+                              if (value === 'real') setFreebet('');
+                            }}
+                          >
+                            <option value="unconfirmed" disabled>
+                              Confirme a modalidade
+                            </option>
+                            <option value="real">Dinheiro real</option>
+                            <option value="freebet">Freebet</option>
+                            <option value="hibrida">Híbrida (real + freebet)</option>
+                          </select>
+                        </Field>
+                        {reviewOrigin === 'freebet' || reviewOrigin === 'hibrida' ? (
+                          <Field label="Crédito de freebet">
+                            <select
+                              value={freebetId}
+                              onChange={(event) => setFreebet(event.target.value)}
+                            >
+                              <option value="">Selecione o crédito</option>
+                              {workspace.freebets
+                                .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                                .map((item) => (
+                                  <option value={item.id} key={item.id}>
+                                    {`${formatDisplayMoney(item.amount)} · até ${item.expiresOn}`}
+                                  </option>
+                                ))}
+                            </select>
+                          </Field>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Field label="Origem da aposta">
+                        <select
+                          value={freebetId}
+                          onChange={(event) => {
+                            setFreebet(event.target.value);
+                            const credit = workspace.freebets.find(
+                              (item) => item.id === event.target.value,
+                            );
+                            if (credit) setStake(credit.amount);
+                          }}
+                        >
+                          <option value="">Dinheiro real</option>
+                          {workspace.freebets
+                            .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                            .map((item) => (
+                              <option value={item.id} key={item.id}>
+                                Freebet {formatDisplayMoney(item.amount)} · até {item.expiresOn}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                    )}
+                    <Field label="Valor apostado (R$)">
+                      <input
+                        required
+                        disabled={!!freebetId && (!review || reviewOrigin === 'freebet')}
+                        inputMode="decimal"
+                        value={stake}
+                        onChange={(event) => setStake(event.target.value)}
+                      />
+                    </Field>
+                    {manualBetType === 'parlay' ? (
+                      <>
+                        <Field
+                          label="Combined odds"
+                          hint="Calculated from the odds of every selection."
+                        >
+                          <input
+                            readOnly
+                            value={
+                              Number.isFinite(computedParlayOdds)
+                                ? computedParlayOdds.toFixed(2)
+                                : '—'
+                            }
+                          />
+                        </Field>
+                        <label className="checkbox-field bettrack-boost-toggle">
+                          <input
+                            type="checkbox"
+                            checked={boostEnabled}
+                            onChange={(event) => setBoostEnabled(event.target.checked)}
+                          />
+                          Apply boosted odds
+                        </label>
+                        {boostEnabled ? (
+                          <Field label="Boosted total odds">
+                            <input
+                              required
+                              inputMode="decimal"
+                              placeholder={
+                                Number.isFinite(computedParlayOdds)
+                                  ? computedParlayOdds.toFixed(2)
+                                  : '3.42'
+                              }
+                              value={boostedOdds}
+                              onChange={(event) => setBoostedOdds(event.target.value)}
+                            />
+                          </Field>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Field label="Total odds">
+                        <input
+                          required
+                          inputMode="decimal"
+                          placeholder="1.91"
+                          value={odds}
+                          onChange={(event) => setOdds(event.target.value)}
+                        />
+                      </Field>
+                    )}
+                    <Field
+                      label="Data e hora da aposta"
+                      hint="Horário de São Paulo. É diferente da data do evento."
+                    >
+                      <input
+                        required
+                        type="datetime-local"
+                        step="1"
+                        value={placedAt}
+                        onChange={(event) => setPlaced(event.target.value)}
+                      />
+                    </Field>
+                  </>
+                ) : null}
+                <Field
+                  label={
+                    referenceLayout
+                      ? 'Ticket reference (optional)'
+                      : 'Referência do bilhete (opcional)'
+                  }
+                >
+                  <input
+                    maxLength={150}
+                    value={reference}
+                    onChange={(event) => setReference(event.target.value)}
+                  />
+                </Field>
+              </div>
+            )
+          ) : null}
+          {referenceLayout ? (
+            <>
+              <div className="bettrack-details-intro">
+                <div>
+                  <h2>{bet ? 'Edit bet' : 'Bet details'}</h2>
+                  <p>Sport, event, your selection, odds and date.</p>
+                </div>
+                {manualBetType === 'parlay' ? (
+                  <button
+                    type="button"
+                    disabled={selections.length >= 40}
+                    onClick={() =>
+                      setSelections([...selections, { ...newSelection(), sport: null }])
+                    }
+                  >
+                    + ADD SELECTION
+                  </button>
+                ) : null}
+              </div>
+              {selections.map((item, index) => (
+                <section className="selection-form bettrack-reference-selection" key={item.key}>
+                  <div className="form-grid bettrack-reference-detail-fields">
+                    <Field label="Sport">
+                      <div className="bettrack-sport-picker">
+                        <div
+                          className="bettrack-sport-options"
+                          role="group"
+                          aria-label="Choose a sport"
+                        >
+                          {quickSportOptions.map((option) => (
+                            <button
+                              type="button"
+                              key={option.value}
+                              aria-pressed={
+                                option.tag === 'OTH'
+                                  ? item.sport?.trim().toLowerCase() === 'other' ||
+                                    (!!item.sport && !knownSportValues.includes(item.sport))
+                                  : ticketSportLabel(item.sport) === option.tag
+                              }
+                              className={
+                                option.tag === 'OTH'
+                                  ? item.sport?.trim().toLowerCase() === 'other' ||
+                                    (!!item.sport && !knownSportValues.includes(item.sport))
+                                    ? 'is-selected'
+                                    : ''
+                                  : ticketSportLabel(item.sport) === option.tag
+                                    ? 'is-selected'
+                                    : ''
+                              }
+                              onClick={() => updateSelection(index, { sport: option.value })}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                          <details className="bettrack-more-sports">
+                            <summary>MORE</summary>
+                            <div>
+                              {additionalSportOptions.map((option) => (
+                                <button
+                                  type="button"
+                                  key={option.value}
+                                  aria-pressed={item.sport === option.value}
+                                  className={item.sport === option.value ? 'is-selected' : ''}
+                                  onClick={() => updateSelection(index, { sport: option.value })}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </details>
+                        </div>
+                        {item.sport?.trim().toLowerCase() === 'other' ||
+                        (!!item.sport && !knownSportValues.includes(item.sport)) ? (
+                          <input
+                            aria-label="Other sport"
+                            list={sportSuggestionsId}
+                            maxLength={100}
+                            value={
+                              item.sport?.trim().toLowerCase() === 'other' ? '' : (item.sport ?? '')
+                            }
+                            onChange={(event) =>
+                              updateSelection(index, { sport: event.target.value })
+                            }
+                            placeholder="Type another sport"
+                          />
+                        ) : null}
+                      </div>
+                    </Field>
+                    <Field label="Event" hint="The game or matchup this bet is on">
+                      <input
+                        required
+                        maxLength={300}
+                        value={item.event}
+                        onChange={(event) => updateSelection(index, { event: event.target.value })}
+                        placeholder="Chiefs vs Bills"
+                      />
+                    </Field>
+                    <Field label="Bet Type" hint="Choose a market type or enter a custom one">
+                      <input
+                        required
+                        maxLength={300}
+                        list={marketTypeSuggestionsId}
+                        value={item.market}
+                        onChange={(event) => updateSelection(index, { market: event.target.value })}
+                        placeholder="Full Time Result"
+                      />
+                    </Field>
+                    <Field label="Selection" hint="Describe your pick and line">
+                      <input
+                        required
+                        maxLength={300}
+                        value={item.selection}
+                        onChange={(event) =>
+                          updateSelection(index, { selection: event.target.value })
+                        }
+                        placeholder="Team A to win"
+                      />
+                    </Field>
+                    {manualBetType === 'parlay' ? (
+                      <Field label={`Odds ${index + 1}`}>
+                        <input
+                          required
+                          disabled={!!bet && !financialEditAllowed}
+                          inputMode="decimal"
+                          placeholder="1.91"
+                          value={item.odds ?? ''}
+                          onChange={(event) =>
+                            updateSelection(index, { odds: event.target.value || null })
+                          }
+                        />
+                      </Field>
+                    ) : index === 0 ? (
+                      <Field label="Odds">
+                        <input
+                          required
+                          disabled={!!bet && !financialEditAllowed}
+                          inputMode="decimal"
+                          placeholder="1.91"
+                          value={odds}
+                          onChange={(event) => setOdds(event.target.value)}
+                        />
+                      </Field>
+                    ) : null}
+                    {manualBetType !== 'parlay' && index === 0 ? (
+                      <div className="bettrack-odds-suggestions" aria-label="Common odds">
+                        <button type="button" onClick={() => setOdds('1.91')}>
+                          1.91
+                        </button>
+                        <button type="button" onClick={() => setOdds('2.50')}>
+                          2.50
+                        </button>
+                        <button type="button" onClick={() => setOdds('2.00')}>
+                          2.00
+                        </button>
+                      </div>
+                    ) : null}
+                    <Field label="Event date">
+                      <input
+                        type="date"
+                        value={item.eventDate ?? ''}
+                        onChange={(event) =>
+                          updateSelection(index, {
+                            eventDate: event.target.value || null,
+                            dateStatus: 'confirmed',
+                          })
+                        }
+                      />
+                    </Field>
+                    <details className="bettrack-bet-extra-fields" open={!!bet}>
+                      <summary>TIME AND DATE CONFIDENCE</summary>
+                      <div className="bettrack-extra-fields-grid">
+                        <Field label="Event time">
+                          <input
+                            type="time"
+                            step="1"
+                            value={item.time}
+                            onChange={(event) =>
+                              updateSelection(index, { time: event.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="Date status">
+                          <select
+                            value={item.dateStatus === 'estimated' ? 'estimated' : 'confirmed'}
+                            onChange={(event) =>
+                              updateSelection(index, {
+                                dateStatus:
+                                  event.target.value === 'estimated' ? 'estimated' : 'confirmed',
+                              })
+                            }
+                          >
+                            <option value="confirmed">Confirmed</option>
+                            <option value="estimated">Estimated · review needed</option>
+                          </select>
+                        </Field>
+                      </div>
+                    </details>
+                    {selections.length > 1 ? (
+                      <button
+                        className="bettrack-remove-selection"
+                        type="button"
+                        onClick={() => setSelections(selections.filter((_, i) => i !== index))}
+                      >
+                        REMOVE SELECTION
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
+              ))}
+              {bet ? (
+                <div className="bettrack-edit-amount-step">
+                  <div className="bettrack-details-intro">
+                    <div>
+                      <h2>Amount and time</h2>
+                      <p>Correct the ticket value and when it was placed.</p>
+                    </div>
+                  </div>
+                  {!financialEditAllowed ? (
+                    <p className="bettrack-edit-lock-note" role="status">
+                      Settlement history locks the amount, odds and placed time. Event details and
+                      tipster can still be corrected.
+                    </p>
+                  ) : null}
+                  <div className="bettrack-edit-financial-fields">
+                    <Field label="Amount (R$)">
+                      <input
+                        required
+                        disabled={!financialEditAllowed}
+                        inputMode="decimal"
+                        value={stake.replace('.', ',')}
+                        onChange={(event) => {
+                          setStake(event.target.value.replace(',', '.'));
+                          setStakeUnitsDraft(null);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Units">
+                      <input
+                        aria-label="Stake in units"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        disabled={!financialEditAllowed || !stakeUnitNumber}
+                        value={
+                          stakeUnitsDraft ??
+                          (stakeUnitsValue === null ? '' : stakeUnitsValue.toFixed(2))
+                        }
+                        onChange={(event) => {
+                          if (!stakeUnitNumber) return;
+                          const raw = event.target.value;
+                          setStakeUnitsDraft(raw);
+                          const units = Number(raw);
+                          if (Number.isFinite(units) && units > 0)
+                            setStake((units * stakeUnitNumber).toFixed(2));
+                          else if (raw === '') setStake('');
+                        }}
+                        onBlur={() => setStakeUnitsDraft(null)}
+                      />
+                    </Field>
+                    <Field
+                      label="Date and time placed"
+                      hint="São Paulo time. This is when the ticket was placed, not the event start."
+                    >
+                      <input
+                        required
+                        disabled={!financialEditAllowed}
+                        type="datetime-local"
+                        step="1"
+                        value={placedAt}
+                        onChange={(event) => {
+                          setPlaced(event.target.value);
+                          setStakeUnitsDraft(null);
+                        }}
+                      />
+                    </Field>
+                  </div>
+                  <div
+                    className="bettrack-unit-presets"
+                    role="group"
+                    aria-label="Set stake in units"
+                  >
+                    {[1, 2, 3, 5].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        disabled={!financialEditAllowed || !stakeUnitNumber}
+                        className={
+                          stakeUnitsValue !== null && Math.abs(stakeUnitsValue - count) < 0.005
+                            ? 'is-active'
+                            : ''
+                        }
+                        onClick={() => {
+                          if (stakeUnitNumber) {
+                            setStake((stakeUnitNumber * count).toFixed(2));
+                            setStakeUnitsDraft(null);
+                          }
+                        }}
+                      >
+                        {count} U
+                      </button>
+                    ))}
+                  </div>
+                  <p className="bettrack-unit-note">
+                    {stakeUnit
+                      ? `Monthly unit ${formatDisplayMoney(stakeUnit.amount)} · ${stakeUnitsValue === null ? '—' : `${stakeUnitsValue.toFixed(2)} U`}`
+                      : 'No monthly unit is set for this date. Correct the date or save with the unit pending.'}
+                  </p>
+                  {financialEditAllowed && !stakeUnit ? (
+                    <label className="checkbox-field bettrack-missing-unit-choice">
+                      <input
+                        type="checkbox"
+                        checked={allowMissingUnit}
+                        onChange={(event) => setMissing(event.target.checked)}
+                      />
+                      Save without linking a monthly unit
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="section-heading">
+                <h3>Seleções</h3>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  disabled={
+                    selections.length >= 40 || (!bet && !review && manualBetType === 'single')
+                  }
+                  onClick={() => setSelections([...selections, newSelection()])}
+                >
+                  Adicionar seleção
+                </Button>
+              </div>
+              {selections.map((item, index) => (
+                <section className="selection-form" key={item.key}>
+                  <div className="selection-heading">
+                    <strong>{`Seleção ${index + 1}`}</strong>
+                    {selections.length > 1 ? (
+                      <Button
+                        variant="ghost"
+                        size="small"
+                        onClick={() => setSelections(selections.filter((_, i) => i !== index))}
+                        aria-label={`Remover seleção ${index + 1}`}
+                      >
+                        Remover
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="form-grid">
+                    <Field label={`${referenceLayout ? 'Event' : 'Evento'} ${index + 1}`}>
+                      <input
+                        required
+                        maxLength={300}
+                        value={item.event}
+                        onChange={(event) => updateSelection(index, { event: event.target.value })}
+                        placeholder="Time A × Time B"
+                      />
+                    </Field>
+                    <Field label={`${referenceLayout ? 'Sport' : 'Esporte'} ${index + 1}`}>
+                      <input
+                        list={sportSuggestionsId}
+                        maxLength={100}
+                        value={item.sport ?? ''}
+                        onChange={(event) => updateSelection(index, { sport: event.target.value })}
+                      />
+                    </Field>
+                    <Field
+                      label={`${referenceLayout ? 'Bet Type' : 'Tipo de aposta'} ${index + 1}`}
+                      hint={
+                        referenceLayout
+                          ? 'Choose a market type or enter a custom one.'
+                          : 'Escolha um tipo ou informe um mercado personalizado.'
+                      }
+                    >
+                      <input
+                        required
+                        maxLength={300}
+                        list={marketTypeSuggestionsId}
+                        value={item.market}
+                        onChange={(event) => updateSelection(index, { market: event.target.value })}
+                      />
+                    </Field>
+                    <Field label={`${referenceLayout ? 'Selection' : 'Palpite'} ${index + 1}`}>
+                      <input
+                        required
+                        maxLength={300}
+                        value={item.selection}
+                        onChange={(event) =>
+                          updateSelection(index, { selection: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label={`${referenceLayout ? 'Event date' : 'Data do evento'} ${index + 1}`}
+                      hint={referenceLayout ? 'Can be left blank.' : 'Pode ficar pendente.'}
+                    >
+                      <input
+                        type="date"
+                        value={item.eventDate ?? ''}
+                        onChange={(event) =>
+                          updateSelection(index, { eventDate: event.target.value || null })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label={`${referenceLayout ? 'Event time' : 'Horário do evento'} ${index + 1}`}
+                      hint={
+                        referenceLayout
+                          ? 'Leave blank if unknown.'
+                          : 'Deixe vazio quando não for conhecido.'
+                      }
+                    >
+                      <input
+                        type="time"
+                        step="1"
+                        value={item.time}
+                        onChange={(event) => updateSelection(index, { time: event.target.value })}
+                      />
+                    </Field>
+                    <Field
+                      label={`${referenceLayout ? 'Date status' : 'Confirmação da data'} ${index + 1}`}
+                    >
+                      <select
+                        value={item.dateStatus === 'estimated' ? 'estimated' : 'confirmed'}
+                        onChange={(event) =>
+                          updateSelection(index, {
+                            dateStatus:
+                              event.target.value === 'estimated' ? 'estimated' : 'confirmed',
+                          })
+                        }
+                      >
+                        <option value="confirmed">
+                          {referenceLayout ? 'Confirmed' : 'Confirmada pelo proprietário'}
+                        </option>
+                        <option value="estimated">
+                          {referenceLayout
+                            ? 'Estimated, review needed'
+                            : 'Estimada, requer conferência'}
+                        </option>
+                      </select>
+                    </Field>
+                    <Field
+                      label={`${referenceLayout ? 'Selection odds' : 'Odd da seleção'} ${index + 1} (${referenceLayout ? 'optional' : 'opcional'})`}
+                    >
+                      <input
+                        inputMode="decimal"
+                        value={item.odds ?? ''}
+                        onChange={(event) =>
+                          updateSelection(index, { odds: event.target.value || null })
+                        }
+                      />
+                    </Field>
+                  </div>
+                </section>
+              ))}
+              {bet ? (
+                <div className="form-grid bettrack-edit-catalog-fields">
+                  <Field label="Sportsbook">
+                    <select
+                      required
+                      disabled={!financialEditAllowed || !!freebetId}
+                      value={bookmakerId}
+                      onChange={(event) => {
+                        setBookmaker(event.target.value);
+                        setFreebet('');
+                      }}
+                    >
+                      <option value="">Selecione</option>
+                      {houses.map((item) => (
+                        <option value={item.id} key={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Tipsters">
+                    <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
+                      <option value="">Sem tipster</option>
+                      {tipsters.map((item) => (
+                        <option value={item.id} key={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Ticket reference (optional)">
+                    <input
+                      maxLength={150}
+                      value={reference}
+                      onChange={(event) => setReference(event.target.value)}
+                    />
+                  </Field>
+                </div>
+              ) : null}
+            </>
+          )}
+        </>
+      ) : null}
+      {!bet && !review && manualBetStep === 2 ? (
+        referenceLayout ? (
+          <div className="bettrack-amount-step">
+            <div className="bettrack-details-intro">
+              <div>
+                <h2>How much are you risking?</h2>
+                <p>The amount closes the capture. Check it against your ticket.</p>
+              </div>
+            </div>
+            <div className="bettrack-amount-control">
+              <label htmlFor="bettrack-stake-amount">Amount</label>
+              <div>
+                <span>R$</span>
+                <input
+                  id="bettrack-stake-amount"
+                  required
+                  disabled={!!freebetId}
+                  inputMode="decimal"
+                  value={stake.replace('.', ',')}
+                  onChange={(event) => setStake(event.target.value.replace(',', '.'))}
+                />
+                <b>
+                  {stakeUnitNumber && stakeNumber > 0
+                    ? `${(stakeNumber / stakeUnitNumber).toFixed(1)} U`
+                    : '— U'}
+                </b>
+              </div>
+            </div>
+            <div className="bettrack-unit-presets" role="group" aria-label="Choose amount in units">
+              {[1, 2, 3, 5].map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  disabled={!stakeUnitNumber}
+                  className={
+                    stakeUnitNumber && Math.abs(stakeNumber - stakeUnitNumber * count) < 0.005
+                      ? 'is-active'
+                      : ''
+                  }
+                  onClick={() => {
+                    if (stakeUnitNumber) setStake((stakeUnitNumber * count).toFixed(2));
+                  }}
+                >
+                  {count} U
+                </button>
+              ))}
+            </div>
+            <p className="bettrack-unit-note">
+              {stakeUnit
+                ? `Your unit is ${formatDisplayMoney(stakeUnit.amount)} · 1 U = ${formatDisplayMoney(stakeUnit.amount)}`
+                : 'No monthly unit is set for this date. You can record the amount and review the unit later.'}
+            </p>
+            <div className="bettrack-payout-block">
+              <label>
+                Total payout (R$) <small>Calculated from odds: {potentialPayout}</small>
+              </label>
+              <output>
+                {potentialPayout === '—' ? '0,00' : potentialPayout.replace(/^R\$\s*/, '')}
+              </output>
+            </div>
+            <div className="bettrack-source-fields">
+              <Field label="Tipsters">
+                <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
+                  <option value="">Add tipsters…</option>
+                  {tipsters.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Sportsbook">
                 <select
                   required
-                  disabled={!!bet}
                   value={bookmakerId}
                   onChange={(event) => {
                     setBookmaker(event.target.value);
                     setFreebet('');
-                    if (review) setReviewOrigin('unconfirmed');
+                  }}
+                >
+                  <option value="">Choose the book…</option>
+                  {houses.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="bettrack-book-actions">
+              <a className="bettrack-book-help" href="#settings">
+                {houses.length
+                  ? `MY BOOK ISN'T HERE · SEE ALL ${houses.length}`
+                  : 'ADD YOUR FIRST SPORTSBOOK IN SETTINGS'}
+              </a>
+              <details className="bettrack-amount-more">
+                <summary>MORE DETAILS</summary>
+                <div>
+                  <Field label="Bet type">
+                    <select
+                      value={freebetId}
+                      onChange={(event) => {
+                        setFreebet(event.target.value);
+                        const credit = workspace.freebets.find(
+                          (item) => item.id === event.target.value,
+                        );
+                        if (credit) setStake(credit.amount);
+                      }}
+                    >
+                      <option value="">Cash</option>
+                      {workspace.freebets
+                        .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                        .map((item) => (
+                          <option
+                            value={item.id}
+                            key={item.id}
+                          >{`Freebet ${formatDisplayMoney(item.amount)} · until ${item.expiresOn}`}</option>
+                        ))}
+                    </select>
+                  </Field>
+                  <Field
+                    label="Date and time placed"
+                    hint="Your local time. Separate from the event date."
+                  >
+                    <input
+                      required
+                      type="datetime-local"
+                      step="1"
+                      value={placedAt}
+                      onChange={(event) => setPlaced(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Ticket reference (optional)">
+                    <input
+                      maxLength={150}
+                      value={reference}
+                      onChange={(event) => setReference(event.target.value)}
+                    />
+                  </Field>
+                </div>
+              </details>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="form-grid">
+              <Field label={referenceLayout ? 'Bookmaker' : 'Casa de aposta'}>
+                <select
+                  required
+                  value={bookmakerId}
+                  onChange={(event) => {
+                    setBookmaker(event.target.value);
+                    setFreebet('');
                   }}
                 >
                   <option value="">Selecione</option>
@@ -726,101 +1843,70 @@ export function BetForm({
                   ))}
                 </select>
               </Field>
-              {!bet ? (
-                <>
-                  {review ? (
-                    <>
-                      <Field label="Origem da aposta">
-                        <select
-                          value={reviewOrigin}
-                          onChange={(event) => {
-                            const value = event.target.value as typeof reviewOrigin;
-                            setReviewOrigin(value);
-                            if (value === 'real') setFreebet('');
-                          }}
-                        >
-                          <option value="unconfirmed" disabled>
-                            Confirme a modalidade
-                          </option>
-                          <option value="real">Dinheiro real</option>
-                          <option value="freebet">Freebet</option>
-                          <option value="hibrida">Híbrida (real + freebet)</option>
-                        </select>
-                      </Field>
-                      {reviewOrigin === 'freebet' || reviewOrigin === 'hibrida' ? (
-                        <Field label="Crédito de freebet">
-                          <select
-                            value={freebetId}
-                            onChange={(event) => setFreebet(event.target.value)}
-                          >
-                            <option value="">Selecione o crédito</option>
-                            {workspace.freebets
-                              .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
-                              .map((item) => (
-                                <option value={item.id} key={item.id}>
-                                  {`${formatBRL(item.amount)} · até ${item.expiresOn}`}
-                                </option>
-                              ))}
-                          </select>
-                        </Field>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Field label="Origem da aposta">
-                      <select
-                        value={freebetId}
-                        onChange={(event) => {
-                          setFreebet(event.target.value);
-                          const credit = workspace.freebets.find(
-                            (item) => item.id === event.target.value,
-                          );
-                          if (credit) setStake(credit.amount);
-                        }}
-                      >
-                        <option value="">Dinheiro real</option>
-                        {workspace.freebets
-                          .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
-                          .map((item) => (
-                            <option value={item.id} key={item.id}>
-                              Freebet {formatBRL(item.amount)} · até {item.expiresOn}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                  )}
-                  <Field label="Valor apostado (R$)">
-                    <input
-                      required
-                      disabled={!!freebetId && (!review || reviewOrigin === 'freebet')}
-                      inputMode="decimal"
-                      value={stake}
-                      onChange={(event) => setStake(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Odd total">
-                    <input
-                      required
-                      inputMode="decimal"
-                      placeholder="1,85"
-                      value={odds}
-                      onChange={(event) => setOdds(event.target.value)}
-                    />
-                  </Field>
-                  <Field
-                    label="Data e hora da aposta"
-                    hint="Horário de São Paulo. É diferente da data do evento."
-                  >
-                    <input
-                      required
-                      type="datetime-local"
-                      step="1"
-                      value={placedAt}
-                      onChange={(event) => setPlaced(event.target.value)}
-                    />
-                  </Field>
-                </>
+              <Field label={referenceLayout ? 'Bet type' : 'Origem da aposta'}>
+                <select
+                  value={freebetId}
+                  onChange={(event) => {
+                    setFreebet(event.target.value);
+                    const credit = workspace.freebets.find(
+                      (item) => item.id === event.target.value,
+                    );
+                    if (credit) setStake(credit.amount);
+                  }}
+                >
+                  <option value="">{referenceLayout ? 'Cash' : 'Dinheiro real'}</option>
+                  {workspace.freebets
+                    .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
+                    .map((item) => (
+                      <option value={item.id} key={item.id}>
+                        Freebet {formatDisplayMoney(item.amount)} · até {item.expiresOn}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label={referenceLayout ? 'Amount' : 'Valor apostado (R$)'}>
+                <input
+                  required
+                  disabled={!!freebetId}
+                  inputMode="decimal"
+                  value={stake}
+                  onChange={(event) => setStake(event.target.value)}
+                />
+              </Field>
+              {!referenceLayout ? (
+                <Field label="Odd total">
+                  <input
+                    required
+                    inputMode="decimal"
+                    placeholder="1,85"
+                    value={odds}
+                    onChange={(event) => setOdds(event.target.value)}
+                  />
+                </Field>
               ) : null}
-              <Field label="Referência do bilhete (opcional)">
+              <Field
+                label={referenceLayout ? 'Date and time placed' : 'Data e hora da aposta'}
+                hint={
+                  referenceLayout
+                    ? 'Your local time. Separate from the event date.'
+                    : 'Horário de São Paulo. É diferente da data do evento.'
+                }
+              >
+                <input
+                  required
+                  type="datetime-local"
+                  step="1"
+                  value={placedAt}
+                  onChange={(event) => setPlaced(event.target.value)}
+                />
+              </Field>
+              <Field
+                label={
+                  referenceLayout
+                    ? 'Ticket reference (optional)'
+                    : 'Referência do bilhete (opcional)'
+                }
+              >
                 <input
                   maxLength={150}
                   value={reference}
@@ -828,212 +1914,19 @@ export function BetForm({
                 />
               </Field>
             </div>
-          ) : null}
-          <div className="section-heading">
-            <h3>Seleções</h3>
-            <Button
-              variant="secondary"
-              size="small"
-              disabled={selections.length >= 40 || (!bet && !review && manualBetType === 'single')}
-              onClick={() => setSelections([...selections, newSelection()])}
-            >
-              Adicionar seleção
-            </Button>
-          </div>
-          {selections.map((item, index) => (
-            <section className="selection-form" key={item.key}>
-              <div className="selection-heading">
-                <strong>Seleção {index + 1}</strong>
-                {selections.length > 1 ? (
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={() => setSelections(selections.filter((_, i) => i !== index))}
-                    aria-label={`Remover seleção ${index + 1}`}
-                  >
-                    Remover
-                  </Button>
-                ) : null}
-              </div>
-              <div className="form-grid">
-                <Field label={`Evento ${index + 1}`}>
-                  <input
-                    required
-                    maxLength={300}
-                    value={item.event}
-                    onChange={(event) => updateSelection(index, { event: event.target.value })}
-                    placeholder="Time A × Time B"
-                  />
-                </Field>
-                <Field label={`Esporte ${index + 1}`}>
-                  <input
-                    maxLength={100}
-                    value={item.sport ?? ''}
-                    onChange={(event) => updateSelection(index, { sport: event.target.value })}
-                  />
-                </Field>
-                <Field label={`Mercado ${index + 1}`}>
-                  <input
-                    required
-                    maxLength={300}
-                    value={item.market}
-                    onChange={(event) => updateSelection(index, { market: event.target.value })}
-                  />
-                </Field>
-                <Field label={`Palpite ${index + 1}`}>
-                  <input
-                    required
-                    maxLength={300}
-                    value={item.selection}
-                    onChange={(event) => updateSelection(index, { selection: event.target.value })}
-                  />
-                </Field>
-                <Field label={`Data do evento ${index + 1}`} hint="Pode ficar pendente.">
-                  <input
-                    type="date"
-                    value={item.eventDate ?? ''}
-                    onChange={(event) =>
-                      updateSelection(index, { eventDate: event.target.value || null })
-                    }
-                  />
-                </Field>
-                <Field
-                  label={`Horário do evento ${index + 1}`}
-                  hint="Deixe vazio quando não for conhecido."
-                >
-                  <input
-                    type="time"
-                    step="1"
-                    value={item.time}
-                    onChange={(event) => updateSelection(index, { time: event.target.value })}
-                  />
-                </Field>
-                <Field label={`Confirmação da data ${index + 1}`}>
-                  <select
-                    value={item.dateStatus === 'estimated' ? 'estimated' : 'confirmed'}
-                    onChange={(event) =>
-                      updateSelection(index, {
-                        dateStatus: event.target.value === 'estimated' ? 'estimated' : 'confirmed',
-                      })
-                    }
-                  >
-                    <option value="confirmed">Confirmada pelo proprietário</option>
-                    <option value="estimated">Estimada, requer conferência</option>
-                  </select>
-                </Field>
-                <Field label={`Odd da seleção ${index + 1} (opcional)`}>
-                  <input
-                    inputMode="decimal"
-                    value={item.odds ?? ''}
-                    onChange={(event) =>
-                      updateSelection(index, { odds: event.target.value || null })
-                    }
-                  />
-                </Field>
-              </div>
-            </section>
-          ))}
-        </>
-      ) : null}
-      {!bet && !review && manualBetStep === 2 ? (
-        <>
-          <div className="form-grid">
-            <Field label="Casa de aposta">
-              <select
-                required
-                value={bookmakerId}
-                onChange={(event) => {
-                  setBookmaker(event.target.value);
-                  setFreebet('');
-                }}
-              >
-                <option value="">Selecione</option>
-                {houses.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Tipster">
-              <select value={tipsterId} onChange={(event) => setTipster(event.target.value)}>
-                <option value="">Sem tipster</option>
-                {tipsters.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Origem da aposta">
-              <select
-                value={freebetId}
-                onChange={(event) => {
-                  setFreebet(event.target.value);
-                  const credit = workspace.freebets.find((item) => item.id === event.target.value);
-                  if (credit) setStake(credit.amount);
-                }}
-              >
-                <option value="">Dinheiro real</option>
-                {workspace.freebets
-                  .filter((item) => item.bookmakerId === bookmakerId && !item.usedBy)
-                  .map((item) => (
-                    <option value={item.id} key={item.id}>
-                      Freebet {formatBRL(item.amount)} · até {item.expiresOn}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-            <Field label="Valor apostado (R$)">
-              <input
-                required
-                disabled={!!freebetId}
-                inputMode="decimal"
-                value={stake}
-                onChange={(event) => setStake(event.target.value)}
-              />
-            </Field>
-            <Field label="Odd total">
-              <input
-                required
-                inputMode="decimal"
-                placeholder="1,85"
-                value={odds}
-                onChange={(event) => setOdds(event.target.value)}
-              />
-            </Field>
-            <Field
-              label="Data e hora da aposta"
-              hint="Horário de São Paulo. É diferente da data do evento."
-            >
-              <input
-                required
-                type="datetime-local"
-                step="1"
-                value={placedAt}
-                onChange={(event) => setPlaced(event.target.value)}
-              />
-            </Field>
-            <Field label="Referência do bilhete (opcional)">
-              <input
-                maxLength={150}
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="bet-wizard-payout">
-            <span>Retorno potencial</span>
-            <strong>{potentialPayout}</strong>
-          </div>
-          <p className="bet-wizard-note">
-            Confira o valor, a odd total e a casa antes de registrar. O bilhete será lançado como
-            aberto.
-          </p>
-        </>
+            <div className="bet-wizard-payout">
+              <span>{referenceLayout ? 'To win' : 'Retorno potencial'}</span>
+              <strong>{potentialPayout}</strong>
+            </div>
+            <p className="bet-wizard-note">
+              Confira o valor, a odd total e a casa antes de registrar. O bilhete será lançado como
+              aberto.
+            </p>
+          </>
+        )
       ) : null}
       {bet ? (
-        <Field label="Motivo da correção">
+        <Field label={referenceLayout ? 'Reason for correction' : 'Motivo da correção'}>
           <textarea
             required
             minLength={3}
@@ -1042,7 +1935,7 @@ export function BetForm({
             onChange={(event) => setReason(event.target.value)}
           />
         </Field>
-      ) : review || manualBetStep === 2 ? (
+      ) : review || (manualBetStep === 2 && (!referenceLayout || !stakeUnit)) ? (
         <label className="checkbox-field">
           <input
             type="checkbox"
@@ -1076,13 +1969,89 @@ export function BetForm({
           </label>
         </>
       ) : null}
+      {referenceLayout ? (
+        <aside className="bettrack-ticket-preview" aria-label="Ticket preview">
+          <div className="bettrack-ticket-preview-heading">
+            <span>YOUR TICKET</span>
+            <b>
+              <i /> UPDATES AS YOU TYPE
+            </b>
+          </div>
+          <div
+            className="bettrack-ticket-paper"
+            data-sport={
+              previewIsParlay || bet?.ticketKind === 'multiple'
+                ? 'multi'
+                : ticketSportLabel(previewSelection?.sport ?? null).toLowerCase()
+            }
+          >
+            <header>
+              <strong>
+                {houses.find((house) => house.id === bookmakerId)?.name.toUpperCase() ?? 'NO BOOK'}
+              </strong>
+              <span>
+                #
+                {bet ? bet.reference?.trim() || String(bet.ticketNumber).padStart(6, '0') : 'DRAFT'}
+              </span>
+            </header>
+            <div className="bettrack-ticket-kind">
+              <span>{ticketSportLabel(previewSelection?.sport ?? null)}</span>
+              <small>{ticketMarket}</small>
+              <b>{previewOdds || previewSelection?.odds || '—'}</b>
+            </div>
+            <strong className="bettrack-ticket-selection">
+              {previewIsParlay || (bet && bet.ticketKind !== 'simple' && selections.length > 1)
+                ? `${selections.length} SELECTIONS`
+                : previewSelection?.selection || '—'}
+            </strong>
+            {previewIsParlay || (bet && bet.ticketKind !== 'simple' && selections.length > 1) ? (
+              <div className="bettrack-ticket-selections bettrack-edit-ticket-selections">
+                {selections.map((item) => (
+                  <div key={item.key}>
+                    <span data-sport={ticketSportLabel(item.sport).toLowerCase()}>
+                      {ticketSportLabel(item.sport)}
+                    </span>
+                    <p>
+                      <strong>{item.selection || '—'}</strong>
+                      <small>{item.event}</small>
+                    </p>
+                    <b>{item.odds || '—'}</b>
+                  </div>
+                ))}
+              </div>
+            ) : previewSelection?.event ? (
+              <small className="bettrack-ticket-event">{previewSelection.event}</small>
+            ) : null}
+            <div className="bettrack-ticket-value-grid">
+              <div>
+                <small>AMOUNT</small>
+                <span>{previewAmount}</span>
+              </div>
+              <div>
+                <small>TO WIN</small>
+                <span>{previewReturn}</span>
+              </div>
+            </div>
+            <footer>OPEN</footer>
+          </div>
+          <p>It fills in as you capture. This is how it looks when you share it.</p>
+        </aside>
+      ) : null}
     </CommandForm>
   );
 }
-export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
+export function SettleForm({
+  bet,
+  onDone,
+  initialOutcome = 'win',
+}: {
+  bet: Bet;
+  onDone: () => void;
+  initialOutcome?: 'win' | 'loss' | 'void' | 'cashout';
+}) {
   const [outcome, setOutcome] = useState<
     'win' | 'loss' | 'void' | 'half_win' | 'half_loss' | 'cashout' | 'partial_cashout'
-  >('win');
+  >(initialOutcome);
   const [principal, setPrincipal] = useState(bet.remaining);
   const suggested = (value: typeof outcome) =>
     // STK-UX-DADOS (R2) — sem principal aberto ou sem odd não há base para
@@ -1100,7 +2069,7 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
           !!bet.freebetId,
           bet.freebetStakeReturned ?? false,
         );
-  const [amount, setAmount] = useState(() => suggested('win'));
+  const [amount, setAmount] = useState(() => suggested(initialOutcome));
   const [at, setAt] = useState(localNow);
   const [reason, setReason] = useState('');
   // STK-UX-DADOS — R2 no ponto que mais dói: o DADO GRAVADO.
@@ -1149,7 +2118,7 @@ export function SettleForm({ bet, onDone }: { bet: Bet; onDone: () => void }) {
       }}
     >
       <p className="form-intro">
-        Principal ainda aberto: <strong>{formatBRLWhenPresent(remaining)}</strong>. Confira o valor
+        Principal ainda aberto: <strong>{formatDisplayMoney(remaining)}</strong>. Confira o valor
         efetivamente recebido na casa.
       </p>
       <div className="form-grid">

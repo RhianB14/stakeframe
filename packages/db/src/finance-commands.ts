@@ -3,6 +3,7 @@ import {
   cents,
   deriveBetOrigin,
   money,
+  oddsInteger,
   saoPauloDate,
   type FinanceCommand,
 } from '@stakeframe/shared';
@@ -574,7 +575,84 @@ export async function applyFinanceCommand(
   if (type === 'bet.update') {
     const before = requireCompleteBet(await getBetRow(client, command.id));
     if (before.state === 'cancelled') throw new FinanceError('STATE_CONFLICT');
+    const nextBookmakerId = command.bookmakerId ?? before.bookmaker_id;
+    const bookmakerChanged = nextBookmakerId !== before.bookmaker_id;
+    if (bookmakerChanged) {
+      if (before.freebet_id) throw new FinanceError('STATE_CONFLICT');
+      await activeCatalog(client, nextBookmakerId, 'bookmaker');
+    }
     if (command.tipsterId) await activeCatalog(client, command.tipsterId, 'tipster');
+    const nextStake = command.stake === undefined ? cents(before.stake) : cents(command.stake);
+    const nextOdds = command.odds ?? before.odds;
+    const nextPlacedAt = command.placedAt ? verifyPast(command.placedAt, now) : before.placed_at;
+    const stakeChanged = nextStake !== cents(before.stake);
+    const oddsChanged = oddsInteger(nextOdds) !== oddsInteger(before.odds);
+    const placedAtChanged =
+      Math.floor(nextPlacedAt.getTime() / 1000) !== Math.floor(before.placed_at.getTime() / 1000);
+    const financialChanged = stakeChanged || oddsChanged || placedAtChanged || bookmakerChanged;
+    if (financialChanged) {
+      // A historical settlement is immutable. Reject all financial edits after
+      // any settlement, including a reversed partial settlement.
+      if (
+        before.state !== 'open' ||
+        (await hasSettlementHistory(client, command.id)) ||
+        cents(before.remaining) !== cents(before.stake)
+      )
+        throw new FinanceError('STATE_CONFLICT');
+    }
+
+    let nextUnitMonth = before.unit_month;
+    let nextUnitAmount = before.unit_amount;
+    const nextStakeJournalId = before.stake_journal_id;
+    if (stakeChanged || placedAtChanged) {
+      const targetMonth = saoPauloDate(nextPlacedAt).slice(0, 7);
+      const unit = (
+        await client.query<{ amount: string }>(
+          'select amount from finance.monthly_unit where organization_id=current_setting($$app.organization_id$$, true)::uuid and month=$1',
+          [targetMonth],
+        )
+      ).rows[0];
+      const frozenUnit =
+        before.unit_month === targetMonth && before.unit_amount && cents(before.unit_amount) > 0n
+          ? before.unit_amount
+          : null;
+      const targetUnitAmount = unit && cents(unit.amount) > 0n ? unit.amount : frozenUnit;
+      const unitKnown = targetUnitAmount !== null;
+      if (!unitKnown && !command.allowMissingUnit) throw new FinanceError('UNIT_REQUIRED');
+      nextUnitMonth = unitKnown ? targetMonth : null;
+      nextUnitAmount = targetUnitAmount;
+    }
+
+    if (stakeChanged || placedAtChanged || bookmakerChanged) {
+      let previousRealStake = cents(before.stake);
+      let nextRealStake = nextStake;
+      if (before.freebet_id) {
+        const promo = (
+          await client.query<{ amount: string; used_by: string | null }>(
+            'select amount,used_by from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+            [before.freebet_id],
+          )
+        ).rows[0];
+        if (!promo || promo.used_by !== command.id) throw new FinanceError('STATE_CONFLICT');
+        if (cents(promo.amount) === cents(before.stake)) previousRealStake = 0n;
+        if (cents(promo.amount) === nextStake) nextRealStake = 0n;
+      }
+
+      const previousHouse = await accountByKind(client, 'bookmaker', before.bookmaker_id);
+      const house = await accountByKind(client, 'bookmaker', nextBookmakerId);
+      const exposure = await accountByKind(client, 'exposure');
+      await writeJournal(client, {
+        kind: 'bet_stake_correction',
+        effectiveAt: now,
+        actor,
+        reason: `Correção da aposta: ${command.reason}`,
+        postings: [
+          { accountId: previousHouse.id, amount: previousRealStake },
+          { accountId: house.id, amount: -nextRealStake },
+          { accountId: exposure.id, amount: nextRealStake - previousRealStake },
+        ],
+      });
+    }
     const selections = (
       await client.query(
         'select * from finance.selection where organization_id=current_setting($$app.organization_id$$, true)::uuid and bet_id=$1 order by position',
@@ -582,8 +660,20 @@ export async function applyFinanceCommand(
       )
     ).rows;
     await client.query(
-      'update finance.bet set tipster_id=$2,reference=$3 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
-      [command.id, command.tipsterId, command.reference],
+      'update finance.bet set bookmaker_id=$2,tipster_id=$3,reference=$4,stake=$5,odds=$6,placed_at=$7,remaining=$8,unit_month=$9,unit_amount=$10,stake_journal_id=$11 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1',
+      [
+        command.id,
+        nextBookmakerId,
+        command.tipsterId,
+        command.reference,
+        money(nextStake),
+        nextOdds,
+        nextPlacedAt,
+        stakeChanged ? money(nextStake) : before.remaining,
+        nextUnitMonth,
+        nextUnitAmount,
+        nextStakeJournalId,
+      ],
     );
     await saveSelections(client, command.id, command.selections);
     // R5: a resposta final do Telegram reflete o registro canônico atualizado.
@@ -599,13 +689,32 @@ export async function applyFinanceCommand(
       )
     ).rowCount;
     if (before.state !== 'open' || active) throw new FinanceError('STATE_CONFLICT');
-    await reverseJournal(
-      client,
-      before.stake_journal_id,
-      verifyPast(command.effectiveAt, now),
+    const effectiveAt = verifyPast(command.effectiveAt, now);
+    if (effectiveAt.getTime() < before.placed_at.getTime())
+      throw new FinanceError('INVALID_FINANCIAL_OPERATION');
+    let realRemaining = cents(before.remaining);
+    if (before.freebet_id) {
+      const promo = (
+        await client.query<{ amount: string; used_by: string | null }>(
+          'select amount,used_by from finance.freebet where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1 for update',
+          [before.freebet_id],
+        )
+      ).rows[0];
+      if (!promo || promo.used_by !== command.id) throw new FinanceError('STATE_CONFLICT');
+      if (cents(promo.amount) === cents(before.stake)) realRemaining = 0n;
+    }
+    const house = await accountByKind(client, 'bookmaker', before.bookmaker_id);
+    const exposure = await accountByKind(client, 'exposure');
+    await writeJournal(client, {
+      kind: 'bet_cancel',
+      effectiveAt,
       actor,
-      command.reason,
-    );
+      reason: command.reason,
+      postings: [
+        { accountId: house.id, amount: realRemaining },
+        { accountId: exposure.id, amount: -realRemaining },
+      ],
+    });
     await client.query(
       "update finance.bet set state='cancelled',remaining=0 where organization_id=current_setting($$app.organization_id$$, true)::uuid and id=$1",
       [command.id],

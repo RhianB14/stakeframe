@@ -1,10 +1,6 @@
+import { formatDisplayMoney, formatDisplayOdds } from './preferences.js';
 import { useEffect, useState } from 'react';
-import {
-  formatBRL,
-  formatBRLWhenPresent,
-  normalizeDecimalInput,
-  type ImportDetail,
-} from '@stakeframe/shared';
+import { normalizeDecimalInput, type ImportDetail } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { ApiFailure } from './api.js';
 
@@ -104,8 +100,8 @@ export function StatusSection({
       <h3>Status da aposta</h3>
       <p role="status">
         Estado atual: <strong>{stateLabel(bet.state)}</strong> · Stake{' '}
-        {formatBRLWhenPresent(bet.stake)} · Odd {bet.odds ?? 'A definir'} · Em aberto{' '}
-        {formatBRLWhenPresent(bet.remaining)}
+        {formatDisplayMoney(bet.stake)} · Odd {formatDisplayOdds(bet.odds)} · Em aberto{' '}
+        {formatDisplayMoney(bet.remaining)}
       </p>
       {incomplete ? (
         <p className="notice warning" role="status">
@@ -332,7 +328,7 @@ export function BookmakerSection({
             </option>
             {(credits ?? []).map((item) => (
               <option key={item.id} value={item.id}>
-                {`${formatBRL(item.amount)} · expira ${item.expiresOn}`}
+                {`${formatDisplayMoney(item.amount)} · expira ${item.expiresOn}`}
               </option>
             ))}
           </select>
@@ -554,8 +550,8 @@ export function CashoutSection({
     <div className="draft-controls">
       <h3>Cashout</h3>
       <p role="status">
-        Em aberto {formatBRLWhenPresent(bet.remaining)} · Stake {formatBRLWhenPresent(bet.stake)} ·
-        Odd {bet.odds ?? 'A definir'}
+        Em aberto {formatDisplayMoney(bet.remaining)} · Stake {formatDisplayMoney(bet.stake)} · Odd{' '}
+        {formatDisplayOdds(bet.odds)}
       </p>
       <fieldset>
         <legend>Tipo de cashout *</legend>

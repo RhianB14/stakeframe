@@ -102,8 +102,8 @@ type DraftPatch = {
 // e a mensagem permaneciam nos valores antigos: três fontes divergentes
 // (rascunho, aposta financeira, mensagem). Depois da confirmação esses campos
 // só mudam pelos comandos canônicos já existentes (bet.origin, bet.bookmaker,
-// bet.update, event.update); valor e odd total ainda NÃO têm comando, e essa
-// lacuna é um bloqueio de produto/contrato registrado em STK-G0-23.
+// bet.update, event.update). A Web corrige casa, valor e odd por bet.update; o
+// PATCH da inbox do Telegram continua fail-closed nesses campos.
 // Um valor igual ao vigente não é divergência: não há o que persistir, então um
 // PATCH que apenas reenvia o conteúdo continua sendo aceito.
 type RegisteredBet = {

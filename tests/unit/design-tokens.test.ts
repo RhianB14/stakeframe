@@ -24,6 +24,7 @@ const tokensCss = read('../../apps/web/src/product/tokens.css');
 const productCss = read('../../apps/web/src/product/product.css');
 const styleCss = read('../../apps/web/src/style.css');
 const productApp = read('../../apps/web/src/product/ProductApp.tsx');
+const appShell = read('../../apps/web/src/product/app-shell.tsx');
 
 /**
  * STK-F2-18 (Fase 4) — os arquivos JSX da Fase 4 entram na guarda.
@@ -120,6 +121,18 @@ const SKIN_PALETTE = new Set([
   '#04b5d1',
   '#17b8a6',
   '#8bc927',
+  '#0d0d0d',
+  '#191919',
+  '#222222',
+  '#333333',
+  '#535353',
+  '#f2f2f0',
+  '#ecece8',
+  '#a4a4a4',
+  '#ff7900',
+  '#c5f639',
+  '#141509',
+  '#e85c6e',
 ]);
 
 /**
@@ -605,7 +618,7 @@ describe('casca do produto (STK-F2-18)', () => {
     expect(productApp).toContain('href="#product-main"');
     expect(productApp).toMatch(/id="product-main"/);
     // O alvo precisa ser focável por script, senão o foco some nele.
-    expect(productApp).toMatch(/id="product-main" tabIndex=\{-1\}/);
+    expect(productApp).toMatch(/id="product-main"\s+tabIndex=\{-1\}/);
   });
 
   it('a navegação declara os três estados de interação', () => {
@@ -627,15 +640,24 @@ describe('casca do produto (STK-F2-18)', () => {
     for (const id of used) {
       expect(declared, `Page não declara '${id}'`).toContain(id);
     }
-    // `sidebarGroups` é a OUTRA fonte de verdade da navegação (as categorias da
-    // sidebar) e nasceu sem teste: um id inexistente ali só apareceria em runtime.
-    const grouped = quoted(
-      productApp,
-      /const sidebarGroups = \[([\s\S]*?)\] as const/,
-      /'([a-z-]+)'/g,
-    );
-    for (const id of grouped) {
-      expect(declared, `Page não declara '${id}' (sidebarGroups)`).toContain(id);
+    // Confere também as rotas que o shell exibe, incluindo destinos não
+    // incluídos na navegação plana usada pelo resolvedor de hash.
+    const shellRoutes = [
+      'overview',
+      'bets',
+      'calendar',
+      'finance',
+      'analytics',
+      'hedge',
+      'settings',
+      'pm-global',
+      'pm-favorites',
+      'pm-telegram',
+      'pm-simulation',
+    ];
+    for (const id of shellRoutes) {
+      expect(declared, `Page não declara '${id}' (sidebar)`).toContain(id);
+      expect(appShell, `sidebar sem rota '${id}'`).toContain(`['${id}'`);
     }
     // `imports` é rota por hash e não aparece no menu — declarada, sem item.
     expect(declared).toContain('imports');

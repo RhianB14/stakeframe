@@ -1,3 +1,4 @@
+import { formatDisplayMoney } from './preferences.js';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,7 +7,6 @@ import {
   betPageSchema,
   uploadResultSchema,
   MAX_IMAGE_BYTES,
-  formatBRL,
   type Workspace,
   type ImportDetail,
   type AutomaticReason,
@@ -538,7 +538,7 @@ function ReviewContent({
               {detail.duplicates.map((candidate) => (
                 <div key={candidate.betId}>
                   <strong>{candidate.reference || 'Sem referência'}</strong> ·{' '}
-                  {candidate.stake ? formatBRL(candidate.stake) : 'Valor pendente'} ·{' '}
+                  {candidate.stake ? formatDisplayMoney(candidate.stake) : 'Valor pendente'} ·{' '}
                   {candidate.placedAt ? dateLabel(candidate.placedAt) : 'Data pendente'}
                   <span>
                     {candidate.reasons.includes('image')
@@ -745,7 +745,7 @@ function ExistingBetPicker({
               {workspace.catalog.find((item) => item.id === bet.bookmakerId)?.name ?? 'Casa'} ·{' '}
               {bet.reference || bet.event} ·{' '}
               {bet.placedAt ? dateLabel(bet.placedAt) : 'Data pendente'} ·{' '}
-              {bet.stake ? formatBRL(bet.stake) : 'Valor pendente'}
+              {bet.stake ? formatDisplayMoney(bet.stake) : 'Valor pendente'}
             </option>
           ))}
         </select>

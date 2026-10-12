@@ -1,3 +1,4 @@
+import { formatDisplayMoney } from './preferences.js';
 import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -5,7 +6,6 @@ import {
   calendarItemSchema,
   eventSearchSchema,
   eventSearchStatusSchema,
-  formatBRL,
   eventSearchInputSchema,
   saoPauloDate,
   type Workspace,
@@ -162,7 +162,7 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
             const dailyResult = resultsByDay.get(value);
             const displayedResult = dailyResult
               ? resultMode === 'money'
-                ? formatBRL(dailyResult.profit)
+                ? formatDisplayMoney(dailyResult.profit)
                 : dailyResult.profitUnits === null
                   ? 'Unid. —'
                   : formatUnits(dailyResult.profitUnits)
@@ -371,13 +371,6 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
                       </div>
                     </div>
                     <div className="event-actions">
-                      <Button
-                        size="small"
-                        variant="secondary"
-                        onClick={() => open({ kind: 'event', id: item.selection.id })}
-                      >
-                        Conferir data
-                      </Button>
                       <Button
                         size="small"
                         variant="ghost"

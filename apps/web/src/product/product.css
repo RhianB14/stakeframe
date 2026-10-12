@@ -6790,3 +6790,6256 @@
     min-height: 40px;
   }
 }
+
+/* BetTrack reference skin: the source interface uses Barlow across every
+   route, a 55px masthead, a fixed 220px navigation rail, and square panels. */
+.bettrack-theme {
+  --font-display: 'Barlow Condensed', Impact, 'Arial Narrow', sans-serif;
+  --font-body: 'Barlow', 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', Consolas, monospace;
+  --web-text: var(--bettrack-copy);
+  --sidebar-w: 220px;
+  --sidebar-w-collapsed: 220px;
+  --topbar-github-h: 55px;
+  min-height: 100vh;
+  background: var(--web-bg);
+  color: var(--web-text);
+  font-family: var(--font-body);
+}
+.bettrack-theme .product-topbar {
+  display: none;
+}
+.bettrack-theme .product-topbar-github {
+  height: 55px;
+  padding: 0 22px 0 25px;
+  gap: 13px;
+  border-bottom-color: var(--web-border);
+  background: var(--web-bg);
+}
+.bettrack-theme .product-topbar-icon {
+  display: none;
+}
+.bettrack-theme .product-topbar-brand {
+  align-items: center;
+  gap: 8px;
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+.bettrack-theme .product-topbar-logo-mark.bettrack-logo-mark {
+  position: relative;
+  display: flex;
+  width: 25px;
+  height: 25px;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 7px;
+  background: var(--web-accent);
+}
+.bettrack-theme .bettrack-logo-mark i {
+  display: block;
+  width: 4px;
+  border-radius: 2px 2px 1px 1px;
+  background: var(--web-ink);
+}
+.bettrack-theme .bettrack-logo-mark i:nth-child(1) {
+  height: 7px;
+}
+.bettrack-theme .bettrack-logo-mark i:nth-child(2) {
+  height: 12px;
+}
+.bettrack-theme .bettrack-logo-mark i:nth-child(3) {
+  height: 16px;
+}
+.bettrack-theme .product-topbar-brand-copy,
+.bettrack-theme .product-topbar-profile-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.bettrack-theme .product-topbar-brand-copy strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.035em;
+}
+.bettrack-theme .product-topbar-brand-copy small,
+.bettrack-theme .product-topbar-profile-name small {
+  margin-top: 3px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.13em;
+}
+.bettrack-theme .product-topbar-profile {
+  gap: 10px;
+  padding: 0 8px;
+  border: 0;
+  color: var(--web-text-secondary);
+  text-decoration: none;
+}
+.bettrack-theme .product-topbar-profile-name strong {
+  color: var(--web-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.bettrack-theme .product-topbar-avatar {
+  width: 31px;
+  height: 31px;
+  border-color: var(--web-blue);
+  background: var(--web-blue);
+  color: var(--web-white);
+  font-family: var(--font-display);
+}
+.bettrack-theme .product-topbar-signout {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .product-sidebar,
+.bettrack-theme .product-sidebar[data-mode='collapsed'],
+.bettrack-theme .product-sidebar[data-mode='hover'] {
+  top: 55px;
+  width: 220px;
+  padding: 18px 10px 20px;
+  border-right: 1px solid var(--web-border);
+  background: var(--web-sidebar);
+  overflow-y: auto;
+  transition: none;
+}
+.bettrack-theme .bettrack-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.bettrack-theme .product-sidebar .bettrack-nav-item > a {
+  min-height: 28px;
+  justify-content: flex-end;
+  padding: 4px 13px 4px 8px;
+  border-radius: 0;
+  color: var(--web-nav);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  text-align: right;
+  text-decoration: none;
+}
+.bettrack-theme .product-sidebar .bettrack-nav-item > a:hover {
+  background: var(--web-panel);
+  color: var(--web-text);
+}
+.bettrack-theme .product-sidebar .bettrack-nav-item > a[aria-current='page'] {
+  background: transparent;
+  color: var(--web-accent);
+}
+.bettrack-theme .product-sidebar .bettrack-nav-item > a[aria-current='page']::before {
+  display: none;
+}
+.bettrack-theme .bettrack-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0 4px 14px;
+}
+.bettrack-theme .bettrack-nav-group {
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-nav-group h2 {
+  margin: 0;
+  padding: 0 13px 3px 8px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 18px;
+  text-align: right;
+}
+.bettrack-theme .bettrack-subnav a {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 13px 0 8px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-align: right;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-subnav a:hover,
+.bettrack-theme .bettrack-subnav a[aria-current='page'] {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-subnav a:focus-visible {
+  outline: 1px solid var(--web-accent);
+  outline-offset: -1px;
+}
+.bettrack-theme .bettrack-subnav .bettrack-nav-disabled {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 13px 0 8px;
+  color: var(--web-text-tertiary);
+  cursor: not-allowed;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+  text-align: right;
+}
+.bettrack-theme .bettrack-subnav button {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 11px;
+  border: 0;
+  background: transparent;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-align: left;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-subnav button:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-sidebar .product-new-bet {
+  min-height: 32px;
+  justify-content: flex-end;
+  margin: 57px 0 0;
+  padding: 0 13px 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--web-accent);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.bettrack-theme .bettrack-sidebar .product-new-bet:hover {
+  background: transparent;
+  color: color-mix(in srgb, var(--web-accent) 88%, white);
+}
+.bettrack-theme .product-content {
+  width: calc(100% - 220px);
+  margin-left: 220px;
+  padding-top: 55px;
+}
+.bettrack-theme .product-main {
+  width: 100%;
+  max-width: 1117px;
+  margin: 0;
+  padding: 53px 0 38px 64px;
+  color: var(--web-text);
+  font-size: 16px;
+}
+.bettrack-theme .page-heading {
+  margin-bottom: 15px;
+}
+.bettrack-theme .page-heading .product-eyebrow {
+  margin-bottom: 5px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.bettrack-theme .page-heading h1,
+.bettrack-theme .product-main h1,
+.bettrack-theme .product-main h2,
+.bettrack-theme .product-main h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+.bettrack-theme .page-heading h1 {
+  font-size: 36px;
+  line-height: 1;
+}
+.bettrack-theme .live-label,
+.bettrack-theme .product-footer,
+.bettrack-theme .product-brand,
+.bettrack-theme .sidebar-bottom {
+  display: none;
+}
+.bettrack-theme .panel,
+.bettrack-theme .metric-card,
+.bettrack-theme .bankroll-reference-card,
+.bettrack-theme .overview-timeline-panel,
+.bettrack-theme .overview-running-panel,
+.bettrack-theme .overview-insights,
+.bettrack-theme .settings-grid > .panel {
+  border: 0;
+  border-radius: 0;
+  background: var(--web-panel);
+  box-shadow: none;
+}
+.bettrack-theme .ui-button,
+.bettrack-theme button,
+.bettrack-theme select,
+.bettrack-theme input,
+.bettrack-theme textarea {
+  border-radius: 0;
+  font-family: var(--font-body);
+}
+.bettrack-theme .product-main > .metric-grid {
+  display: none;
+}
+.bettrack-theme .overview-accounts {
+  display: none;
+}
+.bettrack-theme .overview-dashboard-metrics .metric-card {
+  border: 0;
+  border-radius: 0;
+  background: var(--web-panel);
+}
+.bettrack-theme .overview-dashboard-metrics .metric-card > span,
+.bettrack-theme .metric-card > span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.bettrack-theme .overview-running-layout {
+  grid-template-columns: minmax(0, 1fr) 270px;
+}
+.bettrack-theme .bets-reference-page {
+  font-family: var(--font-body);
+}
+.bettrack-theme .bets-reference-heading h2 {
+  font-size: 36px;
+}
+.bettrack-theme .bets-reference-actions .columns-panel {
+  display: none;
+}
+.bettrack-theme .bets-reference-empty {
+  min-height: 406px;
+}
+.bettrack-theme .bets-reference-pitch {
+  transform: rotate(42deg);
+}
+.bettrack-theme .bets-reference-section-heading h3,
+.bettrack-theme .bets-reference-toolbar,
+.bettrack-theme .bets-reference-table th {
+  font-family: var(--font-mono);
+}
+.bettrack-theme .bets-reference-table {
+  min-width: 650px;
+  table-layout: fixed;
+}
+.bettrack-theme .bets-history-table {
+  min-width: 1660px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.bettrack-theme .bets-history-table th,
+.bettrack-theme .bets-history-table td {
+  overflow: hidden;
+  padding: 5px 9px;
+  text-overflow: ellipsis;
+}
+.bettrack-theme .bets-history-table td {
+  height: 48px;
+}
+.bettrack-theme .bets-history-table .bets-history-column-stake,
+.bettrack-theme .bets-history-table .bets-history-column-odds,
+.bettrack-theme .bets-history-table .bets-history-column-status {
+  text-align: center;
+}
+.bettrack-theme .bets-history-table .bets-history-column-result {
+  text-align: right;
+}
+.bettrack-theme .bets-history-date-time {
+  white-space: nowrap;
+}
+.bettrack-theme .bets-history-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bets-history-sport,
+.bettrack-theme .bets-history-selection,
+.bettrack-theme .bets-history-event {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bets-history-sport {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bets-history-selection {
+  color: var(--web-text);
+}
+.bettrack-theme .bets-history-selection-content {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.bettrack-theme .bets-history-selection-content > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bettrack-theme .bets-reference-table.bets-history-table .bets-history-expand {
+  position: static;
+  display: grid;
+  flex: 0 0 22px;
+  place-items: center;
+  transform: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-panel-hover);
+  color: var(--web-accent);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+}
+.bettrack-theme .bets-reference-table.bets-history-table .bets-history-expand:hover {
+  border-color: var(--web-accent);
+  background: var(--web-bg);
+}
+.bettrack-theme .bets-reference-table.bets-history-table .bets-history-expand:focus-visible {
+  outline: 2px solid var(--web-accent);
+  outline-offset: 2px;
+}
+.bettrack-theme .bets-history-event {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bets-reference-table td {
+  height: 54px;
+  padding: 5px 12px;
+  vertical-align: middle;
+}
+.bettrack-theme .bets-reference-table:not(.bets-history-table) th:nth-child(1),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) td:nth-child(1) {
+  width: 9%;
+  text-align: center;
+}
+.bettrack-theme .bets-reference-table:not(.bets-history-table) th:nth-child(2),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) td:nth-child(2) {
+  width: 54%;
+  text-align: left;
+}
+.bettrack-theme .bets-reference-table:not(.bets-history-table) th:nth-child(3),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) td:nth-child(3),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) th:nth-child(4),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) td:nth-child(4),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) th:nth-child(5),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) td:nth-child(5) {
+  text-align: center;
+}
+.bettrack-theme .bets-reference-table:not(.bets-history-table) th:nth-child(6),
+.bettrack-theme .bets-reference-table:not(.bets-history-table) td:nth-child(6) {
+  text-align: right;
+}
+.bettrack-theme .bets-reference-table td:first-child {
+  min-width: 0;
+}
+.bettrack-theme .bets-reference-table .bets-reference-sport {
+  position: relative;
+}
+.bettrack-theme .bets-reference-table .bets-history-expand {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  display: grid;
+  width: 20px;
+  height: 24px;
+  place-items: center;
+  transform: translateY(-50%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--web-text-tertiary);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 18px;
+}
+.bettrack-theme .bets-reference-table .bets-history-expand:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bets-history-selections-row > td {
+  height: auto;
+  padding: 12px 20px;
+  border-top: 0;
+  background: var(--web-bg);
+}
+.bettrack-theme .bets-history-selections {
+  display: grid;
+  gap: 8px;
+}
+.bettrack-theme .bets-history-selections > div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+}
+.bettrack-theme .bets-history-selections > div > strong {
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bets-history-controls {
+  display: grid;
+  grid-template-columns:
+    minmax(210px, 1.5fr) repeat(4, minmax(125px, 1fr)) repeat(2, minmax(145px, 1fr))
+    auto;
+  align-items: end;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+.bettrack-theme .bets-history-controls > label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+.bettrack-theme .bets-history-controls input,
+.bettrack-theme .bets-history-controls select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--web-border);
+  border-radius: 0;
+  background: var(--web-panel);
+  color: var(--web-text);
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: normal;
+}
+.bettrack-theme .bets-history-controls input:focus,
+.bettrack-theme .bets-history-controls select:focus {
+  border-color: var(--web-accent);
+  outline: 1px solid var(--web-accent);
+}
+.bettrack-theme .bets-history-controls .bets-history-search input {
+  font-family: var(--font-body);
+}
+.bettrack-theme .bets-history-columns {
+  position: relative;
+  min-width: 120px;
+}
+.bettrack-theme .bets-history-columns > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  list-style: none;
+  white-space: nowrap;
+}
+.bettrack-theme .bets-history-columns > summary::-webkit-details-marker {
+  display: none;
+}
+.bettrack-theme .bets-history-columns > summary strong {
+  color: var(--web-accent);
+  font-weight: 500;
+}
+.bettrack-theme .bets-history-columns-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: min(300px, calc(100vw - 36px));
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-panel);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 42%);
+}
+.bettrack-theme .bets-history-columns-popover > p {
+  margin: 0 0 7px;
+  color: var(--web-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.bettrack-theme .bets-history-columns-popover > label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.bettrack-theme
+  .bets-history-controls
+  .bets-history-columns-popover
+  > label
+  > input[type='checkbox'] {
+  width: 15px;
+  min-width: 15px;
+  height: 15px;
+  min-height: 15px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--web-accent);
+  background: transparent;
+  cursor: pointer;
+}
+.bettrack-theme .bets-history-columns-popover > label small {
+  margin-left: auto;
+  color: var(--web-accent);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bets-history-columns-popover > button,
+.bettrack-theme .bets-history-clear {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+.bettrack-theme .bets-history-columns-popover > button {
+  margin-top: 7px;
+}
+.bettrack-theme .bets-history-clear:hover,
+.bettrack-theme .bets-history-columns-popover > button:not(:disabled):hover {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.bettrack-theme .bets-history-columns-popover > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.bettrack-theme .bets-history-summary {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: clamp(18px, 4vw, 52px);
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-left: 2px solid var(--web-accent);
+  background: var(--web-panel);
+}
+.bettrack-theme .bets-history-summary > div {
+  display: grid;
+  gap: 5px;
+}
+.bettrack-theme .bets-history-summary > div > span,
+.bettrack-theme .bets-history-summary p > span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+.bettrack-theme .bets-history-summary > div > strong {
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+.bettrack-theme .bets-history-summary p {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.bettrack-theme .bets-history-summary p > strong {
+  color: var(--web-text);
+  font-weight: 500;
+}
+.bettrack-theme .bets-history-summary p > strong.is-positive {
+  color: var(--web-accent);
+}
+.bettrack-theme .bets-history-summary p > strong.is-negative {
+  color: var(--web-negative);
+}
+.bettrack-theme .bets-history-loading {
+  margin: 12px 0;
+  color: var(--web-text-tertiary);
+  font-size: 12px;
+}
+.bettrack-theme .bets-history-selections > div > small {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bets-history-selections > div > b {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  text-align: right;
+}
+.bettrack-theme .bets-reference-table .bets-row-open {
+  min-height: 0;
+  line-height: 18px;
+}
+.bettrack-theme .bets-reference-table .bets-reference-selection strong {
+  font-size: 14px;
+}
+.bettrack-theme .bets-reference-sport {
+  color: var(--web-orange) !important;
+  font-family: var(--font-display);
+  font-size: 14px !important;
+  font-weight: 700;
+}
+.bettrack-theme .bets-reference-sport.is-fut,
+.bettrack-theme .bets-reference-sport.is-volley {
+  color: var(--web-avatar-teal) !important;
+}
+.bettrack-theme .bets-reference-sport.is-multi {
+  color: var(--web-accent) !important;
+}
+.bettrack-theme .bets-reference-sport.is-ncaab,
+.bettrack-theme .bets-reference-sport.is-esports {
+  color: var(--web-avatar-violet) !important;
+}
+.bettrack-theme .bets-reference-sport.is-nba,
+.bettrack-theme .bets-reference-sport.is-wnba {
+  color: var(--web-sport-basketball) !important;
+}
+.bettrack-theme .bets-reference-sport.is-nfl,
+.bettrack-theme .bets-reference-sport.is-rugby {
+  color: var(--web-orange) !important;
+}
+.bettrack-theme .bets-reference-sport.is-ncaaf,
+.bettrack-theme .bets-reference-sport.is-tennis,
+.bettrack-theme .bets-reference-sport.is-golf {
+  color: var(--web-accent) !important;
+}
+.bettrack-theme .bets-reference-sport.is-mlb,
+.bettrack-theme .bets-reference-sport.is-nhl {
+  color: var(--web-avatar-cyan) !important;
+}
+.bettrack-theme .bets-reference-sport.is-mma,
+.bettrack-theme .bets-reference-sport.is-f1 {
+  color: var(--web-avatar-red) !important;
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='fut'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='volley'] td:first-child {
+  border-left: 3px solid var(--web-avatar-teal);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='multi'] td:first-child {
+  border-left: 3px solid var(--web-accent);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='ncaab'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='esports'] td:first-child {
+  border-left: 3px solid var(--web-avatar-violet);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='nba'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='wnba'] td:first-child {
+  border-left: 3px solid var(--web-sport-basketball);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='nfl'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='rugby'] td:first-child {
+  border-left: 3px solid var(--web-orange);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='ncaaf'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='tennis'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='golf'] td:first-child {
+  border-left: 3px solid var(--web-accent);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='mlb'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='nhl'] td:first-child {
+  border-left: 3px solid var(--web-avatar-cyan);
+}
+.bettrack-theme .bets-reference-table tbody tr[data-sport='mma'] td:first-child,
+.bettrack-theme .bets-reference-table tbody tr[data-sport='f1'] td:first-child {
+  border-left: 3px solid var(--web-avatar-red);
+}
+.bettrack-theme .bets-reference-table td.negative,
+.bettrack-theme .bets-reference-table td.neg {
+  color: var(--web-avatar-red);
+}
+.bettrack-theme .bets-reference-selection {
+  white-space: normal !important;
+}
+.bettrack-theme .bets-reference-selection strong,
+.bettrack-theme .bets-reference-selection small {
+  display: block;
+}
+.bettrack-theme .bets-reference-selection strong {
+  color: var(--web-text);
+}
+.bettrack-theme .bets-reference-selection small {
+  margin-top: 3px;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bets-reference-status {
+  display: inline-grid;
+  min-width: 72px;
+  height: 20px;
+  place-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.bettrack-theme .bets-reference-status.is-settled {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.bettrack-theme .bets-reference-status.is-won {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.bettrack-theme .bets-reference-status.is-lost {
+  border-color: var(--web-avatar-red);
+  background: var(--web-avatar-red);
+  color: var(--web-text);
+}
+.bettrack-theme .bets-reference-status.is-cash-out {
+  border-color: var(--web-orange);
+  background: transparent;
+  color: var(--web-orange);
+}
+.bettrack-theme .bets-reference-status.is-void {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bets-row-open {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--web-text);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.bettrack-theme .bets-row-open:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bankroll-reference-page {
+  margin-top: 0;
+}
+.bettrack-theme .bankroll-reference-heading h1 {
+  font-size: 36px;
+}
+.bettrack-theme .bankroll-reference-heading p,
+.bettrack-theme .bankroll-kicker {
+  font-family: var(--font-mono);
+}
+.bettrack-theme .bankroll-reference-page .bankroll-reference-card {
+  padding: 21px;
+}
+.bettrack-theme .new-bet-reference-card,
+.bettrack-theme .hedge-reference-card {
+  padding: 22px;
+  background: var(--web-panel);
+}
+.bettrack-theme .new-bet-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.bettrack-theme .new-bet-intro p,
+.bettrack-theme .hedge-reference-kicker {
+  margin: 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.bettrack-theme .new-bet-intro span,
+.bettrack-theme .hedge-reference-page p {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bet-wizard-progress button {
+  border-radius: 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+.bettrack-theme .bet-wizard-type-options button {
+  border-radius: 0;
+  background: var(--web-bg);
+}
+.bettrack-theme .hedge-reference-heading,
+.bettrack-theme .hedge-reference-progress,
+.bettrack-theme .hedge-reference-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bettrack-theme .hedge-reference-heading {
+  margin-bottom: 20px;
+}
+.bettrack-theme .hedge-reference-heading h2,
+.bettrack-theme .hedge-result-card h2 {
+  margin: 5px 0 0;
+  font-size: 28px;
+}
+.bettrack-theme .hedge-reference-heading a,
+.bettrack-theme .hedge-reference-actions button {
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-decoration: none;
+}
+.bettrack-theme .hedge-reference-progress {
+  justify-content: flex-start;
+  margin-bottom: 20px;
+}
+.bettrack-theme .hedge-reference-progress button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+.bettrack-theme .hedge-reference-progress button span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--web-border);
+  border-radius: 50%;
+}
+.bettrack-theme .hedge-reference-progress button.is-current {
+  color: var(--web-accent);
+}
+.bettrack-theme .hedge-reference-progress button.is-current span {
+  border-color: var(--web-accent);
+}
+.bettrack-theme .hedge-reference-progress button.is-complete {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .hedge-reference-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.bettrack-theme .hedge-reference-card h3 {
+  margin: 0 0 18px;
+  font-size: 17px;
+}
+.bettrack-theme .hedge-reference-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.bettrack-theme .hedge-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.bettrack-theme .hedge-field > span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+}
+.bettrack-theme .hedge-field input,
+.bettrack-theme .hedge-field select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--web-border);
+  background: var(--web-bg);
+  color: var(--web-text);
+}
+.bettrack-theme .hedge-odds-card {
+  max-width: 520px;
+}
+.bettrack-theme .hedge-reference-actions {
+  margin-top: 16px;
+}
+.bettrack-theme .hedge-reference-actions button,
+.bettrack-theme .hedge-log-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+  cursor: pointer;
+}
+.bettrack-theme .hedge-reference-actions button:last-child,
+.bettrack-theme .hedge-log-button {
+  border-color: transparent;
+  background: var(--web-accent);
+  color: var(--web-ink);
+  font-weight: 700;
+}
+.bettrack-theme .hedge-reference-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.bettrack-theme .hedge-result-card {
+  padding: 30px;
+}
+.bettrack-theme .hedge-result-card dl {
+  display: flex;
+  gap: 30px;
+  margin: 24px 0;
+}
+.bettrack-theme .hedge-result-card dl div {
+  display: grid;
+  gap: 7px;
+}
+.bettrack-theme .hedge-result-card dt {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.bettrack-theme .hedge-result-card dd {
+  margin: 0;
+  color: var(--web-accent);
+  font-family: var(--font-mono);
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-topbar-github {
+    height: 55px;
+  }
+  .bettrack-theme .product-sidebar {
+    display: none;
+  }
+  .bettrack-theme .product-sidebar.is-mobile-open {
+    position: fixed;
+    top: 55px;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    display: flex;
+    width: min(280px, 86vw);
+    padding: 18px 10px 20px;
+    border-right: 1px solid var(--web-border);
+    background: var(--web-sidebar);
+    box-shadow: 14px 0 40px rgb(0 0 0 / 0.55);
+  }
+  .bettrack-theme .product-content {
+    width: 100%;
+    margin-left: 0;
+  }
+  .bettrack-theme .product-topbar-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid var(--web-border);
+    background: var(--web-panel);
+    color: var(--web-text);
+  }
+  .bettrack-theme .product-main {
+    max-width: none;
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .product-topbar-signout {
+    display: none;
+  }
+  .bettrack-theme .product-topbar-profile-name {
+    display: none;
+  }
+  .bettrack-theme .hedge-reference-grid,
+  .bettrack-theme .hedge-reference-pair,
+  .bettrack-theme .overview-running-layout {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bets-reference-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .bettrack-theme .bets-reference-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+.bettrack-theme .product-main.bettrack-page-overview {
+  max-width: 1185px;
+  padding: 24px 24px 38px;
+}
+.bettrack-theme .bettrack-page-overview .page-heading {
+  align-items: center;
+  margin-bottom: 16px;
+}
+.bettrack-theme .bettrack-page-overview .page-heading > div {
+  display: flex;
+  flex-direction: column;
+}
+.bettrack-theme .bettrack-page-overview .page-heading h1 {
+  order: 1;
+}
+.bettrack-theme .bettrack-page-overview .page-heading .dashboard-date {
+  order: 2;
+  margin: 4px 0 0;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+}
+.bettrack-theme .bettrack-dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-mode-toggle {
+  height: 36px;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-mode-toggle button,
+.bettrack-theme .bettrack-dashboard-actions .bets-visibility-toggle {
+  min-width: 36px;
+  height: 36px;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text-tertiary);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-mode-toggle button.is-active {
+  background: var(--web-white);
+  color: var(--web-bg);
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-visibility-toggle {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  box-sizing: border-box;
+  padding: 0;
+  line-height: 1;
+  vertical-align: middle;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-visibility-toggle > span {
+  display: block;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+.bettrack-theme .overview-timeline-panel {
+  min-height: 216px;
+  padding: 17px 16px 13px;
+}
+.bettrack-theme .overview-timeline-heading > div > span {
+  top: 17px;
+  right: 86px;
+  font-size: 10px;
+}
+.bettrack-theme .overview-timeline {
+  height: 132px;
+}
+.bettrack-theme .overview-timeline-labels {
+  padding-inline: 0;
+  justify-content: space-between;
+}
+.bettrack-theme .overview-dashboard-metrics .metric-card {
+  min-height: 196px;
+}
+.bettrack-theme .overview-dashboard-metrics .metric-card > strong {
+  font-size: 36px;
+}
+.bettrack-theme .overview-running-layout {
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+}
+.bettrack-theme .overview-running-panel,
+.bettrack-theme .overview-insights {
+  min-height: 252px;
+}
+.bettrack-theme .overview-running-panel .report-chart {
+  height: 151px;
+}
+.bettrack-theme .overview-running-panel .recharts-legend-wrapper {
+  display: none;
+}
+.bettrack-theme .overview-running-panel .pending-label {
+  display: none;
+}
+.bettrack-theme .bettrack-dashboard-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+.bettrack-theme .bettrack-dashboard-widget {
+  min-height: 220px;
+  padding: 17px 16px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-dashboard-widget > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.bettrack-theme .bettrack-dashboard-widget > header h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.bettrack-theme .bettrack-dashboard-widget > header span,
+.bettrack-theme .bettrack-dashboard-widget > header a,
+.bettrack-theme .bettrack-dashboard-widget > header button {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-dashboard-widget > header button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-open-bet-list {
+  display: flex;
+  flex-direction: column;
+}
+.bettrack-theme .bettrack-open-bet-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  border-top: 1px solid var(--web-border);
+  color: var(--web-text);
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-open-bet-row > strong {
+  color: var(--web-orange);
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-open-bet-row > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.bettrack-theme .bettrack-open-bet-row b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-open-bet-row small,
+.bettrack-theme .bettrack-open-bet-row em {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+}
+.bettrack-theme .bettrack-open-bet-row em {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-dashboard-empty {
+  display: flex;
+  min-height: 144px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-dashboard-empty h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.bettrack-theme .bettrack-dashboard-empty p {
+  max-width: 360px;
+  margin: 0;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-dashboard-empty .ui-button {
+  min-height: 44px;
+  margin-top: 7px;
+}
+.bettrack-theme .bettrack-breakdown-list > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 0;
+  border-top: 1px solid var(--web-border);
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-breakdown-list strong {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-main.bettrack-page-overview {
+    max-width: none;
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .bettrack-dashboard-bottom {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .overview-running-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dashboard geometry and cards follow the reference's compact 3-row grid. */
+.bettrack-theme .product-main.bettrack-page-overview {
+  max-width: 1195px;
+  padding: 26px 24px 38px 27px;
+}
+.bettrack-theme .bettrack-page-overview .page-heading {
+  display: flex !important;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+.bettrack-theme .bettrack-page-overview .page-heading > div {
+  flex: 0 1 auto;
+}
+.bettrack-theme .bettrack-dashboard-actions {
+  display: flex !important;
+  width: max-content;
+  flex: 0 0 auto;
+  flex-flow: row nowrap !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-visibility-toggle,
+.bettrack-theme .bettrack-dashboard-actions .bets-mode-toggle {
+  display: flex;
+  flex: 0 0 auto;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-visibility-toggle {
+  order: 0;
+}
+.bettrack-theme .bettrack-dashboard-actions .bets-mode-toggle {
+  order: 1;
+}
+.bettrack-theme .overview-timeline-panel {
+  position: relative;
+  min-height: 216px;
+  margin-bottom: 0;
+  padding: 17px 16px 13px;
+}
+.bettrack-theme .bettrack-timeline-month {
+  position: absolute;
+  top: 17px;
+  right: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-timeline-month button {
+  display: grid;
+  width: 28px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bettrack-theme .overview-timeline {
+  height: 132px;
+  margin: 23px 2px 0;
+}
+.bettrack-theme .overview-timeline-track {
+  top: 71px;
+}
+.bettrack-theme .overview-timeline-day {
+  z-index: 1;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.bettrack-theme .overview-timeline-day::after {
+  top: 68px;
+  height: 6px;
+  background: var(--web-tick);
+}
+.bettrack-theme .overview-day-marker {
+  top: 34px;
+  width: 5px;
+  height: 38px;
+  border-radius: 0;
+  background: var(--web-accent);
+  box-shadow: none;
+}
+.bettrack-theme .overview-day-marker.is-negative {
+  top: 71px;
+  height: 24px;
+  background: var(--web-orange);
+}
+.bettrack-theme .overview-today-marker {
+  top: 18px;
+  height: 90px;
+  background: var(--web-today);
+}
+.bettrack-theme .overview-timeline-day.is-today::after,
+.bettrack-theme .overview-timeline-day.is-selected::after {
+  top: 65px;
+  left: -5px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--web-text-secondary);
+  border-radius: 50%;
+  background: var(--web-panel);
+}
+.bettrack-theme .overview-timeline-day:focus-visible {
+  outline: 1px solid var(--web-accent);
+  outline-offset: 4px;
+}
+.bettrack-theme .bettrack-timeline-labels {
+  position: relative;
+  height: 14px;
+  margin: -2px 2px 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-timeline-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-timeline-labels span:first-child {
+  transform: none;
+}
+.bettrack-theme .bettrack-timeline-labels span:last-child {
+  color: var(--web-text);
+  font-weight: 700;
+}
+.bettrack-theme .overview-dashboard-metrics {
+  gap: 10px;
+  margin-top: 0;
+}
+.bettrack-theme .bettrack-dashboard-metric {
+  display: flex;
+  min-width: 0;
+  min-height: 197px;
+  flex-direction: column;
+  padding: 18px 17px 15px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-metric-heading,
+.bettrack-theme .bettrack-metric-split,
+.bettrack-theme .bettrack-metric-unit-value,
+.bettrack-theme .bettrack-metric-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bettrack-theme .bettrack-metric-heading > span,
+.bettrack-theme .bettrack-metric-split,
+.bettrack-theme .bettrack-metric-bottom,
+.bettrack-theme .bettrack-dashboard-metric > small,
+.bettrack-theme .bettrack-running-ceiling,
+.bettrack-theme .bettrack-running-foot {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-metric-heading {
+  justify-content: flex-start;
+  min-height: 15px;
+}
+.bettrack-theme .bettrack-dashboard-metric > strong {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-dashboard-metric > strong.is-positive {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-dashboard-metric > strong.is-negative {
+  color: var(--web-red);
+}
+.bettrack-theme .bettrack-metric-divider {
+  height: 1px;
+  margin: 8px 0 10px;
+  background: var(--web-border);
+}
+.bettrack-theme .bettrack-metric-split {
+  min-height: 15px;
+}
+.bettrack-theme .bettrack-metric-unit-value {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.bettrack-theme .bettrack-metric-unit-value b {
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-metric-unit-value .is-warning {
+  color: var(--web-orange);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-metric-unit-value .is-good {
+  color: var(--web-accent);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-unit-track {
+  position: relative;
+  height: 5px;
+  margin: 8px 0 5px;
+  background: var(--web-border-strong);
+}
+.bettrack-theme .bettrack-unit-track span {
+  position: absolute;
+  left: 16%;
+  width: 26%;
+  height: 100%;
+  background: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-unit-track i {
+  position: absolute;
+  z-index: 1;
+  top: -4px;
+  width: 2px;
+  height: 13px;
+  background: var(--web-orange);
+}
+.bettrack-theme .bettrack-dashboard-metric > small {
+  margin-top: auto;
+}
+.bettrack-theme .bettrack-metric-bottom {
+  min-height: 22px;
+  margin-top: auto;
+  padding-top: 7px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-metric-bottom b {
+  color: var(--web-accent);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.bettrack-theme .bettrack-metric-bottom a {
+  color: var(--web-accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-metric-help {
+  position: relative;
+  display: inline-flex;
+}
+.bettrack-theme .bettrack-metric-help summary {
+  display: grid;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  border: 1px solid var(--web-text-tertiary);
+  border-radius: 50%;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-body);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  list-style: none;
+}
+.bettrack-theme .bettrack-metric-help summary::-webkit-details-marker {
+  display: none;
+}
+.bettrack-theme .bettrack-metric-help p {
+  position: absolute;
+  z-index: 8;
+  top: 19px;
+  left: 0;
+  width: 230px;
+  margin: 0;
+  padding: 10px;
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-transform: none;
+}
+.bettrack-theme .overview-running-layout {
+  grid-template-columns: minmax(0, 2.3fr) minmax(270px, 1fr);
+  gap: 10px;
+  margin-top: -2px;
+}
+.bettrack-theme .overview-running-panel,
+.bettrack-theme .overview-insights {
+  min-height: 252px;
+  margin-bottom: 0;
+}
+.bettrack-theme .overview-running-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 17px 16px 11px;
+}
+.bettrack-theme .bettrack-running-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bettrack-theme .bettrack-running-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.bettrack-theme .bettrack-running-title h2,
+.bettrack-theme .bettrack-insights-title h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.bettrack-theme .bettrack-running-ceiling {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+.bettrack-theme .bettrack-running-ceiling span {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-running-ceiling b {
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-running-value {
+  display: block;
+  margin: 9px 0 0;
+  font-family: var(--font-display);
+  font-size: 29px;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-running-value.is-positive {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-running-value.is-negative {
+  color: var(--web-red);
+}
+.bettrack-theme .bettrack-running-chart {
+  width: 100%;
+  height: 126px;
+  margin-top: 2px;
+}
+.bettrack-theme .bettrack-running-chart .recharts-wrapper {
+  overflow: visible;
+}
+.bettrack-theme .bettrack-running-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--web-border);
+  font-size: 8px;
+}
+.bettrack-theme .overview-insights {
+  padding: 17px 16px;
+}
+.bettrack-theme .overview-insights .section-heading {
+  margin: 0 0 12px;
+}
+.bettrack-theme .bettrack-insight-card {
+  display: flex;
+  min-height: 55px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--web-border-strong);
+}
+.bettrack-theme .bettrack-insight-card + .bettrack-insight-card {
+  margin-top: 5px;
+}
+.bettrack-theme .bettrack-insight-card.is-warning {
+  border-left-color: var(--web-orange);
+}
+.bettrack-theme .bettrack-insight-card strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-insight-card span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-main.bettrack-page-overview {
+    max-width: none;
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .bettrack-page-overview .page-heading {
+    align-items: flex-start;
+  }
+  .bettrack-theme .bettrack-dashboard-actions {
+    gap: 4px;
+  }
+  .bettrack-theme .bettrack-dashboard-actions .bets-visibility-toggle,
+  .bettrack-theme .bettrack-dashboard-actions .bets-mode-toggle button {
+    min-width: 30px;
+    height: 30px;
+  }
+  .bettrack-theme .bettrack-dashboard-metric {
+    min-height: 185px;
+    padding: 15px 12px;
+  }
+  .bettrack-theme .bettrack-dashboard-metric > strong {
+    font-size: clamp(24px, 6vw, 34px);
+  }
+  .bettrack-theme .bettrack-metric-split {
+    align-items: flex-start;
+    font-size: 8px;
+  }
+  .bettrack-theme .bettrack-running-foot {
+    gap: 7px;
+    font-size: 7px;
+  }
+}
+.bettrack-theme .overview-report {
+  gap: 14px;
+}
+
+/* Route layouts follow the reference page geometry while keeping the real
+   Stakeframe controls and data connected underneath the presentation. */
+.bettrack-theme .product-main.bettrack-page-analytics {
+  max-width: none;
+  padding: 6px 35px 38px 24px;
+}
+.bettrack-theme .product-main.bettrack-page-settings {
+  max-width: none;
+  padding: 38px 35px 48px 26px;
+}
+.bettrack-theme .product-main.bettrack-page-new-bet {
+  max-width: none;
+  padding: 38px 37px 40px 59px;
+}
+.bettrack-theme .product-main.bettrack-page-hedge {
+  max-width: none;
+  padding: 6px 32px 40px 27px;
+}
+.bettrack-theme .analytics-page-heading,
+.bettrack-theme .settings-page-heading,
+.bettrack-theme .new-bet-page-heading,
+.bettrack-theme .hedge-page-heading {
+  align-items: flex-start;
+}
+.bettrack-theme .analytics-page-heading > div,
+.bettrack-theme .settings-page-heading > div,
+.bettrack-theme .new-bet-page-heading > div,
+.bettrack-theme .hedge-page-heading > div {
+  display: flex;
+  flex-direction: column;
+}
+.bettrack-theme .analytics-page-heading h1,
+.bettrack-theme .settings-page-heading h1,
+.bettrack-theme .new-bet-page-heading h1,
+.bettrack-theme .hedge-page-heading h1 {
+  order: 1;
+}
+.bettrack-theme .analytics-page-heading .product-eyebrow,
+.bettrack-theme .settings-page-heading .product-eyebrow,
+.bettrack-theme .new-bet-page-heading .product-eyebrow,
+.bettrack-theme .hedge-page-heading .product-eyebrow {
+  order: 2;
+  margin: 5px 0 0;
+}
+.bettrack-theme .settings-page-heading {
+  margin-bottom: 25px;
+}
+.bettrack-theme .analytics-page-heading {
+  margin-bottom: 10px;
+}
+.bettrack-theme .new-bet-page-heading,
+.bettrack-theme .hedge-page-heading {
+  margin-bottom: 18px;
+}
+.bettrack-theme .bettrack-page-close {
+  position: absolute;
+  top: 71px;
+  right: 35px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+  font-size: 23px;
+  cursor: pointer;
+}
+
+/* Analytics */
+.bettrack-theme .bettrack-analytics {
+  display: grid;
+  gap: 14px;
+}
+.bettrack-theme .bettrack-analytics-divider {
+  height: 1px;
+  background: var(--web-border);
+}
+.bettrack-theme .bettrack-analytics-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--web-border);
+  border: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-analytics-kpis > div {
+  display: flex;
+  min-height: 116px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 15px 17px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-analytics-kpis span,
+.bettrack-theme .bettrack-analytics-kpis small,
+.bettrack-theme .bettrack-sample-scale,
+.bettrack-theme .bettrack-segment-row,
+.bettrack-theme .bettrack-record-grid article > span,
+.bettrack-theme .bettrack-behaviour-grid article > span,
+.bettrack-theme .bettrack-analytics-period,
+.bettrack-theme .bettrack-settings-heading > span,
+.bettrack-theme .bettrack-preference-grid label > span,
+.bettrack-theme .bettrack-book-list small,
+.bettrack-theme .bettrack-settings-empty small,
+.bettrack-theme .bettrack-responsible-grid article > span,
+.bettrack-theme .bettrack-responsible-label,
+.bettrack-theme .bettrack-settings-export > div > span,
+.bettrack-theme .bettrack-workspace-settings summary span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-analytics-kpis strong {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-analytics-kpis strong.is-positive {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-analytics-kpis small {
+  margin-top: auto;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.bettrack-theme .bettrack-weekly-net {
+  padding: 15px 18px 10px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-weekly-net > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bettrack-theme .bettrack-weekly-net h2,
+.bettrack-theme .bettrack-weekly-net > header > span {
+  margin: 0;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-weekly-chart {
+  height: 142px;
+  margin-top: 7px;
+}
+.bettrack-theme .bettrack-weekly-net > p {
+  margin: 5px 0;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-sample-warning {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(340px, 1fr);
+  align-items: center;
+  gap: 30px;
+  min-height: 146px;
+  padding: 21px 23px;
+  border-left: 3px solid var(--web-orange);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-sample-warning h2 {
+  margin: 0 0 7px;
+  font-size: 22px;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-sample-warning > p {
+  margin: 0;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.bettrack-theme .bettrack-sample-scale > strong {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-sample-track {
+  display: flex;
+  gap: 4px;
+  height: 7px;
+  margin: 10px 0 8px;
+}
+.bettrack-theme .bettrack-sample-track span {
+  background: var(--web-border);
+}
+.bettrack-theme .bettrack-sample-track span.is-current {
+  background: var(--web-orange);
+}
+.bettrack-theme .bettrack-sample-labels {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+  line-height: 1.35;
+}
+.bettrack-theme .bettrack-segments,
+.bettrack-theme .bettrack-records,
+.bettrack-theme .bettrack-behaviour {
+  padding: 18px 20px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-segments > header,
+.bettrack-theme .bettrack-records > header,
+.bettrack-theme .bettrack-behaviour > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.bettrack-theme .bettrack-segments h2,
+.bettrack-theme .bettrack-records h2,
+.bettrack-theme .bettrack-behaviour h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.bettrack-theme .bettrack-segments header p,
+.bettrack-theme .bettrack-records header p,
+.bettrack-theme .bettrack-behaviour header p {
+  margin: 0;
+  color: var(--web-text-tertiary);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-segment-tabs {
+  display: flex;
+  border: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-segment-tabs button {
+  min-height: 44px;
+  padding: 0 11px;
+  border: 0;
+  border-right: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-segment-tabs button:last-child {
+  border-right: 0;
+}
+.bettrack-theme .bettrack-segment-tabs button.is-active {
+  background: var(--web-text);
+  color: var(--web-bg);
+}
+.bettrack-theme .bettrack-segment-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.5fr) repeat(3, minmax(70px, 0.6fr));
+  align-items: center;
+  min-height: 39px;
+  gap: 10px;
+  border-top: 1px solid var(--web-border);
+  letter-spacing: 0;
+}
+.bettrack-theme .bettrack-segment-row.is-heading {
+  min-height: 29px;
+  color: var(--web-text-tertiary);
+  font-size: 8px;
+  letter-spacing: 0.09em;
+}
+.bettrack-theme .bettrack-segment-row strong {
+  color: var(--web-text);
+  font-family: var(--font-body);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-segment-row small {
+  grid-column: 1 / -1;
+  margin: -4px 0 8px;
+  color: var(--web-orange);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-analytics-empty {
+  padding: 22px 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: center;
+}
+.bettrack-theme .bettrack-record-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--web-border);
+}
+.bettrack-theme .bettrack-record-grid article {
+  display: flex;
+  min-height: 90px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 15px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-record-grid article > strong {
+  font-family: var(--font-display);
+  font-size: 27px;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-record-grid article > small {
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-behaviour-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.bettrack-theme .bettrack-behaviour-grid article {
+  min-height: 154px;
+  padding: 13px;
+  border: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-behaviour-grid article.is-fact {
+  border-top: 2px solid var(--web-accent);
+}
+.bettrack-theme .bettrack-behaviour-grid article > span {
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-behaviour-grid article h3 {
+  margin: 12px 0 7px;
+  font-size: 15px;
+  line-height: 1.05;
+}
+.bettrack-theme .bettrack-behaviour-grid article p {
+  margin: 0 0 9px;
+  color: var(--web-text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.bettrack-theme .bettrack-behaviour-grid article a {
+  color: var(--web-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-analytics-period {
+  margin: 0;
+  text-align: right;
+}
+.bettrack-theme .bettrack-analytics-period a {
+  color: var(--web-accent);
+  text-decoration: none;
+}
+
+/* Settings */
+.bettrack-theme .bettrack-settings {
+  display: grid;
+  gap: 20px;
+  max-width: 1120px;
+}
+.bettrack-theme .bettrack-settings-section {
+  padding: 18px 20px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-settings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 17px;
+}
+.bettrack-theme .bettrack-settings-heading h2 {
+  margin: 0 0 3px;
+  font-size: 18px;
+}
+.bettrack-theme .bettrack-settings-heading p {
+  margin: 0;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.bettrack-theme .bettrack-preference-grid label {
+  display: grid;
+  gap: 7px;
+}
+.bettrack-theme .bettrack-preference-grid label > span {
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-preference-grid select {
+  width: 100%;
+  min-height: 39px;
+  padding: 0 9px;
+  border: 1px solid var(--web-border);
+  background: var(--web-bg);
+  color: var(--web-text);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-settings-heading > button {
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-book-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bettrack-theme .bettrack-book-list button {
+  display: grid;
+  min-width: 160px;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  gap: 1px 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--web-border);
+  background: var(--web-bg);
+  color: var(--web-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-book-list button.is-selected {
+  border-color: color-mix(in srgb, var(--web-accent) 55%, var(--web-border));
+  color: var(--web-text);
+}
+.bettrack-theme .bettrack-book-check {
+  display: grid;
+  width: 19px;
+  height: 19px;
+  grid-row: span 2;
+  place-items: center;
+  border: 1px solid var(--web-border);
+  color: var(--web-accent);
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-book-list strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+.bettrack-theme .bettrack-book-list small {
+  font-size: 7px;
+}
+.bettrack-theme .bettrack-settings-empty {
+  display: grid;
+  width: 100%;
+  min-height: 94px;
+  place-items: center;
+  gap: 5px;
+  border: 1px dashed var(--web-border);
+  background: transparent;
+  color: var(--web-text-secondary);
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-settings-empty > span {
+  color: var(--web-accent);
+  font-size: 24px;
+}
+.bettrack-theme .bettrack-settings-empty > strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-responsible-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-responsible-label i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--web-accent);
+}
+.bettrack-theme .bettrack-responsible-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bettrack-theme .bettrack-responsible-grid article {
+  min-height: 154px;
+  padding: 14px;
+  border: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-responsible-grid article > span {
+  color: var(--web-accent);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-responsible-grid h3 {
+  margin: 9px 0 6px;
+  font-size: 18px;
+  text-transform: none;
+}
+.bettrack-theme .bettrack-responsible-grid p {
+  max-width: 500px;
+  margin: 0 0 11px;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.bettrack-theme .bettrack-responsible-grid a {
+  color: var(--web-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-responsible-foot {
+  margin: 12px 0 0;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-settings-export {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 17px 20px;
+  border: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-settings-export > div > span {
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-settings-export h2 {
+  margin: 4px 0 3px;
+  font-size: 17px;
+}
+.bettrack-theme .bettrack-settings-export p {
+  margin: 0;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-settings-export > a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 13px;
+  background: var(--web-accent);
+  color: var(--web-ink);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-workspace-settings {
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-workspace-settings summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-workspace-settings > div {
+  display: grid;
+  gap: 15px;
+  padding-bottom: 20px;
+}
+
+/* New Bet form */
+.bettrack-theme .new-bet-reference-page {
+  max-width: 1080px;
+}
+.bettrack-theme .bettrack-new-bet-form fieldset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(285px, 340px);
+  align-items: start;
+  gap: 0 20px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress {
+  grid-column: 1 / -1;
+  margin: 0 0 17px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button {
+  min-width: 125px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type,
+.bettrack-theme .bettrack-new-bet-form > fieldset > .form-grid,
+.bettrack-theme .bettrack-new-bet-form > fieldset > .selection-form,
+.bettrack-theme .bettrack-new-bet-form > fieldset > .section-heading,
+.bettrack-theme .bettrack-new-bet-form > fieldset > .bet-wizard-payout,
+.bettrack-theme .bettrack-new-bet-form > fieldset > .bet-wizard-note {
+  grid-column: 1;
+}
+.bettrack-theme .bettrack-new-bet-form .bettrack-ticket-preview {
+  grid-column: 2;
+  grid-row: 2 / span 10;
+  padding: 15px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-new-bet-form .form-actions,
+.bettrack-theme .bettrack-new-bet-form .form-error {
+  grid-column: 1 / -1;
+}
+.bettrack-theme .bet-wizard-type > p {
+  margin: 0 0 11px;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+}
+.bettrack-theme .bet-wizard-type-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bettrack-theme .bet-wizard-type-options button {
+  min-height: 100px;
+  padding: 14px;
+  border: 1px solid var(--web-border);
+  text-align: left;
+}
+.bettrack-theme .bet-wizard-type-options button.is-selected {
+  border-color: var(--web-accent);
+}
+.bettrack-theme .bet-wizard-type-options button strong {
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+.bettrack-theme .bet-wizard-type-options button span {
+  color: var(--web-text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.bettrack-theme .bettrack-ai-coming-soon {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  margin-top: 10px;
+  padding: 13px;
+  border: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-text);
+  text-align: left;
+}
+.bettrack-theme .bettrack-ai-coming-soon strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-ai-coming-soon small {
+  color: var(--web-orange);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-ai-coming-soon span {
+  grid-column: 1 / -1;
+  color: var(--web-text-secondary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-ticket-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+.bettrack-theme .bettrack-ticket-preview-heading b {
+  color: var(--web-accent);
+  font-weight: 400;
+}
+.bettrack-theme .bettrack-ticket-preview-heading i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 4px 1px 0;
+  border-radius: 50%;
+  background: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-paper {
+  border: 1px solid var(--web-border);
+  border-top: 3px solid var(--web-orange);
+  background: var(--web-bg);
+  transform: rotate(-1deg);
+}
+.bettrack-theme .bettrack-ticket-paper > header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid var(--web-border);
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-ticket-paper > header span {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 7px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-ticket-kind > span {
+  color: var(--web-orange);
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-ticket-kind > small {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-kind > b {
+  margin-left: auto;
+  padding: 3px 6px;
+  background: var(--web-panel-hover);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-ticket-selection {
+  display: block;
+  min-height: 61px;
+  padding: 4px 10px 12px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-ticket-value-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 9px 10px;
+  border-top: 1px dashed var(--web-border);
+}
+.bettrack-theme .bettrack-ticket-value-grid > div {
+  display: grid;
+  gap: 4px;
+}
+.bettrack-theme .bettrack-ticket-value-grid small {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 7px;
+}
+.bettrack-theme .bettrack-ticket-value-grid span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-ticket-paper > footer {
+  padding: 8px 10px;
+  background: var(--web-accent);
+  color: var(--web-ink);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-ticket-preview > p {
+  margin: 12px 0 0;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* Hedge calculator */
+.bettrack-theme .hedge-reference-page {
+  max-width: 1100px;
+}
+.bettrack-theme .hedge-reference-progress {
+  gap: 0;
+  min-height: 43px;
+  margin: 0 0 15px;
+  border-bottom: 1px solid var(--web-border);
+}
+.bettrack-theme .hedge-reference-progress button {
+  position: relative;
+  height: 43px;
+  padding: 0 20px 0 0;
+  margin-right: 20px;
+  font-size: 9px;
+}
+.bettrack-theme .hedge-reference-progress button span {
+  width: 19px;
+  height: 19px;
+  border-radius: 0;
+  font-size: 9px;
+}
+.bettrack-theme .hedge-reference-progress button.is-current::after {
+  position: absolute;
+  right: 20px;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--web-accent);
+  content: '';
+}
+.bettrack-theme .hedge-reference-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 22px;
+}
+.bettrack-theme .hedge-reference-main > h2 {
+  margin: 0 0 5px;
+  font-size: 23px;
+}
+.bettrack-theme .hedge-reference-main > p {
+  margin: 0 0 16px;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+}
+.bettrack-theme .hedge-mode-card {
+  display: flex;
+  min-height: 130px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--web-border);
+  text-align: left;
+  cursor: pointer;
+}
+.bettrack-theme .hedge-mode-card.is-selected {
+  border-color: var(--web-accent);
+}
+.bettrack-theme .hedge-mode-card strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+.bettrack-theme .hedge-mode-card small {
+  color: var(--web-accent);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .hedge-mode-card span {
+  color: var(--web-text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.bettrack-theme .hedge-pick-list {
+  margin-top: 18px;
+}
+.bettrack-theme .hedge-pick-list > .hedge-reference-kicker {
+  display: block;
+  margin-bottom: 8px;
+}
+.bettrack-theme .hedge-pick-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-top: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-text);
+  text-align: left;
+  cursor: pointer;
+}
+.bettrack-theme .hedge-pick-row.is-selected {
+  background: var(--web-panel);
+  box-shadow: inset 2px 0 var(--web-accent);
+}
+.bettrack-theme .hedge-pick-row > b {
+  color: var(--web-orange);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.bettrack-theme .hedge-pick-row > span {
+  display: grid;
+  gap: 3px;
+}
+.bettrack-theme .hedge-pick-row strong {
+  font-size: 11px;
+}
+.bettrack-theme .hedge-pick-row small {
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+}
+.bettrack-theme .hedge-pick-row em {
+  display: grid;
+  gap: 3px;
+  color: var(--web-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  text-align: right;
+}
+.bettrack-theme .hedge-empty {
+  padding: 13px;
+  background: var(--web-panel);
+}
+.bettrack-theme .hedge-reference-preview {
+  padding: 14px;
+  background: var(--web-panel);
+}
+.bettrack-theme .hedge-preview-card {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--web-border);
+  background: var(--web-bg);
+}
+.bettrack-theme .hedge-preview-card > strong {
+  color: var(--web-orange);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .hedge-preview-card h3 {
+  margin: 10px 0 3px;
+  font-size: 19px;
+}
+.bettrack-theme .hedge-preview-card > p {
+  margin: 0 0 17px;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .hedge-preview-card dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+.bettrack-theme .hedge-preview-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 9px;
+  padding-top: 7px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .hedge-preview-card dt {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .hedge-preview-card dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-align: right;
+}
+.bettrack-theme .hedge-manual-fields {
+  margin-top: 17px;
+}
+
+@media (max-width: 900px) {
+  .bettrack-theme .bettrack-analytics-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bettrack-theme .bettrack-behaviour-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bettrack-theme .hedge-reference-layout {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-main.bettrack-page-analytics,
+  .bettrack-theme .product-main.bettrack-page-settings,
+  .bettrack-theme .product-main.bettrack-page-new-bet,
+  .bettrack-theme .product-main.bettrack-page-hedge {
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .bettrack-sample-warning,
+  .bettrack-theme .bettrack-preference-grid,
+  .bettrack-theme .bettrack-responsible-grid,
+  .bettrack-theme .hedge-reference-layout {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-new-bet-form fieldset {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-new-bet-form .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .bettrack-theme .bettrack-segments > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .bettrack-theme .bettrack-segment-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .bettrack-theme .bettrack-record-grid {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-settings-export {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* Reference sizing corrections from the live 1427 × 885 view. */
+.bettrack-theme .product-main.bettrack-page-analytics {
+  padding: 26px 23px 38px 27px;
+}
+.bettrack-theme .product-main.bettrack-page-settings {
+  padding: 55px 35px 48px 29px;
+}
+.bettrack-theme .product-main.bettrack-page-new-bet {
+  padding-top: 55px;
+}
+.bettrack-theme .product-main.bettrack-page-new-bet:has(.bettrack-new-bet-form.bet-step-2) {
+  transform: translateY(-28px);
+}
+.bettrack-theme .product-main.bettrack-page-hedge {
+  padding-top: 26px;
+}
+.bettrack-theme .settings-page-heading {
+  margin-bottom: 45px;
+}
+.bettrack-theme .analytics-page-heading {
+  margin-bottom: 10px;
+}
+.bettrack-theme .analytics-page-heading {
+  margin-bottom: 25px;
+}
+.bettrack-theme .new-bet-page-heading {
+  margin-bottom: 30px;
+}
+
+.bettrack-theme .bettrack-analytics-confidence {
+  margin: 0;
+  font-size: 22px;
+}
+.bettrack-theme .bettrack-analytics-confidence {
+  margin-top: 14px;
+}
+.bettrack-theme .bettrack-analytics-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border: 0;
+  background: transparent;
+}
+.bettrack-theme .bettrack-analytics-kpis {
+  margin-bottom: 15px;
+}
+.bettrack-theme .bettrack-analytics-kpis > div {
+  min-height: 99px;
+  padding: 11px 0 12px;
+  background: transparent;
+}
+.bettrack-theme .bettrack-analytics-kpis > div + div {
+  padding-left: 15px;
+}
+.bettrack-theme .bettrack-analytics-kpis strong {
+  font-size: 36px;
+}
+.bettrack-theme .bettrack-sample-warning {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  min-height: 190px;
+  padding: 22px;
+}
+.bettrack-theme .bettrack-sample-warning h2 {
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+.bettrack-theme .bettrack-sample-warning > div > p {
+  margin: 0;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.bettrack-theme .bettrack-sample-scale {
+  max-width: 100%;
+}
+.bettrack-theme .bettrack-segments,
+.bettrack-theme .bettrack-records,
+.bettrack-theme .bettrack-behaviour {
+  padding: 0;
+  background: transparent;
+}
+.bettrack-theme .bettrack-segments {
+  margin-top: 5px;
+}
+.bettrack-theme .bettrack-segments {
+  margin-top: 13px;
+}
+.bettrack-theme .bettrack-segments > header,
+.bettrack-theme .bettrack-records > header,
+.bettrack-theme .bettrack-behaviour > header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-segments h2,
+.bettrack-theme .bettrack-records h2,
+.bettrack-theme .bettrack-behaviour h2 {
+  font-size: 22px;
+}
+.bettrack-theme .bettrack-segment-row {
+  grid-template-columns: minmax(250px, 1.3fr) 70px 100px 100px minmax(185px, 1fr);
+  min-height: 53px;
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-segment-row.is-heading {
+  min-height: 39px;
+}
+.bettrack-theme .bettrack-segment-row small {
+  grid-column: 5;
+  grid-row: 1;
+  margin: 0;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-market-note {
+  margin: 14px 0 27px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.bettrack-theme .bettrack-record-grid {
+  max-width: 846px;
+  background: transparent;
+}
+.bettrack-theme .bettrack-record-grid article {
+  min-height: 118px;
+  padding: 16px;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-record-grid article + article {
+  margin-left: 10px;
+}
+.bettrack-theme .bettrack-behaviour-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+.bettrack-theme .bettrack-behaviour-grid article {
+  min-height: 162px;
+  padding: 18px 20px;
+  border: 0;
+  border-left: 3px solid var(--web-border);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-behaviour-grid article.is-fact {
+  border-left-color: var(--web-accent);
+  border-top: 0;
+}
+.bettrack-theme .bettrack-behaviour-grid article h3 {
+  margin-top: 12px;
+  font-size: 18px;
+}
+.bettrack-theme .bettrack-behaviour-grid article p {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-behaviour-grid .bettrack-behaviour-wide {
+  grid-column: 1 / -1;
+  min-height: 144px;
+}
+.bettrack-theme .bettrack-behaviour-track {
+  height: 8px;
+  margin: 16px 0 7px;
+  background: var(--web-border);
+}
+.bettrack-theme .bettrack-behaviour-track i {
+  display: block;
+  height: 100%;
+  background: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-behaviour-wide > small {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.bettrack-theme .bettrack-settings {
+  gap: 29px;
+  max-width: none;
+}
+.bettrack-theme .bettrack-settings-section {
+  padding: 0;
+  background: transparent;
+}
+.bettrack-theme .bettrack-settings-heading {
+  min-height: 37px;
+  align-items: flex-start;
+  margin-bottom: 15px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-settings-heading h2 {
+  margin: 0;
+  font-size: 23px;
+}
+.bettrack-theme .bettrack-settings-heading p {
+  margin-top: 11px;
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-preferences .bettrack-settings-heading {
+  margin-bottom: 30px;
+}
+.bettrack-theme .bettrack-preferences {
+  margin-bottom: 40px;
+}
+.bettrack-theme .bettrack-preference-grid {
+  column-gap: 65px;
+}
+.bettrack-theme .bettrack-sportsbooks {
+  margin-bottom: 60px;
+}
+.bettrack-theme .bettrack-sportsbooks-copy {
+  margin: 0 0 25px;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-sportsbooks .bettrack-settings-heading {
+  align-items: center;
+}
+.bettrack-theme .bettrack-sportsbooks .bettrack-settings-heading > button {
+  min-height: 44px;
+  padding: 0 14px;
+  background: var(--web-accent);
+  color: var(--web-bg);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-preference-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 65px;
+}
+.bettrack-theme .bettrack-preference-item {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(140px, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+.bettrack-theme .bettrack-preference-item label {
+  display: grid;
+  gap: 8px;
+}
+.bettrack-theme .bettrack-preference-item label > span {
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-preference-item select {
+  min-height: 46px;
+  padding: 0 13px;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.bettrack-theme .bettrack-preference-item p {
+  margin: 12px 0 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  line-height: 1.5;
+}
+.bettrack-theme .bettrack-book-list {
+  gap: 8px;
+}
+.bettrack-theme .bettrack-book-list button {
+  display: inline-flex;
+  min-width: 92px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-book-list button.is-selected {
+  border-color: transparent;
+  background: var(--web-text);
+  color: var(--web-bg);
+}
+.bettrack-theme .bettrack-book-list strong {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-book-check {
+  display: none;
+}
+.bettrack-theme .bettrack-see-books {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-responsible-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+.bettrack-theme .bettrack-responsible .bettrack-settings-heading {
+  margin-bottom: 22px;
+}
+.bettrack-theme .bettrack-responsible-grid article {
+  min-height: 164px;
+  padding: 19px 23px;
+  border: 0;
+  border-left: 3px solid var(--web-border);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-responsible-grid article.is-limit {
+  border-left-color: var(--web-accent);
+}
+.bettrack-theme .bettrack-responsible-grid article.is-alert {
+  border-left-color: var(--web-orange);
+}
+.bettrack-theme .bettrack-responsible-grid article > span {
+  color: var(--web-text-tertiary);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-responsible-grid article h3 {
+  margin: 12px 0 8px;
+  font-size: 18px;
+}
+.bettrack-theme .bettrack-responsible-grid article p {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-responsible-grid article > small {
+  color: var(--web-orange);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-responsible-grid .bettrack-responsible-wide {
+  grid-column: 1 / -1;
+  min-height: 115px;
+}
+.bettrack-theme .bettrack-responsible-grid .bettrack-responsible-wide h3 {
+  margin: 8px 0 5px;
+}
+.bettrack-theme .bettrack-settings-export {
+  min-height: 74px;
+  align-items: center;
+  padding: 13px 0;
+  border: 0;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-settings-export > div > p {
+  max-width: 680px;
+  margin: 0;
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-settings-export > a {
+  min-height: 40px;
+  padding: 0 15px;
+  font-size: 9px;
+}
+
+.bettrack-theme .new-bet-reference-page {
+  max-width: 1095px;
+}
+.bettrack-theme .bettrack-new-bet-form fieldset {
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 0 40px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress {
+  display: flex;
+  width: max-content;
+  min-width: 0;
+  gap: 0;
+  margin: 0 0 26px;
+  border: 0;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button {
+  position: relative;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 15px;
+  margin-right: 47px;
+  border: 0;
+  background: var(--web-panel);
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button:nth-child(1) {
+  min-width: 79px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button:nth-child(2) {
+  min-width: 91px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button:nth-child(3) {
+  min-width: 97px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button span {
+  width: auto;
+  height: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button.is-current {
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button.is-complete {
+  background: var(--web-text);
+  color: var(--web-bg);
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: -25px;
+  width: 20px;
+  height: 1px;
+  background: var(--web-border);
+  content: '';
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button {
+  margin-right: 47px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button:not(:last-child)::after {
+  right: -38px;
+  width: 30px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button {
+  position: relative;
+  display: grid;
+  min-height: 90px;
+  grid-template-columns: 45px 1fr 18px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 4px 18px;
+  padding: 14px 20px;
+  border-color: transparent;
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button.is-selected {
+  border-color: var(--web-accent);
+  box-shadow: none;
+}
+.bettrack-theme .bettrack-bet-type-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-size: 21px;
+  font-style: normal;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button strong {
+  align-self: end;
+  font-size: 18px;
+  text-transform: none;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button span {
+  align-self: start;
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-bet-type-arrow {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--web-text-tertiary);
+  font-size: 22px;
+  font-weight: 400;
+}
+.bettrack-theme .bettrack-ai-coming-soon {
+  min-height: 90px;
+  grid-template-columns: 45px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 16px;
+  padding: 14px 20px;
+  border: 0;
+  background: var(--web-panel);
+  opacity: 0.62;
+}
+.bettrack-theme .bettrack-ai-coming-soon > i {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.bettrack-theme .bettrack-ai-coming-soon > strong {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+}
+.bettrack-theme .bettrack-ai-coming-soon > small {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+}
+.bettrack-theme .bettrack-ai-coming-soon > span {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  align-self: start;
+}
+.bettrack-theme .bettrack-ai-coming-soon strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress + .bet-wizard-type {
+  margin-top: 8px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type > p {
+  margin: 0 0 18px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-ticket-preview {
+  padding: 0 !important;
+  background: transparent !important;
+}
+.bettrack-theme .bettrack-new-bet-form .bettrack-ticket-preview {
+  padding-top: 14px !important;
+}
+.bettrack-theme .bettrack-ticket-paper {
+  transform: none;
+  border-color: var(--web-border-strong);
+  border-top: 3px solid var(--web-orange);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-ticket-kind > span {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-selection {
+  min-height: 47px;
+}
+.bettrack-theme .bettrack-ticket-value-grid {
+  padding-top: 14px;
+  padding-bottom: 18px;
+}
+.bettrack-theme .bettrack-ticket-paper > footer {
+  display: flex;
+  height: 30px;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+}
+.bettrack-theme .bettrack-ticket-preview > p {
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-0 .form-actions {
+  display: none;
+}
+.bettrack-theme .bettrack-new-bet-form .form-actions {
+  justify-content: flex-end;
+}
+.bettrack-theme .bettrack-new-bet-form .form-actions button:first-child {
+  display: none;
+}
+.bettrack-theme .bettrack-page-close {
+  top: 118px;
+  right: 56px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 fieldset {
+  max-width: 1082px;
+  grid-template-columns: minmax(0, 1fr) 362px;
+  gap: 0 39px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 .bettrack-ticket-preview {
+  grid-row: 2 / span 8;
+}
+.bettrack-theme .bettrack-details-intro {
+  display: flex;
+  grid-column: 1;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 27px;
+}
+.bettrack-theme .bettrack-details-intro h2 {
+  margin: 0;
+  font-size: 20px;
+  text-transform: none;
+}
+.bettrack-theme .bettrack-details-intro p {
+  margin: 10px 0 0;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-details-intro > button {
+  min-height: 44px;
+  padding: 0 9px;
+  border: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-new-bet-form .bettrack-reference-selection {
+  grid-column: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.bettrack-theme .bettrack-reference-detail-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+.bettrack-theme .bettrack-reference-detail-fields > .form-field:first-child {
+  margin-bottom: 6px;
+}
+.bettrack-theme .bettrack-reference-detail-fields .form-field {
+  gap: 7px;
+}
+.bettrack-theme .bettrack-reference-detail-fields .form-field > label {
+  color: var(--web-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-reference-detail-fields .form-field > input,
+.bettrack-theme .bettrack-reference-detail-fields .form-field > select {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-reference-detail-fields .form-field > small {
+  position: relative;
+  top: 12px;
+  margin-top: 1px;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-odds-suggestions {
+  display: flex;
+  grid-column: 1;
+  gap: 7px;
+  margin-top: -17px;
+}
+.bettrack-theme .bettrack-odds-suggestions button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-text-secondary);
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-odds-suggestions button:hover {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-bet-extra-fields {
+  grid-column: 1;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-bet-extra-fields summary {
+  padding: 10px 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-extra-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+.bettrack-theme .bettrack-remove-selection {
+  width: max-content;
+  border: 0;
+  background: transparent;
+  color: var(--web-red);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions {
+  margin-top: 10px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions > button:last-child {
+  min-width: 105px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .form-grid {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bet-wizard-payout,
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bet-wizard-note {
+  grid-column: 1;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-preview {
+  grid-row: 2 / span 8;
+}
+@media (max-width: 760px) {
+  .bettrack-theme .bettrack-new-bet-form.bet-step-1 fieldset {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-new-bet-form.bet-step-1 .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+/* Amount step follows the reference ticket flow while writing through the same
+   Stakeframe command and preserving the owner's unit, freebet and timestamp. */
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 fieldset {
+  max-width: 1082px;
+  grid-template-columns: minmax(0, 1fr) 362px;
+  gap: 0 39px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bet-wizard-progress {
+  margin-bottom: 36px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-amount-step {
+  grid-column: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-details-intro {
+  margin: 0 0 28px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-details-intro h2 {
+  font-size: 22px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-details-intro p {
+  margin-top: 8px;
+}
+.bettrack-theme .bettrack-amount-control {
+  display: grid;
+  gap: 8px;
+}
+.bettrack-theme .bettrack-amount-control > label,
+.bettrack-theme .bettrack-payout-block > label {
+  color: var(--web-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-amount-control > div {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 0 14px 0 18px;
+  background: var(--web-panel-hover);
+}
+.bettrack-theme .bettrack-amount-control > div > span {
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+.bettrack-theme .bettrack-amount-control input {
+  width: 100%;
+  min-width: 0;
+  height: 58px;
+  padding: 0 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-amount-control input:focus {
+  box-shadow: none;
+}
+.bettrack-theme .bettrack-amount-control > div > b {
+  padding: 9px 12px;
+  background: var(--web-panel);
+  color: var(--web-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-unit-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 15px;
+}
+.bettrack-theme .bettrack-unit-presets button {
+  min-width: 52px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-unit-presets button.is-active {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-unit-presets button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.bettrack-theme .bettrack-unit-note {
+  margin: 13px 0 27px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-payout-block {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 25px;
+}
+.bettrack-theme .bettrack-payout-block > label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.bettrack-theme .bettrack-payout-block > label small {
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+  font-weight: 400;
+}
+.bettrack-theme .bettrack-payout-block output {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  padding: 0 13px;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.bettrack-theme .bettrack-source-fields {
+  display: grid;
+  gap: 3px;
+}
+.bettrack-theme .bettrack-source-fields .form-field {
+  gap: 7px;
+}
+.bettrack-theme .bettrack-source-fields .form-field > label {
+  color: var(--web-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-source-fields .form-field > select {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-book-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: -5px;
+}
+.bettrack-theme .bettrack-book-help {
+  align-self: center;
+  margin: 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-book-help:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-amount-more {
+  position: relative;
+  margin: 0;
+  border: 0;
+}
+.bettrack-theme .bettrack-amount-more > summary {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-amount-more > div {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 5;
+  display: grid;
+  width: min(640px, 80vw);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+  box-shadow: var(--shadow-menu);
+}
+.bettrack-theme .bettrack-amount-more:not([open]) > div {
+  display: none;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-preview {
+  grid-column: 2;
+  grid-row: 2 / span 10;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-preview {
+  padding-top: 2px !important;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-preview-heading {
+  margin-bottom: 16px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-unit-presets button.is-active {
+  border-color: var(--web-border);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-paper > header {
+  padding-top: 7px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-kind {
+  padding-top: 7px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-kind > span {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-selection {
+  min-height: 32px;
+  padding-top: 3px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-event {
+  display: block;
+  padding: 0 10px 22px;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-value-grid {
+  padding-top: 17px;
+  padding-bottom: 18px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions,
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .form-actions {
+  display: grid;
+  width: min(100%, 674px);
+  grid-template-columns: 109px minmax(0, 1fr);
+  gap: 11px;
+  margin-top: 24px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .form-actions {
+  margin-top: 17px;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions > button:first-child,
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .form-actions > button:first-child {
+  display: flex;
+  min-height: 55px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--web-border-strong);
+  background: transparent;
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions > button:last-child,
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 .form-actions > button:last-child {
+  min-height: 55px;
+  background: var(--web-accent);
+  color: var(--web-ink);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .bettrack-theme .bettrack-new-bet-form.bet-step-2 fieldset {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions,
+  .bettrack-theme .bettrack-new-bet-form.bet-step-2 .form-actions {
+    width: 100%;
+  }
+}
+
+/* Match the original centered ticket workspace and paper cutouts. */
+.bettrack-theme .new-bet-reference-page {
+  width: min(100%, 1160px);
+  max-width: 1160px;
+  margin-inline: auto;
+}
+
+/* Existing ticket edits use the same field scale, spacing and preview paper as
+   the original BetTrack entry flow, with the immutable unit kept visible. */
+.dialog-content:has(.bettrack-bet-edit-form) {
+  --web-bg: var(--bettrack-background);
+  --web-panel: var(--bettrack-panel);
+  --web-panel-hover: var(--bettrack-panel-hover);
+  --web-border: var(--bettrack-border);
+  --web-border-strong: var(--bettrack-border-strong);
+  --web-text: var(--bettrack-edit-text);
+  --web-text-secondary: var(--bettrack-edit-muted);
+  --web-text-tertiary: var(--web-gray);
+  --web-orange: var(--bettrack-orange);
+  --web-accent: var(--bettrack-accent);
+  --web-ink: var(--bettrack-ink);
+  width: min(1120px, calc(100vw - 44px));
+  max-height: calc(100svh - 36px);
+  padding: 30px 34px;
+  border: 1px solid var(--web-border);
+  border-radius: 0;
+  background: var(--web-bg);
+  color: var(--web-text);
+}
+.dialog-content:has(.bettrack-bet-edit-form) .dialog-header {
+  margin-bottom: 24px;
+}
+.dialog-content:has(.bettrack-bet-edit-form) .dialog-header h2 {
+  font-family: var(--font-display);
+  font-size: 25px;
+  text-transform: uppercase;
+}
+.dialog-content .bettrack-bet-edit-form fieldset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 0 34px;
+}
+.dialog-content .bettrack-bet-edit-form fieldset > .form-grid,
+.dialog-content .bettrack-bet-edit-form .bettrack-details-intro,
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-selection,
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-amount-step,
+.dialog-content .bettrack-bet-edit-form fieldset > .form-field {
+  grid-column: 1;
+}
+.dialog-content .bettrack-bet-edit-form fieldset > .form-grid {
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-details-intro {
+  margin: 10px 0 20px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-selection {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-detail-fields {
+  grid-template-columns: 1fr;
+  gap: 17px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-detail-fields .form-field > label,
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-financial-fields .form-field > label {
+  color: var(--web-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-detail-fields .form-field > input,
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-detail-fields .form-field > select,
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-financial-fields .form-field > input {
+  min-height: 41px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 14px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-reference-detail-fields .form-field > small,
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-financial-fields .form-field > small {
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-sport-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-sport-options > button,
+.dialog-content .bettrack-bet-edit-form .bettrack-more-sports > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-sport-options > button.is-selected {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-more-sports {
+  position: relative;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-more-sports > summary::-webkit-details-marker {
+  display: none;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-more-sports > div {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  display: grid;
+  width: 232px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-panel);
+  box-shadow: var(--shadow-menu);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-more-sports > div button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  cursor: pointer;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-more-sports > div button.is-selected {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-odds-suggestions {
+  display: flex;
+  grid-column: 1;
+  gap: 7px;
+  margin-top: -14px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-odds-suggestions button {
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid var(--web-border);
+  background: transparent;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-bet-extra-fields {
+  border-top: 1px solid var(--web-border);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-bet-extra-fields summary {
+  padding: 10px 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-extra-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-amount-step {
+  margin: 20px 0 12px;
+  padding-top: 7px;
+  border-top: 1px solid var(--web-border);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-amount-step .bettrack-details-intro {
+  margin: 10px 0 18px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-financial-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-financial-fields > .form-field:last-child {
+  grid-column: 1 / -1;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-edit-lock-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--web-orange);
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-unit-presets {
+  margin: 0 0 9px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-unit-presets button {
+  min-width: 48px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-unit-presets button.is-active {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-unit-presets button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-unit-note {
+  margin: 0 0 14px;
+  font-size: 9px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-missing-unit-choice {
+  color: var(--web-text-secondary);
+  font-size: 11px;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-ticket-preview {
+  grid-column: 2;
+  grid-row: 1 / span 20;
+  align-self: start;
+  padding: 0 !important;
+  background: transparent !important;
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-ticket-paper {
+  border-top: 3px solid var(--web-orange);
+  border-radius: 0;
+  background: var(--web-panel);
+}
+.dialog-content .bettrack-bet-edit-form .bettrack-ticket-preview > p {
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.dialog-content .bettrack-bet-edit-form .form-actions {
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 13px;
+}
+.dialog-content .bettrack-bet-edit-form .form-actions button {
+  min-height: 49px;
+  border-radius: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.dialog-content .bettrack-bet-edit-form .form-actions button:last-child {
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+@media (max-width: 760px) {
+  .dialog-content:has(.bettrack-bet-edit-form) {
+    width: calc(100vw - 20px);
+    padding: 22px 17px;
+  }
+  .dialog-content .bettrack-bet-edit-form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dialog-content .bettrack-bet-edit-form .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 14px;
+  }
+}
+.bettrack-theme .bettrack-new-bet-form fieldset,
+.bettrack-theme .bettrack-new-bet-form.bet-step-1 fieldset,
+.bettrack-theme .bettrack-new-bet-form.bet-step-2 fieldset {
+  width: 100%;
+  max-width: 1112px;
+  grid-template-columns: minmax(0, 1fr) 358px;
+  gap: 0 38px;
+}
+.bettrack-theme .bettrack-ticket-paper {
+  border-top-color: var(--web-border-strong);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='fut'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='volley'] {
+  border-top-color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='ncaab'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='ncaabb'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='esports'] {
+  border-top-color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='nba'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='wnba'] {
+  border-top-color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='nfl'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='rugby'] {
+  border-top-color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='ncaaf'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='tennis'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='golf'] {
+  border-top-color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='mlb'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='nhl'] {
+  border-top-color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='mma'],
+.bettrack-theme .bettrack-ticket-paper[data-sport='f1'] {
+  border-top-color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-ticket-value-grid {
+  position: relative;
+}
+.bettrack-theme .bettrack-ticket-value-grid::before,
+.bettrack-theme .bettrack-ticket-value-grid::after {
+  position: absolute;
+  top: -9px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--web-bg);
+  content: '';
+}
+.bettrack-theme .bettrack-ticket-value-grid::before {
+  left: -9px;
+}
+.bettrack-theme .bettrack-ticket-value-grid::after {
+  right: -9px;
+}
+@media (max-width: 900px) {
+  .bettrack-theme .bettrack-new-bet-form fieldset,
+  .bettrack-theme .bettrack-new-bet-form.bet-step-1 fieldset,
+  .bettrack-theme .bettrack-new-bet-form.bet-step-2 fieldset {
+    max-width: none;
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-new-bet-form .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+.bettrack-theme .hedge-page-heading {
+  margin-bottom: 22px;
+}
+.bettrack-theme .product-main.bettrack-page-hedge {
+  padding-right: 24px;
+}
+.bettrack-theme .hedge-reference-progress {
+  width: max-content;
+  min-height: 32px;
+  margin-bottom: 34px;
+  border: 0;
+}
+.bettrack-theme .hedge-reference-progress button {
+  min-width: 67px;
+  min-height: 44px;
+  height: 32px;
+  justify-content: center;
+  padding: 0 10px;
+  margin-right: 29px;
+  background: var(--web-panel);
+}
+.bettrack-theme .hedge-reference-progress button span {
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+.bettrack-theme .hedge-reference-progress button.is-current {
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.bettrack-theme .hedge-reference-progress button.is-current span {
+  border: 0;
+}
+.bettrack-theme .hedge-reference-progress button.is-current::after {
+  display: none;
+}
+.bettrack-theme .hedge-reference-progress button:not(:last-child)::before {
+  position: absolute;
+  top: 50%;
+  right: -24px;
+  width: 18px;
+  height: 1px;
+  background: var(--web-border);
+  content: '';
+}
+.bettrack-theme .hedge-reference-layout {
+  grid-template-columns: minmax(0, 1fr) 356px;
+  gap: 40px;
+  align-items: start;
+}
+.bettrack-theme .hedge-reference-page {
+  max-width: none;
+}
+.bettrack-theme .hedge-reference-main > h2 {
+  margin-bottom: 11px;
+  font-size: 22px;
+  text-transform: none;
+}
+.bettrack-theme .hedge-reference-main > p {
+  margin-bottom: 27px;
+}
+.bettrack-theme .hedge-reference-grid {
+  gap: 16px;
+}
+.bettrack-theme .hedge-mode-card {
+  min-height: 138px;
+}
+.bettrack-theme .hedge-mode-card.is-selected {
+  border: 0;
+  box-shadow: inset 3px 0 var(--web-accent);
+}
+.bettrack-theme .hedge-reference-actions {
+  justify-content: flex-start;
+}
+.bettrack-theme .hedge-reference-actions button:last-child {
+  width: 300px;
+  min-height: 50px;
+}
+.bettrack-theme .hedge-reference-preview {
+  align-self: start;
+  padding: 0;
+  background: transparent;
+}
+.bettrack-theme .hedge-preview-card {
+  padding: 18px;
+  border: 0;
+  background: var(--web-panel);
+}
+.bettrack-theme .hedge-preview-card h3 {
+  text-transform: none;
+}
+.bettrack-theme .hedge-pick-list {
+  margin-top: 30px;
+}
+.bettrack-theme .product-main.bettrack-page-hedge .bettrack-page-close {
+  top: 80px;
+  right: 24px;
+}
+
+@media (max-width: 900px) {
+  .bettrack-theme .hedge-reference-layout {
+    grid-template-columns: minmax(0, 1fr) 290px;
+    gap: 20px;
+  }
+}
+@media (max-width: 760px) {
+  .bettrack-theme .hedge-reference-layout {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .hedge-reference-preview {
+    grid-row: 1;
+  }
+  .bettrack-theme .hedge-reference-progress {
+    max-width: 100%;
+  }
+  .bettrack-theme .bettrack-new-bet-form .bet-wizard-progress {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+.bettrack-theme .product-main.bettrack-page-settings {
+  padding-top: 58px;
+}
+.bettrack-theme .settings-page-heading {
+  margin-bottom: 40px;
+}
+.bettrack-theme .settings-page-heading .product-eyebrow {
+  margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .bettrack-theme .bettrack-preference-grid {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-preference-item {
+    grid-template-columns: minmax(220px, 320px) 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .bettrack-theme .bettrack-sample-warning {
+    min-height: 0;
+  }
+  .bettrack-theme .bettrack-analytics-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bettrack-theme .bettrack-behaviour-grid,
+  .bettrack-theme .bettrack-responsible-grid {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-behaviour-grid .bettrack-behaviour-wide,
+  .bettrack-theme .bettrack-responsible-grid .bettrack-responsible-wide {
+    grid-column: auto;
+  }
+  .bettrack-theme .bettrack-preference-item {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .bettrack-theme .bettrack-preference-item p {
+    margin: 6px 0 0;
+  }
+  .bettrack-theme .bettrack-new-bet-form fieldset {
+    grid-template-columns: 1fr;
+  }
+  .bettrack-theme .bettrack-new-bet-form .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .bettrack-theme .bettrack-segment-row {
+    grid-template-columns: minmax(120px, 1fr) 50px 70px 60px;
+  }
+  .bettrack-theme .bettrack-segment-row small {
+    display: none;
+  }
+}
+
+/* Bets: ticket slips follow the four-column BetTrack reference. */
+.bettrack-theme .product-main.bettrack-page-bets {
+  width: 100%;
+  max-width: 1112px;
+  margin: 0 auto;
+  padding: 55px 0 38px;
+  font-size: 16px;
+}
+@media (min-width: 1400px) {
+  .bettrack-theme .product-main.bettrack-page-bets {
+    transform: translateX(-2.5px);
+  }
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-main.bettrack-page-bets {
+    max-width: none;
+    margin: 0;
+    padding: 22px 16px 30px;
+    transform: none;
+  }
+}
+.bettrack-theme .bets-reference-heading h2 {
+  font-size: 36px;
+}
+.bettrack-theme .bets-history-sort-control {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.bettrack-theme .bets-history-sort-control .bets-date-sort {
+  width: 76px;
+  min-width: 76px;
+  min-height: 33px;
+  padding: 0 26px 0 14px;
+  appearance: none;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.bettrack-theme .bets-sort-direction {
+  display: grid;
+  width: 18px;
+  min-width: 18px;
+  min-height: 33px;
+  margin-left: -18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--web-accent);
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-bets-summary {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.bettrack-theme .bettrack-bets-summary p {
+  margin: 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-bets-summary p > span {
+  margin-right: 7px;
+  color: var(--web-text-tertiary);
+  font-size: 8px;
+  letter-spacing: 0.13em;
+}
+.bettrack-theme .bettrack-bets-summary p > strong {
+  color: var(--web-orange);
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-bets-summary .is-positive {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-bets-summary .is-negative {
+  color: var(--web-negative);
+}
+.bettrack-theme .bet-list-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+.bettrack-theme .bet-table-desktop {
+  display: none;
+}
+.bettrack-theme .bets-history-table-wrap {
+  display: block;
+}
+.bettrack-theme .bet-list-card.bettrack-ticket-card {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 236px;
+  grid-template-rows: 27px 28px minmax(95px, 1fr) 54px 30px;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-top: 3px solid var(--web-border-strong);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-ticket-card[data-outcome='won'] {
+  border-top-color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-card[data-outcome='lost'] {
+  border-top-color: var(--web-negative);
+}
+.bettrack-theme .bettrack-ticket-card[data-outcome='cashout'] {
+  border-top-color: var(--web-orange);
+}
+.bettrack-theme .bet-list-card.bettrack-ticket-card {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='multi'] {
+  border-top-color: var(--web-border-strong);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='fut'],
+.bettrack-theme .bettrack-ticket-card[data-sport='volley'] {
+  border-top-color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='nba'],
+.bettrack-theme .bettrack-ticket-card[data-sport='wnba'] {
+  border-top-color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='ncaab'],
+.bettrack-theme .bettrack-ticket-card[data-sport='ncaabb'],
+.bettrack-theme .bettrack-ticket-card[data-sport='esports'] {
+  border-top-color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='mlb'],
+.bettrack-theme .bettrack-ticket-card[data-sport='nhl'] {
+  border-top-color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='nfl'],
+.bettrack-theme .bettrack-ticket-card[data-sport='rugby'] {
+  border-top-color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='ncaaf'],
+.bettrack-theme .bettrack-ticket-card[data-sport='tennis'],
+.bettrack-theme .bettrack-ticket-card[data-sport='golf'] {
+  border-top-color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-card[data-sport='mma'],
+.bettrack-theme .bettrack-ticket-card[data-sport='f1'] {
+  border-top-color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-ticket-card:focus-visible {
+  outline: 2px solid var(--web-accent);
+  outline-offset: 3px;
+}
+.bettrack-theme .bettrack-ticket-card:hover .bettrack-ticket-title {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--web-border);
+  background: var(--web-panel-hover);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+.bettrack-theme .bettrack-ticket-head strong {
+  overflow: hidden;
+  color: var(--web-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-ticket-head span {
+  flex: none;
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--web-orange);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-ticket-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bettrack-theme .bettrack-ticket-kind-label {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-ticket-sports {
+  display: inline-flex;
+  gap: 3px;
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-sports i {
+  color: var(--web-text-tertiary);
+  font-style: normal;
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='fut'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='volley'] {
+  color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='nba'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='wnba'] {
+  color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='ncaab'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='ncaabb'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='esports'] {
+  color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='mlb'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='nhl'] {
+  color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='nfl'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='ncaaf'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='rugby'] {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='tennis'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='golf'] {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='mma'],
+.bettrack-theme .bettrack-ticket-sports > span[data-sport='f1'] {
+  color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport] {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0;
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='fut'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='volley'] {
+  color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='nba'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='wnba'] {
+  color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='ncaab'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='ncaabb'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='esports'] {
+  color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='mlb'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='nhl'] {
+  color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='nfl'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='ncaaf'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='rugby'] {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='tennis'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='golf'] {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='mma'],
+.bettrack-theme .bettrack-ticket-meta .bettrack-ticket-sports > span[data-sport='f1'] {
+  color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-ticket-meta > b {
+  flex: none;
+  margin-left: auto;
+  padding: 4px 7px;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.bettrack-theme .bettrack-ticket-content {
+  position: relative;
+  min-width: 0;
+  padding: 7px 13px 10px;
+}
+.bettrack-theme .bettrack-ticket-title {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  margin: 0 0 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--web-text);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.02;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.bettrack-theme .bettrack-ticket-title:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-title:focus-visible {
+  outline: 1px solid var(--web-accent);
+  outline-offset: 2px;
+}
+.bettrack-theme .bettrack-ticket-event {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.bettrack-theme .bettrack-ticket-selections {
+  display: grid;
+  gap: 15px;
+  margin-top: 16px;
+}
+.bettrack-theme .bettrack-ticket-card:has(.bettrack-ticket-selections) .bettrack-ticket-content {
+  padding-top: 17px;
+}
+.bettrack-theme .bettrack-ticket-selections > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 6px;
+}
+.bettrack-theme .bettrack-ticket-selections > div > span {
+  padding-left: 6px;
+  border-left: 2px solid currentColor;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='fut'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='volley'] {
+  color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='nba'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='wnba'] {
+  color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='ncaab'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='ncaabb'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='esports'] {
+  color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='mlb'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='nhl'] {
+  color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='nfl'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='ncaaf'],
+.bettrack-theme .bettrack-ticket-selections > div > span[data-sport='rugby'] {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-selections p {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin: 0;
+}
+.bettrack-theme .bettrack-ticket-selections p strong,
+.bettrack-theme .bettrack-ticket-selections p small {
+  overflow: hidden;
+  color: var(--web-text-secondary);
+  font-size: 9px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-ticket-selections p small {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-selections > div > b {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+  text-align: right;
+}
+.bettrack-theme .bettrack-ticket-more {
+  padding-left: 36px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-ticket-stamp {
+  position: absolute;
+  right: 13px;
+  bottom: 11px;
+  padding: 4px 8px;
+  transform: rotate(-7deg);
+  border: 2px solid var(--web-border-strong);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-ticket-stamp.is-won {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-stamp.is-lost {
+  border-color: var(--web-negative);
+  color: var(--web-negative);
+}
+.bettrack-theme .bettrack-ticket-stamp.is-cashout {
+  border-color: var(--web-orange);
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-stamp.is-void {
+  border-color: var(--web-text-tertiary);
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-amounts {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: center;
+  padding: 8px 13px;
+  border-top: 1px dashed var(--web-border-strong);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-ticket-amounts::before,
+.bettrack-theme .bettrack-ticket-amounts::after {
+  position: absolute;
+  top: -9px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--web-bg);
+  content: '';
+}
+.bettrack-theme .bettrack-ticket-amounts::before {
+  left: -9px;
+}
+.bettrack-theme .bettrack-ticket-amounts::after {
+  right: -9px;
+}
+.bettrack-theme .bettrack-ticket-amounts > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+.bettrack-theme .bettrack-ticket-amounts > div > small {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+.bettrack-theme .bettrack-ticket-amounts > div > strong {
+  overflow: hidden;
+  color: var(--web-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-ticket-result {
+  display: flex;
+  height: 30px;
+  min-height: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 13px;
+  border-top: 0;
+  background: var(--web-panel-hover);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-ticket-result > span {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-ticket-result > strong {
+  overflow: hidden;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-ticket-result.positive > strong {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-result.negative > strong {
+  color: var(--web-negative);
+}
+.bettrack-theme .bettrack-ticket-result.is-open {
+  justify-content: flex-start;
+}
+.bettrack-theme .bettrack-ticket-result.is-open > .bettrack-ticket-open-label {
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-ticket-card:has(.bettrack-ticket-selections) {
+  min-height: 262px;
+  grid-template-rows: 27px 28px minmax(121px, 1fr) 54px 30px;
+}
+.bettrack-theme .bets-history-heading {
+  margin-top: 28px;
+}
+@media (max-width: 1100px) {
+  .bettrack-theme .bet-list-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .bettrack-theme .bet-list-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .bettrack-theme .product-main.bettrack-page-bets {
+    padding: 20px 14px 30px;
+  }
+  .bettrack-theme .bet-list-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bettrack-theme .bets-reference-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .bettrack-theme .bettrack-bets-summary {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+  }
+}
+
+/* Match the centered original bet flow, its sport accents, and readable type. */
+.bettrack-theme .new-bet-reference-page {
+  width: min(100%, 1160px);
+  transform: none;
+}
+.bettrack-theme .new-bet-page-heading {
+  width: min(100%, 1112px);
+  margin-left: max(0px, calc((100% - 1160px) / 2));
+  margin-right: 0;
+  transform: none;
+}
+.bettrack-theme .new-bet-page-heading h1 {
+  font-size: 38px;
+}
+.bettrack-theme .new-bet-page-heading .product-eyebrow {
+  font-size: 11px;
+}
+.bettrack-theme .new-bet-page-heading .bettrack-page-close {
+  position: static;
+  top: auto;
+  right: auto;
+  flex: none;
+  margin: 0;
+  transform: none;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button {
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type > p {
+  font-size: 23px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button strong {
+  font-size: 19px;
+}
+.bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button span {
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-details-intro h2 {
+  font-size: 22px;
+}
+.bettrack-theme .bettrack-reference-detail-fields .form-field > label {
+  font-size: 15px;
+}
+.bettrack-theme .bettrack-reference-detail-fields .form-field > small {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-ticket-preview-heading {
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-ticket-paper > header {
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-ticket-kind {
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-ticket-selection {
+  font-size: 23px;
+}
+.bettrack-theme .bettrack-ticket-event {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-ticket-value-grid small {
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-ticket-value-grid span {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-ticket-preview > p {
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-sport-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.bettrack-theme .bettrack-sport-options > button,
+.bettrack-theme .bettrack-more-sports > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-more-sports {
+  position: relative;
+}
+.bettrack-theme .bettrack-more-sports > summary::-webkit-details-marker {
+  display: none;
+}
+.bettrack-theme .bettrack-more-sports > div {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  display: grid;
+  width: 232px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-panel);
+  box-shadow: var(--shadow-menu);
+}
+.bettrack-theme .bettrack-more-sports > div button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-sport-options > button:hover,
+.bettrack-theme .bettrack-more-sports > summary:hover,
+.bettrack-theme .bettrack-more-sports > div button:hover {
+  border-color: var(--web-accent);
+}
+.bettrack-theme .bettrack-sport-options > button.is-selected,
+.bettrack-theme .bettrack-more-sports > div button.is-selected {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.bettrack-theme .bettrack-sport-picker > input {
+  min-height: 40px;
+  margin-top: 8px;
+  padding: 0 13px;
+  border: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='fut'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='volley'] .bettrack-ticket-kind > span {
+  color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='ncaab'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='ncaabb'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='esports'] .bettrack-ticket-kind > span {
+  color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='nba'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='wnba'] .bettrack-ticket-kind > span {
+  color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='nfl'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='rugby'] .bettrack-ticket-kind > span {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='ncaaf'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='tennis'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='golf'] .bettrack-ticket-kind > span {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='mlb'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='nhl'] .bettrack-ticket-kind > span {
+  color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-ticket-paper[data-sport='mma'] .bettrack-ticket-kind > span,
+.bettrack-theme .bettrack-ticket-paper[data-sport='f1'] .bettrack-ticket-kind > span {
+  color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-head,
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-meta {
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-title {
+  font-size: 21px;
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-event,
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-selections p small {
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-amounts > div > small {
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-amounts > div > strong {
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-result {
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-ticket-card .bettrack-ticket-result > strong {
+  font-size: 12px;
+}
+
+/* A ticket opens its detail screen; the pencil on that screen opens this editor. */
+.bettrack-theme .product-main.bettrack-ticket-edit-page {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 42px 24px 48px;
+  transform: none;
+}
+.bettrack-theme .product-main.bettrack-ticket-edit-page > .page-heading {
+  display: none;
+}
+.bettrack-theme .bettrack-edit-page {
+  width: 100%;
+}
+.bettrack-theme .bettrack-edit-back {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  margin: 0 0 18px;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-edit-back:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-edit-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 28px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-edit-page-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 31px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-edit-page-heading p {
+  margin: 8px 0 0;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+.bettrack-theme .bettrack-edit-state {
+  padding: 6px 9px;
+  border: 1px solid var(--web-border-strong);
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset {
+  position: relative;
+  display: grid;
+  max-width: 1075px;
+  grid-template-columns: minmax(300px, 0.66fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 0 28px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: calc(60% - 14px);
+  background: var(--web-panel);
+  content: '';
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-grid,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-details-intro,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-reference-selection,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-amount-step,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-field {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  padding-inline: 18px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-details-intro {
+  margin: 0 0 23px;
+  padding-top: 20px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-details-intro h2 {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-details-intro p {
+  display: none;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-reference-selection {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-reference-detail-fields {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field {
+  gap: 7px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > label {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > input,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > select,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > textarea {
+  min-height: 41px;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-radius: 0;
+  background: var(--web-panel-hover) !important;
+  color: var(--web-text);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > small {
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-sport-options {
+  gap: 7px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-sport-options > button,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-more-sports > summary {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-sport-options
+  > button.is-selected {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-odds-suggestions {
+  margin-top: -13px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-amount-step {
+  margin: 18px 0 12px;
+  padding-top: 17px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-edit-amount-step
+  .bettrack-details-intro {
+  margin: 0 0 18px;
+  padding: 0;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-catalog-fields {
+  margin-top: 17px;
+  padding-top: 17px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-financial-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-edit-financial-fields
+  > .form-field:last-child {
+  grid-column: 1 / -1;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-preview {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
+  grid-row: 1 / span 30;
+  padding-top: 0 !important;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-preview-heading,
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-preview > p {
+  display: none;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-paper {
+  display: flex;
+  flex-direction: column;
+  min-height: 264px;
+  border-top-color: var(--web-border-strong);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='fut'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='volley'] {
+  border-top-color: var(--web-avatar-teal);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='nba'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='wnba'] {
+  border-top-color: var(--web-sport-basketball);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='mlb'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='nhl'] {
+  border-top-color: var(--web-avatar-cyan);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='nfl'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='rugby'] {
+  border-top-color: var(--web-orange);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='ncaaf'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='tennis'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='golf'] {
+  border-top-color: var(--web-accent);
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='mma'],
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-ticket-paper[data-sport='f1'] {
+  border-top-color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-ticket-selections {
+  gap: 11px;
+  margin: 8px 0 13px;
+}
+.bettrack-theme
+  .bettrack-edit-page
+  .bettrack-bet-edit-form
+  .bettrack-edit-ticket-selections
+  p
+  small {
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-paper > footer {
+  margin-top: auto;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-actions {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  display: grid;
+  width: calc(100% - 36px);
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  margin: 13px 18px 0;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-actions button {
+  min-height: 49px;
+  border-radius: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-actions button:last-child {
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-main.bettrack-ticket-edit-page {
+    max-width: none;
+    margin: 0;
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset::before {
+    display: none;
+  }
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-grid,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-details-intro,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-reference-selection,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-amount-step,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-field,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-actions {
+    grid-column: 1;
+  }
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-grid,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-details-intro,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-reference-selection,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-edit-amount-step,
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset > .form-field {
+    padding-inline: 0;
+  }
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-preview {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0 0 20px;
+  }
+  .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-actions {
+    width: 100%;
+  }
+}
+@media (max-width: 900px) {
+  .bettrack-theme .new-bet-reference-page {
+    width: min(100%, 1160px);
+    transform: none;
+  }
+  .bettrack-theme .new-bet-page-heading {
+    width: min(100%, 1112px);
+    margin-left: 0;
+    margin-right: 0;
+    transform: none;
+  }
+  .bettrack-theme .product-main.bettrack-page-hedge .bettrack-page-close {
+    right: 16px;
+    transform: none;
+  }
+}
+
+@media (max-width: 1650px) {
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Bets use the available content width at tablet and phone sizes. */
+@media (max-width: 1399px) {
+  .bettrack-theme .product-main.bettrack-page-bets {
+    width: min(100%, 1112px);
+    max-width: 1112px;
+    margin: 0 auto;
+    padding: 42px 0 38px;
+    transform: none;
+  }
+  .bettrack-theme
+    .product-main.bettrack-page-bets
+    .bettrack-ticket-card:has(.bettrack-ticket-selections) {
+    min-height: 264px;
+    grid-template-rows: 27px 28px minmax(115px, 1fr) 62px 30px;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-heading {
+    margin-top: 38px;
+    margin-bottom: 11px;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-reference-toolbar {
+    margin-bottom: 14px;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-reference-section-heading {
+    align-items: center;
+    flex-direction: row;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bettrack-bets-summary {
+    width: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .bettrack-theme .product-main.bettrack-page-bets .bet-list-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .bettrack-theme .product-main.bettrack-page-bets {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bet-list-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-reference-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bettrack-bets-summary {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-reference-toolbar {
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-sort-control {
+    align-self: flex-end;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-reference-toolbar .bet-state-tabs {
+    flex-wrap: wrap;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-table-wrap {
+    overflow-x: auto;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-search {
+    grid-column: 1 / -1;
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-summary {
+    flex-wrap: wrap;
+    gap: 12px 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bettrack-theme .product-main.bettrack-page-bets .bets-history-search {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 1399px) {
+  .bettrack-theme .product-content:has(.product-main.bettrack-ticket-edit-page) {
+    width: calc(100% - 220px);
+    min-width: 0;
+    margin-left: 220px;
+    padding-top: 55px;
+  }
+  .bettrack-theme .product-main.bettrack-ticket-edit-page {
+    width: 100%;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 42px 24px 48px;
+    transform: none;
+  }
+}
+@media (max-width: 760px) {
+  .bettrack-theme .product-content:has(.product-main.bettrack-ticket-edit-page) {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    padding-top: 55px;
+  }
+  .bettrack-theme .product-main.bettrack-ticket-edit-page {
+    max-width: none;
+    margin: 0;
+    padding: 22px 16px 30px;
+  }
+}
+
+/* Bet detail follows the original ticket flow: summary and settlement controls
+   stay together on the left while selections and record metadata occupy the right. */
+.bettrack-theme .product-content:has(.product-main.bettrack-ticket-detail-route) {
+  width: calc(100% - 220px);
+  min-width: 0;
+  margin-left: 220px;
+  padding-top: 55px;
+}
+.bettrack-theme .product-main.bettrack-ticket-detail-route {
+  width: 100%;
+  max-width: 973px;
+  margin: 0;
+  padding: 47px 0 48px 43px;
+  transform: none;
+}
+.bettrack-theme .product-main.bettrack-ticket-detail-route > .page-heading {
+  display: none;
+}
+.bettrack-theme .bettrack-detail-page {
+  width: 100%;
+  color: var(--web-text);
+}
+.bettrack-theme .bettrack-detail-back {
+  display: inline-block;
+  margin: 0 0 17px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+}
+.bettrack-theme .bettrack-detail-back:hover {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-detail-heading {
+  display: flex;
+  min-height: 51px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 22px;
+}
+.bettrack-theme .bettrack-detail-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 27px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.bettrack-theme .bettrack-detail-heading p {
+  margin: 7px 0 0;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+.bettrack-theme .bettrack-detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+.bettrack-theme .bettrack-detail-actions button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--web-border);
+  border-radius: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-detail-actions button:hover:not(:disabled) {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-detail-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.bettrack-theme .bettrack-detail-actions svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+.bettrack-theme .bettrack-detail-actions > span[role='status'] {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.bettrack-theme .bettrack-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(290px, 350px) minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+}
+.bettrack-theme .bettrack-detail-left,
+.bettrack-theme .bettrack-detail-right {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+.bettrack-theme .bettrack-detail-ticket {
+  display: flex;
+  min-height: 228px;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 3px solid var(--web-border-strong);
+  background: var(--web-panel);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='fut'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='volley'] {
+  border-top-color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='nba'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='wnba'] {
+  border-top-color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='ncaab'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='ncaabb'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='esports'] {
+  border-top-color: var(--web-avatar-violet);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='mlb'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='nhl'] {
+  border-top-color: var(--web-avatar-cyan);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='nfl'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='rugby'] {
+  border-top-color: var(--web-orange);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='ncaaf'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='tennis'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='golf'] {
+  border-top-color: var(--web-accent);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='mma'],
+.bettrack-theme .bettrack-detail-ticket[data-sport='f1'] {
+  border-top-color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-detail-ticket[data-sport='multi'] {
+  border-top-color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-detail-ticket > header {
+  display: flex;
+  height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 11px;
+  background: var(--web-panel-hover);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-ticket > header span {
+  color: var(--web-text-tertiary);
+}
+.bettrack-theme .bettrack-detail-ticket-type {
+  display: flex;
+  min-height: 29px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-ticket-type strong {
+  color: var(--web-avatar-teal);
+}
+.bettrack-theme .bettrack-detail-ticket-type b {
+  margin-left: auto;
+  padding: 3px 7px;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-size: 12px;
+}
+.bettrack-theme .bettrack-detail-ticket h3 {
+  margin: 4px 11px 7px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.1;
+}
+.bettrack-theme .bettrack-detail-ticket-selections {
+  display: grid;
+  gap: 6px;
+  padding: 0 11px 9px;
+}
+.bettrack-theme .bettrack-detail-ticket-selections > div {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-detail-ticket-selections > div > b {
+  color: var(--web-avatar-teal);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-ticket-selections > div[data-sport='nba'] > b,
+.bettrack-theme .bettrack-detail-ticket-selections > div[data-sport='wnba'] > b {
+  color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-detail-ticket-selections > div > strong {
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+}
+.bettrack-theme .bettrack-detail-ticket-single {
+  flex: 1;
+  padding-top: 13px;
+}
+.bettrack-theme .bettrack-detail-ticket-single h3 {
+  font-size: 21px;
+}
+.bettrack-theme .bettrack-detail-ticket-single p {
+  margin: 4px 11px;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-detail-ticket-values {
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding: 7px 11px;
+  border-top: 2px dashed var(--web-border-strong);
+}
+.bettrack-theme .bettrack-detail-ticket-values > div {
+  display: grid;
+  gap: 4px;
+}
+.bettrack-theme .bettrack-detail-ticket-values small {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.bettrack-theme .bettrack-detail-ticket-values strong {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+.bettrack-theme .bettrack-detail-ticket > footer {
+  min-height: 28px;
+  padding: 6px 11px;
+  background: var(--web-panel-hover);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+}
+.bettrack-theme .bettrack-settle-card,
+.bettrack-theme .bettrack-hedge-card,
+.bettrack-theme .bettrack-detail-panel {
+  min-width: 0;
+  background: var(--web-panel);
+}
+.bettrack-theme a.bettrack-hedge-card {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background-color 120ms ease,
+    outline-color 120ms ease;
+}
+.bettrack-theme a.bettrack-hedge-card:hover {
+  background: var(--web-panel-hover);
+}
+.bettrack-theme a.bettrack-hedge-card:focus-visible {
+  outline: 2px solid var(--web-accent);
+  outline-offset: 2px;
+}
+.bettrack-theme .bettrack-settle-card {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+}
+.bettrack-theme .bettrack-settle-card > h3,
+.bettrack-theme .bettrack-detail-panel > h3 {
+  margin: 0 0 4px;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+.bettrack-theme .bettrack-settle-card > button {
+  display: grid;
+  min-height: 46px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 0;
+  background: var(--web-panel-hover);
+  text-align: left;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-settle-card > button:hover {
+  background: color-mix(in srgb, var(--web-panel-hover) 75%, white);
+}
+.bettrack-theme .bettrack-settle-card > button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.bettrack-theme .bettrack-settle-icon {
+  font-size: 18px;
+  text-align: center;
+}
+.bettrack-theme .bettrack-settle-card > button > strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+.bettrack-theme .bettrack-settle-card > button > small {
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+  text-align: right;
+}
+.bettrack-theme .bettrack-settle-card .is-won {
+  color: var(--web-accent);
+}
+.bettrack-theme .bettrack-settle-card .is-lost {
+  color: var(--web-avatar-red);
+}
+.bettrack-theme .bettrack-settle-card .is-void {
+  color: var(--web-text-secondary);
+}
+.bettrack-theme .bettrack-settle-card .is-cashout {
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-cashout-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-bg);
+}
+.bettrack-theme .bettrack-cashout-inline > label {
+  grid-column: 1 / -1;
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.bettrack-theme .bettrack-cashout-inline > input {
+  min-width: 0;
+  height: 37px;
+  padding: 0 10px;
+  border: 1px solid var(--web-border-strong);
+  border-radius: 0;
+  background: var(--web-panel-hover);
+  color: var(--web-text);
+  font-family: var(--font-mono);
+}
+.bettrack-theme .bettrack-cashout-inline > div {
+  display: flex;
+  gap: 6px;
+}
+.bettrack-theme .bettrack-cashout-inline > div button {
+  min-height: 44px;
+  padding: 0 9px;
+  border: 1px solid var(--web-border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--web-text-secondary);
+  font-family: var(--font-display);
+  font-size: 10px;
+  cursor: pointer;
+}
+.bettrack-theme .bettrack-cashout-inline > div button:last-child {
+  border-color: var(--web-orange);
+  color: var(--web-orange);
+}
+.bettrack-theme .bettrack-cashout-inline > div button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.bettrack-theme .bettrack-settlement-feedback {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--web-avatar-red);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-hedge-card {
+  padding: 16px;
+}
+.bettrack-theme .bettrack-hedge-card h3 {
+  margin: 0 0 7px;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+.bettrack-theme .bettrack-hedge-card p {
+  margin: 0;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.bettrack-theme .bettrack-detail-panel {
+  padding: 17px;
+}
+.bettrack-theme .bettrack-detail-selections {
+  min-height: 160px;
+}
+.bettrack-theme .bettrack-detail-selection {
+  display: grid;
+  min-height: 55px;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--web-border);
+}
+.bettrack-theme .bettrack-detail-selection:first-of-type {
+  margin-top: 10px;
+}
+.bettrack-theme .bettrack-detail-selection > b {
+  padding-left: 10px;
+  border-left: 2px solid var(--web-avatar-teal);
+  color: var(--web-avatar-teal);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-selection[data-sport='nba'] > b,
+.bettrack-theme .bettrack-detail-selection[data-sport='wnba'] > b {
+  border-color: var(--web-sport-basketball);
+  color: var(--web-sport-basketball);
+}
+.bettrack-theme .bettrack-detail-selection > div {
+  display: grid;
+  gap: 4px;
+}
+.bettrack-theme .bettrack-detail-selection > div strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+.bettrack-theme .bettrack-detail-selection > div small {
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-selection > span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.bettrack-theme .bettrack-detail-profit {
+  min-height: 105px;
+}
+.bettrack-theme .bettrack-detail-profit > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 9px;
+}
+.bettrack-theme .bettrack-detail-profit > div strong {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
+}
+.bettrack-theme .bettrack-detail-profit > div span {
+  color: var(--web-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-profit > p {
+  margin: 7px 0 0;
+  color: var(--web-text-tertiary);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-detail-record {
+  display: grid;
+  gap: 12px;
+}
+.bettrack-theme .bettrack-detail-record > label {
+  display: grid;
+  gap: 6px;
+  color: var(--web-text-secondary);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-record-value {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: var(--web-bg);
+  color: var(--web-text);
+  font-size: 11px;
+}
+.bettrack-theme .bettrack-record-value select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--web-border);
+  background: var(--web-bg);
+  color: var(--web-text);
+  text-align: left;
+}
+.bettrack-theme .bettrack-record-value i {
+  color: var(--web-text-tertiary);
+  font-size: 15px;
+  font-style: normal;
+}
+.bettrack-theme .bettrack-record-logged {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+  padding-top: 13px;
+  border-top: 1px solid var(--web-border);
+  color: var(--web-text-secondary);
+  font-size: 9px;
+}
+.bettrack-theme .bettrack-record-logged strong {
+  color: var(--web-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+.bettrack-theme .bankroll-daily-limit-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--web-text-tertiary);
+  font-size: 10px;
+}
+.bettrack-theme .bankroll-daily-limit-edit input {
+  width: 78px;
+  height: 31px;
+  padding: 0 8px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-bg);
+  color: var(--web-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.bettrack-theme .bankroll-daily-limit-actions {
+  display: flex;
+  gap: 6px;
+}
+.bettrack-theme .bankroll-daily-limit-feedback {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--web-accent);
+  font-size: 10px;
+}
+.bettrack-theme .bankroll-move-feedback {
+  margin: 8px 0 0;
+  color: var(--web-accent);
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .bettrack-theme .product-main.bettrack-ticket-detail-route {
+    max-width: 973px;
+  }
+  .bettrack-theme .bettrack-detail-grid {
+    grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+@media (max-width: 680px) {
+  .bettrack-theme .product-content:has(.product-main.bettrack-ticket-detail-route) {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 55px;
+  }
+  .bettrack-theme .product-main.bettrack-ticket-detail-route {
+    max-width: none;
+    margin: 0;
+    padding: 22px 16px 30px;
+  }
+  .bettrack-theme .bettrack-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bettrack-theme .bettrack-detail-heading {
+    flex-direction: column;
+  }
+  .bettrack-theme .bettrack-detail-heading h2 {
+    font-size: 23px;
+  }
+  .bettrack-theme .bettrack-detail-actions {
+    align-self: stretch;
+  }
+}
+
+/* Catalog dialogs use the current StakeFrame panel language: square edges,
+   clear hierarchy, and the same lime accent as the settings screen. */
+.dialog-content:has(.catalog-form) {
+  --font-display: 'Barlow Condensed', Impact, 'Arial Narrow', sans-serif;
+  --font-body: 'Barlow', 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', Consolas, monospace;
+  width: min(620px, calc(100vw - 32px));
+  padding: 26px 28px 24px;
+  border: 1px solid var(--web-border);
+  border-top: 2px solid var(--web-accent);
+  border-radius: 0;
+  background: var(--web-bg);
+  color: var(--web-text);
+  box-shadow: 0 24px 72px rgb(0 0 0 / 72%);
+  font-family: var(--font-body);
+}
+.dialog-content:has(.catalog-form) .dialog-header {
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--web-border);
+}
+.dialog-content:has(.catalog-form) .dialog-header h2 {
+  color: var(--web-text);
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  line-height: 1;
+}
+.dialog-content:has(.catalog-form) .dialog-header p {
+  max-width: 54ch;
+  margin-top: 8px;
+  color: var(--web-text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dialog-content:has(.catalog-form) .dialog-close {
+  flex: 0 0 auto;
+  border: 1px solid var(--web-border);
+  border-radius: 0;
+  background: var(--web-panel);
+  color: var(--web-text-secondary);
+}
+.dialog-content:has(.catalog-form) .dialog-close:hover {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.catalog-form fieldset {
+  display: grid;
+  gap: 2px;
+}
+.catalog-form .form-field {
+  margin-bottom: 12px;
+}
+.catalog-form .form-field label {
+  margin-bottom: 7px;
+  color: var(--web-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.catalog-form .form-field input,
+.catalog-form .form-field textarea {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--web-border-strong);
+  border-radius: 0;
+  background: var(--web-panel);
+  color: var(--web-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.catalog-form .form-field textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+.catalog-form .form-field input::placeholder,
+.catalog-form .form-field textarea::placeholder {
+  color: var(--web-text-tertiary);
+}
+.catalog-form .form-field input:focus-visible,
+.catalog-form .form-field textarea:focus-visible {
+  border-color: var(--web-accent);
+  outline: 1px solid var(--web-accent);
+  outline-offset: 1px;
+}
+.catalog-form .form-field small {
+  margin-top: 6px;
+  color: var(--web-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.catalog-form .form-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 17px;
+  border-top: 1px solid var(--web-border);
+}
+.catalog-form .form-actions .ui-button {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 0 15px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.catalog-form .form-actions .ui-button-primary {
+  border-color: var(--web-accent);
+  background: var(--web-accent);
+  color: var(--web-ink);
+}
+.catalog-form .form-actions .ui-button-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--web-accent) 88%, white);
+}
+.catalog-form .form-actions .ui-button-secondary {
+  border-color: var(--web-border-strong);
+  background: transparent;
+  color: var(--web-text-secondary);
+}
+.catalog-form .form-actions .ui-button-secondary:hover:not(:disabled) {
+  border-color: var(--web-text-secondary);
+  background: var(--web-panel);
+  color: var(--web-text);
+}
+@media (max-width: 540px) {
+  .dialog-content:has(.catalog-form) {
+    width: calc(100vw - 24px);
+    max-height: calc(100svh - 24px);
+    padding: 20px 18px 17px;
+  }
+  .dialog-content:has(.catalog-form) .dialog-header h2 {
+    font-size: 24px;
+  }
+  .dialog-content:has(.catalog-form) .dialog-header p {
+    font-size: 11px;
+  }
+  .catalog-form .form-actions .ui-button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

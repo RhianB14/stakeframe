@@ -12,22 +12,32 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   workspaceSchema,
   onboardingStatusSchema,
-  formatBRL,
+  betPageSchema,
+  reportSchema,
   saoPauloDate,
-  polymarketFavoritesResponseSchema,
   POLYMARKET_DEFAULT_WINDOW,
   POLYMARKET_RANKING_LIMIT,
   type Workspace,
   type Bet,
   type CatalogItem,
   type ReleaseInfo,
-  type PolymarketFavoritesResponse,
 } from '@stakeframe/shared';
 import { authAction } from '../OwnerAccess.js';
 import { Button } from '../components/ui/button.js';
 import { Dialog } from '../components/ui/dialog.js';
 import { ActionProvider, PendingOperation, useFinanceActions } from './actions.js';
 import { request, type CommandInput } from './api.js';
+import {
+  displayCurrencyReady,
+  fetchReferenceRates,
+  formatDisplayDate,
+  formatDisplayMoney,
+  formatDisplayOdds,
+  displayTimeZone,
+  readDisplayPreferences,
+  referenceRateDate,
+  setReferenceRates,
+} from './preferences.js';
 import {
   InitializeForm,
   CashForm,
@@ -39,8 +49,17 @@ import {
   BetForm,
   SettleForm,
 } from './forms.js';
-import { BetsPage, BetDetails, FinancePage, SettingsPage } from './pages.js';
+import {
+  BetsPage,
+  BetEditPage,
+  BetTrackBetDetailPage,
+  BetDetails,
+  FinancePage,
+  SettingsPage,
+  BetTrackSettingsPage,
+} from './pages.js';
 import { BetDrawer } from './bet-drawer.js';
+import { ticketSportLabel } from './sports.js';
 import { ImportsPage, ImportReview, UploadForm } from './imports.js';
 import { ImportBatchForm } from './import-batch.js';
 import { savePendingUpload } from './upload-storage.js';
@@ -52,11 +71,16 @@ import { OnboardingPage } from './onboarding.js';
 import { PolymarketGlobalPage, PolymarketTipsterPage } from './polymarket-global.js';
 import { PolymarketFavoritesPage } from './polymarket-favorites.js';
 import { PolymarketSimulationPage } from './polymarket-simulation.js';
+import { TelegramLinkPanel } from './telegram-link.js';
 import { NavGlyph, type NavIcon } from './nav-icons.js';
-import { SidebarFooter, TopBar } from './app-shell.js';
+import { BetTrackSidebar, TopBar } from './app-shell.js';
 import { readSidebarMode, writeSidebarMode, type SidebarMode } from './sidebar-mode.js';
+import { observeUiLanguage } from './ui-translation.js';
 import './product.css';
 const AnalyticsPage = lazy(() => import('./analytics.js'));
+const BetTrackAnalyticsPage = lazy(() =>
+  import('./analytics.js').then((module) => ({ default: module.BetTrackAnalyticsPage })),
+);
 
 export type Modal =
   | { kind: 'initialize' | 'freebet' | 'unit' | 'settings' | 'upload' | 'import-batch' }
@@ -69,9 +93,9 @@ export type Modal =
       amount?: string;
     }
   | { kind: 'catalog'; catalogKind: 'bookmaker' | 'tipster'; item?: CatalogItem }
-  | { kind: 'bet'; bet?: Bet }
+  | { kind: 'bet'; bet?: Bet; financialEditAllowed?: boolean }
   | { kind: 'detail'; id: string }
-  | { kind: 'settle'; bet: Bet }
+  | { kind: 'settle'; bet: Bet; outcome?: 'win' | 'loss' | 'void' | 'cashout' }
   | { kind: 'correction'; title: string; build: (reason: string, at: string) => CommandInput };
 export type OpenModal = (modal: Modal) => void;
 type Owner = { id: string; name: string };
@@ -82,8 +106,8 @@ type Owner = { id: string; name: string };
  * A lista abaixo e a constante precisam concordar; o teste
  * tests/unit/design-tokens.test.ts confere as duas.
  *
- * A categoria Polymarket tem telas de ranking global, Favoritos e Simulação.
- * `pm-telegram` permanece como destino reservado até a tela ser implementada.
+ * A categoria Polymarket tem telas de ranking global, Favoritos, Telegram e
+ * Simulação.
  * A rota antiga `#ranking` encaminha para o ranking global.
  *
  * A união é mantida CONTÍGUA, sem comentário no meio, porque o teste de
@@ -94,6 +118,8 @@ type Owner = { id: string; name: string };
 type Page =
   | 'overview'
   | 'bets'
+  | 'new-bet'
+  | 'hedge'
   | 'calendar'
   | 'analytics'
   | 'reports'
@@ -127,27 +153,6 @@ const navigation = [
      outra no fim da lista plana. */
 ] as const satisfies ReadonlyArray<{ id: Page; title: string; icon: NavIcon }>;
 
-/**
- * STK-F3-01 — as categorias da sidebar, na ordem da prova visual.
- *
- * `sidebarGroups` NÃO duplica os destinos: ele guarda o rótulo de cada
- * categoria e os IDS que a compõem, e a navegação continua sendo a
- * `navigation` acima — a lista plana é a que o teste de tokens lê e a que
- * `currentPage` resolve. Se as duas tivessem os títulos, uma delas
- * passaria a ser a verdade e a outra uma cópia.
- *
- * `pm-telegram` não entra em `sidebarGroups`: ele é renderizado como item
- * reservado dentro da categoria Polymarket. As telas disponíveis ficam
- * visíveis como destinos normais da navegação.
- */
-const sidebarGroups = [
-  { caption: 'PAINEL', ids: ['overview'] },
-  { caption: 'APOSTAS', ids: ['bets', 'calendar'] },
-  { caption: 'ANÁLISES', ids: ['analytics', 'reports'] },
-  { caption: 'BANCA', ids: ['finance'] },
-  { caption: 'POLYMARKET', ids: ['pm-favorites', 'pm-simulation'] },
-  { caption: 'CONTA', ids: ['profile', 'settings'] },
-] as const satisfies ReadonlyArray<{ caption: string; ids: ReadonlyArray<Page> }>;
 /**
  * STK-F2-12 — os MESMOS quatro destinos dentro do Mini App, sobre as mesmas
  * telas e os mesmos modais. O Telegram entrega um menu inferior, não uma
@@ -187,7 +192,7 @@ const polymarketItems = [
   // destino honesto para "ainda não existe".
   { id: 'pm-global', title: 'Ranking global', icon: 'global' },
   { id: 'pm-favorites', title: 'Favoritos', icon: 'favorite', count: true },
-  { id: 'pm-telegram', title: 'Telegram', icon: 'telegram', reserved: true },
+  { id: 'pm-telegram', title: 'Telegram', icon: 'telegram' },
   { id: 'pm-simulation', title: 'Simulação', icon: 'simulation' },
 ] as const satisfies ReadonlyArray<{
   id: Page;
@@ -210,7 +215,7 @@ const polymarketItems = [
  * "Visão geral" em silêncio. Um link guardado para o futuro que cai na tela
  * errada é pior que um 404 honesto.
  */
-const reservedPages = new Set<Page>(['pm-telegram']);
+const reservedPages = new Set<Page>();
 
 /**
  * STK-F3-01 — os rótulos de `h1` das rotas da categoria Polymarket.
@@ -223,6 +228,8 @@ const reservedPages = new Set<Page>(['pm-telegram']);
  * sair vazio. O nome ficou `pageTitles` porque ele serve às duas situações.
  */
 const pageTitles: Partial<Record<Page, { title: string }>> = {
+  'new-bet': { title: 'New Bet' },
+  hedge: { title: 'Hedge' },
   // `pm-global` deixou de ser reserva no STK-F3-04, e o `h1` da tela nova
   // continua precisando do rótulo.
   'pm-global': { title: 'Ranking global' },
@@ -272,99 +279,15 @@ function ReservedPage({ title }: { title: string }) {
   );
 }
 
-/**
- * STK-F3-01 — um destino do card cuja tela está FORA DE ESCOPO.
- *
- * Ele é um item VISÍVEL e DESLIGADO, não um link: existe para que a decisão
- * decisão do dono fique à vista sem prometer uma
- * tela que não existe. Um link que leva a lugar nenhum seria pior que
- * silencioso; um item cinza sem explicação seria pior que ausente.
- *
- * `aria-disabled` num elemento que não é interativo é inocuo aqui e é o que
- * a auditoria espera encontrar: o item não recebe foco, não é anunciável
- * como ação e o texto do motivo é lido no mesmo lugar.
- */
-function ReservedDestination({ icon, title }: { icon: NavIcon; title: string }) {
-  return (
-    <span className="sidebar-reserved" aria-disabled="true">
-      <span className="nav-icon">
-        <NavGlyph icon={icon} />
-      </span>
-      <span className="nav-label">{title}</span>
-      <span className="sidebar-reserved-note">EM BREVE</span>
-    </span>
-  );
-}
-
-/**
- * STK-F3-01 — a badge de contagem de Favoritos na sidebar.
- *
- * R2 vale aqui com força: dado ausente NÃO é zero. Enquanto a resposta não
- * chega — ou se a rota falha — a badge não é desenhada, e um `0` seria uma
- * afirmação de que a pessoa não tem favorito nenhum, que é o oposto de "não
- * sabemos". Quando aparece, é o número que o CONTRATO devolveu (`used`),
- * nunca um número escrito aqui.
- *
- * A consulta é a MESMA da tela de Favoritos (`queryKey` idêntica), então
- * favoritar em qualquer lugar já reflete na badge sem uma segunda chamada. E
- * ela roda mesmo fora da tela: uma badge que só existe quando a página está
- * aberta deixa de avisar a pessoa justamente quando ela está em outro lugar.
- */
-function FavoritesBadge() {
-  const favorites = useQuery({
-    queryKey: ['polymarket', 'favorites'],
-    queryFn: () =>
-      request(
-        '/api/v1/polymarket/favorites',
-        polymarketFavoritesResponseSchema,
-        {},
-        /* STK-F3-01 — `decorative: true` NÃO É AFORDAMENTO DE REDE: é
-           integridade da casca.
-
-           A rota responde 401 em qualquer produto sem o Polymarket
-           liberado, e `api.ts` transforma 401 em
-           `stakeframe:session-expired`, que em `App.tsx` faz
-           `removeQueries({ queryKey: ['product'] })` — desmonta o produto
-           inteiro e o reconstrói. A tela voltava a "Seu espaço" e o
-           navegador reclamava "element was detached from the DOM, retrying"
-           no clique da navegação: 45 testes de produto caíram de uma vez por
-           causa de uma badge decorativa.
-
-           O 401 dessa consulta não significa sessão perdida — significa que
-           este usuário não tem a feature. Tratar isso como sessão expirada
-           desligava a tela de quem estava lendo as apostas. */
-        { decorative: true },
-      ),
-    /* `placeholderData`, e NÃO `initialData`: o segundo CONGELA a chave com
-       o sentinela e adia a consulta até `staleTime`, o que fazia a badge
-       nunca aparecer. O primeiro não bloqueia nada — a consulta roda e o
-       sentinela só ocupa o lugar enquanto ela não volta. */
-    placeholderData: favoritesPending,
-    staleTime: 30_000,
-  });
-  // Os dois estados em que a badge NAO é desenhada: o sentinela de
-  // "ainda não buscou" e a ausência de dado (a consulta ainda não voltou,
-  // ou falhou). Nenhum dos dois vira um zero escrito à mão.
-  if (favorites.data === undefined || favorites.data === favoritesPending) return null;
-  return (
-    <span className="nav-count" aria-hidden="true">
-      {favorites.data.used}
-    </span>
-  );
-}
-
-/**
- * O estado de "a lista de favoritos ainda não foi buscada". Ele é um
- * SENTINELA e não um objeto com `used: 0`: um zero aqui seria uma
- * afirmação de que a pessoa não tem favorito nenhum, que é o oposto de
- * "não sabemos" — R2 vale para a badge como vale para o resto.
- */
-const favoritesPending = { favoritesPending: true } as unknown as PolymarketFavoritesResponse;
-
 function currentPage(): Page {
   const tipster = location.hash.match(/^#\/polymarket\/tipster\/(0x[a-f\d]{40})$/i);
   if (tipster) return 'pm-tipster';
-  const id = location.hash.slice(1);
+  const hash = location.hash.slice(1);
+  if (/^bets\/edit\/[0-9a-f-]{36}(?:\?.*)?$/i.test(hash)) return 'bets';
+  if (/^bets\/[0-9a-f-]{36}(?:\?.*)?$/i.test(hash)) return 'bets';
+  if (hash === 'bets/new' || hash.startsWith('bets/new?')) return 'new-bet';
+  const id = hash.split('?')[0] ?? '';
+  if (id === 'hedge') return 'hedge';
   // Link legado: leva à tela que agora concentra o ranking.
   if (id === 'ranking') return 'pm-global';
   if (id === 'imports') return 'imports';
@@ -387,8 +310,317 @@ function currentPage(): Page {
   // "Visão geral" em silêncio.
   return reservedPages.has(id as Page) ? (id as Page) : 'overview';
 }
+function currentBetEditId() {
+  return location.hash.match(/^#bets\/edit\/([0-9a-f-]{36})(?:\?.*)?$/i)?.[1] ?? '';
+}
+function currentBetDetailId() {
+  return location.hash.match(/^#bets\/([0-9a-f-]{36})(?:\?.*)?$/i)?.[1] ?? '';
+}
+function currentBetEditAmountMode(): 'money' | 'units' {
+  const mode = new URLSearchParams(location.hash.split('?')[1] ?? '').get('mode');
+  if (mode === 'money' || mode === 'units') return mode;
+  return window.sessionStorage.getItem('bettrack:bet-edit-amount-mode') === 'money'
+    ? 'money'
+    : 'units';
+}
 function currentTipsterWallet() {
   return location.hash.match(/^#\/polymarket\/tipster\/(0x[a-f\d]{40})$/i)?.[1] ?? '';
+}
+
+function NewBetPage({
+  workspace,
+  onStepChange,
+}: {
+  workspace: Workspace;
+  onStepChange: (step: number) => void;
+}) {
+  const params = new URLSearchParams(location.hash.split('?')[1] ?? '');
+  const initialStake = params.get('stake') ?? undefined;
+  const initialOdds = params.get('odds') ?? undefined;
+  const done = () => {
+    window.location.hash = '#bets';
+  };
+  return (
+    <section className="new-bet-reference-page">
+      <BetForm
+        workspace={workspace}
+        referenceLayout
+        onStepChange={onStepChange}
+        {...(initialStake ? { initialStake } : {})}
+        {...(initialOdds ? { initialOdds } : {})}
+        onDone={done}
+      />
+    </section>
+  );
+}
+
+function HedgePage({
+  workspace,
+  onStepChange,
+}: {
+  workspace: Workspace;
+  onStepChange: (step: number) => void;
+}) {
+  const requestedBetId = new URLSearchParams(location.hash.split('?')[1] ?? '').get('betId') ?? '';
+  const params = new URLSearchParams({ page: '1', pageSize: '100' }).toString();
+  const betsQuery = useQuery({
+    queryKey: ['product', 'bets', workspace.version, params],
+    queryFn: () => request(`/api/v1/bets?${params}`, betPageSchema),
+  });
+  const openBets = betsQuery.data?.items.filter((bet) => bet.state === 'open') ?? [];
+  const [selectedId, setSelectedId] = useState('');
+  const [inputMode, setInputMode] = useState<'existing' | 'manual'>('existing');
+  const [step, setStep] = useState(0);
+  const [stake, setStake] = useState('');
+  const [odds, setOdds] = useState('');
+  const [oppositeOdds, setOppositeOdds] = useState('');
+  const changeStep = (next: number) => {
+    setStep(next);
+    onStepChange(next);
+  };
+  useEffect(() => {
+    if (selectedId || !openBets.length) return;
+    const first = openBets.find((bet) => bet.id === requestedBetId) ?? openBets[0];
+    if (!first) return;
+    setSelectedId(first.id);
+    setStake(first.stake ?? '');
+    setOdds(first.odds ?? '');
+  }, [openBets, requestedBetId, selectedId]);
+  const selected = openBets.find((bet) => bet.id === selectedId);
+  const toNumber = (value: string) => Number(value.replace(',', '.'));
+  const originalStake = toNumber(
+    inputMode === 'existing' && selected ? (selected.stake ?? '') : stake,
+  );
+  const originalOdds = toNumber(
+    inputMode === 'existing' && selected ? (selected.odds ?? '') : odds,
+  );
+  const otherOdds = toNumber(oppositeOdds);
+  const hedgeStake =
+    originalStake > 0 && originalOdds > 1 && otherOdds > 1
+      ? (originalStake * originalOdds) / otherOdds
+      : 0;
+  const guaranteed = hedgeStake > 0 ? hedgeStake * (otherOdds - 1) - originalStake : 0;
+  const canCalculate = originalStake > 0 && originalOdds > 1 && otherOdds > 1;
+  const updateBet = (id: string) => {
+    setSelectedId(id);
+    const bet = openBets.find((item) => item.id === id);
+    if (bet) {
+      setStake(bet.stake ?? '');
+      setOdds(bet.odds ?? '');
+    }
+  };
+  const logHedge = () => {
+    const query = new URLSearchParams({ stake: hedgeStake.toFixed(2), odds: oppositeOdds });
+    window.location.hash = `#bets/new?${query.toString()}`;
+  };
+  const selection = selected?.selections[0];
+  const sourceStake = inputMode === 'existing' && selected ? (selected.stake ?? '') : stake;
+  const sourceOdds = inputMode === 'existing' && selected ? (selected.odds ?? '') : odds;
+  const canStart = inputMode === 'existing' ? !!selected : originalStake > 0 && originalOdds > 1;
+  return (
+    <section className="hedge-reference-page">
+      <div className="hedge-reference-progress" aria-label="Hedge calculator steps">
+        {['START', 'ODDS', 'DECIDE'].map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            className={index === step ? 'is-current' : index < step ? 'is-complete' : ''}
+            onClick={() => index < step && changeStep(index)}
+          >
+            <span>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="hedge-reference-layout">
+        <div className="hedge-reference-main">
+          {step === 0 ? (
+            <>
+              <h2>What are we calculating on?</h2>
+              <p>
+                You can start from a bet you already logged, or just run the numbers without logging
+                anything.
+              </p>
+              <div className="hedge-reference-grid">
+                <button
+                  type="button"
+                  className={`hedge-reference-card hedge-mode-card${inputMode === 'existing' ? ' is-selected' : ''}`}
+                  onClick={() => setInputMode('existing')}
+                >
+                  <strong>ONE OF MY BETS</strong>
+                  <small>{openBets.length} OPEN</small>
+                  <span>
+                    It brings the bet's odds and amount, and at the end it can log the hedge next to
+                    it.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`hedge-reference-card hedge-mode-card${inputMode === 'manual' ? ' is-selected' : ''}`}
+                  onClick={() => setInputMode('manual')}
+                >
+                  <strong>NUMBERS ONLY</strong>
+                  <small>LOGS NOTHING</small>
+                  <span>
+                    You type the odds and amount by hand. Good for testing the water before betting,
+                    or for a bet that isn't in the app.
+                  </span>
+                </button>
+              </div>
+              {inputMode === 'existing' ? (
+                <div className="hedge-pick-list">
+                  <span className="hedge-reference-kicker">PICK WHICH ONE</span>
+                  {openBets.length ? (
+                    openBets.map((bet) => (
+                      <button
+                        key={bet.id}
+                        type="button"
+                        className={`hedge-pick-row${selectedId === bet.id ? ' is-selected' : ''}`}
+                        onClick={() => updateBet(bet.id)}
+                      >
+                        <b>{bet.selections[0]?.sport?.slice(0, 3).toUpperCase() || 'OTH'}</b>
+                        <span>
+                          <strong>{bet.selections[0]?.selection || 'Untitled bet'}</strong>
+                          <small>
+                            {bet.selections[0]?.event || bet.reference || 'Open ticket'}
+                          </small>
+                        </span>
+                        <em>
+                          {formatDisplayOdds(bet.odds)}
+                          <small>{formatDisplayMoney(bet.stake ?? '0.00')}</small>
+                        </em>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="hedge-empty">
+                      No open bets yet. Use Numbers only to calculate by hand.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="hedge-reference-pair hedge-manual-fields">
+                  <label className="hedge-field">
+                    <span>AMOUNT</span>
+                    <input
+                      inputMode="decimal"
+                      value={stake}
+                      onChange={(event) => setStake(event.target.value)}
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label className="hedge-field">
+                    <span>YOUR ODDS</span>
+                    <input
+                      inputMode="decimal"
+                      value={odds}
+                      onChange={(event) => setOdds(event.target.value)}
+                      placeholder="2.00"
+                    />
+                  </label>
+                </div>
+              )}
+            </>
+          ) : step === 1 ? (
+            <section className="hedge-reference-card hedge-odds-card">
+              <h2>What are the odds on the other side?</h2>
+              <p>Enter the decimal odds for the opposite outcome.</p>
+              <label className="hedge-field">
+                <span>OPPOSITE ODDS</span>
+                <input
+                  autoFocus
+                  inputMode="decimal"
+                  value={oppositeOdds}
+                  onChange={(event) => setOppositeOdds(event.target.value)}
+                  placeholder="2.00"
+                />
+              </label>
+              {!canCalculate && oppositeOdds ? (
+                <p className="hedge-validation">Use odds above 1.00 and an amount above zero.</p>
+              ) : null}
+            </section>
+          ) : (
+            <section className="hedge-reference-card hedge-result-card">
+              <span className="hedge-reference-kicker">THE TWO SIDES TOGETHER</span>
+              <h2>
+                {guaranteed >= 0 ? 'HEDGING LEAVES YOU' : 'HEDGING COSTS YOU'}{' '}
+                {formatDisplayMoney(Math.abs(guaranteed).toFixed(2))} GUARANTEED
+              </h2>
+              <p>
+                Stake {formatDisplayMoney(hedgeStake.toFixed(2))} on the opposite side. The estimate
+                uses the odds and amount you entered.
+              </p>
+              <dl>
+                <div>
+                  <dt>HEDGE STAKE</dt>
+                  <dd>{formatDisplayMoney(hedgeStake.toFixed(2))}</dd>
+                </div>
+                <div>
+                  <dt>GUARANTEED RESULT</dt>
+                  <dd>
+                    {guaranteed >= 0 ? '+' : '−'}
+                    {formatDisplayMoney(Math.abs(guaranteed).toFixed(2))}
+                  </dd>
+                </div>
+              </dl>
+              <button type="button" className="hedge-log-button" onClick={logHedge}>
+                LOG THE HEDGE
+              </button>
+            </section>
+          )}
+          <div className="hedge-reference-actions">
+            {step > 0 ? (
+              <button type="button" onClick={() => changeStep(Math.max(0, step - 1))}>
+                BACK
+              </button>
+            ) : null}
+            {step < 2 ? (
+              <button
+                type="button"
+                disabled={step === 0 ? !canStart : !canCalculate}
+                onClick={() => changeStep(Math.min(2, step + 1))}
+              >
+                CONTINUE
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <aside className="hedge-reference-preview">
+          <span className="hedge-reference-kicker">THE ONE YOU'RE HEDGING</span>
+          <div className="hedge-preview-card">
+            <strong>
+              {selection?.sport?.slice(0, 3).toUpperCase() ||
+                (inputMode === 'manual' ? 'MANUAL' : '—')}
+            </strong>
+            <h3>
+              {selection?.selection ||
+                (inputMode === 'manual' ? 'Your selection' : 'Choose an open bet')}
+            </h3>
+            <p>
+              {selection?.event || (inputMode === 'manual' ? 'Numbers only' : 'Your logged ticket')}
+            </p>
+            <dl>
+              <div>
+                <dt>ODDS</dt>
+                <dd>{formatDisplayOdds(sourceOdds)}</dd>
+              </div>
+              <div>
+                <dt>AMOUNT</dt>
+                <dd>{sourceStake ? formatDisplayMoney(sourceStake) : '—'}</dd>
+              </div>
+              <div>
+                <dt>IF IT WINS ALONE</dt>
+                <dd>
+                  {originalStake > 0 && originalOdds > 1
+                    ? formatDisplayMoney((originalStake * (originalOdds - 1)).toFixed(2))
+                    : '—'}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
 }
 
 export function ProductApp({
@@ -445,8 +677,13 @@ function ProductShell({
 }) {
   const releaseLabel = release && release.version !== 'unversioned' ? ` · v${release.version}` : '';
   const [page, setPage] = useState(currentPage);
+  const [betEditId, setBetEditId] = useState(currentBetEditId);
+  const [betDetailId, setBetDetailId] = useState(currentBetDetailId);
+  const [betEditAmountMode, setBetEditAmountMode] = useState(currentBetEditAmountMode);
+  const [flowStep, setFlowStep] = useState(0);
   const [tipsterWallet, setTipsterWallet] = useState(currentTipsterWallet);
   const [modal, setModal] = useState<Modal | null>(null);
+  const [, setPreferencesRevision] = useState(0);
   // STK-F3-01 — o modo da sidebar é estado do CASCA, não do conteúdo: sobrevive
   // à troca de página e é lido do storage uma vez, na montagem. A leitura é
   // preguiçosa de propósito — o valor inicial só importa na primeira
@@ -455,6 +692,32 @@ function ProductShell({
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() =>
     readSidebarMode(typeof window === 'undefined' ? null : window.localStorage),
   );
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    return observeUiLanguage(document.body);
+  }, []);
+  useEffect(() => setMobileNavOpen(false), [page]);
+  const referenceRates = useQuery({
+    queryKey: ['product', 'display-currency-rates', 'BRL'],
+    queryFn: fetchReferenceRates,
+    staleTime: 12 * 60 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+  useEffect(() => {
+    setReferenceRates(referenceRates.data ?? null);
+    setPreferencesRevision((revision) => revision + 1);
+  }, [referenceRates.data]);
+  useEffect(() => {
+    const applyPreferences = () => {
+      const preferences = readDisplayPreferences();
+      document.documentElement.lang = preferences.language;
+      setPreferencesRevision((revision) => revision + 1);
+    };
+    applyPreferences();
+    window.addEventListener('bettrack:preferences', applyPreferences);
+    return () => window.removeEventListener('bettrack:preferences', applyPreferences);
+  }, []);
   const actions = useFinanceActions();
   const client = useQueryClient();
   const onboarding = useQuery({
@@ -462,6 +725,28 @@ function ProductShell({
     queryFn: () => request('/api/v1/onboarding', onboardingStatusSchema),
     refetchInterval: 30_000,
   });
+  const dashboardToday = saoPauloDate(new Date());
+  const dashboardMonth = dashboardToday.slice(0, 7);
+  const dashboardBetsParams = new URLSearchParams({ page: '1', pageSize: '100' }).toString();
+  const dashboardBets = useQuery({
+    queryKey: ['product', 'bets', workspace.version, dashboardBetsParams],
+    queryFn: () => request(`/api/v1/bets?${dashboardBetsParams}`, betPageSchema),
+    enabled: variant === 'web' && (page === 'overview' || page === 'analytics'),
+  });
+  const dashboardReport = useQuery({
+    queryKey: ['product', 'overview-report', dashboardMonth, workspace.version],
+    queryFn: () =>
+      request(`/api/v1/reports?from=${dashboardMonth}-01&to=${dashboardToday}`, reportSchema),
+    enabled: variant === 'web' && (page === 'overview' || page === 'analytics'),
+  });
+  const [dashboardMode, setDashboardMode] = useState<'money' | 'units'>(() =>
+    new URLSearchParams(window.location.search).get('mode') === 'units' ? 'units' : 'money',
+  );
+  const [hideDashboardAmounts, setHideDashboardAmounts] = useState(false);
+  const dashboardOpenCount = dashboardBets.data?.items.filter((bet) => bet.state === 'open').length;
+  const dashboardSettledToday = dashboardReport.data?.timeline.find(
+    (bucket) => bucket.date === dashboardToday,
+  )?.metrics.settledBets;
   // First login lands on the first-steps flow; the server state decides, and finishing it
   // (or having it already finished) restores the regular overview. A failed lookup never
   // counts as completed — the page itself surfaces the error with a retry affordance.
@@ -479,7 +764,11 @@ function ProductShell({
   useEffect(() => {
     const changed = () => {
       setPage(currentPage());
+      setBetEditId(currentBetEditId());
+      setBetDetailId(currentBetDetailId());
+      setBetEditAmountMode(currentBetEditAmountMode());
       setTipsterWallet(currentTipsterWallet());
+      setFlowStep(0);
     };
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
@@ -494,6 +783,8 @@ function ProductShell({
     setSensitiveSurface(
       'product-app',
       page === 'bets' ||
+        page === 'new-bet' ||
+        page === 'hedge' ||
         page === 'finance' ||
         page === 'reports' ||
         page === 'analytics' ||
@@ -516,6 +807,15 @@ function ProductShell({
     identifyOwner(owner.id);
   }, [owner.id]);
   const open: OpenModal = (value) => {
+    if (variant === 'web' && value.kind === 'bet' && !value.bet) {
+      window.location.hash = '#bets/new';
+      return;
+    }
+    if (variant === 'web' && value.kind === 'detail') {
+      window.location.hash = `#bets/${value.id}`;
+      window.scrollTo(0, 0);
+      return;
+    }
     actions.clearError();
     setModal(value);
   };
@@ -534,7 +834,7 @@ function ProductShell({
   const shellClass =
     variant === 'mini'
       ? 'product-shell miniapp-shell'
-      : `product-shell product-web-theme sidebar-mode-${sidebarMode}`;
+      : `product-shell product-web-theme bettrack-theme sidebar-mode-${sidebarMode}`;
   return (
     <div className={shellClass}>
       {/*
@@ -549,11 +849,16 @@ function ProductShell({
       </a>
       {variant === 'web' ? (
         <TopBar
+          brand="bettrack"
           collapsed={sidebarMode === 'collapsed'}
+          mobileNavOpen={mobileNavOpen}
+          onToggleMobileNav={() => setMobileNavOpen((open) => !open)}
           ownerName={owner.name}
           signingOut={logout.isPending}
           newBetDisabled={!workspace.initialized || !!actions.pending}
-          onNewBet={() => open({ kind: 'bet' })}
+          onNewBet={() => {
+            window.location.hash = '#bets/new';
+          }}
           onSignOut={() => logout.mutate()}
           onToggleSidebar={() => {
             const next: SidebarMode = sidebarMode === 'collapsed' ? 'expanded' : 'collapsed';
@@ -563,74 +868,16 @@ function ProductShell({
         />
       ) : null}
       {variant === 'web' ? (
-        <aside className="product-sidebar" data-mode={sidebarMode}>
-          <a href="#overview" className="product-brand">
-            stakeframe<span>.</span>
-          </a>
-          {/* Hardening: o CTA "+ Nova aposta" da sidebar saiu — o cabeçalho já
-              tem o botão, e dois controles com o mesmo nome acessível quebram o
-              alvo (strict mode do Playwright) e confundem quem usa leitor de tela. */}
-          {/* STK-F3-01 — a sidebar tem UM `nav` só, com as categorias
-              dentro dele. Não são quatro `nav`: os quatro seriam quatro listas
-              de mesmo peso para o leitor de tela, e a barra inferior do mobile
-              (que é este mesmo `nav`) precisa de UM elemento com a grade
-              explícita que o teste de navegador mede. As categorias são
-              `<section>` com `aria-label`, não navegação — elas não mudam de
-              contexto, só seccionam. */}
-          <nav aria-label="Navegação principal">
-            {sidebarGroups.map((group) => (
-              <section className="sidebar-group" key={group.caption} aria-label={group.caption}>
-                <p className="sidebar-caption">{group.caption}</p>
-                {/* STK-F3-01 — a categoria Polymarket é a única que NÃO é uma
-                    lista de ids. Ranking global, Favoritos e Simulação têm
-                    telas; Telegram fica reservado. A ordem é a do card —
-                    Ranking global, Favoritos, Telegram, Simulação
-                    — e a lista `polymarketItems` é a que a garante; deixá-la
-                    espalhada por condicionais dentro do mapa era a forma de a
-                    ordem depender de onde alguém-editaria o arquivo. */}
-                {group.caption === 'POLYMARKET'
-                  ? polymarketItems.map((entry) =>
-                      'reserved' in entry ? (
-                        <ReservedDestination key={entry.id} icon={entry.icon} title={entry.title} />
-                      ) : (
-                        <a
-                          key={entry.id}
-                          href={`#${entry.id}`}
-                          aria-current={
-                            page === entry.id || (entry.id === 'pm-global' && page === 'pm-tipster')
-                              ? 'page'
-                              : undefined
-                          }
-                        >
-                          <span className="nav-icon">
-                            <NavGlyph icon={entry.icon} />
-                          </span>
-                          <span className="nav-label">{entry.title}</span>
-                          {'count' in entry ? <FavoritesBadge /> : null}
-                        </a>
-                      ),
-                    )
-                  : group.ids.map((id) => {
-                      const item = navigation.find((entry) => entry.id === id)!;
-                      return (
-                        <a
-                          key={item.id}
-                          href={`#${item.id}`}
-                          aria-current={page === item.id ? 'page' : undefined}
-                        >
-                          <span className="nav-icon">
-                            <NavGlyph icon={item.icon} />
-                          </span>
-                          <span className="nav-label">{item.title}</span>
-                          {'count' in item ? <FavoritesBadge /> : null}
-                        </a>
-                      );
-                    })}
-              </section>
-            ))}
-          </nav>
-          <SidebarFooter mode={sidebarMode} onChange={setSidebarMode} />
-        </aside>
+        <BetTrackSidebar
+          page={page}
+          workspace={workspace}
+          disabled={!workspace.initialized || !!actions.pending}
+          mobileOpen={mobileNavOpen}
+          onNavigate={() => setMobileNavOpen(false)}
+          onNewBet={() => {
+            window.location.hash = '#bets/new';
+          }}
+        />
       ) : null}
       <div className="product-content">
         <header className="product-topbar">
@@ -662,42 +909,104 @@ function ProductShell({
             ) : null}
           </div>
         </header>
-        <main className="product-main" id="product-main" tabIndex={-1}>
+        <main
+          className={`product-main bettrack-page-${page}${betEditId ? ' bettrack-ticket-edit-page' : ''}${betDetailId ? ' bettrack-ticket-detail-route' : ''}`}
+          id="product-main"
+          tabIndex={-1}
+        >
           <div
-            className={`page-heading${page === 'bets' ? ' bets-page-heading' : ''}${page === 'finance' ? ' finance-page-heading' : ''}`}
+            className={`page-heading${page === 'bets' ? ' bets-page-heading' : ''}${page === 'finance' ? ' finance-page-heading' : ''}${page === 'analytics' ? ' analytics-page-heading' : ''}${page === 'settings' ? ' settings-page-heading' : ''}${page === 'new-bet' ? ' new-bet-page-heading' : ''}${page === 'hedge' ? ' hedge-page-heading' : ''}`}
           >
             <div>
               <p className={`product-eyebrow${page === 'overview' ? ' dashboard-date' : ''}`}>
-                STAKEFRAME /{' '}
-                {new Intl.DateTimeFormat('pt-BR', {
-                  timeZone: 'America/Sao_Paulo',
-                  month: 'long',
-                  year: 'numeric',
-                }).format(new Date())}
+                {page === 'new-bet' && variant === 'web'
+                  ? `STEP ${flowStep + 1} OF 3 · ${['BET TYPE', 'DETAILS', 'AMOUNT AND SOURCE'][flowStep] ?? 'BET TYPE'}`
+                  : page === 'hedge' && variant === 'web'
+                    ? `STEP ${flowStep + 1} OF 3 · ${['WHERE WE START', 'THE OTHER ODDS', 'THE DECISION'][flowStep] ?? 'WHERE WE START'}`
+                    : page === 'analytics' && variant === 'web'
+                      ? `${dashboardReport.data?.metrics.settledBets ?? '—'} SETTLED BETS · SINCE ${formatDisplayDate(dashboardReport.data?.timeline.find((bucket) => bucket.metrics.settledBets > 0)?.date ?? dashboardToday, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}`
+                      : page === 'settings' && variant === 'web'
+                        ? 'HOW THE APP BEHAVES WITH YOU'
+                        : page === 'overview' && variant === 'web'
+                          ? `TODAY · ${dashboardOpenCount ?? '—'} OPEN · ${dashboardSettledToday === undefined ? 'LOADING RESULTS' : dashboardSettledToday === 0 ? 'NONE SETTLED THAT DAY' : `${dashboardSettledToday} SETTLED TODAY`}`
+                          : `STAKEFRAME / ${formatDisplayDate(new Date().toISOString(), { month: 'long', year: 'numeric' })}`}
               </p>
               <h1>
-                {page === 'overview' && !onboardingActive
-                  ? variant === 'mini'
-                    ? 'Painel'
-                    : 'Dashboard'
-                  : onboardingActive
-                    ? 'Primeiros passos'
-                    : page === 'imports'
-                      ? 'Recebimentos técnicos'
-                      : // STK-F3-01: uma rota da categoria Polymarket não tem item
-                        // em `navigation` (ela vive em `polymarketItems`, para
-                        // não aparecer duas vezes), então o título vem de
-                        // `pageTitles` — e, no caso de uma rota RESERVADA, a
-                        // página logo abaixo diz que ela ainda não existe. Um
-                        // `!` aqui derrubaria a tela inteira para quem abrir um
-                        // link guardado para o futuro, e um `?? ''` mostraria
-                        // um `h1` vazio numa tela que existe.
-                        (items.find((item) => item.id === page) ?? pageTitles[page as Page])?.title}
+                {onboardingActive
+                  ? 'Primeiros passos'
+                  : variant === 'web'
+                    ? {
+                        overview: 'DASHBOARD',
+                        bets: 'BETS',
+                        'new-bet': 'NEW BET',
+                        hedge: 'HEDGE A BET',
+                        finance: 'BANKROLL',
+                        analytics: 'ANALYTICS',
+                        settings: 'SETTINGS',
+                        profile: 'PROFILE',
+                        calendar: 'CALENDAR',
+                        reports: 'REPORTS',
+                        imports: 'INBOX',
+                        'pm-global': 'GLOBAL RANKING',
+                        'pm-favorites': 'FAVORITES',
+                        'pm-telegram': 'TELEGRAM',
+                        'pm-simulation': 'SIMULATION',
+                        'pm-tipster': 'TIPSTER',
+                      }[page]
+                    : page === 'overview'
+                      ? 'Painel'
+                      : page === 'imports'
+                        ? 'Recebimentos técnicos'
+                        : (items.find((item) => item.id === page) ?? pageTitles[page as Page])
+                            ?.title}
               </h1>
             </div>
-            <span className={`live-label${page === 'overview' ? ' dashboard-live-label' : ''}`}>
-              <span className="private-dot" /> Registros pessoais
-            </span>
+            {page === 'overview' && variant === 'web' ? (
+              <div className="bettrack-dashboard-actions" aria-label="Dashboard display options">
+                <button
+                  type="button"
+                  className="bets-visibility-toggle"
+                  aria-label={hideDashboardAmounts ? 'Show amounts' : 'Hide amounts'}
+                  aria-pressed={hideDashboardAmounts}
+                  onClick={() => setHideDashboardAmounts((hidden) => !hidden)}
+                >
+                  <span aria-hidden="true">◉</span>
+                </button>
+                <div className="bets-mode-toggle" role="group" aria-label="Show in money or units">
+                  <button
+                    type="button"
+                    className={dashboardMode === 'money' ? 'is-active' : ''}
+                    aria-pressed={dashboardMode === 'money'}
+                    onClick={() => setDashboardMode('money')}
+                  >
+                    $
+                  </button>
+                  <button
+                    type="button"
+                    className={dashboardMode === 'units' ? 'is-active' : ''}
+                    aria-pressed={dashboardMode === 'units'}
+                    onClick={() => setDashboardMode('units')}
+                  >
+                    U
+                  </button>
+                </div>
+              </div>
+            ) : page === 'new-bet' && variant === 'web' ? (
+              <button
+                type="button"
+                className="bettrack-page-close"
+                aria-label="Close"
+                onClick={() => {
+                  window.location.hash = '#bets';
+                }}
+              >
+                ×
+              </button>
+            ) : (
+              <span className="live-label">
+                <span className="private-dot" /> Personal records
+              </span>
+            )}
           </div>
           {logout.isError ? (
             <p role="alert" className="notice warning">
@@ -705,6 +1014,18 @@ function ProductShell({
             </p>
           ) : null}
           <PendingOperation />
+          {variant === 'web' && page === 'hedge' ? (
+            <button
+              type="button"
+              className="bettrack-page-close"
+              aria-label="Close"
+              onClick={() => {
+                window.location.hash = '#bets';
+              }}
+            >
+              ×
+            </button>
+          ) : null}
           {workspace.warnings.map((warning) => (
             <div key={warning} role="status" className="notice warning">
               {warning === 'NEGATIVE_BALANCE'
@@ -727,9 +1048,30 @@ function ProductShell({
           {onboardingActive ? (
             <OnboardingPage workspace={workspace} open={open} />
           ) : page === 'overview' ? (
-            <Overview workspace={workspace} open={open} owner={owner.id} />
+            <Overview
+              workspace={workspace}
+              open={open}
+              amountMode={dashboardMode}
+              hideAmounts={hideDashboardAmounts}
+              openBetCount={dashboardOpenCount}
+            />
           ) : page === 'bets' ? (
-            <BetsPage workspace={workspace} open={open} owner={owner.id} />
+            betEditId ? (
+              <BetEditPage id={betEditId} workspace={workspace} amountMode={betEditAmountMode} />
+            ) : betDetailId ? (
+              <BetTrackBetDetailPage
+                id={betDetailId}
+                workspace={workspace}
+                amountMode={betEditAmountMode}
+                open={open}
+              />
+            ) : (
+              <BetsPage workspace={workspace} open={open} owner={owner.id} />
+            )
+          ) : page === 'new-bet' ? (
+            <NewBetPage workspace={workspace} onStepChange={setFlowStep} />
+          ) : page === 'hedge' ? (
+            <HedgePage workspace={workspace} onStepChange={setFlowStep} />
           ) : page === 'finance' ? (
             <FinancePage workspace={workspace} open={open} />
           ) : page === 'imports' ? (
@@ -738,7 +1080,11 @@ function ProductShell({
             <CalendarPage workspace={workspace} open={open} />
           ) : page === 'analytics' ? (
             <Suspense fallback={<p role="status">Carregando análises…</p>}>
-              <AnalyticsPage workspace={workspace} open={open} />
+              {variant === 'web' ? (
+                <BetTrackAnalyticsPage workspace={workspace} />
+              ) : (
+                <AnalyticsPage workspace={workspace} open={open} />
+              )}
             </Suspense>
           ) : page === 'pm-favorites' ? (
             // STK-F3-01: Favoritos deixa de ser SEÇÃO do ranking e vira
@@ -772,10 +1118,11 @@ function ProductShell({
             // ranking: é dado público, idêntico para qualquer conta, e ligar
             // a lista a um tenant abriria espaço para impersonação.
             //
-            // A integração está PENDENTE (gate F2-18 não autorizado) e a
-            // tela usa os dados locais de `polymarket-global-data.ts`, que
-            // passam pelo mesmo contrato que um payload real passaria.
+            // A página consulta a série autenticada do backend. Sem ingestão,
+            // a própria tela informa que o leaderboard ainda não está disponível.
             <PolymarketGlobalPage />
+          ) : page === 'pm-telegram' ? (
+            <TelegramLinkPanel />
           ) : reservedPages.has(page) ? (
             <ReservedPage title={pageTitles[page as Page]!.title} />
           ) : page === 'reports' ? (
@@ -790,13 +1137,26 @@ function ProductShell({
               signingOut={logout.isPending}
               onSignOut={() => logout.mutate()}
             />
+          ) : variant === 'web' ? (
+            <BetTrackSettingsPage workspace={workspace} open={open} />
           ) : (
             <SettingsPage workspace={workspace} open={open} />
           )}
         </main>
         <div className="product-footer">
           Seus movimentos, com contexto.
-          <span>BRL · America/Sao_Paulo{releaseLabel}</span>
+          <span>
+            {(() => {
+              const preferences = readDisplayPreferences();
+              const currencyLabel =
+                preferences.currency === 'BRL'
+                  ? 'BRL'
+                  : displayCurrencyReady()
+                    ? `≈${preferences.currency} · ${referenceRateDate()}`
+                    : `BRL · ${preferences.currency} rate unavailable`;
+              return `${currencyLabel} · ${preferences.timezone}${releaseLabel}`;
+            })()}
+          </span>
         </div>
       </div>
       {variant === 'mini' ? (
@@ -894,7 +1254,7 @@ function ProfilePage({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+  const timezone = displayTimeZone();
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = displayName.trim();
@@ -1088,15 +1448,19 @@ function ProfilePage({
 function Overview({
   workspace,
   open,
-  owner,
+  amountMode,
+  hideAmounts,
+  openBetCount,
 }: {
   workspace: Workspace;
   open: OpenModal;
-  owner: string;
+  amountMode: 'money' | 'units';
+  hideAmounts: boolean;
+  openBetCount: number | undefined;
 }) {
-  const unit = workspace.units.find(
-    (value) => value.month === saoPauloDate(new Date()).slice(0, 7),
-  );
+  const today = saoPauloDate(new Date());
+  const [selectedDate, setSelectedDate] = useState(today);
+  const unit = workspace.units.find((value) => value.month === today.slice(0, 7));
   return (
     <>
       {/* STK-F2-18 (Fase 4): as 4 métricas de POSIÇÃO. Saldo, disponível e
@@ -1107,58 +1471,141 @@ function Overview({
       <div className="metric-grid">
         <Metric
           label="Saldo em conta"
-          value={formatBRL(workspace.bankroll)}
+          value={formatDisplayMoney(workspace.bankroll)}
           detail="Reserva e saldo somados nas casas"
           featured
         />
         <Metric
           label="Disponível para apostar"
-          value={formatBRL(workspace.available)}
+          value={formatDisplayMoney(workspace.available)}
           detail="Saldo menos o que está em jogo"
         />
         <Metric
           label="Exposição em aberto"
-          value={formatBRL(workspace.exposure)}
+          value={formatDisplayMoney(workspace.exposure)}
           detail="Principal real ainda no jogo"
           commitment
         />
         <Metric
           label="Unidade do mês"
-          value={unit ? formatBRL(unit.amount) : 'A conferir'}
+          value={unit ? formatDisplayMoney(unit.amount) : 'A conferir'}
           detail={unit ? 'Valor congelado durante o mês' : 'Cadastre os saldos para começar'}
         />
       </div>
-      <OverviewReport version={workspace.version} workspace={workspace} />
-      <div className="panel overview-accounts">
-        <div className="section-heading">
-          <div>
-            <h2>Onde está sua banca</h2>
-            <p>Saldo disponível por conta</p>
-          </div>
-          <a className="text-link" href="#finance">
-            Ver movimentações
-          </a>
-        </div>
-        <div className="account-grid">
-          {workspace.accounts.map((account) => (
-            <div className="account-card" key={account.id}>
-              <span className="account-icon" aria-hidden="true">
-                {account.kind === 'reserve' ? 'R$' : account.name.trim().charAt(0).toUpperCase()}
-              </span>
-              <div>
-                <span>{account.name}</span>
-                <strong className={account.balance.startsWith('-') ? 'negative' : ''}>
-                  {formatBRL(account.balance)}
-                </strong>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <BetsPage workspace={workspace} open={open} owner={owner} compact />
+      <OverviewReport
+        version={workspace.version}
+        workspace={workspace}
+        amountMode={amountMode}
+        hideAmounts={hideAmounts}
+        openBetCount={openBetCount}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
+      <BetTrackDashboardBottom workspace={workspace} open={open} selectedDate={selectedDate} />
     </>
   );
 }
+
+function BetTrackDashboardBottom({
+  workspace,
+  open,
+  selectedDate,
+}: {
+  workspace: Workspace;
+  open: OpenModal;
+  selectedDate: string;
+}) {
+  const params = new URLSearchParams({ page: '1', pageSize: '100' }).toString();
+  const query = useQuery({
+    queryKey: ['product', 'bets', workspace.version, params],
+    queryFn: () => request(`/api/v1/bets?${params}`, betPageSchema),
+  });
+  const rows = query.data?.items ?? [];
+  const openBets = rows.filter((bet) => bet.state === 'open');
+  const todayBets = rows.filter((bet) =>
+    bet.selections.some((selection) => {
+      if (selection.eventAt) return saoPauloDate(new Date(selection.eventAt)) === selectedDate;
+      return selection.dateStatus === 'confirmed' && selection.eventDate === selectedDate;
+    }),
+  );
+  const sportCounts = new Map<string, number>();
+  for (const bet of todayBets) {
+    const sport = bet.selections[0]?.sport?.toUpperCase() || 'OTHER';
+    sportCounts.set(sport, (sportCounts.get(sport) ?? 0) + 1);
+  }
+  return (
+    <div className="bettrack-dashboard-bottom">
+      <section className="bettrack-dashboard-widget">
+        <header>
+          <div>
+            <h2>Open bets</h2>
+            <span>{openBets.length} to settle</span>
+          </div>
+          <a href="#bets">VIEW ALL</a>
+        </header>
+        {openBets.length ? (
+          <div className="bettrack-open-bet-list">
+            {openBets.slice(0, 5).map((bet) => (
+              <a href={`#bets/${bet.id}`} key={bet.id} className="bettrack-open-bet-row">
+                <strong>
+                  {bet.ticketKind === 'simple'
+                    ? ticketSportLabel(bet.selections[0]?.sport ?? null)
+                    : 'MULTI'}
+                </strong>
+                <span>
+                  <b>{bet.selections[0]?.selection || bet.reference || 'Untitled bet'}</b>
+                  <small>{bet.selections[0]?.event || bet.bookmakerId}</small>
+                </span>
+                <em>{formatDisplayMoney(bet.stake ?? '0')}</em>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="bettrack-dashboard-empty">
+            <h3>NO OPEN BETS</h3>
+            <p>Open tickets appear here until they are settled.</p>
+          </div>
+        )}
+      </section>
+      <section className="bettrack-dashboard-widget">
+        <header>
+          <div>
+            <h2>Breakdown</h2>
+            <span>
+              {selectedDate === saoPauloDate(new Date()) ? 'Today' : selectedDate} · by sport
+            </span>
+          </div>
+          <button type="button" aria-label="Change breakdown">
+            •••
+          </button>
+        </header>
+        {sportCounts.size ? (
+          <div className="bettrack-breakdown-list">
+            {[...sportCounts].map(([sport, count]) => (
+              <div key={sport}>
+                <span>{sport}</span>
+                <strong>
+                  {count} BET{count === 1 ? '' : 'S'}
+                </strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bettrack-dashboard-empty">
+            <h3>NO BETS THAT DAY</h3>
+            <p>
+              Once there are bets on this date, this shows how the stake splits by type or sport.
+            </p>
+            <Button variant="secondary" onClick={() => open({ kind: 'bet' })}>
+              LOG ONE
+            </Button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function Metric({
   label,
   value,
@@ -1246,9 +1693,20 @@ function ModalContent({
       );
       break;
     case 'bet':
-      title = modal.bet ? 'Corrigir dados da aposta' : 'Nova aposta';
+      title = modal.bet ? 'Edit bet' : 'Nova aposta';
       content = (
-        <BetForm workspace={workspace} {...(modal.bet ? { bet: modal.bet } : {})} onDone={close} />
+        <BetForm
+          workspace={workspace}
+          {...(modal.bet
+            ? {
+                bet: modal.bet,
+                referenceLayout: true,
+                financialEditAllowed: modal.financialEditAllowed ?? false,
+                onCancel: close,
+              }
+            : {})}
+          onDone={close}
+        />
       );
       break;
     case 'detail':
@@ -1262,7 +1720,13 @@ function ModalContent({
       );
     case 'settle':
       title = 'Liquidar aposta';
-      content = <SettleForm bet={modal.bet} onDone={close} />;
+      content = (
+        <SettleForm
+          bet={modal.bet}
+          onDone={close}
+          {...(modal.outcome ? { initialOutcome: modal.outcome } : {})}
+        />
+      );
       break;
     case 'freebet':
       title = 'Novo crédito de freebet';
@@ -1284,9 +1748,16 @@ function ModalContent({
   return (
     <Dialog
       title={title}
-      {...(modal.kind === 'settings'
-        ? { description: 'Defina o percentual que vai orientar a unidade dos próximos meses.' }
-        : {})}
+      {...(modal.kind === 'catalog'
+        ? {
+            description:
+              modal.catalogKind === 'bookmaker'
+                ? 'Cadastre a casa que você usa para organizar seus bilhetes e seu histórico.'
+                : 'Cadastre um tipster para organizar suas apostas.',
+          }
+        : modal.kind === 'settings'
+          ? { description: 'Defina o percentual que vai orientar a unidade dos próximos meses.' }
+          : {})}
       open
       onClose={close}
     >

@@ -1,7 +1,7 @@
+import { formatDisplayDate, formatDisplayMoney } from './preferences.js';
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  formatReportBRL,
   reportPeriodSchema,
   reportSnapshotListSchema,
   reportSnapshotSchema,
@@ -102,7 +102,7 @@ function BreakdownTable({ payload }: { payload: ReportSnapshotPayload }) {
                     Number(row.profit) > 0 ? 'positive' : Number(row.profit) < 0 ? 'negative' : ''
                   }`}
                 >
-                  {formatReportBRL(row.profit)}
+                  {formatDisplayMoney(row.profit)}
                   {row.lowSample ? <small>amostra pequena</small> : null}
                 </td>
               </tr>
@@ -231,8 +231,9 @@ export function ReportsPage() {
                 <h2>{shown.snapshot.title}</h2>
                 <p>
                   Versão {shown.snapshot.version} · congelado em{' '}
-                  {new Date(shown.snapshot.createdAt).toLocaleString('pt-BR', {
-                    timeZone: 'America/Sao_Paulo',
+                  {formatDisplayDate(shown.snapshot.createdAt, {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
                   })}
                   {shown.snapshot.revisionReason
                     ? ` · motivo da revisão: ${shown.snapshot.revisionReason}`
@@ -258,7 +259,7 @@ export function ReportsPage() {
               <div className="metric-card featured">
                 <span>Resultado</span>
                 <strong className={shown.metrics.profit.startsWith('-') ? 'negative' : ''}>
-                  {formatReportBRL(shown.metrics.profit)}
+                  {formatDisplayMoney(shown.metrics.profit)}
                 </strong>
                 <small>
                   {shown.metrics.settledBets} liquidadas · {shown.metrics.openBets} abertas
@@ -267,16 +268,18 @@ export function ReportsPage() {
               <div className="metric-card">
                 <span>ROI real</span>
                 <strong>{percent(shown.metrics.roiReal)}</strong>
-                <small>principal real {formatReportBRL(shown.metrics.realPrincipalClosed)}</small>
+                <small>
+                  principal real {formatDisplayMoney(shown.metrics.realPrincipalClosed)}
+                </small>
               </div>
               <div className="metric-card">
                 <span>Yield real</span>
                 <strong>{percent(shown.metrics.yieldReal)}</strong>
-                <small>retornos {formatReportBRL(shown.metrics.realReturns)}</small>
+                <small>retornos {formatDisplayMoney(shown.metrics.realReturns)}</small>
               </div>
               <div className="metric-card">
                 <span>Exposição aberta</span>
-                <strong>{formatReportBRL(shown.metrics.exposure)}</strong>
+                <strong>{formatDisplayMoney(shown.metrics.exposure)}</strong>
                 <small>{shown.metrics.bets} apostas no período</small>
               </div>
             </div>
@@ -337,8 +340,9 @@ export function ReportsPage() {
                       Versão {item.version}
                     </Button>
                     <small>
-                      {new Date(item.createdAt).toLocaleString('pt-BR', {
-                        timeZone: 'America/Sao_Paulo',
+                      {formatDisplayDate(item.createdAt, {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
                       })}
                       {item.revisionReason ? ` · ${item.revisionReason}` : ''}
                     </small>
@@ -418,8 +422,9 @@ export function ReportsPage() {
                     <td>{item.title}</td>
                     <td>{item.version}</td>
                     <td>
-                      {new Date(item.createdAt).toLocaleString('pt-BR', {
-                        timeZone: 'America/Sao_Paulo',
+                      {formatDisplayDate(item.createdAt, {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
                       })}
                     </td>
                     <td className="tabular">{item.financialVersion}</td>

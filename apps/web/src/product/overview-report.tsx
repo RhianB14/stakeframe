@@ -1,366 +1,470 @@
+import { displayLocale, formatDisplayMoney } from './preferences.js';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
+  Line,
+  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { reportSchema, saoPauloDate, formatReportBRL, type Workspace } from '@stakeframe/shared';
+import { betPageSchema, reportSchema, saoPauloDate, type Workspace } from '@stakeframe/shared';
 import { request } from './api.js';
 import { Button } from '../components/ui/button.js';
 import { readChartTokens } from './chart-tokens.js';
-import { axisTick, chartHasSample, lowChartSampleMessage, resultDomain } from './chart-domain.js';
+import { chartHasSample, lowChartSampleMessage } from './chart-domain.js';
 
-/**
- * STK-F2-18 (Fase 4) — resultado realizado do mês na Visão geral.
- *
- * Três decisões que o layout antigo não tinha e o produto exige:
- *
- * 1. **Toda cifra tem período.** A tela é o ponto de entrada e as três
- *    families de dinheiro — saldo, exposição, lucro — precisam ser lidas como
- *    números DIFERENTES. Saldo e exposição são posição; lucro é resultado.
- *    Uma carteira de apostas que mostra os três com a mesma tratamento
- *    visual é uma tela que convida a somar coisas que não se somam.
- * 2. **Evolução preenchida, não contorno.** A área é preenchida porque o
- *    que importa é o ACÚMULO — a distância entre zero e a linha é o
- *    resultado. `sparse` (poucos dias observados) cai para linha: preencher
- *    uma área com 3 pontos fabrica uma forma que não existe.
- * 3. **Uma fonte de dado.** Esta tela, a do painel e a de Análises leem o
- *    mesmo endpoint com o mesmo recorte. Duas telas que contam histórias
- *    diferentes sobre o mesmo número é a classe de defeito mais cara num
- *    produto de contabilidade.
- */
-export function OverviewReport({ version, workspace }: { version: number; workspace: Workspace }) {
+export function OverviewReport({
+  version,
+  workspace,
+  amountMode,
+  hideAmounts,
+  openBetCount,
+  selectedDate,
+  onSelectDate,
+}: {
+  version: number;
+  workspace: Workspace;
+  amountMode: 'money' | 'units';
+  hideAmounts: boolean;
+  openBetCount: number | undefined;
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+}) {
   const today = saoPauloDate(new Date());
   const month = today.slice(0, 7);
   const query = useQuery({
     queryKey: ['product', 'overview-report', month, version],
     queryFn: () => request(`/api/v1/reports?from=${month}-01&to=${today}`, reportSchema),
   });
+  const betParams = new URLSearchParams({ page: '1', pageSize: '100' }).toString();
+  const betsQuery = useQuery({
+    queryKey: ['product', 'bets', version, betParams],
+    queryFn: () => request(`/api/v1/bets?${betParams}`, betPageSchema),
+  });
   const chart = readChartTokens();
-  // Acumulado em CENTAVOS (BigInt) e só convertido no fim: somar `Number`
-  // ponto flutuante em dinheiro é o defeito que o resto do produto evita.
+  const unit = workspace.units.find((value) => value.month === month) ?? null;
+  const unitCents = unit ? moneyCents(unit.amount) : 0n;
+  const buckets = query.data?.timeline ?? [];
+  const bucketsByDate = new Map(buckets.map((bucket) => [bucket.date, bucket]));
+  const selectedBucket = bucketsByDate.get(selectedDate);
+  const openBets = betsQuery.data?.items.filter((bet) => bet.state === 'open') ?? [];
+  const openCount = openBetCount ?? openBets.length;
+  const bankroll = Number(workspace.bankroll);
+  const unitPercent = bankroll > 0 && unit ? (Number(unit.amount) / bankroll) * 100 : null;
+  const exposurePercent = bankroll > 0 ? (Number(workspace.exposure) / bankroll) * 100 : null;
+  const potentialProfitCents = openBets.reduce((total, bet) => {
+    if (bet.stake === null || bet.odds === null) return total;
+    const stake = Number(bet.stake);
+    const odds = Number(bet.odds);
+    if (!Number.isFinite(stake) || !Number.isFinite(odds) || odds <= 1) return total;
+    return total + Math.round(stake * (odds - 1) * 100);
+  }, 0);
+  const potentialProfit = centsMoney(BigInt(potentialProfitCents));
+
   const series = useMemo(() => {
-    if (!query.data) return [];
     let running = 0n;
-    return query.data.timeline.map((bucket) => {
-      running +=
-        BigInt(bucket.metrics.profit.replace('.', '').replace('-', '')) *
-        (bucket.metrics.profit.startsWith('-') ? -1n : 1n);
+    return buckets.map((bucket) => {
+      const change = moneyCents(bucket.metrics.profit);
+      running += change;
       return {
         date: bucket.date,
-        accumulated: Number(running) / 100,
-        period: Number(bucket.metrics.profit),
+        accumulated: unitCents > 0n ? Number(running) / Number(unitCents) : Number(running) / 100,
+        period: unitCents > 0n ? Number(change) / Number(unitCents) : Number(change) / 100,
         bets: bucket.metrics.bets,
       };
     });
-  }, [query.data]);
+  }, [buckets, unitCents]);
   const observed = series.filter((row) => row.bets > 0);
-  /* STK-F3-03 — o PISO DE AMOSTRA manda neste gráfico, e ele não é
-     negociável. Abaixo do piso o produto NÃO desenha e diz por quê: um
-     gráfico com 1 ou 2 pontos é uma forma interpolada a partir de nada, e a
-     biblioteca desenha isso com a mesma confiança com que desenha 30 pontos
-     reais. Números crus no lugar do desenho é a resposta honesta. */
   const drawable = chartHasSample(observed.length);
-  /* A escala inclui o zero quando a série é negativa — ver `resultDomain`.
-     Aplicar o mínimo automático aqui inverteria o sinal do resultado, que é
-     o defeito mais caro que um gráfico de dinheiro pode ter. */
-  const domain = resultDomain(series.map((row) => row.accumulated));
-  const monthDays = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
-  const bucketsByDate = new Map(
-    (query.data?.timeline ?? []).map((bucket) => [bucket.date, bucket]),
+  const latest = series.at(-1)?.accumulated ?? 0;
+  const ceiling = series.reduce((best, row) => Math.max(best, row.accumulated), 0);
+  const drawdown = series.reduce(
+    (result, row) => {
+      const nextPeak = Math.max(result.peak, row.accumulated);
+      return { peak: nextPeak, worst: Math.max(result.worst, nextPeak - row.accumulated) };
+    },
+    { peak: 0, worst: 0 },
+  ).worst;
+  const underwaterDays = series.filter((row) => row.accumulated < ceiling).length;
+  const observedBets = observed.reduce((total, row) => total + row.bets, 0);
+  const losingBets = observed
+    .filter((row) => row.period < 0)
+    .reduce((total, row) => total + row.bets, 0);
+  const losingPercent = observedBets ? Math.round((losingBets / observedBets) * 100) : 0;
+  const last14 = buckets.slice(-14);
+  const redDays = last14.filter((bucket) => moneyCents(bucket.metrics.profit) < 0n).length;
+  const last14ProfitCents = last14.reduce(
+    (total, bucket) => total + moneyCents(bucket.metrics.profit),
+    0n,
   );
-  const todayBucket = bucketsByDate.get(today);
-  const unit = workspace.units.find((value) => value.month === month);
+  const last14ProfitUnits =
+    unitCents > 0n
+      ? Number(last14ProfitCents) / Number(unitCents)
+      : Number(last14ProfitCents) / 100;
+  const dateStart = shiftDate(selectedDate, -13);
+  const days = Array.from({ length: 21 }, (_, index) => shiftDate(dateStart, index));
+  const todayIndex = days.indexOf(today);
+  const monthLabel = new Intl.DateTimeFormat(displayLocale(), {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${selectedDate}T12:00:00Z`));
+  const rangeProfit = (date: string) => {
+    const bucket = bucketsByDate.get(date);
+    return bucket
+      ? dashboardAmount(bucket.metrics.profit, unit?.amount ?? null, 'units', false)
+      : 'no bets';
+  };
+  const moveSelectedDate = (offset: number) => onSelectDate(shiftDate(selectedDate, offset));
 
   return (
     <div className="overview-report">
-      <div className="panel overview-timeline-panel">
-        <div className="overview-timeline-heading">
-          <div>
-            <p className="product-eyebrow">ATIVIDADE DO MÊS</p>
-            <span>
-              {new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(
-                new Date(`${month}-15T12:00:00`),
-              )}
-            </span>
-          </div>
-          <span className="overview-today-label">
-            HOJE · {today.split('-').reverse().slice(0, 1)[0]}/{month.slice(5)}
-          </span>
+      <section className="panel overview-timeline-panel" aria-label="Activity timeline">
+        <div className="bettrack-timeline-month">
+          <span>{monthLabel}</span>
+          <button type="button" aria-label="Previous day" onClick={() => moveSelectedDate(-1)}>
+            ‹
+          </button>
+          <button type="button" aria-label="Next day" onClick={() => moveSelectedDate(1)}>
+            ›
+          </button>
         </div>
-        <div
-          className="overview-timeline"
-          role="img"
-          aria-label={`Calendário de atividade de ${month}. Os marcadores indicam dias com apostas registradas.`}
-        >
+        <div className="overview-timeline" role="group" aria-label="Days around the selected date">
           <div className="overview-timeline-track" />
-          {Array.from({ length: monthDays }, (_, index) => {
-            const day = index + 1;
-            const key = `${month}-${String(day).padStart(2, '0')}`;
-            const bucket = bucketsByDate.get(key);
-            const isToday = key === today;
+          {days.map((date, index) => {
+            const bucket = bucketsByDate.get(date);
+            const isToday = date === today;
+            const isSelected = date === selectedDate;
             return (
-              <div
-                className={`overview-timeline-day${isToday ? ' is-today' : ''}`}
-                key={key}
-                style={{ left: `${((day - 1) / Math.max(1, monthDays - 1)) * 100}%` }}
+              <button
+                key={date}
+                type="button"
+                className={`overview-timeline-day${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}`}
+                style={{ left: `${(index / Math.max(1, days.length - 1)) * 100}%` }}
+                aria-label={`${formatDay(date)} · ${rangeProfit(date)}`}
+                aria-pressed={isSelected}
+                title={`${formatDay(date)} · ${rangeProfit(date)}`}
+                onClick={() => onSelectDate(date)}
               >
                 {bucket && bucket.metrics.bets > 0 ? (
                   <span
-                    className="overview-day-marker"
-                    title={`${bucket.metrics.bets} aposta(s) · ${formatReportBRL(bucket.metrics.profit)}`}
+                    className={`overview-day-marker${moneyCents(bucket.metrics.profit) < 0n ? ' is-negative' : ''}`}
                   />
                 ) : null}
                 {isToday ? <span className="overview-today-marker" /> : null}
-              </div>
+              </button>
             );
           })}
         </div>
-        <div className="overview-timeline-labels">
-          <span>01/{month.slice(5)}</span>
-          <span>15/{month.slice(5)}</span>
-          <span>
-            {monthDays}/{month.slice(5)}
-          </span>
+        <div className="bettrack-timeline-labels" aria-hidden="true">
+          <span style={{ left: '0%' }}>{formatDayShort(days[0]!)}</span>
+          <span style={{ left: `${(7 / 20) * 100}%` }}>{formatDayShort(days[7]!)}</span>
+          {todayIndex >= 0 ? (
+            <span style={{ left: `${(todayIndex / 20) * 100}%` }}>TODAY</span>
+          ) : null}
         </div>
-      </div>
+      </section>
+
       <div className="overview-dashboard-metrics">
-        <Metric
-          label="Banca"
-          value={formatReportBRL(workspace.bankroll)}
-          detail={`${workspace.accounts.length} conta(s) · saldo consolidado`}
-          featured
-        />
-        <Metric
-          label="Em jogo agora"
-          value={formatReportBRL(workspace.exposure)}
-          detail="Exposição em apostas abertas"
-        />
-        <Metric
-          label="Resultado de hoje"
-          value={
-            query.data && todayBucket
-              ? formatReportBRL(todayBucket.metrics.profit)
-              : query.data
-                ? '—'
-                : '…'
-          }
-          detail={
-            todayBucket
-              ? `${todayBucket.metrics.settledBets} liquidada(s) · por data do evento`
-              : 'Nenhuma aposta liquidada hoje'
-          }
-          tone={todayBucket ? signTone(todayBucket.metrics.profit) : 'neutral'}
-        />
-      </div>
-      <div className="overview-running-layout">
-        <div className="panel overview-running-panel">
-          <div className="section-heading">
-            <div>
-              <h2>Resultado acumulado</h2>
-              <p>
-                01/{month.slice(5)} a {today.split('-').reverse().join('/')} · por data de evento ·{' '}
-                atualizado pela última aposta liquidada
-              </p>
-            </div>
-            <a className="text-link" href="#analytics">
-              Ver análises
-            </a>
+        <section className="bettrack-dashboard-metric">
+          <div className="bettrack-metric-heading">
+            <span>BANKROLL</span>
+            <MetricHelp label="What Bankroll means">
+              The money available across your reserve and sportsbook accounts.
+            </MetricHelp>
           </div>
+          <strong>
+            {dashboardAmount(workspace.bankroll, unit?.amount ?? null, amountMode, hideAmounts)}
+          </strong>
+          <div className="bettrack-metric-divider" />
+          <div className="bettrack-metric-split">
+            <span>1 UNIT</span>
+            <span>OF BANKROLL</span>
+          </div>
+          <div className="bettrack-metric-unit-value">
+            <b>{unit ? dashboardAmount(unit.amount, unit.amount, amountMode, hideAmounts) : '—'}</b>
+            <b
+              className={
+                unitPercent === null || unitPercent < 1 || unitPercent > 3
+                  ? 'is-warning'
+                  : 'is-good'
+              }
+            >
+              {hideAmounts ? '••••' : unitPercent === null ? '—' : `${unitPercent.toFixed(1)}%`}
+            </b>
+          </div>
+          <div className="bettrack-unit-track" aria-hidden="true">
+            <i style={{ left: `${Math.min(100, Math.max(2, (unitPercent ?? 0) * 12.5))}%` }} />
+            <span />
+          </div>
+          <small>
+            {unitPercent === null
+              ? 'NO UNIT SET'
+              : unitPercent < 1 || unitPercent > 3
+                ? 'OUTSIDE 1–3%'
+                : 'WITHIN 1–3%'}
+          </small>
+        </section>
+
+        <section className="bettrack-dashboard-metric">
+          <div className="bettrack-metric-heading">
+            <span>AT STAKE NOW</span>
+            <MetricHelp label="What At stake now means">
+              The real amount committed to open bets, before any result is known.
+            </MetricHelp>
+          </div>
+          <strong>
+            {dashboardAmount(workspace.exposure, unit?.amount ?? null, amountMode, hideAmounts)}
+          </strong>
+          <div className="bettrack-metric-divider" />
+          <div className="bettrack-metric-split">
+            <span>
+              {hideAmounts ? '••••' : `${openCount} ${openCount === 1 ? 'open' : 'open bets'}`}
+            </span>
+            <span>
+              {hideAmounts
+                ? '••••'
+                : exposurePercent === null
+                  ? '—'
+                  : `${exposurePercent.toFixed(1)}% OF BANKROLL`}
+            </span>
+          </div>
+          <div className="bettrack-metric-bottom">
+            <span>IF EVERYTHING LANDS</span>
+            <b>{signedAmount(potentialProfit, unit?.amount ?? null, amountMode, hideAmounts)}</b>
+          </div>
+        </section>
+
+        <section className="bettrack-dashboard-metric">
+          <div className="bettrack-metric-heading">
+            <span>THE DAY</span>
+            <MetricHelp label="What The day means">
+              Settled result for the date selected on the activity timeline.
+            </MetricHelp>
+          </div>
+          <strong
+            className={`is-${selectedBucket ? signTone(selectedBucket.metrics.profit) : 'neutral'}`}
+          >
+            {dashboardAmount(
+              selectedBucket?.metrics.profit ?? '0.00',
+              unit?.amount ?? null,
+              amountMode,
+              hideAmounts,
+            )}
+          </strong>
+          <div className="bettrack-metric-divider" />
+          <div className="bettrack-metric-split">
+            <span>RESULT FOR THE DAY</span>
+            <span>
+              {selectedBucket?.metrics.settledBets
+                ? `${selectedBucket.metrics.settledBets} SETTLED`
+                : 'NOTHING SETTLED'}
+            </span>
+          </div>
+          <div className="bettrack-metric-bottom">
+            <span>NO CAP SET</span>
+            <a href="#finance">SET ONE</a>
+          </div>
+        </section>
+      </div>
+
+      <div className="overview-running-layout">
+        <section className="panel overview-running-panel">
+          <div className="bettrack-running-head">
+            <div className="bettrack-running-title">
+              <h2>RUNNING RESULT</h2>
+              <MetricHelp label="What Running result means">
+                The cumulative result of settled bets by event date.
+              </MetricHelp>
+            </div>
+            <div className="bettrack-running-ceiling">
+              <span>AT YOUR BEST POINT</span>
+              <b>CEILING {hideAmounts ? '••••' : signedUnits(ceiling)}</b>
+            </div>
+          </div>
+          <strong
+            className={`bettrack-running-value is-${latest < 0 ? 'negative' : latest > 0 ? 'positive' : 'neutral'}`}
+          >
+            {hideAmounts ? '••••' : signedUnits(latest)}
+          </strong>
           {query.isError ? (
             <p role="alert">
-              Não foi possível carregar o resultado.{' '}
+              Could not load the result.{' '}
               <Button variant="ghost" onClick={() => void query.refetch()}>
-                Tentar novamente
+                Try again
               </Button>
             </p>
           ) : !query.data ? (
-            <p role="status">Calculando resultado…</p>
+            <p role="status">Calculating result…</p>
+          ) : drawable ? (
+            <div
+              className="report-chart bettrack-running-chart"
+              role="img"
+              aria-label={`Running result this month. Ends at ${signedUnits(latest)} across ${query.data.metrics.settledBets} settled bets.`}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={series} margin={{ left: 0, right: 2, top: 8, bottom: 0 }}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis hide domain={['auto', 'auto']} />
+                  <ReferenceLine y={0} stroke={chart['--border-strong']} />
+                  <Tooltip
+                    content={({ active, payload }) =>
+                      active && payload?.[0] ? (
+                        <div className="report-tooltip">
+                          {formatDay(String(payload[0].payload.date))}
+                          <br />
+                          Day: {signedUnits(Number(payload[0].payload.period))}
+                          <br />
+                          Running: {signedUnits(Number(payload[0].payload.accumulated))}
+                        </div>
+                      ) : null
+                    }
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="accumulated"
+                    name="Running result"
+                    stroke={chart['--pos']}
+                    strokeWidth={1.6}
+                    dot={false}
+                    activeDot={{ r: 3 }}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
-            <>
-              {drawable ? (
-                <div
-                  className="report-chart"
-                  role="img"
-                  aria-label={`Resultado acumulado do mês. Fecha em ${formatReportBRL(query.data.metrics.profit)} em ${query.data.metrics.settledBets} apostas liquidadas. Valores exatos no painel abaixo.`}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={series} margin={{ left: 12, right: 12, top: 12, bottom: 8 }}>
-                      <defs>
-                        {/* O degradê é alfa do token de sinal, não uma cor nova.
-                        0,34 no topo e 0,02 na base é o que dá à área o peso de
-                        "volume acumulado" sem competir com a linha, que é o
-                        dado. */}
-                        <linearGradient id="overview-accumulated" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={chart['--pos']} stopOpacity={0.34} />
-                          <stop offset="100%" stopColor={chart['--pos']} stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      {/* Grade só HORIZONTAL e tracejada: a vertical seria uma
-                      parede atrás de cada dia, e a horizontal é a régua que
-                      permite ler a altura contra um valor. */}
-                      <CartesianGrid
-                        stroke={chart['--border']}
-                        strokeDasharray="3 3"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="date"
-                        minTickGap={45}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(date: string) => date.split('-').reverse().join('/')}
-                        stroke={chart['--text-tertiary']}
-                        tick={{ fill: chart['--text-tertiary'], fontSize: 12 }}
-                      />
-                      {/* `domain` inclui o zero quando a série é negativa. Sem `domain`
-                      explícito o Recharts escolhe o mínimo pelos dados, e uma
-                      série toda negativa sai desenhada como se subisse. */}
-                      <YAxis
-                        stroke={chart['--text-tertiary']}
-                        width={72}
-                        domain={domain}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={axisTick}
-                        tick={{ fill: chart['--text-tertiary'], fontSize: 12 }}
-                      />
-                      <ReferenceLine y={0} stroke={chart['--border-strong']} />
-                      <Tooltip
-                        cursor={{ stroke: chart['--border-strong'] }}
-                        content={({ active, payload }) =>
-                          active && payload?.[0] ? (
-                            <div className="report-tooltip">
-                              {String(payload[0].payload.date).split('-').reverse().join('/')}
-                              <br />
-                              No dia: {formatReportBRL(String(payload[0].payload.period))}
-                              <br />
-                              Acumulado: {formatReportBRL(String(payload[0].payload.accumulated))}
-                            </div>
-                          ) : null
-                        }
-                      />
-                      {/* Legenda embaixo, com a cor e o rótulo da série: o leitor
-                      não precisa adivinhar a qual linha a área pertence. */}
-                      <Legend
-                        verticalAlign="bottom"
-                        height={24}
-                        iconType="plainline"
-                        wrapperStyle={{ color: chart['--text-secondary'] }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="accumulated"
-                        name="Resultado acumulado"
-                        stroke={chart['--pos']}
-                        strokeWidth={2}
-                        fill="url(#overview-accumulated)"
-                        dot={false}
-                        activeDot={{ r: 3 }}
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="panel-footnote">
-                  {observed.length === 0
-                    ? 'Nenhuma aposta com data de evento elegível neste mês.'
-                    : lowChartSampleMessage(observed.length)}
-                </p>
-              )}
-              {query.data.exclusions.unknownDateBets + query.data.exclusions.estimatedDateBets >
-              0 ? (
-                <p className="pending-label">
-                  {query.data.exclusions.unknownDateBets} apostas com datas incompletas em todos os
-                  períodos; {query.data.exclusions.estimatedDateBets} com datas estimadas no mês.{' '}
-                  <a className="text-link" href="#calendar">
-                    Conferir datas
-                  </a>
-                </p>
-              ) : null}
-            </>
+            <p className="panel-footnote">
+              {observed.length === 0
+                ? 'No bets with an eligible event date this month.'
+                : lowChartSampleMessage(observed.length)}
+            </p>
           )}
-        </div>
+          <div className="bettrack-running-foot">
+            <span>WORST DRAWDOWN {hideAmounts ? '••••' : `${drawdown.toFixed(1)} U`}</span>
+            <span>
+              {underwaterDays} {underwaterDays === 1 ? 'DAY' : 'DAYS'} UNDERWATER
+            </span>
+            <span>{losingPercent}% OF YOUR BETS, BELOW</span>
+          </div>
+        </section>
+
         <aside className="panel overview-insights">
           <div className="section-heading">
-            <div>
-              <h2>Leitura rápida</h2>
-              <p>Recorte do mês · até hoje</p>
+            <div className="bettrack-insights-title">
+              <h2>INSIGHTS</h2>
             </div>
           </div>
-          {query.data ? (
-            <>
-              <div className="overview-insight-row">
-                <span>Resultado realizado</span>
-                <strong className={`metric-tone-${signTone(query.data.metrics.profit)}`}>
-                  {formatReportBRL(query.data.metrics.profit)}
-                </strong>
-              </div>
-              <div className="overview-insight-row">
-                <span>Apostas liquidadas</span>
-                <strong>{query.data.metrics.settledBets}</strong>
-              </div>
-              <div className="overview-insight-row">
-                <span>Apostas em aberto</span>
-                <strong>{query.data.metrics.openBets}</strong>
-              </div>
-              <div className="overview-insight-row">
-                <span>Unidade do mês</span>
-                <strong>{unit ? formatReportBRL(unit.amount) : 'A conferir'}</strong>
-              </div>
-              <div className="overview-insight-row">
-                <span>Lucro em dinheiro real</span>
-                <strong>{formatReportBRL(query.data.metrics.realProfit)}</strong>
-              </div>
-              <div className="overview-insight-row">
-                <span>Resultado de freebets</span>
-                <strong>{formatReportBRL(query.data.metrics.freebetProfit)}</strong>
-              </div>
-            </>
-          ) : (
-            <p className="panel-footnote">Carregando dados reais do período…</p>
-          )}
+          <div
+            className={`bettrack-insight-card${unitPercent === null || unitPercent < 1 || unitPercent > 3 ? ' is-warning' : ''}`}
+          >
+            <strong>
+              {unitPercent === null || unitPercent < 1 || unitPercent > 3
+                ? 'UNIT OUT OF RANGE'
+                : 'UNIT IN RANGE'}
+            </strong>
+            <span>
+              {hideAmounts
+                ? '••••'
+                : unitPercent === null
+                  ? 'No unit set'
+                  : `${unitPercent.toFixed(1)}% when healthy is 1–3%`}
+            </span>
+          </div>
+          <div className="bettrack-insight-card">
+            <strong>{hideAmounts ? '••••' : `${redDays} OF 14 DAYS IN THE RED`}</strong>
+            <span>last 14 days · {hideAmounts ? '••••' : signedUnits(last14ProfitUnits)}</span>
+          </div>
         </aside>
       </div>
     </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-  detail,
-  tone = 'neutral',
-  featured = false,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: 'neutral' | 'positive' | 'negative';
-  featured?: boolean;
-}) {
+function MetricHelp({ label, children }: { label: string; children: string }) {
   return (
-    <div className={`metric-card metric-tone-${tone}${featured ? ' featured' : ''}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
+    <details className="bettrack-metric-help">
+      <summary aria-label={label}>i</summary>
+      <p>{children}</p>
+    </details>
   );
 }
 
-/**
- * O sinal de resultado é lido do PRÓPRIO VALOR, nunca de um campo paralelo.
- * Um `tone` vindo do servidor aceitaria 'positive' com valor negativo; aqui os
- * dois não podem divergir porque há uma única fonte.
- */
+function dashboardAmount(
+  amount: string,
+  unitAmount: string | null,
+  mode: 'money' | 'units',
+  hidden: boolean,
+) {
+  if (hidden) return '••••';
+  if (mode === 'money') return formatDisplayMoney(amount);
+  if (!unitAmount) return '—';
+  const unit = moneyCents(unitAmount);
+  if (unit <= 0n) return '—';
+  const raw = moneyCents(amount);
+  const negative = raw < 0n;
+  const hundredths = ((negative ? -raw : raw) * 100n + unit / 2n) / unit;
+  const value = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}U`;
+  return `${negative && hundredths > 0n ? '−' : ''}${value}`;
+}
+
+function signedAmount(
+  amount: string,
+  unitAmount: string | null,
+  mode: 'money' | 'units',
+  hidden: boolean,
+) {
+  const formatted = dashboardAmount(amount, unitAmount, mode, hidden);
+  if (hidden || formatted === '—') return formatted;
+  return moneyCents(amount) > 0n ? `+${formatted}` : formatted;
+}
+
+function moneyCents(value: string): bigint {
+  const negative = value.startsWith('-');
+  const [whole, fraction = ''] = (negative ? value.slice(1) : value).split('.');
+  const result = BigInt(whole || '0') * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
+  return negative ? -result : result;
+}
+
+function centsMoney(value: bigint): string {
+  const negative = value < 0n;
+  const cents = negative ? -value : value;
+  return `${negative ? '-' : ''}${cents / 100n}.${String(cents % 100n).padStart(2, '0')}`;
+}
+
+function signedUnits(value: number): string {
+  const formatted = `${Math.abs(value).toFixed(1)} U`;
+  return value > 0 ? `+${formatted}` : value < 0 ? `−${formatted}` : `0.0 U`;
+}
+
+function shiftDate(date: string, offset: number): string {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + offset);
+  return value.toISOString().slice(0, 10);
+}
+
+function formatDay(date: string): string {
+  return new Intl.DateTimeFormat(displayLocale(), {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function formatDayShort(date: string): string {
+  return new Intl.DateTimeFormat(displayLocale(), {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+    .format(new Date(`${date}T12:00:00Z`))
+    .toUpperCase();
+}
+
 export function signTone(value: string): 'neutral' | 'positive' | 'negative' {
   if (value.startsWith('-')) return 'negative';
   return Number(value) === 0 ? 'neutral' : 'positive';

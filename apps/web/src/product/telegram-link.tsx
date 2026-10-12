@@ -6,7 +6,7 @@ import {
   telegramLinkStatusSchema,
   type TelegramLinkStatus,
 } from '@stakeframe/shared';
-import { request, ApiFailure } from './api.js';
+import { request, ApiFailure, dateLabel } from './api.js';
 import { Button } from '../components/ui/button.js';
 
 /**
@@ -189,7 +189,7 @@ function TelegramLinkState({ status }: { status: TelegramLinkStatus | undefined 
     return (
       <p className="notice" role="status">
         Conta do Telegram conectada
-        {status.linkedAt ? ` em ${new Date(status.linkedAt).toLocaleString('pt-BR')}` : ''}.
+        {status.linkedAt ? ` em ${dateLabel(status.linkedAt)}` : ''}.
       </p>
     );
   return (

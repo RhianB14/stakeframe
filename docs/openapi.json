@@ -789,6 +789,11 @@
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
+              "bookmakerId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
               "tipsterId": {
                 "nullable": true,
                 "type": "string",
@@ -852,6 +857,14 @@
                   "additionalProperties": false
                 }
               },
+              "stake": { "type": "string", "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
+              "odds": { "type": "string", "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$" },
+              "placedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "allowMissingUnit": { "type": "boolean" },
               "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
             },
             "required": [
@@ -1330,6 +1343,25 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "stake": { "type": "string", "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
+              "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
+              "stakeUnits": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
+              },
+              "profitUnits": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
+              }
+            },
+            "required": ["count", "stake", "profit", "stakeUnits", "profitUnits"]
           }
         },
         "required": ["items", "total", "page", "pageSize"]
@@ -6671,6 +6703,11 @@
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
+              "bookmakerId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
               "tipsterId": {
                 "nullable": true,
                 "type": "string",
@@ -6734,6 +6771,14 @@
                   "additionalProperties": false
                 }
               },
+              "stake": { "type": "string", "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
+              "odds": { "type": "string", "pattern": "^(0|[1-9]\\d{0,5})(\\.\\d{1,4})?$" },
+              "placedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "allowMissingUnit": { "type": "boolean" },
               "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
             },
             "required": [
@@ -7219,6 +7264,26 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "stake": { "type": "string", "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
+              "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
+              "stakeUnits": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
+              },
+              "profitUnits": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
+              }
+            },
+            "required": ["count", "stake", "profit", "stakeUnits", "profitUnits"],
+            "additionalProperties": false
           }
         },
         "required": ["items", "total", "page", "pageSize"],
@@ -13318,6 +13383,43 @@
             },
             "in": "query",
             "name": "to",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "in": "query",
+            "name": "search",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 80 },
+            "in": "query",
+            "name": "sport",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "enum": ["simple", "multiple", "betbuild"] },
+            "in": "query",
+            "name": "ticketKind",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["open", "settled", "won", "lost", "void", "cashout"]
+            },
+            "in": "query",
+            "name": "historyOutcome",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "in": "query",
+            "name": "historyBefore",
             "required": false
           }
         ],
