@@ -723,27 +723,112 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   });
   await page.goto('/');
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'HISTORY' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
   await expect.poll(() => historyRequests.length).toBeGreaterThan(0);
   const initialRequestCount = historyRequests.length;
 
-  await page.getByRole('searchbox', { name: 'Search bet history' }).fill('Aurora');
+  await page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' }).fill('Aurora');
   await page.waitForTimeout(300);
   expect(historyRequests).toHaveLength(initialRequestCount);
-  await page.getByRole('button', { name: 'APPLY FILTERS' }).click();
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Aurora');
-  await expect(page.getByRole('button', { name: 'Remove search filter Aurora' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Remove search filter Aurora' }).click();
+  await page.getByRole('button', { name: 'Remover filtro de busca Aurora' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
-  await expect(page.getByRole('searchbox', { name: 'Search bet history' })).toHaveValue('');
+  await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
+    '',
+  );
 
-  await page.getByRole('searchbox', { name: 'Search bet history' }).fill('Central');
-  await page.getByRole('button', { name: 'APPLY FILTERS' }).click();
+  await page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' }).fill('Central');
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Central');
-  await page.getByRole('button', { name: 'CLEAR FILTERS' }).click();
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
-  await expect(page.getByRole('searchbox', { name: 'Search bet history' })).toHaveValue('');
+  await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
+    '',
+  );
+});
+
+test('history accepts a custom market type not present on the first page', async ({ page }) => {
+  const firstPageBets = Array.from({ length: 100 }, (_, index) => ({
+    ...bet,
+    id: `10000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+    ticketNumber: index + 1,
+  }));
+  const customMarket = 'Regional Total';
+  const customMarketBet: Bet = {
+    ...bet,
+    id: '10000000-0000-4000-8000-000000000900',
+    ticketNumber: 101,
+    selections: [{ ...bet.selections[0]!, market: customMarket }],
+  };
+  const historyRequests: URL[] = [];
+  await enabledProduct(page, fixture(), firstPageBets);
+  await page.route('**/api/v1/bets?*', async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has('historyBefore')) return route.fallback();
+    historyRequests.push(url);
+    const filtered = url.searchParams.get('marketType') === customMarket;
+    const items = filtered ? [customMarketBet] : firstPageBets;
+    await route.fulfill({
+      json: {
+        items,
+        total: filtered ? 1 : 101,
+        page: Number(url.searchParams.get('page') ?? 1),
+        pageSize: 100,
+        summary: {
+          count: items.length,
+          stake: filtered ? customMarketBet.stake : '10000.00',
+          profit: '0.00',
+          stakeUnits: '1000.00',
+          profitUnits: '0.00',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
+  const marketType = page.getByRole('textbox', { name: 'Tipo de aposta' });
+  await expect(
+    page.locator(`#bets-history-market-type-options option[value="${customMarket}"]`),
+  ).toHaveCount(0);
+  await marketType.fill(customMarket);
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect
+    .poll(() => historyRequests.at(-1)?.searchParams.get('marketType'))
+    .toBe(customMarket);
+  await expect(page.getByText(`${customMarket}: Mais de 2,5`)).toBeVisible();
+});
+
+test('empty display preferences start in Portuguese and expose only translated languages', async ({
+  page,
+}) => {
+  await enabledProduct(page, fixture(), [bet]);
+  await page.addInitScript(() => {
+    localStorage.removeItem('bettrack.preview.preferences');
+  });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+  await expect(page.getByRole('link', { name: 'Apostas', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Configurações', exact: true }).click();
+  const language = page.getByRole('combobox', { name: 'Idioma' });
+  await expect(language).toHaveValue('pt-BR');
+  await expect(language.locator('option')).toHaveCount(2);
+  await expect(language.locator('option[value="es"]')).toHaveCount(0);
+});
+
+test('unsupported stored language falls back to the supported Portuguese interface', async ({
+  page,
+}) => {
+  await enabledProduct(page, fixture(), [bet]);
+  await page.addInitScript(() => {
+    localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language: 'es' }));
+  });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+  await expect(page.getByRole('link', { name: 'Apostas', exact: true })).toBeVisible();
 });
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,

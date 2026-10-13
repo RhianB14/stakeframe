@@ -434,27 +434,29 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('history filter controls keep readable text and a 44px touch target', () => {
+  it('product text never uses a font size below the D3 12px floor', () => {
+    const undersized: string[] = [];
+    for (const { selector, body } of rulePairs(productCss)) {
+      for (const match of body.matchAll(/font-size:\s*([\d.]+)px/g)) {
+        if (Number(match[1]) < 12) undersized.push(`${selector.trim()}: ${match[1]}px`);
+      }
+    }
+    // No exception is needed: all product text and glyphs use the 12px floor.
+    expect(undersized, `font-size abaixo do piso: ${undersized.join(', ')}`).toEqual([]);
+  });
+
+  it('history filter controls keep a 44px touch target', () => {
     const controls = rulePairs(productCss).filter(({ selector }) =>
       /\.bets-history-(?:columns-popover\s*>\s*button|apply|clear|chip)(?:[:.#\s>]|$)/.test(
         selector,
       ),
     );
-    const undersized: string[] = [];
-    for (const { selector, body } of controls) {
-      for (const match of body.matchAll(/font-size:\s*([\d.]+)px/g)) {
-        if (Number(match[1]) < 12) undersized.push(`${selector.trim()}: ${match[1]}px`);
-      }
-    }
     expect(controls.length).toBeGreaterThan(0);
-    expect(undersized, `font-size abaixo do piso: ${undersized.join(', ')}`).toEqual([]);
 
     for (const control of ['.bets-history-apply', '.bets-history-chip']) {
       const rule = controls.find(({ selector }) => selector.includes(control));
       expect(rule, `regra ausente para ${control}`).toBeDefined();
-      const fontSize = /font-size:\s*([\d.]+)px/.exec(rule?.body ?? '')?.[1];
       const height = /min-height:\s*([\d.]+)px/.exec(rule?.body ?? '')?.[1];
-      expect(Number(fontSize), `${control} font-size`).toBeGreaterThanOrEqual(12);
       expect(Number(height), `${control} min-height`).toBeGreaterThanOrEqual(44);
     }
   });

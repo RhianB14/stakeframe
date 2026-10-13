@@ -523,6 +523,17 @@ describe('financial core with PostgreSQL', () => {
       bankroll: '1020.00',
       exposure: '40.00',
     });
+    await expect(
+      command({
+        type: 'bet.update',
+        id: bet.id,
+        tipsterId: null,
+        reference: detail.bet.reference ?? '',
+        reason: 'Não deve reescrever histórico após reversão parcial',
+        stake: '110.00',
+        selections: detail.bet.selections,
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
     await command({
       type: 'settlement.reverse',
       id: final.id,

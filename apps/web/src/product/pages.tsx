@@ -1669,17 +1669,22 @@ export function BetsPage({
           </label>
           <label>
             <span>BET TYPE</span>
-            <select
+            <input
+              type="text"
+              list="bets-history-market-type-options"
+              maxLength={120}
+              autoComplete="off"
+              aria-label="BET TYPE"
               value={draftHistoryFilters.marketType}
               onChange={(event) => changeHistoryDraft('marketType', event.target.value)}
-            >
-              <option value="">ALL BET TYPES</option>
+            />
+            <datalist id="bets-history-market-type-options">
               {historyMarketTypeOptions.map((marketType) => (
                 <option key={marketType} value={marketType}>
                   {marketType}
                 </option>
               ))}
-            </select>
+            </datalist>
           </label>
           <label>
             <span>TICKET TYPE</span>
@@ -3711,16 +3716,13 @@ export function BetTrackSettingsPage({
                 onChange={(event) => updatePreference('language', event.target.value)}
               >
                 <option value="en">English</option>
-                <option value="es">Español</option>
                 <option value="pt-BR">Português (Brasil)</option>
               </select>
             </label>
             <p>
               {preferences.language === 'pt-BR'
                 ? 'FULL INTERFACE IN PORTUGUÊS (BRASIL)'
-                : preferences.language === 'es'
-                  ? 'DATE AND NUMBER FORMATTING · INTERFACE COPY IS IN ENGLISH'
-                  : 'FULL INTERFACE LANGUAGE'}
+                : 'FULL INTERFACE LANGUAGE'}
             </p>
           </div>
           <div className="bettrack-preference-item">

@@ -1,7 +1,7 @@
 import { formatBRL } from '@stakeframe/shared';
 
 export type DisplayPreferences = {
-  language: 'en' | 'es' | 'pt-BR';
+  language: 'en' | 'pt-BR';
   currency: 'USD' | 'BRL' | 'EUR' | 'MXN';
   odds: 'decimal' | 'fractional' | 'american';
   timezone: string;
@@ -38,7 +38,10 @@ export function readDisplayPreferences(): DisplayPreferences {
       // Invalid localStorage values fall back to the supported product default.
     }
     return {
-      language: stored.language === 'es' || stored.language === 'pt-BR' ? stored.language : 'en',
+      language:
+        stored.language === 'en' || stored.language === 'pt-BR'
+          ? stored.language
+          : defaults.language,
       currency:
         stored.currency === 'BRL' || stored.currency === 'EUR' || stored.currency === 'MXN'
           ? stored.currency
@@ -124,8 +127,7 @@ export function formatDisplayMoney(value: string | null | undefined): string {
   if (preferences.currency === 'BRL') return formatAccountingBRL(value);
   const rate = referenceRates?.rates[preferences.currency];
   if (typeof rate !== 'number' || !Number.isFinite(rate)) return formatAccountingBRL(value);
-  const locale =
-    preferences.language === 'pt-BR' ? 'pt-BR' : preferences.language === 'es' ? 'es-MX' : 'en-US';
+  const locale = preferences.language === 'pt-BR' ? 'pt-BR' : 'en-US';
   const converted = new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: preferences.currency,
@@ -168,7 +170,7 @@ export function formatDisplayOdds(value: string | null | undefined): string {
 
 export function displayLocale() {
   const language = readDisplayPreferences().language;
-  return language === 'pt-BR' ? 'pt-BR' : language === 'es' ? 'es-MX' : 'en-US';
+  return language === 'pt-BR' ? 'pt-BR' : 'en-US';
 }
 
 export function displayTimeZone() {

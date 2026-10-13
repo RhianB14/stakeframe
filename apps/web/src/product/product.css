@@ -6871,7 +6871,7 @@
   margin-top: 3px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.13em;
 }
 .bettrack-theme .product-topbar-profile {
@@ -6953,7 +6953,7 @@
   padding: 0 13px 3px 8px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.12em;
   line-height: 18px;
@@ -6967,7 +6967,7 @@
   padding: 0 13px 0 8px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-align: right;
   text-decoration: none;
@@ -6989,7 +6989,7 @@
   color: var(--web-text-tertiary);
   cursor: not-allowed;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   opacity: 0.55;
   text-align: right;
@@ -7004,7 +7004,7 @@
   background: transparent;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-align: left;
   cursor: pointer;
@@ -7050,7 +7050,7 @@
   margin-bottom: 5px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -7108,7 +7108,7 @@
 .bettrack-theme .metric-card > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -7291,12 +7291,12 @@
   align-items: center;
   gap: 10px;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bets-history-selections > div > strong {
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bets-history-controls {
   display: grid;
@@ -7313,7 +7313,7 @@
   gap: 5px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.1em;
 }
 .bettrack-theme .bets-history-controls input,
@@ -7353,7 +7353,7 @@
   color: var(--web-text-secondary);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   list-style: none;
   white-space: nowrap;
@@ -7381,7 +7381,7 @@
 .bettrack-theme .bets-history-columns-popover > p {
   margin: 0 0 7px;
   color: var(--web-text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .bettrack-theme .bets-history-columns-popover > label {
@@ -7391,7 +7391,7 @@
   align-items: center;
   gap: 8px;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme
@@ -7414,7 +7414,7 @@
   margin-left: auto;
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bets-history-columns-popover > button,
 .bettrack-theme .bets-history-apply,
@@ -7491,7 +7491,7 @@
 .bettrack-theme .bets-history-summary p > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 .bettrack-theme .bets-history-summary > div > strong {
@@ -7527,7 +7527,7 @@
 .bettrack-theme .bets-history-selections > div > b {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
   text-align: right;
 }
@@ -7625,7 +7625,7 @@
 .bettrack-theme .bets-reference-selection small {
   margin-top: 3px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bets-reference-status {
   display: inline-grid;
@@ -7637,7 +7637,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .bettrack-theme .bets-reference-status.is-settled {
@@ -7704,7 +7704,7 @@
   margin: 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 .bettrack-theme .new-bet-intro span,
@@ -7740,7 +7740,7 @@
 .bettrack-theme .hedge-reference-actions button {
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   text-decoration: none;
 }
 .bettrack-theme .hedge-reference-progress {
@@ -7756,7 +7756,7 @@
   background: transparent;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme .hedge-reference-progress button span {
@@ -7799,7 +7799,7 @@
 .bettrack-theme .hedge-field > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.09em;
 }
 .bettrack-theme .hedge-field input,
@@ -7851,7 +7851,7 @@
 .bettrack-theme .hedge-result-card dt {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-result-card dd {
   margin: 0;
@@ -7934,7 +7934,7 @@
   order: 2;
   margin: 4px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.13em;
 }
 .bettrack-theme .bettrack-dashboard-actions {
@@ -7980,7 +7980,7 @@
 .bettrack-theme .overview-timeline-heading > div > span {
   top: 17px;
   right: 86px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .overview-timeline {
   height: 132px;
@@ -8038,7 +8038,7 @@
 .bettrack-theme .bettrack-dashboard-widget > header button {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.09em;
   text-decoration: none;
 }
@@ -8080,7 +8080,7 @@
 .bettrack-theme .bettrack-open-bet-row em {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
 }
 .bettrack-theme .bettrack-open-bet-row em {
@@ -8119,7 +8119,7 @@
 .bettrack-theme .bettrack-breakdown-list strong {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 @media (max-width: 760px) {
   .bettrack-theme .product-main.bettrack-page-overview {
@@ -8187,7 +8187,7 @@
   gap: 6px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -8262,7 +8262,7 @@
   margin: -2px 2px 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -8307,7 +8307,7 @@
 .bettrack-theme .bettrack-running-foot {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
@@ -8413,7 +8413,7 @@
   border-radius: 50%;
   color: var(--web-text-tertiary);
   font-family: var(--font-body);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
   list-style: none;
@@ -8507,7 +8507,7 @@
   margin-top: auto;
   padding-top: 10px;
   border-top: 1px solid var(--web-border);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .overview-insights {
   padding: 17px 16px;
@@ -8538,7 +8538,7 @@
 .bettrack-theme .bettrack-insight-card span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.06em;
 }
 @media (max-width: 760px) {
@@ -8566,11 +8566,11 @@
   }
   .bettrack-theme .bettrack-metric-split {
     align-items: flex-start;
-    font-size: 8px;
+    font-size: 12px;
   }
   .bettrack-theme .bettrack-running-foot {
     gap: 7px;
-    font-size: 7px;
+    font-size: 12px;
   }
 }
 .bettrack-theme .overview-report {
@@ -8687,7 +8687,7 @@
 .bettrack-theme .bettrack-workspace-settings summary span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -8720,7 +8720,7 @@
   margin: 0;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -8731,7 +8731,7 @@
 .bettrack-theme .bettrack-weekly-net > p {
   margin: 5px 0;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-sample-warning {
   display: grid;
@@ -8774,7 +8774,7 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
 }
 .bettrack-theme .bettrack-segments,
@@ -8803,7 +8803,7 @@
 .bettrack-theme .bettrack-behaviour header p {
   margin: 0;
   color: var(--web-text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-segment-tabs {
   display: flex;
@@ -8817,7 +8817,7 @@
   background: transparent;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme .bettrack-segment-tabs button:last-child {
@@ -8839,25 +8839,25 @@
 .bettrack-theme .bettrack-segment-row.is-heading {
   min-height: 29px;
   color: var(--web-text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.09em;
 }
 .bettrack-theme .bettrack-segment-row strong {
   color: var(--web-text);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-segment-row small {
   grid-column: 1 / -1;
   margin: -4px 0 8px;
   color: var(--web-orange);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-analytics-empty {
   padding: 22px 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
 }
 .bettrack-theme .bettrack-record-grid {
@@ -8881,7 +8881,7 @@
 }
 .bettrack-theme .bettrack-record-grid article > small {
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-behaviour-grid {
   display: grid;
@@ -8897,7 +8897,7 @@
   border-top: 2px solid var(--web-accent);
 }
 .bettrack-theme .bettrack-behaviour-grid article > span {
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-behaviour-grid article h3 {
   margin: 12px 0 7px;
@@ -8907,13 +8907,13 @@
 .bettrack-theme .bettrack-behaviour-grid article p {
   margin: 0 0 9px;
   color: var(--web-text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .bettrack-theme .bettrack-behaviour-grid article a {
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   text-decoration: none;
 }
 .bettrack-theme .bettrack-analytics-period {
@@ -8949,7 +8949,7 @@
 .bettrack-theme .bettrack-settings-heading p {
   margin: 0;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-preference-grid {
   display: grid;
@@ -8961,7 +8961,7 @@
   gap: 7px;
 }
 .bettrack-theme .bettrack-preference-grid label > span {
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-preference-grid select {
   width: 100%;
@@ -8970,7 +8970,7 @@
   border: 1px solid var(--web-border);
   background: var(--web-bg);
   color: var(--web-text);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-settings-heading > button {
   min-height: 44px;
@@ -8979,7 +8979,7 @@
   background: transparent;
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme .bettrack-book-list {
@@ -9019,7 +9019,7 @@
   font-size: 13px;
 }
 .bettrack-theme .bettrack-book-list small {
-  font-size: 7px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-settings-empty {
   display: grid;
@@ -9064,7 +9064,7 @@
 }
 .bettrack-theme .bettrack-responsible-grid article > span {
   color: var(--web-accent);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-responsible-grid h3 {
   margin: 9px 0 6px;
@@ -9075,19 +9075,19 @@
   max-width: 500px;
   margin: 0 0 11px;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .bettrack-theme .bettrack-responsible-grid a {
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   text-decoration: none;
 }
 .bettrack-theme .bettrack-responsible-foot {
   margin: 12px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-settings-export {
   display: flex;
@@ -9098,7 +9098,7 @@
   border: 1px solid var(--web-border);
 }
 .bettrack-theme .bettrack-settings-export > div > span {
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-settings-export h2 {
   margin: 4px 0 3px;
@@ -9107,7 +9107,7 @@
 .bettrack-theme .bettrack-settings-export p {
   margin: 0;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-settings-export > a {
   display: inline-flex;
@@ -9118,7 +9118,7 @@
   background: var(--web-accent);
   color: var(--web-ink);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
 }
@@ -9132,7 +9132,7 @@
   padding: 13px 0;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme .bettrack-workspace-settings > div {
@@ -9202,7 +9202,7 @@
 }
 .bettrack-theme .bet-wizard-type-options button span {
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 .bettrack-theme .bettrack-ai-coming-soon {
@@ -9224,12 +9224,12 @@
 .bettrack-theme .bettrack-ai-coming-soon small {
   color: var(--web-orange);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ai-coming-soon span {
   grid-column: 1 / -1;
   color: var(--web-text-secondary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-preview-heading {
   display: flex;
@@ -9238,7 +9238,7 @@
   margin-bottom: 12px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .bettrack-theme .bettrack-ticket-preview-heading b {
@@ -9266,7 +9266,7 @@
   border-bottom: 1px solid var(--web-border);
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-paper > header span {
   color: var(--web-text-tertiary);
@@ -9277,7 +9277,7 @@
   gap: 8px;
   padding: 12px 10px 7px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-kind > span {
   color: var(--web-orange);
@@ -9290,7 +9290,7 @@
   margin-left: auto;
   padding: 3px 6px;
   background: var(--web-panel-hover);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-selection {
   display: block;
@@ -9314,11 +9314,11 @@
 .bettrack-theme .bettrack-ticket-value-grid small {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-value-grid span {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-paper > footer {
   padding: 8px 10px;
@@ -9331,7 +9331,7 @@
 .bettrack-theme .bettrack-ticket-preview > p {
   margin: 12px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -9350,13 +9350,13 @@
   height: 43px;
   padding: 0 20px 0 0;
   margin-right: 20px;
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-reference-progress button span {
   width: 19px;
   height: 19px;
   border-radius: 0;
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-reference-progress button.is-current::after {
   position: absolute;
@@ -9401,11 +9401,11 @@
 .bettrack-theme .hedge-mode-card small {
   color: var(--web-accent);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-mode-card span {
   color: var(--web-text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .bettrack-theme .hedge-pick-list {
@@ -9436,25 +9436,25 @@
 .bettrack-theme .hedge-pick-row > b {
   color: var(--web-orange);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-pick-row > span {
   display: grid;
   gap: 3px;
 }
 .bettrack-theme .hedge-pick-row strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-pick-row small {
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-pick-row em {
   display: grid;
   gap: 3px;
   color: var(--web-text);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
   text-align: right;
 }
@@ -9475,7 +9475,7 @@
 .bettrack-theme .hedge-preview-card > strong {
   color: var(--web-orange);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-preview-card h3 {
   margin: 10px 0 3px;
@@ -9484,7 +9484,7 @@
 .bettrack-theme .hedge-preview-card > p {
   margin: 0 0 17px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-preview-card dl {
   display: grid;
@@ -9501,12 +9501,12 @@
 .bettrack-theme .hedge-preview-card dt {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .hedge-preview-card dd {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   text-align: right;
 }
 .bettrack-theme .hedge-manual-fields {
@@ -9662,7 +9662,7 @@
 .bettrack-theme .bettrack-segment-row {
   grid-template-columns: minmax(250px, 1.3fr) 70px 100px 100px minmax(185px, 1fr);
   min-height: 53px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-segment-row.is-heading {
   min-height: 39px;
@@ -9677,7 +9677,7 @@
   margin: 14px 0 27px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .bettrack-theme .bettrack-record-grid {
@@ -9712,7 +9712,7 @@
   font-size: 18px;
 }
 .bettrack-theme .bettrack-behaviour-grid article p {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-behaviour-grid .bettrack-behaviour-wide {
   grid-column: 1 / -1;
@@ -9731,7 +9731,7 @@
 .bettrack-theme .bettrack-behaviour-wide > small {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .bettrack-theme .bettrack-settings {
@@ -9801,7 +9801,7 @@
   gap: 8px;
 }
 .bettrack-theme .bettrack-preference-item label > span {
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-preference-item select {
   min-height: 46px;
@@ -9816,7 +9816,7 @@
   margin: 12px 0 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.09em;
   line-height: 1.5;
 }
@@ -9839,7 +9839,7 @@
   color: var(--web-bg);
 }
 .bettrack-theme .bettrack-book-list strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-book-check {
   display: none;
@@ -9851,7 +9851,7 @@
   background: transparent;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   cursor: pointer;
 }
@@ -9877,19 +9877,19 @@
 }
 .bettrack-theme .bettrack-responsible-grid article > span {
   color: var(--web-text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-responsible-grid article h3 {
   margin: 12px 0 8px;
   font-size: 18px;
 }
 .bettrack-theme .bettrack-responsible-grid article p {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-responsible-grid article > small {
   color: var(--web-orange);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-responsible-grid .bettrack-responsible-wide {
   grid-column: 1 / -1;
@@ -9913,7 +9913,7 @@
 .bettrack-theme .bettrack-settings-export > a {
   min-height: 40px;
   padding: 0 15px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .bettrack-theme .new-bet-reference-page {
@@ -9941,7 +9941,7 @@
   border: 0;
   background: var(--web-panel);
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button:nth-child(1) {
   min-width: 79px;
@@ -10022,7 +10022,7 @@
 }
 .bettrack-theme .bettrack-new-bet-form .bet-wizard-type-options button span {
   align-self: start;
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-bet-type-arrow {
   grid-column: 3;
@@ -10109,7 +10109,7 @@
   color: var(--web-text);
 }
 .bettrack-theme .bettrack-ticket-preview > p {
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-new-bet-form.bet-step-0 .form-actions {
   display: none;
@@ -10157,7 +10157,7 @@
   background: transparent;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-new-bet-form .bettrack-reference-selection {
   grid-column: 1;
@@ -10196,7 +10196,7 @@
   top: 12px;
   margin-top: 1px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-odds-suggestions {
   display: flex;
@@ -10224,7 +10224,7 @@
   padding: 10px 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   cursor: pointer;
 }
@@ -10240,7 +10240,7 @@
   background: transparent;
   color: var(--web-red);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-new-bet-form.bet-step-1 .form-actions {
   margin-top: 10px;
@@ -10338,7 +10338,7 @@
   background: var(--web-panel);
   color: var(--web-text);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-unit-presets {
   display: flex;
@@ -10353,7 +10353,7 @@
   background: var(--web-panel-hover);
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme .bettrack-unit-presets button.is-active {
@@ -10368,7 +10368,7 @@
   margin: 13px 0 27px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-payout-block {
   display: grid;
@@ -10382,7 +10382,7 @@
 }
 .bettrack-theme .bettrack-payout-block > label small {
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
 }
 .bettrack-theme .bettrack-payout-block output {
@@ -10428,7 +10428,7 @@
   margin: 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-align: center;
   text-decoration: none;
@@ -10444,7 +10444,7 @@
 .bettrack-theme .bettrack-amount-more > summary {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   white-space: nowrap;
   cursor: pointer;
@@ -10497,7 +10497,7 @@
   display: block;
   padding: 0 10px 22px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.2;
 }
 .bettrack-theme .bettrack-new-bet-form.bet-step-2 .bettrack-ticket-value-grid {
@@ -10638,7 +10638,7 @@
 .dialog-content .bettrack-bet-edit-form .bettrack-reference-detail-fields .form-field > small,
 .dialog-content .bettrack-bet-edit-form .bettrack-edit-financial-fields .form-field > small {
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-sport-options {
   display: flex;
@@ -10713,7 +10713,7 @@
   border: 1px solid var(--web-border);
   background: transparent;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-bet-extra-fields {
   border-top: 1px solid var(--web-border);
@@ -10722,7 +10722,7 @@
   padding: 10px 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   cursor: pointer;
 }
@@ -10754,7 +10754,7 @@
   border-left: 3px solid var(--web-orange);
   background: var(--web-panel);
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-unit-presets {
@@ -10768,7 +10768,7 @@
   background: var(--web-panel);
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-unit-presets button.is-active {
@@ -10781,11 +10781,11 @@
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-unit-note {
   margin: 0 0 14px;
-  font-size: 9px;
+  font-size: 12px;
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-missing-unit-choice {
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-ticket-preview {
   grid-column: 2;
@@ -10801,7 +10801,7 @@
 }
 .dialog-content .bettrack-bet-edit-form .bettrack-ticket-preview > p {
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .dialog-content .bettrack-bet-edit-form .form-actions {
   grid-column: 1;
@@ -11150,13 +11150,13 @@
   margin: 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .bettrack-theme .bettrack-bets-summary p > span {
   margin-right: 7px;
   color: var(--web-text-tertiary);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.13em;
 }
 .bettrack-theme .bettrack-bets-summary p > strong {
@@ -11258,7 +11258,7 @@
   border-bottom: 1px solid var(--web-border);
   background: var(--web-panel-hover);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.04em;
 }
 .bettrack-theme .bettrack-ticket-head strong {
@@ -11279,7 +11279,7 @@
   padding: 0 12px;
   color: var(--web-orange);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.07em;
   white-space: nowrap;
@@ -11372,7 +11372,7 @@
   padding: 4px 7px;
   background: var(--web-panel-hover);
   color: var(--web-text);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0;
 }
 .bettrack-theme .bettrack-ticket-content {
@@ -11411,7 +11411,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
@@ -11437,7 +11437,7 @@
   border-left: 2px solid currentColor;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-selections > div > span[data-sport='fut'],
 .bettrack-theme .bettrack-ticket-selections > div > span[data-sport='volley'] {
@@ -11471,7 +11471,7 @@
 .bettrack-theme .bettrack-ticket-selections p small {
   overflow: hidden;
   color: var(--web-text-secondary);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11482,7 +11482,7 @@
 .bettrack-theme .bettrack-ticket-selections > div > b {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
   text-align: right;
 }
@@ -11490,7 +11490,7 @@
   padding-left: 36px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-stamp {
   position: absolute;
@@ -11555,14 +11555,14 @@
 .bettrack-theme .bettrack-ticket-amounts > div > small {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .bettrack-theme .bettrack-ticket-amounts > div > strong {
   overflow: hidden;
   color: var(--web-text);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11578,7 +11578,7 @@
   border-top: 0;
   background: var(--web-panel-hover);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-result > span {
   color: var(--web-text-tertiary);
@@ -11586,7 +11586,7 @@
 .bettrack-theme .bettrack-ticket-result > strong {
   overflow: hidden;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11658,7 +11658,7 @@
   font-size: 38px;
 }
 .bettrack-theme .new-bet-page-heading .product-eyebrow {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .new-bet-page-heading .bettrack-page-close {
   position: static;
@@ -11669,7 +11669,7 @@
   transform: none;
 }
 .bettrack-theme .bettrack-new-bet-form .bet-wizard-progress button {
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-new-bet-form .bet-wizard-type > p {
   font-size: 23px;
@@ -11687,31 +11687,31 @@
   font-size: 15px;
 }
 .bettrack-theme .bettrack-reference-detail-fields .form-field > small {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-preview-heading {
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-paper > header {
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-kind {
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-selection {
   font-size: 23px;
 }
 .bettrack-theme .bettrack-ticket-event {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-value-grid small {
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-value-grid span {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-preview > p {
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-sport-options {
   display: flex;
@@ -11816,23 +11816,23 @@
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-head,
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-meta {
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-title {
   font-size: 21px;
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-event,
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-selections p small {
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-amounts > div > small {
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-amounts > div > strong {
   font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-result {
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-ticket-card .bettrack-ticket-result > strong {
   font-size: 12px;
@@ -11859,7 +11859,7 @@
   margin: 0 0 18px;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-decoration: none;
 }
@@ -11886,7 +11886,7 @@
   margin: 8px 0 0;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 .bettrack-theme .bettrack-edit-state {
@@ -11894,7 +11894,7 @@
   border: 1px solid var(--web-border-strong);
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form fieldset {
@@ -11956,7 +11956,7 @@
 .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > label {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -11973,7 +11973,7 @@
 }
 .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .form-field > small {
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-sport-options {
   gap: 7px;
@@ -12122,7 +12122,7 @@
   p
   small {
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-edit-page .bettrack-bet-edit-form .bettrack-ticket-paper > footer {
   margin-top: auto;
@@ -12362,7 +12362,7 @@
   margin: 0 0 17px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-decoration: none;
 }
@@ -12388,7 +12388,7 @@
   margin: 7px 0 0;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.1em;
 }
 .bettrack-theme .bettrack-detail-actions {
@@ -12429,7 +12429,7 @@
 .bettrack-theme .bettrack-detail-actions > span[role='status'] {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .bettrack-theme .bettrack-detail-grid {
@@ -12493,7 +12493,7 @@
   padding: 0 11px;
   background: var(--web-panel-hover);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-ticket > header span {
   color: var(--web-text-tertiary);
@@ -12506,7 +12506,7 @@
   padding: 0 11px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-ticket-type strong {
   color: var(--web-avatar-teal);
@@ -12534,12 +12534,12 @@
   grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-ticket-selections > div > b {
   color: var(--web-avatar-teal);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-ticket-selections > div[data-sport='nba'] > b,
 .bettrack-theme .bettrack-detail-ticket-selections > div[data-sport='wnba'] > b {
@@ -12548,7 +12548,7 @@
 .bettrack-theme .bettrack-detail-ticket-selections > div > strong {
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
 }
 .bettrack-theme .bettrack-detail-ticket-single {
@@ -12561,7 +12561,7 @@
 .bettrack-theme .bettrack-detail-ticket-single p {
   margin: 4px 11px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-ticket-values {
   display: grid;
@@ -12580,7 +12580,7 @@
 .bettrack-theme .bettrack-detail-ticket-values small {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-ticket-values strong {
   font-family: var(--font-mono);
@@ -12626,7 +12626,7 @@
   margin: 0 0 4px;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.12em;
 }
@@ -12660,7 +12660,7 @@
 }
 .bettrack-theme .bettrack-settle-card > button > small {
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
   text-align: right;
 }
 .bettrack-theme .bettrack-settle-card .is-won {
@@ -12688,7 +12688,7 @@
   grid-column: 1 / -1;
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .bettrack-theme .bettrack-cashout-inline > input {
@@ -12713,7 +12713,7 @@
   background: transparent;
   color: var(--web-text-secondary);
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .bettrack-theme .bettrack-cashout-inline > div button:last-child {
@@ -12728,7 +12728,7 @@
   grid-column: 1 / -1;
   margin: 0;
   color: var(--web-avatar-red);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-hedge-card {
   padding: 16px;
@@ -12741,7 +12741,7 @@
 .bettrack-theme .bettrack-hedge-card p {
   margin: 0;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
 }
 .bettrack-theme .bettrack-detail-panel {
@@ -12766,7 +12766,7 @@
   border-left: 2px solid var(--web-avatar-teal);
   color: var(--web-avatar-teal);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-selection[data-sport='nba'] > b,
 .bettrack-theme .bettrack-detail-selection[data-sport='wnba'] > b {
@@ -12783,12 +12783,12 @@
 }
 .bettrack-theme .bettrack-detail-selection > div small {
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-selection > span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-profit {
   min-height: 105px;
@@ -12807,12 +12807,12 @@
 .bettrack-theme .bettrack-detail-profit > div span {
   color: var(--web-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-profit > p {
   margin: 7px 0 0;
   color: var(--web-text-tertiary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-detail-record {
   display: grid;
@@ -12822,7 +12822,7 @@
   display: grid;
   gap: 6px;
   color: var(--web-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-record-value {
   display: flex;
@@ -12833,7 +12833,7 @@
   border: 1px solid var(--web-border);
   background: var(--web-bg);
   color: var(--web-text);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-record-value select {
   width: 100%;
@@ -12857,12 +12857,12 @@
   padding-top: 13px;
   border-top: 1px solid var(--web-border);
   color: var(--web-text-secondary);
-  font-size: 9px;
+  font-size: 12px;
 }
 .bettrack-theme .bettrack-record-logged strong {
   color: var(--web-text);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
 }
 .bettrack-theme .bankroll-daily-limit-edit {
@@ -12870,7 +12870,7 @@
   align-items: center;
   gap: 8px;
   color: var(--web-text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bankroll-daily-limit-edit input {
   width: 78px;
@@ -12880,7 +12880,7 @@
   background: var(--web-bg);
   color: var(--web-text);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bettrack-theme .bankroll-daily-limit-actions {
   display: flex;
@@ -12890,12 +12890,12 @@
   grid-column: 1 / -1;
   margin: 0;
   color: var(--web-accent);
-  font-size: 10px;
+  font-size: 12px;
 }
 .bettrack-theme .bankroll-move-feedback {
   margin: 8px 0 0;
   color: var(--web-accent);
-  font-size: 11px;
+  font-size: 12px;
 }
 @media (max-width: 900px) {
   .bettrack-theme .product-main.bettrack-ticket-detail-route {
@@ -12990,7 +12990,7 @@
   margin-bottom: 7px;
   color: var(--web-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -13022,7 +13022,7 @@
 .catalog-form .form-field small {
   margin-top: 6px;
   color: var(--web-text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .catalog-form .form-actions {
@@ -13036,7 +13036,7 @@
   min-width: 104px;
   min-height: 44px;
   padding: 0 15px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -13069,7 +13069,7 @@
     font-size: 24px;
   }
   .dialog-content:has(.catalog-form) .dialog-header p {
-    font-size: 11px;
+    font-size: 12px;
   }
   .catalog-form .form-actions .ui-button {
     flex: 1 1 0;
