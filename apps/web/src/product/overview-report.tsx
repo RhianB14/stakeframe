@@ -15,6 +15,7 @@ import {
 import { betPageSchema, reportSchema, saoPauloDate, type Workspace } from '@stakeframe/shared';
 import { request } from './api.js';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { readChartTokens } from './chart-tokens.js';
 import { axisTick, chartHasSample, lowChartSampleMessage, resultDomain } from './chart-domain.js';
 
@@ -293,12 +294,15 @@ export function OverviewReport({
             {hideAmounts ? '••••' : signedUnits(latest)}
           </strong>
           {query.isError ? (
-            <p role="alert">
-              Could not load the result.{' '}
-              <Button variant="ghost" onClick={() => void query.refetch()}>
-                Try again
-              </Button>
-            </p>
+            <div className="notice warning product-error-alert" role="alert">
+              <ProductErrorIcon />
+              <div>
+                <p>Could not load the result.</p>
+                <Button variant="ghost" onClick={() => void query.refetch()}>
+                  Try again
+                </Button>
+              </div>
+            </div>
           ) : !query.data ? (
             <p role="status">Calculating result…</p>
           ) : drawable ? (

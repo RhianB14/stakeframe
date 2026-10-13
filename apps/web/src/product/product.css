@@ -4389,6 +4389,13 @@
   .bet-table-desktop {
     display: none;
   }
+  .bet-table-desktop.bets-history-table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .bet-list-cards {
     display: grid;
     gap: 12px;
@@ -5036,7 +5043,7 @@
 
 .admin-panel code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85em;
+  font-size: 12px;
 }
 
 /* ------------------------------------------------------- STK-F2-08 relatório
@@ -5223,6 +5230,13 @@
      define o próprio piso de largura. */
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
+}
+.polymarket-error-card > svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 0 auto 10px;
+  color: var(--warn);
 }
 
 .global-card {
@@ -8003,7 +8017,7 @@
   min-height: 252px;
 }
 .bettrack-theme .overview-running-panel .report-chart {
-  height: 151px;
+  height: 296px;
 }
 .bettrack-theme .overview-running-panel .recharts-legend-wrapper {
   display: none;
@@ -8494,7 +8508,7 @@
 }
 .bettrack-theme .bettrack-running-chart {
   width: 100%;
-  height: 126px;
+  height: 296px;
   margin-top: 2px;
 }
 .bettrack-theme .bettrack-running-chart .recharts-wrapper {
@@ -8650,6 +8664,42 @@
 .bettrack-theme .bettrack-analytics {
   display: grid;
   gap: 14px;
+}
+.bettrack-theme .analytics-error-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+}
+.bettrack-theme .analytics-error-card > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-top: 2px;
+}
+.bettrack-theme .product-error-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+}
+.bettrack-theme .product-error-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: var(--warn);
+}
+.bettrack-theme .product-error-alert > div > p {
+  margin: 0 0 10px;
+}
+.bettrack-theme .analytics-error-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.bettrack-theme .analytics-error-content > p {
+  margin: 0;
 }
 .bettrack-theme .bettrack-analytics-divider {
   height: 1px;

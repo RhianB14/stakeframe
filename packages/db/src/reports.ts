@@ -115,7 +115,7 @@ export function createReportService(database: Database, options: ReportServiceOp
           coalesce(sum(profit) filter(where profit>0),0)::numeric(32,2)::text as "grossWinProfit",
           coalesce(sum(-profit) filter(where profit<0),0)::numeric(32,2)::text as "grossLossProfit",
           count(*) filter(where profit<0)::int as "lossBets",
-          count(*) filter(where unit_amount is null or unit_amount<=0 or round(stake/nullif(unit_amount,0),2)<1)::int as "underOneUnitBets",
+          count(*) filter(where unit_amount>0 and stake/unit_amount<1)::int as "underOneUnitBets",
           count(*) filter(where unit_amount>0 and round(stake/unit_amount,2) between 1 and 3)::int as "oneToThreeUnitBets",
           count(*) filter(where unit_amount>0 and round(stake/unit_amount,2)>3)::int as "overThreeUnitBets",
           coalesce(round(100*sum(stake) filter(where resolved_ticket_kind<>'simple')/nullif(sum(stake),0),2),0)::numeric(32,2)::text as "parlayStakeSharePct"

@@ -10,6 +10,7 @@ import {
   type ReportSnapshotPayload,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { Field } from './forms.js';
 import { request } from './api.js';
 
@@ -200,14 +201,39 @@ export function ReportsPage() {
           </Field>
         </div>
         {report.isError ? (
-          <div className="notice warning" role="alert">
-            Não foi possível gerar o relatório.{' '}
-            <Button variant="secondary" onClick={() => void report.refetch()}>
-              Tentar novamente
-            </Button>
+          <div className="notice warning product-error-alert" role="alert">
+            <ProductErrorIcon />
+            <div>
+              <p>Não foi possível gerar o relatório.</p>
+              <Button variant="secondary" onClick={() => void report.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
           </div>
         ) : null}
         {report.isPending ? <p role="status">Preparando o relatório...</p> : null}
+        {version.isError ? (
+          <div className="notice warning product-error-alert" role="alert">
+            <ProductErrorIcon />
+            <div>
+              <p>Não foi possível carregar esta versão do relatório.</p>
+              <Button variant="secondary" onClick={() => void version.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {history.isError ? (
+          <div className="notice warning product-error-alert" role="alert">
+            <ProductErrorIcon />
+            <div>
+              <p>Não foi possível carregar o histórico de relatórios.</p>
+              <Button variant="secondary" onClick={() => void history.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {shown && shown.empty ? (

@@ -180,6 +180,26 @@ describe('analytics dashboard (STK-F2-02)', () => {
     });
   });
 
+  it('não conta apostas sem unidade histórica como apostas abaixo de 1U', async () => {
+    const missingUnit = await bet({ placedAt: '2025-01-03T12:00:00Z', allowMissingUnit: true });
+    await settle(missingUnit.id);
+    const smallStake = await bet({ stake: '0.50' });
+    await run({
+      type: 'bet.settle',
+      id: smallStake.id,
+      outcome: 'win',
+      returnAmount: '1.00',
+      closedPrincipal: '0.50',
+      settledAt: new Date().toISOString(),
+      reason: 'Liquidação de teste',
+    });
+
+    const dashboard = await reports.dashboard(tenantContext, query);
+    expect(dashboard.indicators.underOneUnitBets).toBe(1);
+    expect(dashboard.indicators.oneToThreeUnitBets).toBe(0);
+    expect(dashboard.metrics).toMatchObject({ missingUnitBets: 1, profitUnits: null });
+  });
+
   it('marca baixa amostra pelo limiar configurado, com N igual ao mínimo saindo do aviso', async () => {
     await bet();
     await bet();

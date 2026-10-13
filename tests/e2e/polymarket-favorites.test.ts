@@ -9,6 +9,12 @@ import {
   type PolymarketRanking,
 } from '../../packages/shared/src/index.js';
 
+async function openMobileNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 0) <= 760) {
+    await page.getByRole('button', { name: 'Abrir navegação', exact: true }).click();
+  }
+}
+
 /**
  * STK-F2-16 §15 — "Favoritos, quiet hours, limiar, agrupamento e limite diário",
  * no NAVEGADOR, mais a prova de que o Composite Score NÃO aparece na tela.
@@ -357,6 +363,7 @@ test('favoritos são um destino próprio da navegação', async ({ page }) => {
     ranking: rankingPayload(),
     favorites: favoritesPayload(1, false),
   });
+  await openMobileNavigation(page);
   const nav = await page.locator('.product-sidebar nav a').allInnerTexts();
   // Os links da navegação também são renderizados em caixa alta.
   expect(nav.join(' ').toLowerCase()).toContain('favoritos');

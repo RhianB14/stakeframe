@@ -118,10 +118,18 @@ test.describe('STK-F3-03 — gráfico de resultado no padrão SharkTrack', () =>
       if (!zeroLine) throw new Error('linha de referência do zero ausente');
       if (!area) throw new Error('área preenchida ausente');
       if (!curve) throw new Error('curva da área ausente');
-      const box = svg.getBoundingClientRect();
+      const zero = zeroLine as SVGLineElement;
+      const zeroPoint = new DOMPoint(
+        Number(zero.getAttribute('x1')),
+        Number(zero.getAttribute('y1')),
+      ).matrixTransform(zero.getScreenCTM()!);
+      const curveStart = curve.getPointAtLength(0);
+      const curveStartOnScreen = new DOMPoint(curveStart.x, curveStart.y).matrixTransform(
+        curve.getScreenCTM()!,
+      );
       return {
-        zeroScreenY: zeroLine.getBoundingClientRect().top - box.top,
-        firstScreenY: curve.getPointAtLength(0).y,
+        zeroScreenY: zeroPoint.y,
+        firstScreenY: curveStartOnScreen.y,
         areaPathLength: (area.getAttribute('d') ?? '').length,
       };
     });
@@ -187,8 +195,8 @@ test.describe('STK-F3-03 — gráfico de resultado no padrão SharkTrack', () =>
     expect(sizes.box, 'a caixa do gráfico precisa existir').toBeGreaterThan(0);
     // O PLOT nunca é um decalque — o piso vale em toda largura.
     expect(
-      sizes.area,
-      `área desenhada abaixo de 180px (caixa=${sizes.box}, grade=${sizes.grid})`,
+      sizes.grid,
+      `área de plot abaixo de 180px (caixa=${sizes.box}, grade=${sizes.grid})`,
     ).toBeGreaterThanOrEqual(180);
     if ((page.viewportSize()?.width ?? 0) > 760) {
       expect(

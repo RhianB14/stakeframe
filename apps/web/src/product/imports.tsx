@@ -12,6 +12,7 @@ import {
   type AutomaticReason,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { BetForm, Field } from './forms.js';
 import { CommandForm, useFinanceActions } from './actions.js';
 import { ApiFailure, patchImportDraft, request, dateLabel } from './api.js';
@@ -109,17 +110,15 @@ export function ImportsPage({ workspace, open }: { workspace: Workspace; open: O
         </Field>
       </div>
       {query.isError ? (
-        <p role="alert">
-          Não foi possível carregar as importações.{' '}
-          <Button
-            variant="ghost"
-            onClick={() => {
-              void query.refetch();
-            }}
-          >
-            Tentar novamente
-          </Button>
-        </p>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível carregar as importações.</p>
+            <Button variant="ghost" onClick={() => void query.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
       ) : !query.data ? (
         <p role="status">Carregando importações…</p>
       ) : query.data.items.length === 0 ? (
@@ -356,16 +355,13 @@ export function ImportReview({
   });
   if (query.isError)
     return (
-      <p role="alert">
-        Não foi possível carregar este comprovante.{' '}
-        <Button
-          onClick={() => {
-            void query.refetch();
-          }}
-        >
-          Tentar novamente
-        </Button>
-      </p>
+      <div className="notice warning product-error-alert" role="alert">
+        <ProductErrorIcon />
+        <div>
+          <p>Não foi possível carregar este comprovante.</p>
+          <Button onClick={() => void query.refetch()}>Tentar novamente</Button>
+        </div>
+      </div>
     );
   if (!query.data) return <p role="status">Carregando comprovante…</p>;
   return (
@@ -750,7 +746,17 @@ function ExistingBetPicker({
           ))}
         </select>
       </Field>
-      {query.isError ? <p role="alert">Não foi possível carregar as apostas.</p> : null}
+      {query.isError ? (
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível carregar as apostas.</p>
+            <Button variant="ghost" onClick={() => void query.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <div className="pagination">
         <span>Página {page}</span>
         <div className="button-row">
@@ -798,7 +804,15 @@ export function BetAttachments({
     <section className="bet-attachments">
       <h3>Comprovantes</h3>
       {query.isError ? (
-        <p role="alert">Não foi possível consultar os comprovantes.</p>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível consultar os comprovantes.</p>
+            <Button variant="ghost" onClick={() => void query.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
       ) : !query.data ? (
         <p role="status">Carregando comprovantes…</p>
       ) : query.data.items.length ? (

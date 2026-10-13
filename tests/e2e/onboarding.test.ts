@@ -288,7 +288,8 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
 
   // Step 3 — first manual bet through the existing form.
   await page.getByRole('button', { name: 'Registrar aposta manual' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Nova aposta');
+  await expect(page).toHaveURL(/#bets\/new$/);
+  await expect(page.getByRole('heading', { name: 'Nova aposta', exact: true })).toBeVisible();
   // O formulário foi convertido em wizard: primeiro se escolhe o tipo, depois
   // são informadas as seleções obrigatórias, e só então aparecem valor e casa.
   await page.getByRole('button', { name: /Simples/ }).click();
@@ -498,15 +499,15 @@ test('the Telegram step issues a single-use deep link and confirms it on the sit
   expect(harness.finishPosts).toHaveLength(0);
 
   // Confirming on the site is what links the account; the Telegram account
-  // itself is never chosen in the browser. The Settings panel is the
+  // itself is never chosen in the browser. The Telegram destination is the
   // always-available surface for the same operation.
-  await page.goto('/#settings');
+  await page.goto('/#pm-telegram');
   // Chega pelo deep link como o Telegram abriria: UMA navegação. Atribuir
   // `location.search` dentro de evaluate TAMBÉM navega, e essa navegação ainda
   // estava no ar quando o `page.goto` seguinte começou — as duas disputam a
   // mesma URL e a segunda aborta a primeira (net::ERR_ABORTED / "interrupted
   // by another navigation"). O destino final é idêntico; o evaluate, não.
-  await page.goto('/?telegram=fixture-token-value-000000#settings');
+  await page.goto('/?telegram=fixture-token-value-000000#pm-telegram');
   await expect(page.getByRole('button', { name: 'Confirmar vínculo' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar vínculo' }).click();
   await expect(page.getByText(/Conta do Telegram conectada/)).toBeVisible();

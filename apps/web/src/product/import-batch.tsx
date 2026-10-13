@@ -14,6 +14,7 @@ import {
   type ImportPreview,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { Field } from './forms.js';
 import { ApiFailure, request } from './api.js';
 
@@ -489,12 +490,15 @@ export function ImportBatchList() {
   });
   if (query.isError)
     return (
-      <p role="alert">
-        Não foi possível carregar os lotes.{' '}
-        <Button variant="ghost" onClick={() => void query.refetch()}>
-          Tentar novamente
-        </Button>
-      </p>
+      <div className="notice warning product-error-alert" role="alert">
+        <ProductErrorIcon />
+        <div>
+          <p>Não foi possível carregar os lotes.</p>
+          <Button variant="ghost" onClick={() => void query.refetch()}>
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
     );
   if (!query.data) return <p role="status">Carregando lotes…</p>;
   if (query.data.items.length === 0) return null;

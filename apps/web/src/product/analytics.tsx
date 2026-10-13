@@ -35,6 +35,7 @@ import { betFinancialDisplay } from './financial-display.js';
 import { DashboardPanel } from './dashboard.js';
 import { readChartTokens } from './chart-tokens.js';
 import { SplitsPanel } from './splits.js';
+import { AnalyticsErrorCard } from './analytics-error.js';
 
 const dayLabel = (date: string) => date.split('-').reverse().join('/');
 const units = (value: string | null) =>
@@ -47,6 +48,7 @@ const decimal = (value: bigint) =>
 const percent = (value: string | null) =>
   value === null ? 'Sem base' : value.replace('.', ',') + '%';
 const exactCents = (value: string) => BigInt(value.replace('.', ''));
+const exactUnits = (value: string) => BigInt(value.replace('.', ''));
 const signedUnitText = (value: string | null) => {
   if (value === null) return '—';
   const units = Number(value);
@@ -222,7 +224,13 @@ function Evolution({ report }: { report: PerformanceReport }) {
 }
 
 /** BetTrack presentation for the same account-owned report data. */
-export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
+export function BetTrackAnalyticsPage({
+  workspace,
+  onOpenDetailed,
+}: {
+  workspace: Workspace;
+  onOpenDetailed?: () => void;
+}) {
   const today = saoPauloDate(new Date());
   const month = today.slice(0, 7);
   const monday = new Date(`${today}T12:00:00Z`);
@@ -260,7 +268,16 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
   });
   const [dimension, setDimension] = useState<'sport' | 'book' | 'tipster' | 'amount'>('sport');
   if (report.isError || dashboard.isError)
-    return <p role="alert">Could not load your analytics.</p>;
+    return (
+      <AnalyticsErrorCard
+        message={
+          report.isError
+            ? "Couldn't load your analytics report."
+            : "Couldn't load analytics indicators."
+        }
+        onRetry={() => void (report.isError ? report.refetch() : dashboard.refetch())}
+      />
+    );
   if (!report.data || !dashboard.data) return <p role="status">Loading analytics…</p>;
 
   const summary = report.data.metrics;
@@ -349,10 +366,10 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
         ].filter((row) => row.bets > 0)
       : [];
   const bestDay = report.data.timeline
-    .filter((bucket) => bucket.metrics.settledBets > 0)
+    .filter((bucket) => bucket.metrics.settledBets > 0 && bucket.metrics.profitUnits !== null)
     .reduce<(typeof report.data.timeline)[number] | null>(
       (best, bucket) =>
-        !best || exactCents(bucket.metrics.profit) > exactCents(best.metrics.profit)
+        !best || exactUnits(bucket.metrics.profitUnits!) > exactUnits(best.metrics.profitUnits!)
           ? bucket
           : best,
       null,
@@ -366,6 +383,13 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="bettrack-analytics">
+      {onOpenDetailed ? (
+        <div className="button-row">
+          <button className="ui-button ui-button-secondary" type="button" onClick={onOpenDetailed}>
+            Open detailed analytics
+          </button>
+        </div>
+      ) : null}
       <div className="bettrack-analytics-divider" />
       <h2 className="bettrack-analytics-confidence">{sampleHeadline}</h2>
       <div className="bettrack-analytics-kpis">
@@ -409,7 +433,10 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
           <span>{redWeeks} IN THE RED</span>
         </header>
         {weeklyReport.isError ? (
-          <p role="alert">Could not load weekly results.</p>
+          <AnalyticsErrorCard
+            message="Couldn't load weekly results."
+            onRetry={() => void weeklyReport.refetch()}
+          />
         ) : weeklyReport.isPending ? (
           <p role="status">Loading weekly results…</p>
         ) : (
@@ -434,7 +461,7 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
                     dataKey="unitsLabel"
                     position="top"
                     fill={chartTokens['--text-secondary']}
-                    fontSize={11}
+                    fontSize={12}
                     fontWeight={700}
                   />
                   {weeklyNet.map((week) => (
@@ -603,7 +630,7 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
           </p>
         </header>
         <div className="bettrack-record-grid">
-          <article>
+          <article data-testid="best-day">
             <span>BEST DAY</span>
             <strong>{bestDay ? signedUnitText(bestDay.metrics.profitUnits) : '—'}</strong>
             <small>
@@ -613,7 +640,9 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
                     day: 'numeric',
                     timeZone: 'UTC',
                   }).format(new Date(`${bestDay.date}T12:00:00Z`))
-                : 'No settled bets yet'}
+                : settledCount > 0
+                  ? 'Units unavailable'
+                  : 'No settled bets yet'}
             </small>
           </article>
           <article>
@@ -644,33 +673,37 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
             <h3>
               {betsInsideRange} OF {settledCount} BETS FIT IN 1–3 U
             </h3>
-            <p>The professional standard is 1–3% of the bankroll per bet.</p>
           </article>
           <article>
-            <span>
-              {dailyLimit.isPending
-                ? 'LIMIT LOADING'
-                : dailyLimit.isError
-                  ? 'LIMIT UNAVAILABLE'
-                  : dailyLimit.data?.dailyLimitPercent
-                    ? 'LIMIT SET'
-                    : 'NO LIMIT SET'}
-            </span>
-            <h3>
-              {dailyLimit.data?.dailyLimit
-                ? `${formatDisplayMoney(dailyLimit.data.dailyLimit)} DAILY LIMIT`
-                : dailyLimit.isPending
-                  ? 'CHECKING YOUR BANKROLL'
-                  : dailyLimit.isError
-                    ? 'LIMIT STATUS UNAVAILABLE'
-                    : "YOU HAVEN'T SET A DAILY LIMIT"}
-            </h3>
-            <p>
-              {dailyLimit.data?.dailyLimit
-                ? `${formatDisplayMoney(dailyLimit.data.usedToday)} USED · ${formatDisplayMoney(dailyLimit.data.remainingToday)} REMAINING TODAY`
-                : 'A limit is configured from Bankroll and recalculates when your bankroll changes.'}
-            </p>
-            <a href="#finance">OPEN BANKROLL</a>
+            {dailyLimit.isError ? (
+              <AnalyticsErrorCard
+                message="Couldn't load daily limit details."
+                onRetry={() => void dailyLimit.refetch()}
+              />
+            ) : (
+              <>
+                <span>
+                  {dailyLimit.isPending
+                    ? 'LIMIT LOADING'
+                    : dailyLimit.data?.dailyLimitPercent
+                      ? 'LIMIT SET'
+                      : 'NO LIMIT SET'}
+                </span>
+                <h3>
+                  {dailyLimit.data?.dailyLimit
+                    ? `${formatDisplayMoney(dailyLimit.data.dailyLimit)} DAILY LIMIT`
+                    : dailyLimit.isPending
+                      ? 'CHECKING YOUR BANKROLL'
+                      : "YOU HAVEN'T SET A DAILY LIMIT"}
+                </h3>
+                <p>
+                  {dailyLimit.data?.dailyLimit
+                    ? `${formatDisplayMoney(dailyLimit.data.usedToday)} USED · ${formatDisplayMoney(dailyLimit.data.remainingToday)} REMAINING TODAY`
+                    : 'A limit is configured from Bankroll and recalculates when your bankroll changes.'}
+                </p>
+                <a href="#finance">OPEN BANKROLL</a>
+              </>
+            )}
           </article>
           <article className="bettrack-behaviour-wide">
             <span>{lossCount < 20 ? 'CAN’T BE READ YET' : 'LOSSES OBSERVED'}</span>
@@ -868,12 +901,10 @@ export default function AnalyticsPage({
             </label>
           </div>
           {options.isError ? (
-            <p role="alert">
-              Não foi possível carregar os esportes.{' '}
-              <button type="button" className="text-link" onClick={() => void options.refetch()}>
-                Tentar novamente
-              </button>
-            </p>
+            <AnalyticsErrorCard
+              message="Couldn't load sports."
+              onRetry={() => void options.refetch()}
+            />
           ) : null}
         </details>
         <div className="button-row">
@@ -904,12 +935,10 @@ export default function AnalyticsPage({
           combináveis, unknown preservado e aviso de baixa amostra por split. */}
       <SplitsPanel search={search} version={workspace.version} />
       {report.isError ? (
-        <div className="notice warning" role="alert">
-          Não foi possível carregar a análise.{' '}
-          <Button variant="secondary" onClick={() => void report.refetch()}>
-            Tentar novamente
-          </Button>
-        </div>
+        <AnalyticsErrorCard
+          message="Couldn't load the report."
+          onRetry={() => void report.refetch()}
+        />
       ) : !report.data ? (
         <p role="status">Calculando resultados…</p>
       ) : (
@@ -1061,12 +1090,10 @@ export default function AnalyticsPage({
               </div>
             </div>
             {bets.isError ? (
-              <p role="alert">
-                Não foi possível carregar o detalhamento.{' '}
-                <Button variant="ghost" onClick={() => void bets.refetch()}>
-                  Tentar novamente
-                </Button>
-              </p>
+              <AnalyticsErrorCard
+                message="Couldn't load report details."
+                onRetry={() => void bets.refetch()}
+              />
             ) : !bets.data ? (
               <p role="status">Carregando apostas…</p>
             ) : (

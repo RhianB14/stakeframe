@@ -63,7 +63,7 @@ async function openLegacyRanking(page: Page) {
       },
     }),
   );
-  await page.goto('/#ranking');
+  await page.goto('/?previewPolymarket=true#ranking');
 }
 
 test('a rota legada #ranking abre o Ranking global, sem Composite Score', async ({ page }) => {

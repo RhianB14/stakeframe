@@ -26,6 +26,7 @@ import {
   type Workspace,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { BetForm, Field } from './forms.js';
 import { request, dateLabel, localInstant, localNow } from './api.js';
 import { TelegramLinkPanel } from './telegram-link.js';
@@ -631,11 +632,14 @@ function QueryNotice({
   retry: () => void;
 }) {
   return error ? (
-    <div className="notice warning" role="alert">
-      Não foi possível carregar os registros.
-      <Button variant="secondary" onClick={retry}>
-        Tentar novamente
-      </Button>
+    <div className="notice warning product-error-alert" role="alert">
+      <ProductErrorIcon />
+      <div>
+        <p>Não foi possível carregar os registros.</p>
+        <Button variant="secondary" onClick={retry}>
+          Tentar novamente
+        </Button>
+      </div>
     </div>
   ) : loading ? (
     <p className="loading-note" role="status">
@@ -1668,13 +1672,13 @@ export function BetsPage({
             </select>
           </label>
           <label>
-            <span>BET TYPE</span>
+            <span>MARKET TYPE</span>
             <input
               type="text"
               list="bets-history-market-type-options"
               maxLength={120}
               autoComplete="off"
-              aria-label="BET TYPE"
+              aria-label="MARKET TYPE"
               value={draftHistoryFilters.marketType}
               onChange={(event) => changeHistoryDraft('marketType', event.target.value)}
             />

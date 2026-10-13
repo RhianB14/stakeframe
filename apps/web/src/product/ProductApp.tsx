@@ -25,6 +25,7 @@ import {
 import { authAction } from '../OwnerAccess.js';
 import { Button } from '../components/ui/button.js';
 import { Dialog } from '../components/ui/dialog.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { ActionProvider, PendingOperation, useFinanceActions } from './actions.js';
 import { request, type CommandInput } from './api.js';
 import {
@@ -642,20 +643,17 @@ export function ProductApp({
     return (
       <div className="product-loading">
         <h1>Seu espaço</h1>
-        <p role={workspace.isError ? 'alert' : 'status'}>
-          {workspace.isError
-            ? 'Não foi possível carregar seus registros.'
-            : 'Carregando seus registros…'}
-        </p>
         {workspace.isError ? (
-          <Button
-            onClick={() => {
-              void workspace.refetch();
-            }}
-          >
-            Tentar novamente
-          </Button>
-        ) : null}
+          <div className="notice warning product-error-alert" role="alert">
+            <ProductErrorIcon />
+            <div>
+              <p>Não foi possível carregar seus registros.</p>
+              <Button onClick={() => void workspace.refetch()}>Tentar novamente</Button>
+            </div>
+          </div>
+        ) : (
+          <p role="status">Carregando seus registros…</p>
+        )}
       </div>
     );
   return (
@@ -677,6 +675,7 @@ function ProductShell({
 }) {
   const releaseLabel = release && release.version !== 'unversioned' ? ` · v${release.version}` : '';
   const [page, setPage] = useState(currentPage);
+  const [analyticsDetail, setAnalyticsDetail] = useState(false);
   const [betEditId, setBetEditId] = useState(currentBetEditId);
   const [betDetailId, setBetDetailId] = useState(currentBetDetailId);
   const [betEditAmountMode, setBetEditAmountMode] = useState(currentBetEditAmountMode);
@@ -764,6 +763,7 @@ function ProductShell({
   useEffect(() => {
     const changed = () => {
       setPage(currentPage());
+      setAnalyticsDetail(false);
       setBetEditId(currentBetEditId());
       setBetDetailId(currentBetDetailId());
       setBetEditAmountMode(currentBetEditAmountMode());
@@ -1081,7 +1081,23 @@ function ProductShell({
           ) : page === 'analytics' ? (
             <Suspense fallback={<p role="status">Carregando análises…</p>}>
               {variant === 'web' ? (
-                <BetTrackAnalyticsPage workspace={workspace} />
+                analyticsDetail ? (
+                  <>
+                    <button
+                      className="ui-button ui-button-secondary"
+                      type="button"
+                      onClick={() => setAnalyticsDetail(false)}
+                    >
+                      Voltar à visão geral de análises
+                    </button>
+                    <AnalyticsPage workspace={workspace} open={open} />
+                  </>
+                ) : (
+                  <BetTrackAnalyticsPage
+                    workspace={workspace}
+                    onOpenDetailed={() => setAnalyticsDetail(true)}
+                  />
+                )
               ) : (
                 <AnalyticsPage workspace={workspace} open={open} />
               )}

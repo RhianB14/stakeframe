@@ -304,6 +304,11 @@ async function enabledProduct(
     route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
   );
 }
+async function openMobileProductNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 0) <= 760) {
+    await page.getByRole('button', { name: 'Abrir navegação', exact: true }).click();
+  }
+}
 for (const scenario of [
   {
     name: 'open without settlement',
@@ -381,6 +386,8 @@ for (const scenario of [
     };
     await enabledProduct(page, fixture(), [sample], sample);
     await page.goto('/');
+    await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
+    await openMobileProductNavigation(page);
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
     // STK-F2-18: casa a célula pelo NOME da coluna, não pelo índice. A Fase 3
     // passou a mostrar 8 das 14 colunas por padrão, o que deslocou a coluna de
@@ -388,7 +395,7 @@ for (const scenario of [
     // teste reprovar por um motivo que não tinha nada a ver com o que ele
     // verifica. Localizar pelo `th` é o que o teste quer dizer.
     const realizedReturn = page
-      .locator('.product-table tbody tr')
+      .locator('.product-table:not(.bets-history-table) tbody tr')
       .first()
       .locator('td[data-column="return"]');
     await expect(realizedReturn).toContainText(scenario.returnExpected);
@@ -464,7 +471,11 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     route.fulfill({ json: { bet: multipleBet, settlements: [] } }),
   );
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  if ((page.viewportSize()?.width ?? 0) > 900) {
+    await page.setViewportSize({ width: 1024, height: 900 });
+  }
   await page.goto('/');
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
 
   if ((page.viewportSize()?.width ?? 0) <= 900) {
@@ -676,55 +687,69 @@ test('bets table sorts by the proposed columns on desktop', async ({ page }) => 
   await page.goto('/');
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
 
-  const firstTicket = page.locator('.bet-detail-table tbody tr').first().locator('td').first();
-  await expect(firstTicket).toContainText('#3');
+  const firstTicket = page
+    .locator('.product-table:not(.bets-history-table) tbody tr')
+    .first()
+    .locator('td')
+    .first();
+  await expect(firstTicket).toHaveText('#000003');
 
   const ticketHeader = page.getByRole('columnheader', { name: 'Nº do bilhete' });
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'none');
   await ticketHeader.getByRole('button').click();
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'ascending');
-  await expect(firstTicket).toContainText('#1');
+  await expect(firstTicket).toHaveText('#000001');
   await ticketHeader.getByRole('button').click();
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'descending');
-  await expect(firstTicket).toContainText('#3');
+  await expect(firstTicket).toHaveText('#000003');
 
   const stakeHeader = page.getByRole('columnheader', { name: 'Valor apostado' });
   await stakeHeader.getByRole('button').click();
   await expect(stakeHeader).toHaveAttribute('aria-sort', 'ascending');
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'none');
-  await expect(firstTicket).toContainText('#2');
+  await expect(firstTicket).toHaveText('#000002');
   await stakeHeader.getByRole('button').click();
   await expect(stakeHeader).toHaveAttribute('aria-sort', 'descending');
-  await expect(firstTicket).toContainText('#3');
+  await expect(firstTicket).toHaveText('#000003');
 });
 test('bet-history filters stay as drafts until applied and active chips can be removed or cleared', async ({
   page,
 }) => {
-  await enabledProduct(page, fixture(), [bet]);
+  const secondHistoryBet: Bet = {
+    ...bet,
+    id: '10000000-0000-4000-8000-000000000008',
+    ticketNumber: 2,
+    reference: 'TICKET-2',
+    selections: bet.selections.map((selection) => ({ ...selection, event: 'Pine × Harbor' })),
+  };
+  await enabledProduct(page, fixture(), [bet, secondHistoryBet]);
   const historyRequests: URL[] = [];
   await page.route('**/api/v1/bets?*', async (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.has('historyBefore')) historyRequests.push(url);
     await route.fulfill({
       json: {
-        items: [bet],
-        total: 1,
+        items: url.searchParams.has('search') ? [bet] : [bet, secondHistoryBet],
+        total: url.searchParams.has('search') ? 1 : 2,
         page: Number(url.searchParams.get('page') ?? 1),
         pageSize: 100,
         summary: {
-          count: 1,
-          stake: '100.00',
+          count: url.searchParams.has('search') ? 1 : 2,
+          stake: url.searchParams.has('search') ? '100.00' : '200.00',
           profit: '0.00',
-          stakeUnits: '10.00',
+          stakeUnits: url.searchParams.has('search') ? '10.00' : '20.00',
           profitUnits: '0.00',
         },
       },
     });
   });
   await page.goto('/');
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
   await expect.poll(() => historyRequests.length).toBeGreaterThan(0);
+  const historyTable = page.locator('.bets-history-table');
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
   const initialRequestCount = historyRequests.length;
 
   await page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' }).fill('Aurora');
@@ -732,10 +757,12 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   expect(historyRequests).toHaveLength(initialRequestCount);
   await page.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Aurora');
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Remover filtro de busca Aurora' }).click();
-  await expect.poll(() => historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
     '',
   );
@@ -743,8 +770,10 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   await page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' }).fill('Central');
   await page.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Central');
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Limpar filtros' }).click();
-  await expect.poll(() => historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Remover filtro de busca/ })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
     '',
   );
@@ -788,9 +817,10 @@ test('history accepts a custom market type not present on the first page', async
     });
   });
   await page.goto('/');
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
-  const marketType = page.getByRole('textbox', { name: 'Tipo de aposta' });
+  const marketType = page.getByRole('textbox', { name: 'Tipo de mercado' });
   await expect(
     page.locator(`#bets-history-market-type-options option[value="${customMarket}"]`),
   ).toHaveCount(0);
@@ -811,6 +841,7 @@ test('empty display preferences start in Portuguese and expose only translated l
   });
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+  await openMobileProductNavigation(page);
   await expect(page.getByRole('link', { name: 'Apostas', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Configurações', exact: true }).click();
   const language = page.getByRole('combobox', { name: 'Idioma' });
@@ -828,6 +859,7 @@ test('unsupported stored language falls back to the supported Portuguese interfa
   });
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+  await openMobileProductNavigation(page);
   await expect(page.getByRole('link', { name: 'Apostas', exact: true })).toBeVisible();
 });
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
@@ -835,6 +867,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
 }, info) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
+  await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(
     page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
@@ -881,6 +914,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     ),
   ).toBe(true);
   await page.screenshot({ path: info.outputPath('product-overview.png'), fullPage: true });
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('group', { name: /Filtrar histórico por resultado/i })).toBeVisible();
   await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
@@ -928,6 +962,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     expect(labelLayout.scrollWidth).toBeLessThanOrEqual(labelLayout.width);
     expect(labelLayout.height).toBeGreaterThan(12);
 
+    await openMobileProductNavigation(page);
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
     await expect(page.locator('.bet-list-card').last()).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -967,6 +1002,7 @@ test('first use requires explicit balance confirmation and preserves decimal str
     return route.fulfill({ json: { id: 'initial', version: workspace.version } });
   });
   await page.goto('/');
+  await openMobileProductNavigation(page);
 
   await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Conferir saldos iniciais' }).click();
@@ -1005,12 +1041,7 @@ test('ambiguous network result is recovered with the same key and body after rel
   await page.goto('/#finance');
   await page.getByLabel('Valor da movimentação', { exact: true }).fill('25,50');
   await page.locator('.bankroll-move-card').getByRole('button', { name: 'Registrar' }).click();
-  await expect(page.getByLabel('Valor (R$)', { exact: true })).toHaveValue('25,50');
-  await page.getByLabel('Motivo / observação').fill('Aporte conferido');
-  await page.getByRole('button', { name: 'Registrar movimentação' }).click();
-  await expect(
-    page.getByRole('dialog').getByRole('button', { name: 'Verificar operação' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Verificar operação', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Verificar operação', exact: true })).toBeVisible();
   // A primeira chamada já falhou e foi abortada antes do reload. Aguarde a
@@ -1044,6 +1075,8 @@ test('partial cashout sends closed principal independently from received money',
     return route.fulfill({ json: { id: betId, version: 2 } });
   });
   await page.goto('/');
+  await openMobileProductNavigation(page);
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
   await page.getByRole('button', { name: 'Liquidar aposta', exact: true }).click();
   await page.getByLabel('Resultado', { exact: true }).selectOption('partial_cashout');
@@ -1062,6 +1095,7 @@ test('partial cashout sends closed principal independently from received money',
 test('an expired API session removes cached private records', async ({ page }) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
+  await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
   await expect(
     page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
@@ -1361,7 +1395,7 @@ test('review displays conflicting evidence, leaves unknown dates blank and confi
       bet: {
         bookmakerId: house,
         stake: '25.50',
-        odds: '2.10',
+        odds: '2.1',
         placedAt: '2026-09-01T18:00:00.000Z',
         freebetId: null,
         selections: [{ eventDate: null, eventAt: null, dateStatus: 'pending' }],
@@ -1648,6 +1682,10 @@ test('calendar distinguishes selections from bets and saves a partial date witho
   await page.getByRole('button', { name: 'Pendências (1)' }).click();
   await expect(page.getByRole('heading', { name: 'Datas a conferir' })).toBeVisible();
   await expect(page.getByText('Sem data', { exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: /^Ver aposta/ })
+    .first()
+    .click();
   await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).click();
   await expect(
     page.getByText('Fonte desativada neste ambiente. O preenchimento manual está disponível.'),
@@ -1705,6 +1743,10 @@ test('source results preserve a manual date until explicitly selected and review
     return route.fulfill({ json: { id: betId, version: 2 } });
   });
   await page.goto('/#calendar');
+  await page
+    .getByRole('button', { name: /^Ver aposta/ })
+    .first()
+    .click();
   await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
   // STK-F2-18: o nome acessível do link de fonte externa não leva mais o
   // glifo `↗`. Um caractere Unicode como parte do nome é anunciado pelo
@@ -1762,10 +1804,18 @@ test('an uncertain event search reuses its key and input after reloading without
       });
   });
   await page.goto('/#calendar');
+  await page
+    .getByRole('button', { name: /^Ver aposta/ })
+    .first()
+    .click();
   await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
   await page.getByRole('button', { name: 'Buscar programação' }).click();
   await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
   await page.reload();
+  await page
+    .getByRole('button', { name: /^Ver aposta/ })
+    .first()
+    .click();
   await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
   expect(attempts).toHaveLength(1);
@@ -1803,8 +1853,10 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
     metrics: {
       ...emptyMetrics,
       bets: 1,
-      profit: i % 2 ? '50.00' : '-25.00',
-      realProfit: i % 2 ? '50.00' : '-25.00',
+      settledBets: 1,
+      profit: i === 0 ? '50.00' : i === 1 ? '40.00' : '-25.00',
+      realProfit: i === 0 ? '50.00' : i === 1 ? '40.00' : '-25.00',
+      profitUnits: i === 0 ? '1.000000' : i === 1 ? '2.000000' : '-0.500000',
     },
   }));
   report.byBookmaker = [{ key: house, label: 'Bet365', metrics: report.metrics }];
@@ -1849,6 +1901,10 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   );
   await page.goto('/#analytics');
   await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  const bestDay = page.locator('[data-testid="best-day"]');
+  await expect(bestDay.locator('strong')).toHaveText('+2.0 U');
+  await expect(bestDay.locator('small')).toContainText('2');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
   /* As DUAS bordas do período são preenchidas aqui, e as duas de propósito.
 
      A tela deriva `from` do primeiro dia do MÊS CORRENTE (analytics.tsx:213) e
@@ -1975,6 +2031,7 @@ test('analytics chart axis labels honour the same 12px floor as the rest of the 
   // tentativa (o id useId muda: _r_3g_, _r_3n_, _r_6i_…). É o mesmo guard do
   // teste de analytics acima, pela mesma razão.
   await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
   /* AS DUAS BORDAS SÃO PREENCHIDAS AQUI — segunda ocorrência da mesma armadilha
      de calendário, e a mesma união de mecanismos já aplicada no teste de
      analytics acima.
@@ -2038,16 +2095,73 @@ test('analytics distinguishes missing units and failed data from empty results',
     route.fulfill({ json: dashboardFixture(report.metrics) }),
   );
   await page.route('**/api/v1/reports/options', (route) => route.fulfill({ json: { sports: [] } }));
-  await page.route('**/api/v1/reports/bets?*', (route) => route.fulfill({ status: 503, json: {} }));
+  let detailAttempts = 0;
+  await page.route('**/api/v1/reports/bets?*', (route) => {
+    detailAttempts += 1;
+    return detailAttempts === 1
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } });
+  });
   await page.goto('/#analytics');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
   await expect(page.getByText('Unidades a conferir', { exact: true })).toBeVisible();
   await expect(page.getByText('O total em reais está completo', { exact: false })).toBeVisible();
-  await expect(
-    page.getByText('Não foi possível carregar o detalhamento.', { exact: false }),
-  ).toBeVisible();
+  const detailsError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar os detalhes do relatório.',
+  });
+  await expect(detailsError).toBeVisible();
+  await expect(detailsError.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await detailsError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(
     page.getByText('Nenhuma aposta corresponde a estes filtros.', { exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
+  await expect(detailsError).toHaveCount(0);
+  expect(detailAttempts).toBe(2);
+});
+
+test('overview analytics errors announce, show an icon and retry main and weekly reports', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  const monthStart = `${saoPauloDate(new Date()).slice(0, 7)}-01`;
+  let mainAttempts = 0;
+  let weeklyAttempts = 0;
+  await page.route('**/api/v1/reports?*', (route) => {
+    const from = new URL(route.request().url()).searchParams.get('from');
+    if (from === monthStart) {
+      mainAttempts += 1;
+      return mainAttempts === 1
+        ? route.fulfill({ status: 503, json: {} })
+        : route.fulfill({ json: report });
+    }
+    weeklyAttempts += 1;
+    return weeklyAttempts === 1
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: report });
+  });
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
+  await page.goto('/#analytics');
+
+  const mainError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar o relatório de análises.',
+  });
+  await expect(mainError).toBeVisible();
+  await expect(mainError.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await mainError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(mainError).toHaveCount(0);
+  await expect.poll(() => mainAttempts).toBe(2);
+
+  const weeklyError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar os resultados semanais.',
+  });
+  await expect(weeklyError).toBeVisible();
+  await expect(weeklyError.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await weeklyError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(weeklyError).toHaveCount(0);
+  await expect.poll(() => weeklyAttempts).toBe(2);
 });
 
 test('confirms origin and event date on the canonical draft before importing (R5)', async ({

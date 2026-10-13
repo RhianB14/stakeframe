@@ -11,6 +11,7 @@ import {
   type PolymarketFavorite,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { Field } from './forms.js';
 import { ApiFailure, request } from './api.js';
 import { alertFieldLabels, favoritesView } from './favorites-view.js';
@@ -166,11 +167,14 @@ export function PolymarketFavoritesSection() {
         </p>
       ) : null}
       {query.isError ? (
-        <div className="notice warning" role="alert">
-          Não foi possível carregar os favoritos.
-          <Button variant="secondary" onClick={() => void query.refetch()}>
-            Tentar novamente
-          </Button>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível carregar os favoritos.</p>
+            <Button variant="secondary" onClick={() => void query.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
         </div>
       ) : null}
       {error ? (

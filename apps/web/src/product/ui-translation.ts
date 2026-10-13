@@ -48,11 +48,11 @@ const ptBR: Record<string, string> = {
   'show all': 'Mostrar tudo',
   'more details': 'Mais detalhes',
   'date and number formatting · full translation is not available yet':
-    'Formatação de datas e números e tradução completa da interface.',
+    'Formatação de datas e números · tradução completa da interface ainda não está disponível.',
   'date and number formatting': 'Formatação de datas e números',
-  'full interface translation': 'Interface traduzida para português',
-  'full interface in português (brasil)': 'Interface completa em português (Brasil)',
-  'full interface language': 'Idioma completo da interface',
+  'full interface translation': 'Tradução parcial dos textos conhecidos da interface',
+  'full interface in português (brasil)': 'Textos conhecidos da interface em português (Brasil)',
+  'full interface language': 'Idioma dos textos conhecidos da interface',
   'display conversion only · brl remains the accounting currency':
     'Apenas conversão visual; BRL continua sendo a moeda contábil.',
   'how they’re shown · entry accepts all three':
@@ -165,6 +165,19 @@ const ptBR: Record<string, string> = {
   'weekly net · 2 weeks': 'Saldo semanal · 2 semanas',
   'in the red': 'no negativo',
   units: 'unidades',
+  'try again': 'Tentar novamente',
+  'open detailed analytics': 'Abrir análise detalhada',
+  'back to analytics overview': 'Voltar à visão geral de análises',
+  'units unavailable': 'Unidades indisponíveis',
+  "couldn't load your analytics report.": 'Não foi possível carregar o relatório de análises.',
+  "couldn't load analytics indicators.": 'Não foi possível carregar os indicadores de análises.',
+  "couldn't load weekly results.": 'Não foi possível carregar os resultados semanais.',
+  "couldn't load daily limit details.": 'Não foi possível carregar os detalhes do limite diário.',
+  "couldn't load sports.": 'Não foi possível carregar os esportes.',
+  "couldn't load the report.": 'Não foi possível carregar o relatório.',
+  "couldn't load report details.": 'Não foi possível carregar os detalhes do relatório.',
+  "couldn't load dimension comparisons.": 'Não foi possível carregar as comparações por dimensão.',
+  'could not load the result.': 'Não foi possível carregar o resultado.',
   'could not load weekly results.': 'Não foi possível carregar os resultados semanais.',
   'loading weekly results…': 'Carregando resultados semanais…',
   'units are not available for some bets in this period.':
@@ -214,6 +227,7 @@ const ptBR: Record<string, string> = {
   "market can't be segmented yet · needs structure from extraction":
     'Mercado ainda sem segmento · falta estruturar os dados capturados',
   'no settled bets in this segment yet': 'Ainda não há apostas liquidadas neste segmento',
+  'no settled bets yet': 'Ainda não há apostas liquidadas',
   'your first records': 'Seus primeiros recordes',
   'records and consistency, worked out from your own bets. they look backwards on purpose.':
     'Recordes e consistência calculados a partir das suas apostas. Eles mostram o que já aconteceu.',
@@ -225,8 +239,6 @@ const ptBR: Record<string, string> = {
   'counting needs no sample; inferring does. facts appear from the first bet.':
     'Contar não exige amostra; tirar conclusões, sim. Os fatos aparecem desde a primeira aposta.',
   'fact · needs no sample': 'Fato · não exige amostra',
-  'the professional standard is 1–3% of the bankroll per bet.':
-    'O padrão profissional é arriscar de 1% a 3% da banca por aposta.',
   of: 'de',
   'a record, not where you are now': 'um recorde, não sua situação atual',
   'of 20 losses': 'de 20 perdas',
@@ -290,6 +302,7 @@ const ptBR: Record<string, string> = {
   bookmaker: 'Casa de apostas',
   'sport / league': 'Esporte / liga',
   'bet type': 'Tipo de aposta',
+  'market type': 'Tipo de mercado',
   'ticket type': 'Tipo de bilhete',
   'all bookmakers': 'Todas as casas',
   'all sports': 'Todos os esportes',
@@ -310,6 +323,8 @@ const ptBR: Record<string, string> = {
   'bet history table': 'Tabela do histórico de apostas',
   'bet sections': 'Seções de apostas',
   'main navigation': 'Navegação principal',
+  'open navigation': 'Abrir navegação',
+  'close navigation': 'Fechar navegação',
   'choose visible history columns': 'Escolher colunas visíveis do histórico',
   'choose which fields appear in the history table.':
     'Escolha quais campos aparecem na tabela do histórico.',

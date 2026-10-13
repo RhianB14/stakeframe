@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { telegramSessionSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { ApiFailure, request } from './api.js';
 import { readTelegramInitData } from './miniapp-auth.js';
 import { setMiniAppInitData } from './miniapp-session.js';
@@ -106,12 +107,17 @@ export function MiniApp() {
     return (
       <div className="product-loading">
         <h1>Stakeframe</h1>
-        <p role="alert">
-          {session.error instanceof ApiFailure && session.error.status === 403
-            ? 'Esta conta do Telegram ainda não está vinculada. Abra o site, entre na sua conta e use "Vincular Telegram" em Configurações.'
-            : 'Não foi possível conferir sua conta agora. Tente novamente.'}
-        </p>
-        <Button onClick={() => void session.refetch()}>Tentar novamente</Button>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>
+              {session.error instanceof ApiFailure && session.error.status === 403
+                ? 'Esta conta do Telegram ainda não está vinculada. Abra o site, entre na sua conta e use "Vincular Telegram" em Configurações.'
+                : 'Não foi possível conferir sua conta agora. Tente novamente.'}
+            </p>
+            <Button onClick={() => void session.refetch()}>Tentar novamente</Button>
+          </div>
+        </div>
       </div>
     );
   if (!session.data)

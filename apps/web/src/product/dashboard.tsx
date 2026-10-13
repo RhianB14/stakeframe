@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { analyticsDashboardSchema } from '@stakeframe/shared';
-import { Button } from '../components/ui/button.js';
 import { request } from './api.js';
 import { dashboardCards, lowSampleNotice } from './dashboard-metrics.js';
+import { AnalyticsErrorCard } from './analytics-error.js';
 
 /**
  * STK-F2-02 — cards do dashboard analítico: ROI, P&L, yield e N juntos, com N
@@ -16,12 +16,10 @@ export function DashboardPanel({ search, version }: { search: string; version: n
   });
   if (dashboard.isError)
     return (
-      <div className="notice warning" role="alert">
-        Não foi possível carregar os indicadores.{' '}
-        <Button variant="secondary" onClick={() => void dashboard.refetch()}>
-          Tentar novamente
-        </Button>
-      </div>
+      <AnalyticsErrorCard
+        message="Couldn't load analytics indicators."
+        onRetry={() => void dashboard.refetch()}
+      />
     );
   if (!dashboard.data) return <p role="status">Calculando indicadores...</p>;
   const { metrics, lowSample, minSample } = dashboard.data;

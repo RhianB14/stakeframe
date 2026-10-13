@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // STK-F2-18 (PR-1) — o mesmo medidor que o E2E usa, importado uma vez.
 import {
@@ -23,6 +24,15 @@ const read = (relative: string) =>
 const tokensCss = read('../../apps/web/src/product/tokens.css');
 const productCss = read('../../apps/web/src/product/product.css');
 const styleCss = read('../../apps/web/src/style.css');
+const uiSourceRoot = fileURLToPath(new URL('../../apps/web/src', import.meta.url));
+
+function uiStyleFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return uiStyleFiles(path);
+    return /\.(?:css|tsx)$/.test(entry.name) ? [path] : [];
+  });
+}
 const productApp = read('../../apps/web/src/product/ProductApp.tsx');
 const appShell = read('../../apps/web/src/product/app-shell.tsx');
 
@@ -434,15 +444,76 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('product text never uses a font size below the D3 12px floor', () => {
-    const undersized: string[] = [];
-    for (const { selector, body } of rulePairs(productCss)) {
-      for (const match of body.matchAll(/font-size:\s*([\d.]+)px/g)) {
-        if (Number(match[1]) < 12) undersized.push(`${selector.trim()}: ${match[1]}px`);
+  it('all web UI text and chart labels respect the D3 12px floor', () => {
+    const files = uiStyleFiles(uiSourceRoot).map((path) => ({
+      path,
+      source: readFileSync(path, 'utf8').replace(/\r\n/g, '\n'),
+    }));
+    const fontTokens = new Map<string, string>();
+    for (const file of files.filter(({ path }) => path.endsWith('.css'))) {
+      for (const match of file.source.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
+        fontTokens.set(match[1]!, match[2]!.trim());
       }
     }
-    // No exception is needed: all product text and glyphs use the 12px floor.
-    expect(undersized, `font-size abaixo do piso: ${undersized.join(', ')}`).toEqual([]);
+
+    const pixels = (value: string, depth = 0): number | undefined => {
+      if (depth > 5) return undefined;
+      const normalized = value.trim().replace(/\s*!important\s*$/i, '');
+      if (/^(?:inherit|initial|unset)$/i.test(normalized)) return 12;
+      const token = /^var\(--([\w-]+)(?:\s*,\s*([^)]*))?\)$/.exec(normalized);
+      if (token) {
+        const resolved = fontTokens.get(token[1]!) ?? token[2];
+        return resolved ? pixels(resolved, depth + 1) : undefined;
+      }
+      const clamp = /^clamp\(([^,]+)/.exec(normalized);
+      const candidate = clamp?.[1]?.trim() ?? normalized;
+      const size = /^([\d.]+)(px|rem|em|pt)?$/.exec(candidate);
+      if (!size) return undefined;
+      const amount = Number(size[1]);
+      if (size[2] === 'px') return amount;
+      if (size[2] === 'rem') return amount * 16;
+      if (size[2] === 'em') return amount * 12;
+      if (size[2] === 'pt') return amount * (4 / 3);
+      return amount;
+    };
+
+    const undersized: string[] = [];
+    const unresolved: string[] = [];
+    for (const file of files) {
+      const css = file.path.endsWith('.css');
+      file.source.split('\n').forEach((line, index) => {
+        const declarations = css
+          ? [...line.matchAll(/font-size\s*:\s*([^;]+);?/gi)].map((match) => match[1]!.trim())
+          : [
+              ...line.matchAll(/fontSize\s*=\s*\{\s*([^}]+)\s*\}/g),
+              ...line.matchAll(/fontSize\s*:\s*([^,;}]+)/g),
+            ].map((match) => match[1]!.trim());
+        for (const declaration of declarations) {
+          const size = pixels(declaration);
+          const location = `${file.path}:${index + 1} ${declaration}`;
+          if (size === undefined) unresolved.push(location);
+          else if (size < 12) undersized.push(`${location} (${size}px)`);
+        }
+      });
+    }
+
+    // The sole exception is the collapsed sidebar's icon-only new-bet CTA:
+    // the semantic button label remains in the DOM, while a visible 18px `+`
+    // pseudo-element is its only rendered glyph at that breakpoint.
+    const hiddenText = undersized.filter((entry) => /\(0px\)$/.test(entry));
+    const hasAccessibleCollapsedPlus =
+      hiddenText.length === 1 &&
+      appShell.includes('+ NEW BET') &&
+      /\.product-web-theme\s+\.product-sidebar\[data-mode=['"]collapsed['"]\]\s+\.product-new-bet,[\s\S]*?\.product-new-bet\s*\{[^}]*font-size:\s*0\s*;[^}]*\}/.test(
+        productCss,
+      ) &&
+      /\.product-web-theme\s+\.product-sidebar\[data-mode=['"]collapsed['"]\]\s+\.product-new-bet::before,[\s\S]*?\.product-new-bet::before\s*\{[^}]*content:\s*['"]\+['"];[^}]*font-size:\s*18px;/.test(
+        productCss,
+      );
+    const violations = undersized.filter((entry) => !hiddenText.includes(entry));
+    if (hiddenText.length > 0) expect(hasAccessibleCollapsedPlus).toBe(true);
+    expect(unresolved, `font-size sem valor verificável: ${unresolved.join(', ')}`).toEqual([]);
+    expect(violations, `font-size abaixo do piso: ${violations.join(', ')}`).toEqual([]);
   });
 
   it('history filter controls keep a 44px touch target', () => {

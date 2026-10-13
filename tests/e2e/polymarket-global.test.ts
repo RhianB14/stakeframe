@@ -17,9 +17,8 @@ import { expect, test, type Page } from '@playwright/test';
  * E os dois estados que o card exige ver: a cobertura truncada com a métrica
  * BLOQUEADA, e o valor desconhecido como "Sem base" — nunca zero, nunca vazio.
  *
- * A tela usa DADOS LOCAIS (a integração está pendente, gate F2-18), então
- * este teste não intercepta o ranking: ele abre `#pm-global` e mede o que a
- * casca monta. O que ele prova é a RENDERIZAÇÃO, não a origem do dado.
+ * Este teste habilita explicitamente o preview local de desenvolvimento; o
+ * fluxo normal, inclusive em localhost, consulta a API do ranking.
  */
 
 /** A casca do produto: as mesmas fixtures de status/onboarding/workspace que
@@ -83,7 +82,7 @@ async function openGlobal(page: Page) {
       },
     }),
   );
-  await page.goto('/#pm-global');
+  await page.goto('/?previewPolymarket=true#pm-global');
   await expect(page.getByRole('heading', { name: 'Tipsters' })).toBeVisible();
 }
 

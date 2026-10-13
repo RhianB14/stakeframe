@@ -22,6 +22,7 @@ import {
 } from './polymarket-global-view.js';
 import { ApiFailure, request } from './api.js';
 import { formatDisplayDate } from './preferences.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 
 const rankingSorts = [
   { value: 'PNL', label: 'PnL' },
@@ -58,20 +59,19 @@ const rankingSorts = [
  *    "Sem base" — nunca uma casa vazia.
  *  - Não há cor inline, não há `style={{}}` e não há termo de avaliação.
  *
- * O preview em desenvolvimento/loopback usa a série local validada para
- * demonstrar a apresentação; origens de produção consultam o endpoint
- * autenticado, cuja série depende do worker de ingestão. Quando ela não
- * existe, a interface explica isso sem recorrer a perfis fictícios.
+ * A fixture local só é habilitada em desenvolvimento quando a URL pede
+ * explicitamente `?previewPolymarket=true`. A navegação normal, inclusive em
+ * localhost com banco real, sempre consulta o ranking persistido pela API.
  */
 export function PolymarketGlobalPage() {
   const [filter, setFilter] = useState<PolymarketGlobalFilter>('ALL');
   const [sort, setSort] = useState<PolymarketGlobalSort>('PNL');
   const [pageSize, setPageSize] = useState(12);
   const [page, setPage] = useState(1);
-  const isLoopbackPreview =
+  const isDemo =
+    import.meta.env.DEV &&
     typeof window !== 'undefined' &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-  const isDemo = import.meta.env.DEV || isLoopbackPreview;
+    new URLSearchParams(window.location.search).get('previewPolymarket') === 'true';
   const view = isDemo ? globalView(localPolymarketGlobal, { category: filter, sort }) : null;
   const category = filter === 'ALL' ? 'OVERALL' : filter;
   const orderBy = sort === 'VOLUME' ? 'VOL' : 'PNL';
@@ -199,7 +199,8 @@ export function PolymarketGlobalPage() {
       ) : null}
       {!view && query.isPending ? <p role="status">Carregando leaderboard oficial…</p> : null}
       {!view && query.isError ? (
-        <div className="empty-state" role="alert">
+        <div className="empty-state polymarket-error-card" role="alert">
+          <ProductErrorIcon />
           <h3>Ranking oficial indisponível</h3>
           <p>
             A prévia precisa de uma sessão autenticada e de uma série Polymarket ingerida no

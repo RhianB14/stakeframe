@@ -15,6 +15,7 @@ import {
   type EventProvider,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { CommandForm } from './actions.js';
 import { Field } from './forms.js';
 import { request, localInstant, ApiFailure, dateLabel } from './api.js';
@@ -307,17 +308,15 @@ export function CalendarPage({ workspace, open }: { workspace: Workspace; open: 
           </p>
         ) : null}
         {query.isError ? (
-          <p role="alert">
-            Não foi possível carregar o calendário.{' '}
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void query.refetch();
-              }}
-            >
-              Tentar novamente
-            </Button>
-          </p>
+          <div className="notice warning product-error-alert" role="alert">
+            <ProductErrorIcon />
+            <div>
+              <p>Não foi possível carregar o calendário.</p>
+              <Button variant="ghost" onClick={() => void query.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
         ) : !query.data ? (
           <p role="status">Carregando agenda…</p>
         ) : (
@@ -431,16 +430,13 @@ export function EventReview({
   });
   if (query.isError)
     return (
-      <p role="alert">
-        Não foi possível carregar o evento.{' '}
-        <Button
-          onClick={() => {
-            void query.refetch();
-          }}
-        >
-          Tentar novamente
-        </Button>
-      </p>
+      <div className="notice warning product-error-alert" role="alert">
+        <ProductErrorIcon />
+        <div>
+          <p>Não foi possível carregar o evento.</p>
+          <Button onClick={() => void query.refetch()}>Tentar novamente</Button>
+        </div>
+      </div>
     );
   if (!query.data) return <p role="status">Carregando evento…</p>;
   return <EventEditor item={query.data} owner={owner} onDone={onDone} />;
@@ -701,18 +697,15 @@ function EventSearchPanel({
         </Field>
       </div>
       {status.isError ? (
-        <p role="alert">
-          Não foi possível verificar as fontes.{' '}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              void status.refetch();
-            }}
-          >
-            Tentar novamente
-          </Button>
-        </p>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível verificar as fontes.</p>
+            <Button type="button" variant="ghost" onClick={() => void status.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
       ) : available ? (
         <p className="muted">
           {available.enabled
@@ -736,7 +729,12 @@ function EventSearchPanel({
           A solicitação anterior precisa ser verificada. A verificação reutiliza a mesma consulta.
         </p>
       ) : null}
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? (
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <p>{error}</p>
+        </div>
+      ) : null}
       <Button
         type="button"
         variant="secondary"
@@ -748,18 +746,15 @@ function EventSearchPanel({
         {busy ? 'Solicitando…' : pending ? 'Verificar consulta' : 'Buscar programação'}
       </Button>
       {searches.isError ? (
-        <p role="alert">
-          Não foi possível carregar as buscas.{' '}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              void searches.refetch();
-            }}
-          >
-            Tentar novamente
-          </Button>
-        </p>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível carregar as buscas.</p>
+            <Button type="button" variant="ghost" onClick={() => void searches.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
       ) : searches.data?.length ? (
         <div className="search-history">
           <p className="muted">
