@@ -4,13 +4,22 @@ import {
   POLYMARKET_FAVORITES_LIMIT,
   POLYMARKET_GLOBAL_FILTER_LABELS,
   POLYMARKET_GLOBAL_FILTERS,
+  POLYMARKET_GLOBAL_SORT_LABELS,
+  POLYMARKET_GLOBAL_SORTS,
   polymarketFavoriteCreatedSchema,
   polymarketFavoriteRemovedSchema,
   polymarketFavoritesResponseSchema,
   polymarketRankingSchema,
   formatExactDecimal,
   type PolymarketGlobalFilter,
+  type PolymarketGlobalSort,
 } from '@stakeframe/shared';
+import { localPolymarketGlobal } from './polymarket-global-data.js';
+import {
+  globalView,
+  type GlobalCardView,
+  type GlobalMetricView,
+} from './polymarket-global-view.js';
 import { ApiFailure, request } from './api.js';
 import { formatDisplayDate } from './preferences.js';
 
@@ -49,15 +58,18 @@ const rankingSorts = [
  *    "Sem base" — nunca uma casa vazia.
  *  - Não há cor inline, não há `style={{}}` e não há termo de avaliação.
  *
- * Os dados e a classificação vêm do endpoint autenticado, cuja série depende
- * do worker de ingestão. Quando a série não existe, a interface explica isso
- * sem recorrer a perfis ou métricas fictícias.
+ * O preview de desenvolvimento usa a série local validada para demonstrar a
+ * apresentação; builds de produção consultam o endpoint autenticado, cuja
+ * série depende do worker de ingestão. Quando ela não existe, a interface
+ * explica isso sem recorrer a perfis fictícios.
  */
 export function PolymarketGlobalPage() {
   const [filter, setFilter] = useState<PolymarketGlobalFilter>('ALL');
-  const [sort, setSort] = useState<(typeof rankingSorts)[number]['value']>('PNL');
+  const [sort, setSort] = useState<PolymarketGlobalSort>('PNL');
   const [pageSize, setPageSize] = useState(12);
   const [page, setPage] = useState(1);
+  const isDemo = import.meta.env.DEV;
+  const view = isDemo ? globalView(localPolymarketGlobal, { category: filter, sort }) : null;
   const category = filter === 'ALL' ? 'OVERALL' : filter;
   const orderBy = sort === 'VOLUME' ? 'VOL' : 'PNL';
   const query = useQuery({
@@ -67,20 +79,29 @@ export function PolymarketGlobalPage() {
       return request(`/api/v1/polymarket/ranking?${params}`, polymarketRankingSchema);
     },
     staleTime: 60_000,
+    enabled: !isDemo,
   });
   const rows = query.data?.rows ?? [];
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const rowCount = view?.cards.length ?? rows.length;
+  const pageCount = Math.max(1, Math.ceil(rowCount / pageSize));
   const currentPage = Math.min(page, pageCount);
   const firstIndex = (currentPage - 1) * pageSize;
-  const cards = rows.slice(firstIndex, firstIndex + pageSize);
-  const firstVisible = rows.length === 0 ? 0 : firstIndex + 1;
-  const lastVisible = Math.min(firstIndex + pageSize, rows.length);
+  const demoCards = view?.cards.slice(firstIndex, firstIndex + pageSize) ?? [];
+  const liveCards = rows.slice(firstIndex, firstIndex + pageSize);
+  const sortOptions = view
+    ? POLYMARKET_GLOBAL_SORTS.map((value) => ({
+        value,
+        label: POLYMARKET_GLOBAL_SORT_LABELS[value],
+      }))
+    : rankingSorts;
+  const firstVisible = rowCount === 0 ? 0 : firstIndex + 1;
+  const lastVisible = Math.min(firstIndex + pageSize, rowCount);
 
   const changeFilter = (next: PolymarketGlobalFilter) => {
     setFilter(next);
     setPage(1);
   };
-  const changeSort = (next: (typeof rankingSorts)[number]['value']) => {
+  const changeSort = (next: PolymarketGlobalSort) => {
     setSort(next);
     setPage(1);
   };
@@ -89,11 +110,18 @@ export function PolymarketGlobalPage() {
     <section className="panel" aria-labelledby="polymarket-global-title">
       <div className="section-heading">
         <div>
-          <h2 id="polymarket-global-title">Ranking global · Polymarket</h2>
-          <p>Leaderboard mensal publicado pela Polymarket · valores em US$ da origem</p>
+          <h2 id="polymarket-global-title">{view?.title ?? 'Ranking global · Polymarket'}</h2>
+          <p>
+            {view?.subtitle ??
+              'Leaderboard mensal publicado pela Polymarket · valores em US$ da origem'}
+          </p>
         </div>
         <span className="live-label" data-testid="global-count">
-          {query.data ? `${query.data.returned} de ${query.data.requested} traders` : 'RANKING'}
+          {view
+            ? `${view.shown} de ${view.total} tipsters`
+            : query.data
+              ? `${query.data.returned} de ${query.data.requested} traders`
+              : 'RANKING'}
         </span>
       </div>
 
@@ -108,11 +136,12 @@ export function PolymarketGlobalPage() {
               onClick={() => changeFilter(option)}
             >
               {POLYMARKET_GLOBAL_FILTER_LABELS[option]}
+              {view ? <span className="global-chip-count">{view.counts[option]}</span> : null}
             </button>
           ))}
         </div>
         <div className="global-filter-group" role="group" aria-label="Ordenar por">
-          {rankingSorts.map(({ value, label }) => (
+          {sortOptions.map(({ value, label }) => (
             <button
               key={value}
               type="button"
@@ -144,12 +173,29 @@ export function PolymarketGlobalPage() {
           </select>
         </label>
         <span className="global-results-count" aria-live="polite">
-          {firstVisible}–{lastVisible} de {rows.length} traders
+          {firstVisible}–{lastVisible} de {rowCount} {view ? 'tipsters' : 'traders'}
         </span>
       </div>
 
-      {query.isPending ? <p role="status">Carregando leaderboard oficial…</p> : null}
-      {query.isError ? (
+      {view ? (
+        view.cards.length === 0 ? (
+          <div className="empty-state">
+            <span aria-hidden="true">▤</span>
+            <h3>{view.emptyTitle}</h3>
+            <p>{view.emptyDetail}</p>
+          </div>
+        ) : (
+          <ul className="global-grid" data-testid="global-grid">
+            {demoCards.map((card) => (
+              <li key={card.key}>
+                <TipsterCard card={card} />
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+      {!view && query.isPending ? <p role="status">Carregando leaderboard oficial…</p> : null}
+      {!view && query.isError ? (
         <div className="empty-state" role="alert">
           <h3>Ranking oficial indisponível</h3>
           <p>
@@ -161,20 +207,20 @@ export function PolymarketGlobalPage() {
           </button>
         </div>
       ) : null}
-      {!query.isError && query.data && !query.data.series.available ? (
+      {!view && !query.isError && query.data && !query.data.series.available ? (
         <div className="empty-state" role="status">
           <h3>Esta série ainda não foi coletada</h3>
           <p>{query.data.completeness.detail}</p>
         </div>
       ) : null}
-      {!query.isError && query.data?.series.available && rows.length === 0 ? (
+      {!view && !query.isError && query.data?.series.available && rows.length === 0 ? (
         <div className="empty-state">
           <h3>Nenhum trader nesta série</h3>
           <p>A coleta está disponível, mas não trouxe linhas para esta categoria.</p>
         </div>
-      ) : query.data?.series.available ? (
+      ) : !view && query.data?.series.available ? (
         <ul className="global-grid" data-testid="global-grid">
-          {cards.map((trader) => (
+          {liveCards.map((trader) => (
             <li key={trader.proxyWallet}>
               <article
                 className="global-card"
@@ -244,6 +290,12 @@ export function PolymarketGlobalPage() {
         </button>
       </div>
 
+      {view ? (
+        <p className="panel-footnote">
+          Cada métrica derivada mostra a contagem de amostras ao lado; valor desconhecido aparece
+          como “Sem base” e métrica que depende de série completa aparece como “bloqueado”.
+        </p>
+      ) : null}
       {query.data?.series.available ? (
         <p className="panel-footnote">
           {query.data.completeness.label}: {query.data.completeness.detail} ·{' '}
@@ -471,6 +523,85 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
         )}
       </div>
     </section>
+  );
+}
+
+function TipsterCard({ card }: { card: GlobalCardView }) {
+  return (
+    <article
+      className={`global-card${card.coverage.truncated ? ' is-truncated' : ''}`}
+      data-testid="global-card"
+      data-wallet={card.key}
+    >
+      <FavoriteStar proxyWallet={card.key} traderName={card.name.text} />
+      <a className="global-card-link" href={card.href} aria-label={card.ariaLabel}>
+        <header className="global-card-head">
+          <span className="global-avatar" aria-hidden="true">
+            {card.avatar}
+          </span>
+          <span className="global-card-identity">
+            <span
+              className="global-card-name"
+              title={card.name.truncated ? card.name.text : undefined}
+            >
+              {card.name.text}
+            </span>
+            <span className="global-card-scope">{card.scope}</span>
+          </span>
+          <span className="global-card-rank">{card.rankLabel}</span>
+        </header>
+        {card.coverage.truncated ? (
+          <p className="global-truncated" role="status">
+            <strong>{card.coverage.label}</strong>
+            <span>{card.coverage.reason}</span>
+          </p>
+        ) : null}
+        <p
+          className="global-card-market-label"
+          title={card.topMarket.truncated ? card.topMarket.text : undefined}
+        >
+          Onde mais aposta
+        </p>
+        <p
+          className="global-card-market"
+          title={card.topMarket.truncated ? card.topMarket.text : undefined}
+        >
+          {card.topMarket.text}
+        </p>
+        <dl className="global-metrics">
+          <Metric term="P&L 30d" metric={card.pnl} emphasis />
+          <Metric term="ROI" metric={card.roi} />
+          <Metric term="Taxa de acerto" metric={card.hitRate} />
+          <Metric term="Unidades/mês" metric={card.monthlyUnits} />
+        </dl>
+      </a>
+    </article>
+  );
+}
+
+function Metric({
+  term,
+  metric,
+  emphasis = false,
+}: {
+  term: string;
+  metric: GlobalMetricView;
+  emphasis?: boolean;
+}) {
+  const toneClass = metric.tone === 'pos' ? ' is-pos' : metric.tone === 'neg' ? ' is-neg' : '';
+  const stateClass = metric.blocked ? ' is-blocked' : metric.unknown ? ' is-unknown' : '';
+  return (
+    <div className={`global-metric${emphasis ? ' is-emphasis' : ''}${stateClass}`}>
+      <dt>{term}</dt>
+      <dd>
+        <span className={`global-metric-value${toneClass}`} data-global-metric={term}>
+          {metric.value}
+        </span>
+        <span className="global-metric-n" data-global-n={term}>
+          {metric.sample}
+        </span>
+      </dd>
+    </div>
   );
 }
 
