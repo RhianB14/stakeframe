@@ -243,7 +243,12 @@ async function enabledProduct(
   workspace = fixture(),
   bets: Bet[] = [],
   detailBet: Bet = bet,
+  preferenceLanguage: string | null = 'pt-BR',
 ) {
+  if (preferenceLanguage !== null)
+    await page.addInitScript((language) => {
+      localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language }));
+    }, preferenceLanguage);
   await page.route('**/api/v1/system/status', (route) =>
     route.fulfill({
       json: {
@@ -311,6 +316,10 @@ async function openMobileProductNavigation(page: Page) {
   if ((page.viewportSize()?.width ?? 0) <= 760) {
     await page.getByRole('button', { name: 'Abrir navegação', exact: true }).click();
   }
+}
+async function exerciseShowAmountsToggle(page: Page) {
+  await page.getByRole('button', { name: 'Ocultar valores', exact: true }).click();
+  await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
 }
 for (const scenario of [
   {
@@ -389,7 +398,7 @@ for (const scenario of [
     };
     await enabledProduct(page, fixture(), [sample], sample);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
+    await exerciseShowAmountsToggle(page);
     await openMobileProductNavigation(page);
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
     // STK-F2-18: casa a célula pelo NOME da coluna, não pelo índice. A Fase 3
@@ -868,10 +877,7 @@ test('history accepts a custom market type not present on the first page', async
 test('empty display preferences start in Portuguese and expose only translated languages', async ({
   page,
 }) => {
-  await enabledProduct(page, fixture(), [bet]);
-  await page.addInitScript(() => {
-    localStorage.removeItem('bettrack.preview.preferences');
-  });
+  await enabledProduct(page, fixture(), [bet], bet, null);
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
   await openMobileProductNavigation(page);
@@ -886,10 +892,7 @@ test('empty display preferences start in Portuguese and expose only translated l
 test('unsupported stored language falls back to the supported Portuguese interface', async ({
   page,
 }) => {
-  await enabledProduct(page, fixture(), [bet]);
-  await page.addInitScript(() => {
-    localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language: 'es' }));
-  });
+  await enabledProduct(page, fixture(), [bet], bet, 'es');
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
   await openMobileProductNavigation(page);
@@ -900,7 +903,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
 }, info) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
+  await exerciseShowAmountsToggle(page);
   await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(
     page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
@@ -1110,7 +1113,7 @@ test('partial cashout sends closed principal independently from received money',
   await page.goto('/');
   await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
+  await page.getByRole('link', { name: 'Open Mais de 2,5 — Open', exact: true }).click();
   await page.getByRole('button', { name: 'Liquidar aposta', exact: true }).click();
   await page.getByLabel('Resultado', { exact: true }).selectOption('partial_cashout');
   await page.getByLabel('Principal encerrado (R$)', { exact: true }).fill('40,00');
@@ -1128,7 +1131,7 @@ test('partial cashout sends closed principal independently from received money',
 test('an expired API session removes cached private records', async ({ page }) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
+  await exerciseShowAmountsToggle(page);
   await expect(
     page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();

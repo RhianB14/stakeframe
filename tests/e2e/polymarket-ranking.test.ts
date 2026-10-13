@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockPolymarketRanking } from './polymarket-ranking-fixture.js';
 
 /**
  * A tela própria de ranking foi aposentada. A rota legada `#ranking` continua
@@ -6,6 +7,9 @@ import { expect, test, type Page } from '@playwright/test';
  * (série, amostra, enums e tabela) não têm equivalente neste destino.
  */
 async function openLegacyRanking(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language: 'pt-BR' }));
+  });
   await page.route('**/api/v1/system/status', (route) =>
     route.fulfill({
       json: {
@@ -63,15 +67,17 @@ async function openLegacyRanking(page: Page) {
       },
     }),
   );
-  await page.goto('/?previewPolymarket=true#ranking');
+  await mockPolymarketRanking(page);
+  await page.goto('/#ranking');
 }
 
 test('a rota legada #ranking abre o Ranking global, sem Composite Score', async ({ page }) => {
   await openLegacyRanking(page);
 
   await expect(page.getByRole('heading', { name: 'Ranking global', level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Tipsters', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ranking global · Polymarket' })).toBeVisible();
   await expect(page.getByTestId('global-grid')).toBeVisible();
+  await expect(page.getByTestId('global-card')).toHaveCount(6);
 
   const rendered = (await page.locator('body').innerText()).toLowerCase();
   expect(rendered).not.toContain('composite score');

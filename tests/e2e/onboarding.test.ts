@@ -124,6 +124,9 @@ async function enableOnboarding(
     consentRequired?: boolean;
   } = {},
 ): Promise<Harness> {
+  await page.addInitScript(() => {
+    localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language: 'pt-BR' }));
+  });
   const workspace = options.workspace ?? emptyWorkspace();
   const onboarding = options.onboarding ?? pendingOnboarding();
   const harness: Harness = {

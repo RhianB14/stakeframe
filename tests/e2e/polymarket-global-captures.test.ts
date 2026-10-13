@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockPolymarketRanking } from './polymarket-ranking-fixture.js';
 
 /**
  * STK-F3-04 — as CAPTURAS da tela Global, e o critério delas.
@@ -20,6 +21,9 @@ import { expect, test, type Page } from '@playwright/test';
  * usuário vê, e é a que a revisão deve usar para julgar a tela.
  */
 async function abrirGlobal(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language: 'pt-BR' }));
+  });
   await page.route('**/api/v1/system/status', (route) =>
     route.fulfill({
       json: {
@@ -77,7 +81,8 @@ async function abrirGlobal(page: Page) {
       },
     }),
   );
-  await page.goto('/?previewPolymarket=true#pm-global');
+  await mockPolymarketRanking(page);
+  await page.goto('/#pm-global');
   await expect(page.getByTestId('global-card')).toHaveCount(6);
 }
 
