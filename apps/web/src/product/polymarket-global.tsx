@@ -238,7 +238,7 @@ export function PolymarketGlobalPage() {
                 />
                 <a
                   className="global-card-link"
-                  href={`#pm-tipster/${trader.proxyWallet}`}
+                  href={`#/polymarket/tipster/${trader.proxyWallet}`}
                   aria-label={`${trader.userName || trader.proxyWallet}, rank ${trader.rank}, P and L ${formatExactDecimal(trader.pnl)}, volume ${formatExactDecimal(trader.vol)}`}
                 >
                   <header className="global-card-head">

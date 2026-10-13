@@ -116,7 +116,7 @@ test('a cobertura truncada e seu motivo ficam visíveis sem ocultar os dados rec
 }) => {
   await openGlobal(page);
   await expect(cards(page)).toHaveCount(6);
-  const coverage = page.locator('.panel-footnote').filter({ hasText: 'Cobertura truncada' });
+  const coverage = page.locator('.panel-footnote').filter({ hasText: 'Série truncada' });
   await expect(coverage).toContainText('1000 registros ingeridos em 20 páginas');
   await expect(coverage).toContainText('NÃO representa o ranking inteiro');
   await expect(cards(page).first().getByText('@alpha_odds', { exact: true })).toBeVisible();
@@ -247,7 +247,7 @@ test('o card é clicável, focável e anuncia a identidade e as métricas do ran
   await openGlobal(page);
   await expect(cards(page)).toHaveCount(6);
   const first = cards(page).first().locator('.global-card-link');
-  await expect(first).toHaveAttribute('href', /#pm-tipster\/0x[0-9a-f]{40}/);
+  await expect(first).toHaveAttribute('href', /#\/polymarket\/tipster\/0x[0-9a-f]{40}/);
   expect(
     await first.evaluate((node) => node.getBoundingClientRect().height),
   ).toBeGreaterThanOrEqual(44);
@@ -275,7 +275,7 @@ test('o card é clicável, focável e anuncia a identidade e as métricas do ran
   expect(label).toContain('P and L');
   expect(label).toContain('volume');
   await first.click();
-  await expect(page).toHaveURL(/#pm-tipster\/0x/);
+  await expect(page).toHaveURL(/#\/polymarket\/tipster\/0x/);
 });
 
 test('detalhe de tipster não faz requisições externas de posições', async ({ page }) => {
@@ -287,7 +287,7 @@ test('detalhe de tipster não faz requisições externas de posições', async (
   await openGlobal(page);
   await expect(cards(page)).toHaveCount(6);
   await cards(page).first().locator('.global-card-link').click();
-  await expect(page).toHaveURL(/#pm-tipster\/0x/);
+  await expect(page).toHaveURL(/#\/polymarket\/tipster\/0x/);
   await expect(page.getByRole('status')).toContainText('depende de autorização específica');
   await page.getByRole('tab', { name: /Apostas fechadas/ }).click();
   await expect(page.getByRole('tabpanel')).toContainText('posições fechadas');

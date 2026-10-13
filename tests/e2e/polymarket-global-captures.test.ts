@@ -104,9 +104,7 @@ test('captura: a completude truncada e o agregado bloqueado', async ({ page }) =
   await expect(page.getByTestId('polymarket-aggregate-blocked')).toContainText(
     'Métrica bloqueada:',
   );
-  await expect(
-    page.locator('.panel-footnote').filter({ hasText: 'Cobertura truncada' }),
-  ).toBeVisible();
+  await expect(page.locator('.panel-footnote').filter({ hasText: 'Série truncada' })).toBeVisible();
   await page.screenshot({ path: destino(page, 'global-truncado.png') });
 });
 
