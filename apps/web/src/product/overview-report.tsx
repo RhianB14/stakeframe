@@ -2,8 +2,10 @@ import { displayLocale, formatDisplayMoney } from './preferences.js';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Line,
-  LineChart,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -14,7 +16,7 @@ import { betPageSchema, reportSchema, saoPauloDate, type Workspace } from '@stak
 import { request } from './api.js';
 import { Button } from '../components/ui/button.js';
 import { readChartTokens } from './chart-tokens.js';
-import { chartHasSample, lowChartSampleMessage } from './chart-domain.js';
+import { axisTick, chartHasSample, lowChartSampleMessage, resultDomain } from './chart-domain.js';
 
 export function OverviewReport({
   version,
@@ -306,9 +308,25 @@ export function OverviewReport({
               aria-label={`Running result this month. Ends at ${signedUnits(latest)} across ${query.data.metrics.settledBets} settled bets.`}
             >
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series} margin={{ left: 0, right: 2, top: 8, bottom: 0 }}>
+                <AreaChart data={series} margin={{ left: 0, right: 2, top: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="bettrack-running-gradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={chart['--pos']} stopOpacity={0.34} />
+                      <stop offset="100%" stopColor={chart['--pos']} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    vertical={false}
+                    stroke={chart['--border']}
+                    strokeDasharray="3 3"
+                  />
                   <XAxis dataKey="date" hide />
-                  <YAxis hide domain={['auto', 'auto']} />
+                  <YAxis
+                    width={64}
+                    domain={resultDomain(series.map((row) => row.accumulated))}
+                    tickFormatter={axisTick}
+                    stroke={chart['--text-tertiary']}
+                  />
                   <ReferenceLine y={0} stroke={chart['--border-strong']} />
                   <Tooltip
                     content={({ active, payload }) =>
@@ -323,17 +341,19 @@ export function OverviewReport({
                       ) : null
                     }
                   />
-                  <Line
+                  <Legend verticalAlign="bottom" height={24} />
+                  <Area
                     type="monotone"
                     dataKey="accumulated"
-                    name="Running result"
+                    name="Resultado acumulado"
                     stroke={chart['--pos']}
                     strokeWidth={1.6}
+                    fill="url(#bettrack-running-gradient)"
                     dot={false}
                     activeDot={{ r: 3 }}
                     isAnimationActive={false}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (

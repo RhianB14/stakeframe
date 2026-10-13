@@ -835,7 +835,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
 }, info) => {
   await enabledProduct(page, fixture(), [bet]);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(
     page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
@@ -1648,7 +1648,7 @@ test('calendar distinguishes selections from bets and saves a partial date witho
   await page.getByRole('button', { name: 'Pendências (1)' }).click();
   await expect(page.getByRole('heading', { name: 'Datas a conferir' })).toBeVisible();
   await expect(page.getByText('Sem data', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).click();
+  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).click();
   await expect(
     page.getByText('Fonte desativada neste ambiente. O preenchimento manual está disponível.'),
   ).toBeVisible();
@@ -1705,7 +1705,7 @@ test('source results preserve a manual date until explicitly selected and review
     return route.fulfill({ json: { id: betId, version: 2 } });
   });
   await page.goto('/#calendar');
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
   // STK-F2-18: o nome acessível do link de fonte externa não leva mais o
   // glifo `↗`. Um caractere Unicode como parte do nome é anunciado pelo
   // leitor de tela ("Aurora vs Central seta para cima à direita") e não
@@ -1762,11 +1762,11 @@ test('an uncertain event search reuses its key and input after reloading without
       });
   });
   await page.goto('/#calendar');
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
   await page.getByRole('button', { name: 'Buscar programação' }).click();
   await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
   expect(attempts).toHaveLength(1);
   await page.getByRole('button', { name: 'Verificar consulta' }).click();
@@ -2450,7 +2450,7 @@ test('the Mini App explains how to open it when Telegram is unavailable (R5)', a
 test('owner panel footer shows the stamped release version', async ({ page }) => {
   await enabledProduct(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
 });
 

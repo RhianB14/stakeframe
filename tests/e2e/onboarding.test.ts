@@ -252,7 +252,7 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
 
   // Step 2 — first house, then the explicit balance confirmation (reuses the existing flows).
   await page.getByRole('button', { name: 'Adicionar casa' }).click();
-  await page.getByLabel('Nome', { exact: true }).fill('Bet365');
+  await page.getByLabel('Nome da casa', { exact: true }).fill('Bet365');
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.getByLabel('Bet365 (R$)', { exact: true })).toBeVisible();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('500,00');
@@ -294,7 +294,7 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
   await page.getByRole('button', { name: /Simples/ }).click();
   await page.getByRole('button', { name: 'Continuar para seleções' }).click();
   await page.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
-  await page.getByLabel('Mercado 1', { exact: true }).fill('Gols');
+  await page.getByLabel('Tipo de aposta 1', { exact: true }).fill('Gols');
   await page.getByLabel('Palpite 1', { exact: true }).fill('Mais de 2,5');
   await page.getByRole('button', { name: 'Continuar para valor' }).click();
   await page.getByLabel('Casa de aposta').selectOption({ label: 'Bet365' });
@@ -306,7 +306,7 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
 
   // Finish explicitly and land on the regular overview.
   await page.getByRole('button', { name: 'Concluir primeiros passos' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await noHorizontalOverflow(page);
   expect(harness.finishChoices).toEqual(['registered']);
 });
@@ -322,7 +322,7 @@ test('concluding without a bet requires the explicit deferral choice', async ({ 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
   expect(harness.onboarding.steps.firstBet).toEqual({
     completed: true,
@@ -435,7 +435,7 @@ test('a finished onboarding opens the regular overview without the first-steps f
   workspace.initialized = true;
   await enableOnboarding(page, { onboarding: finishedOnboarding(), workspace });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Primeiros passos' })).toHaveCount(0);
 });
 
@@ -563,7 +563,7 @@ test('the onboarding is fully operable by keyboard with visible focus', async ({
   await add.focus();
   await add.press('Enter');
   await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByLabel('Nome', { exact: true }).fill('Bet365');
+  await page.getByLabel('Nome da casa', { exact: true }).fill('Bet365');
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.getByLabel('Bet365 (R$)', { exact: true })).toBeVisible();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('400,00');
@@ -575,7 +575,7 @@ test('the onboarding is fully operable by keyboard with visible focus', async ({
   const defer = page.getByRole('button', { name: 'Continuar sem registrar aposta' });
   await defer.focus();
   await defer.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
 });
 
@@ -637,10 +637,10 @@ test('a finish failure keeps the step open, is announced and offers an explicit 
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível concluir a solicitação.');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toHaveCount(0);
   failing = false;
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
 });
 
