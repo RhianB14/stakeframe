@@ -11,6 +11,7 @@ import {
   polymarketFavoritesResponseSchema,
   polymarketRankingSchema,
   formatExactDecimal,
+  rankingSampleLabel,
   type PolymarketGlobalFilter,
   type PolymarketGlobalSort,
 } from '@stakeframe/shared';
@@ -213,7 +214,7 @@ export function PolymarketGlobalPage() {
       ) : null}
       {!view && !query.isError && query.data && !query.data.series.available ? (
         <div className="empty-state" role="status">
-          <h3>Esta série ainda não foi coletada</h3>
+          <h3>{query.data.completeness.label}</h3>
           <p>{query.data.completeness.detail}</p>
         </div>
       ) : null}
@@ -305,6 +306,17 @@ export function PolymarketGlobalPage() {
           {query.data.completeness.label}: {query.data.completeness.detail} ·{' '}
           {query.data.series.ingested} traders coletados · backfill desde{' '}
           {query.data.series.backfillFrom}
+        </p>
+      ) : null}
+      {query.data?.series.available ? (
+        <p className="panel-footnote" data-testid="polymarket-ranking-sample">
+          {rankingSampleLabel(query.data.sample.n)} · mínimo {query.data.sample.minSample}
+          {query.data.sample.lowSample ? ' · Amostra baixa' : ''}
+        </p>
+      ) : null}
+      {query.data?.aggregate.blocked ? (
+        <p className="panel-footnote" role="status" data-testid="polymarket-aggregate-blocked">
+          Métrica bloqueada: {query.data.aggregate.reason}
         </p>
       ) : null}
     </section>

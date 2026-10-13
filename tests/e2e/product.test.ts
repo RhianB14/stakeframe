@@ -1113,7 +1113,9 @@ test('partial cashout sends closed principal independently from received money',
   await page.goto('/');
   await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  await page.getByRole('link', { name: 'Open Mais de 2,5 — Open', exact: true }).click();
+  const cashoutBet = page.getByRole('link', { name: /Mais de 2,5/ });
+  await expect(cashoutBet).toHaveAttribute('href', `#bets/${betId}`);
+  await cashoutBet.click();
   await page.getByRole('button', { name: 'Liquidar aposta', exact: true }).click();
   await page.getByLabel('Resultado', { exact: true }).selectOption('partial_cashout');
   await page.getByLabel('Principal encerrado (R$)', { exact: true }).fill('40,00');

@@ -1,12 +1,17 @@
-import { polymarketRankingSchema } from '../../packages/shared/src/index.js';
+import {
+  polymarketRankingSchema,
+  rankingAggregatePolicy,
+  rankingCompleteness,
+  rankingSample,
+} from '../../packages/shared/src/index.js';
 import type { Page } from '@playwright/test';
 
 const traders = [
   {
     proxyWallet: '0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d',
     userName: '@alpha_odds',
-    pnl: '48210',
-    vol: '312000',
+    pnl: '48210.123456789012345678',
+    vol: '312000.000000000000000001',
     categories: ['SPORTS'] as const,
   },
   {
@@ -46,15 +51,33 @@ const traders = [
   },
 ];
 
-function rankingResponse(category: string, orderBy: string) {
+type RankingFixtureOptions = {
+  available?: boolean;
+  status?: 'complete' | 'truncated' | 'partial' | 'unknown';
+  empty?: boolean;
+  minSample?: number;
+};
+
+function decimalInteger(value: string) {
+  const negative = value.startsWith('-');
+  const [whole = '0', fraction = ''] = value.replace(/^-/, '').split('.');
+  const scaled = BigInt(`${whole}${fraction.padEnd(18, '0')}`);
+  return negative ? -scaled : scaled;
+}
+
+function rankingResponse(category: string, orderBy: string, options: RankingFixtureOptions = {}) {
+  const available = options.available ?? true;
+  const status = options.status ?? (available ? 'truncated' : 'unknown');
   const matching =
-    category === 'SPORTS' || category === 'ESPORTS'
-      ? traders.filter((trader) => trader.categories.some((item) => item === category))
-      : traders;
+    !available || options.empty
+      ? []
+      : category === 'SPORTS' || category === 'ESPORTS'
+        ? traders.filter((trader) => trader.categories.some((item) => item === category))
+        : traders;
   const rows = [...matching]
     .sort((left, right) => {
-      const leftValue = BigInt(orderBy === 'VOL' ? left.vol : left.pnl);
-      const rightValue = BigInt(orderBy === 'VOL' ? right.vol : right.pnl);
+      const leftValue = decimalInteger(orderBy === 'VOL' ? left.vol : left.pnl);
+      const rightValue = decimalInteger(orderBy === 'VOL' ? right.vol : right.pnl);
       return leftValue === rightValue ? 0 : leftValue > rightValue ? -1 : 1;
     })
     .map((trader, index) => ({
@@ -64,6 +87,15 @@ function rankingResponse(category: string, orderBy: string) {
       pnl: trader.pnl,
       vol: trader.vol,
     }));
+  const series = {
+    status,
+    available,
+    ingested: !available ? 0 : status === 'complete' ? rows.length : 1000,
+    backfillFrom: '2026-04-13',
+    pages: !available ? 0 : status === 'complete' ? 1 : 20,
+    failedPages: status === 'partial' ? 1 : 0,
+  };
+  const aggregatePolicy = rankingAggregatePolicy({ status, available });
 
   return polymarketRankingSchema.parse({
     window: {
@@ -71,37 +103,26 @@ function rankingResponse(category: string, orderBy: string) {
       timePeriod: 'MONTH',
       orderBy: orderBy === 'VOL' ? 'VOL' : 'PNL',
     },
-    series: {
-      status: 'truncated',
-      available: true,
-      ingested: 1000,
-      backfillFrom: '2026-04-13',
-      pages: 20,
-      failedPages: 0,
-    },
-    completeness: {
-      truncated: true,
-      label: 'Cobertura truncada',
-      detail: '210 de 1.000 eventos ingeridos nesta janela.',
-    },
-    sample: { n: rows.length, minSample: 30, lowSample: rows.length < 30 },
-    aggregate: {
-      blocked: true,
-      reason: 'A série está truncada; o agregado não pode ser afirmado.',
-    },
+    series,
+    completeness: rankingCompleteness({ series }),
+    sample: rankingSample({ n: rows.length, minSample: options.minSample ?? 30 }),
+    aggregate: aggregatePolicy.allowed
+      ? { blocked: false, reason: null }
+      : { blocked: true, reason: aggregatePolicy.reason },
     requested: 100,
     returned: rows.length,
     rows,
   });
 }
 
-export async function mockPolymarketRanking(page: Page) {
+export async function mockPolymarketRanking(page: Page, options: RankingFixtureOptions = {}) {
   await page.route('**/api/v1/polymarket/ranking?*', (route) => {
     const requestUrl = new URL(route.request().url());
     return route.fulfill({
       json: rankingResponse(
         requestUrl.searchParams.get('category') ?? 'OVERALL',
         requestUrl.searchParams.get('orderBy') ?? 'PNL',
+        options,
       ),
     });
   });

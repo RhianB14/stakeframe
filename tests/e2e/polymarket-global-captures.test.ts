@@ -4,10 +4,9 @@ import { mockPolymarketRanking } from './polymarket-ranking-fixture.js';
 /**
  * STK-F3-04 — as CAPTURAS da tela Global, e o critério delas.
  *
- * Este teste não afirma comportamento de produto: ele grava as imagens que o
- * card pede em `capturas/`, nos DOIS tamanhos de tela, e nos ESTADOS que
- * precisam ser vistos — a grade completa, o card truncado com a métrica
- * bloqueada, e o filtro de e-sports aplicado.
+ * Este teste valida o estado mostrado antes de gravar as imagens que o card
+ * pede em `capturas/`, nos DOIS tamanhos de tela: a grade completa, a série
+ * truncada com o agregado bloqueado, e o filtro de e-sports aplicado.
  *
  * Por que as capturas ficam aqui e não no `test-results/`: o Playwright
  * apaga `test-results/` a cada execução, então uma imagem deixada ali não
@@ -99,17 +98,15 @@ test('captura: a Global em cards, na tela e inteira', async ({ page }) => {
   await page.screenshot({ path: destino(page, 'global-cards-fullpage.png'), fullPage: true });
 });
 
-test('captura: o card truncado com a métrica bloqueada, em foco', async ({ page }) => {
+test('captura: a completude truncada e o agregado bloqueado', async ({ page }) => {
   await abrirGlobal(page);
-  // O card truncado é trazido para o topo pela rolagem, e não pela
-  // ordenação: ele é o TERCEIRO por PnL, e trocar a ordem para fotografá-lo
-  // mostraria uma tela que o dono não abriu. A rolagem não mente sobre o
-  // estado da lista.
-  await page
-    .getByTestId('global-card')
-    .filter({ hasText: 'Cobertura truncada' })
-    .first()
-    .scrollIntoViewIfNeeded();
+  await page.getByTestId('polymarket-aggregate-blocked').scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('polymarket-aggregate-blocked')).toContainText(
+    'Métrica bloqueada:',
+  );
+  await expect(
+    page.locator('.panel-footnote').filter({ hasText: 'Cobertura truncada' }),
+  ).toBeVisible();
   await page.screenshot({ path: destino(page, 'global-truncado.png') });
 });
 

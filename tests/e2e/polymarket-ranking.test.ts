@@ -3,8 +3,9 @@ import { mockPolymarketRanking } from './polymarket-ranking-fixture.js';
 
 /**
  * A tela própria de ranking foi aposentada. A rota legada `#ranking` continua
- * encaminhando para o Ranking global; asserções exclusivas da tela removida
- * (série, amostra, enums e tabela) não têm equivalente neste destino.
+ * encaminhando para o Ranking global. O contrato de série, amostra, decimais
+ * e bloqueio da F2-15 é exercitado pela resposta mockada em
+ * `polymarket-global.test.ts`; este teste garante o encaminhamento legado.
  */
 async function openLegacyRanking(page: Page) {
   await page.addInitScript(() => {

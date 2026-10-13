@@ -158,6 +158,7 @@ describe('STK-F2-15 §15 — os valores são os OFICIAIS e exatos', () => {
     // Notação científica e `null` não são decimais: a origem saiu do contrato.
     expect(polymarketRankingRowSchema.safeParse(row({ pnl: '1e5' })).success).toBe(false);
     expect(polymarketRankingRowSchema.safeParse(row({ vol: 'NaN' })).success).toBe(false);
+    expect(polymarketRankingRowSchema.safeParse({ ...row(), pnl: null }).success).toBe(false);
   });
 
   it('a exibição não arredonda: o literal volta inteiro na formatação', () => {
