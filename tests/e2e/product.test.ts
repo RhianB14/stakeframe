@@ -712,6 +712,28 @@ test('bets table sorts by the proposed columns on desktop', async ({ page }) => 
   await expect(stakeHeader).toHaveAttribute('aria-sort', 'descending');
   await expect(firstTicket).toHaveText('#000003');
 });
+test('mixed known and missing historical units never produce a partial unit summary', async ({
+  page,
+}) => {
+  const missingUnitBet: Bet = {
+    ...bet,
+    id: '10000000-0000-4000-8000-000000000010',
+    ticketNumber: 10,
+    unitMonth: '2020-01',
+    unitAmount: null,
+    stakeUnits: null,
+  };
+  await enabledProduct(page, fixture(), [bet, missingUnitBet]);
+  await page.goto('/');
+  await openMobileProductNavigation(page);
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+
+  const summary = page.getByLabel('Summary for the filtered period');
+  await expect(summary).toContainText('2 BETS');
+  await expect(summary.locator('p').nth(0).locator('strong')).toHaveText('—');
+  await expect(summary.locator('p').nth(1).locator('strong')).toHaveText('—');
+});
+
 test('bet-history filters stay as drafts until applied and active chips can be removed or cleared', async ({
   page,
 }) => {
@@ -735,6 +757,7 @@ test('bet-history filters stay as drafts until applied and active chips can be r
         pageSize: 100,
         summary: {
           count: url.searchParams.has('search') ? 1 : 2,
+          missingUnitBets: 0,
           stake: url.searchParams.has('search') ? '100.00' : '200.00',
           profit: '0.00',
           stakeUnits: url.searchParams.has('search') ? '10.00' : '20.00',
@@ -814,6 +837,7 @@ test('history accepts a custom market type not present on the first page', async
         pageSize: 100,
         summary: {
           count: items.length,
+          missingUnitBets: 0,
           stake: filtered ? customMarketBet.stake : '10000.00',
           profit: '0.00',
           stakeUnits: '1000.00',
@@ -2133,32 +2157,38 @@ test('overview analytics errors announce, show an icon and retry main and weekly
   const monthStart = `${saoPauloDate(new Date()).slice(0, 7)}-01`;
   let mainAttempts = 0;
   let weeklyAttempts = 0;
-  await page.route('**/api/v1/reports?*', (route) => {
+  let dashboardAttempts = 0;
+  await page.route('**/api/v1/reports?*', async (route) => {
     const from = new URL(route.request().url()).searchParams.get('from');
     if (from === monthStart) {
       mainAttempts += 1;
-      return mainAttempts === 1
-        ? route.fulfill({ status: 503, json: {} })
-        : route.fulfill({ json: report });
+      if (mainAttempts === 1) return route.fulfill({ status: 503, json: {} });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return route.fulfill({ json: report });
     }
     weeklyAttempts += 1;
     return weeklyAttempts === 1
       ? route.fulfill({ status: 503, json: {} })
       : route.fulfill({ json: report });
   });
-  await page.route('**/api/v1/dashboard?*', (route) =>
-    route.fulfill({ json: dashboardFixture(report.metrics) }),
-  );
+  await page.route('**/api/v1/dashboard?*', (route) => {
+    dashboardAttempts += 1;
+    return route.fulfill({ json: dashboardFixture(report.metrics) });
+  });
   await page.goto('/#analytics');
 
   const mainError = page.getByRole('alert').filter({
     hasText: 'Não foi possível carregar o relatório de análises.',
   });
   await expect(mainError).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Resumo carregado' })).toBeVisible();
+  await expect(page.getByText('APOSTAS LIQUIDADAS', { exact: true })).toBeVisible();
   await expect(mainError.locator('svg[aria-hidden="true"]')).toBeVisible();
   await mainError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(mainError.getByRole('button', { name: 'Tentando…', exact: true })).toBeDisabled();
   await expect(mainError).toHaveCount(0);
   await expect.poll(() => mainAttempts).toBe(2);
+  expect(dashboardAttempts).toBe(1);
 
   const weeklyError = page.getByRole('alert').filter({
     hasText: 'Não foi possível carregar os resultados semanais.',
@@ -2168,6 +2198,89 @@ test('overview analytics errors announce, show an icon and retry main and weekly
   await weeklyError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(weeklyError).toHaveCount(0);
   await expect.poll(() => weeklyAttempts).toBe(2);
+});
+
+test('analytics dashboard failure leaves the report visible and retries only the dashboard', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  const today = saoPauloDate(new Date());
+  const monthStart = `${today.slice(0, 7)}-01`;
+  report.metrics = {
+    ...emptyMetrics,
+    bets: 1,
+    settledBets: 1,
+    profit: '10.00',
+    realProfit: '10.00',
+    profitUnits: '1.000000',
+    knownProfitUnits: '1.000000',
+    yieldReal: '10.00',
+    hitRateReal: '100.00',
+    hitWinsReal: 1,
+    hitEligibleReal: 1,
+  };
+  report.timeline = [{ date: today, metrics: { ...report.metrics } }];
+  let mainReportAttempts = 0;
+  let dashboardAttempts = 0;
+  await page.route('**/api/v1/reports?*', (route) => {
+    if (new URL(route.request().url()).searchParams.get('from') === monthStart)
+      mainReportAttempts += 1;
+    return route.fulfill({ json: report });
+  });
+  await page.route('**/api/v1/dashboard?*', (route) => {
+    dashboardAttempts += 1;
+    return dashboardAttempts === 1
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: dashboardFixture(report.metrics) });
+  });
+  await page.goto('/#analytics');
+
+  const dashboardError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar os indicadores do painel.',
+  });
+  await expect(dashboardError).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Relatório carregado' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Resultados do relatório' })).toContainText(today);
+  await dashboardError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(dashboardError).toHaveCount(0);
+  await expect.poll(() => dashboardAttempts).toBe(2);
+  expect(mainReportAttempts).toBe(1);
+});
+
+test('sports options failure stays visible while more filters are collapsed and recovers', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
+  let optionsAttempts = 0;
+  await page.route('**/api/v1/reports/options', (route) => {
+    optionsAttempts += 1;
+    return optionsAttempts === 1
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } });
+  });
+  await page.route('**/api/v1/reports/bets?*', (route) =>
+    route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
+  );
+  await page.goto('/#analytics');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
+
+  const filters = page.locator('details.report-definitions');
+  await expect(filters).toBeVisible();
+  await expect(filters).toHaveJSProperty('open', false);
+  const optionsError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar as opções de esportes.',
+  });
+  await expect(optionsError).toBeVisible();
+  await optionsError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(optionsError).toHaveCount(0);
+  await expect.poll(() => optionsAttempts).toBe(2);
+  await expect(filters).toHaveJSProperty('open', false);
 });
 
 test('confirms origin and event date on the canonical draft before importing (R5)', async ({

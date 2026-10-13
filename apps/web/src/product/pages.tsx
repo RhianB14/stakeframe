@@ -915,8 +915,6 @@ export function BetsPage({
     const displayedScheduledRows = sort
       ? sortBetRows(scheduledRows, sort.column, sort.direction)
       : scheduledRows;
-    const currentMonth = today.slice(0, 7);
-    const currentUnit = workspace.units.find((unit) => unit.month === currentMonth)?.amount ?? null;
     const todayOpenRows = scheduledRows.filter((row) => row.bet.state === 'open');
     const todayExposureCents = todayOpenRows.reduce(
       (total, row) => total + cents(row.bet.remaining ?? row.bet.stake ?? '0'),
@@ -925,28 +923,31 @@ export function BetsPage({
     const todayProfitCents = scheduledRows
       .filter((row) => row.bet.state !== 'cancelled')
       .reduce((total, row) => total + cents(row.bet.profit ?? '0'), 0n);
-    const todayExposureUnits = todayOpenRows.reduce((total, row) => {
-      const value = unitHundredths(
-        row.bet.remaining ?? row.bet.stake,
-        row.bet.unitAmount ?? currentUnit,
-      );
-      return value === null ? total : total + value;
-    }, 0n);
-    const todayProfitUnits = scheduledRows
+    const todayExposureUnitValues = todayOpenRows.map((row) =>
+      unitHundredths(row.bet.remaining ?? row.bet.stake, row.bet.unitAmount),
+    );
+    const todayExposureUnits = todayExposureUnitValues.every((value) => value !== null)
+      ? todayExposureUnitValues.reduce<bigint>((total, value) => total + (value ?? 0n), 0n)
+      : null;
+    const todayProfitUnitValues = scheduledRows
       .filter((row) => row.bet.state !== 'cancelled')
-      .reduce((total, row) => {
-        const value = unitHundredths(row.bet.profit, row.bet.unitAmount ?? currentUnit);
-        return value === null ? total : total + value;
-      }, 0n);
+      .map((row) => unitHundredths(row.bet.profit ?? '0.00', row.bet.unitAmount));
+    const todayProfitUnits = todayProfitUnitValues.every((value) => value !== null)
+      ? todayProfitUnitValues.reduce<bigint>((total, value) => total + (value ?? 0n), 0n)
+      : null;
     const exposure =
       amountMode === 'money'
         ? formatDisplayMoney(moneyFromCents(todayExposureCents))
-        : formatUnitHundredths(todayExposureUnits);
+        : todayExposureUnits === null
+          ? '—'
+          : formatUnitHundredths(todayExposureUnits);
     const dayNet = hideAmounts
       ? '••••'
       : amountMode === 'money'
         ? `${todayProfitCents > 0n ? '+' : ''}${formatDisplayMoney(moneyFromCents(todayProfitCents))}`
-        : `${todayProfitUnits > 0n ? '+' : ''}${formatUnitHundredths(todayProfitUnits)}`;
+        : todayProfitUnits === null
+          ? '—'
+          : `${todayProfitUnits > 0n ? '+' : ''}${formatUnitHundredths(todayProfitUnits)}`;
     const dayNetTone =
       todayProfitCents > 0n ? 'is-positive' : todayProfitCents < 0n ? 'is-negative' : '';
     const statusText = (bet: Bet) =>
@@ -1086,8 +1087,12 @@ export function BetsPage({
               : outcomeFor(left.bet).localeCompare(outcomeFor(right.bet));
       return dateDescending ? -compared : compared;
     });
+    const completeHistoryPage =
+      historyQuery.data !== undefined && historyQuery.data.items.length === historyQuery.data.total;
     const historySummaryFallback = {
-      count: filteredHistory.length,
+      count: completeHistoryPage
+        ? filteredHistory.length
+        : (historyQuery.data?.total ?? filteredHistory.length),
       stake: moneyFromCents(
         filteredHistory.reduce((total, row) => total + cents(row.bet.stake ?? '0'), 0n),
       ),
@@ -1095,23 +1100,28 @@ export function BetsPage({
         filteredHistory.reduce((total, row) => total + cents(row.bet.profit ?? '0'), 0n),
       ),
       stakeUnits: (() => {
+        if (!completeHistoryPage) return null;
         const values = filteredHistory.map((row) =>
-          unitHundredths(row.bet.stake, row.bet.unitAmount ?? currentUnit),
+          unitHundredths(row.bet.stake, row.bet.unitAmount),
         );
-        return values.some((value) => value !== null)
+        return values.every((value) => value !== null)
           ? moneyFromCents(values.reduce<bigint>((total, value) => total + (value ?? 0n), 0n))
           : null;
       })(),
       profitUnits: (() => {
+        if (!completeHistoryPage) return null;
         const values = filteredHistory.map((row) =>
-          unitHundredths(row.bet.profit, row.bet.unitAmount ?? currentUnit),
+          unitHundredths(row.bet.profit ?? '0.00', row.bet.unitAmount),
         );
-        return values.some((value) => value !== null)
+        return values.every((value) => value !== null)
           ? moneyFromCents(values.reduce<bigint>((total, value) => total + (value ?? 0n), 0n))
           : null;
       })(),
+      missingUnitBets: completeHistoryPage
+        ? filteredHistory.filter((row) => !row.bet.unitAmount || cents(row.bet.unitAmount) <= 0n)
+            .length
+        : (historyQuery.data?.summary?.missingUnitBets ?? null),
     };
-    const completeHistoryPage = historyQuery.data?.items.length === historyQuery.data?.total;
     const historySummary = completeHistoryPage
       ? historySummaryFallback
       : (historyQuery.data?.summary ?? historySummaryFallback);
@@ -1390,7 +1400,7 @@ export function BetsPage({
                                     : (() => {
                                         const result = unitsValue(
                                           row.bet.profit,
-                                          row.bet.unitAmount ?? currentUnit,
+                                          row.bet.unitAmount,
                                         );
                                         return result &&
                                           result !== '—' &&
@@ -1466,10 +1476,7 @@ export function BetsPage({
                             : amountMode === 'money'
                               ? betFinancialDisplay(row.bet).profitText
                               : (() => {
-                                  const result = unitsValue(
-                                    row.bet.profit,
-                                    row.bet.unitAmount ?? currentUnit,
-                                  );
+                                  const result = unitsValue(row.bet.profit, row.bet.unitAmount);
                                   return result &&
                                     result !== '—' &&
                                     !result.startsWith('-') &&
@@ -1608,7 +1615,7 @@ export function BetsPage({
                   row={row}
                   amountMode={amountMode}
                   hideAmounts={hideAmounts}
-                  unitAmount={currentUnit}
+                  unitAmount={row.bet.unitAmount}
                   open={open}
                 />
               ))}

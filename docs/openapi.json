@@ -1348,6 +1348,7 @@
             "type": "object",
             "properties": {
               "count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "missingUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
               "stake": { "type": "string", "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
               "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
               "stakeUnits": {
@@ -1361,7 +1362,7 @@
                 "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
               }
             },
-            "required": ["count", "stake", "profit", "stakeUnits", "profitUnits"]
+            "required": ["count", "missingUnitBets", "stake", "profit", "stakeUnits", "profitUnits"]
           }
         },
         "required": ["items", "total", "page", "pageSize"]
@@ -7310,6 +7311,7 @@
             "type": "object",
             "properties": {
               "count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "missingUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
               "stake": { "type": "string", "pattern": "^(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
               "profit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$" },
               "stakeUnits": {
@@ -7323,7 +7325,14 @@
                 "pattern": "^-?(0|[1-9]\\d{0,11})(\\.\\d{1,2})?$"
               }
             },
-            "required": ["count", "stake", "profit", "stakeUnits", "profitUnits"],
+            "required": [
+              "count",
+              "missingUnitBets",
+              "stake",
+              "profit",
+              "stakeUnits",
+              "profitUnits"
+            ],
             "additionalProperties": false
           }
         },

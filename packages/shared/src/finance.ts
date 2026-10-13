@@ -344,6 +344,7 @@ export const betPageSchema = z
     summary: z
       .object({
         count: z.number().int().nonnegative(),
+        missingUnitBets: z.number().int().nonnegative(),
         stake: moneySchema,
         profit: signedMoneySchema,
         stakeUnits: signedMoneySchema.nullable(),

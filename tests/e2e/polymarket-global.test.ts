@@ -411,6 +411,21 @@ test('o card é clicável, focável e fala as métricas com a amostra', async ({
   await expect(page).toHaveURL(/#\/polymarket\/tipster\/0x/);
 });
 
+test('detalhe de tipster não faz requisições externas de posições', async ({ page }) => {
+  const externalRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).hostname === 'data-api.polymarket.com')
+      externalRequests.push(request.url());
+  });
+  await openGlobal(page);
+  await cards(page).first().locator('.global-card-link').click();
+  await expect(page).toHaveURL(/#\/polymarket\/tipster\/0x/);
+  await expect(page.getByRole('status')).toContainText('depende de autorização específica');
+  await page.getByRole('tab', { name: /Apostas fechadas/ }).click();
+  await expect(page.getByRole('tabpanel')).toContainText('posições fechadas');
+  expect(externalRequests).toEqual([]);
+});
+
 test('a tela não escreve Composite Score, avaliação nem conselho de aposta', async ({ page }) => {
   await openGlobal(page);
 

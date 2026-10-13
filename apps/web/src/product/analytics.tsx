@@ -267,19 +267,81 @@ export function BetTrackAnalyticsPage({
     queryFn: () => request('/api/v1/bankroll/rules', dailyLimitStateSchema),
   });
   const [dimension, setDimension] = useState<'sport' | 'book' | 'tipster' | 'amount'>('sport');
-  if (report.isError || dashboard.isError)
+  if (!report.data || !dashboard.data) {
+    const partialMetrics = report.data?.metrics ?? dashboard.data?.metrics ?? null;
     return (
-      <AnalyticsErrorCard
-        message={
-          report.isError
-            ? "Couldn't load your analytics report."
-            : "Couldn't load analytics indicators."
-        }
-        onRetry={() => void (report.isError ? report.refetch() : dashboard.refetch())}
-        isRetrying={report.isError ? report.isFetching : dashboard.isFetching}
-      />
+      <div className="bettrack-analytics">
+        {report.isError ? (
+          <AnalyticsErrorCard
+            message="Não foi possível carregar o relatório de análises."
+            onRetry={() => void report.refetch()}
+            isRetrying={report.isFetching}
+          />
+        ) : !report.data ? (
+          <p role="status">Carregando relatório de análises…</p>
+        ) : null}
+        {dashboard.isError ? (
+          <AnalyticsErrorCard
+            message="Não foi possível carregar os indicadores do painel."
+            onRetry={() => void dashboard.refetch()}
+            isRetrying={dashboard.isFetching}
+          />
+        ) : !dashboard.data ? (
+          <p role="status">Carregando indicadores do painel…</p>
+        ) : null}
+        {partialMetrics ? (
+          <section aria-label={report.data ? 'Relatório carregado' : 'Resumo carregado'}>
+            <h2>{report.data ? 'Relatório carregado' : 'Resumo carregado'}</h2>
+            <div className="bettrack-analytics-kpis">
+              <div>
+                <span>RESULTADO EM UNIDADES</span>
+                <strong>{signedUnitText(partialMetrics.profitUnits)}</strong>
+                <small>{formatDisplayMoney(partialMetrics.profit)}</small>
+              </div>
+              <div>
+                <span>RENDIMENTO</span>
+                <strong>
+                  {partialMetrics.yieldReal === null
+                    ? '—'
+                    : `${Number(partialMetrics.yieldReal).toFixed(1)}%`}
+                </strong>
+                <small>sobre o valor arriscado</small>
+              </div>
+              <div>
+                <span>TAXA DE ACERTO</span>
+                <strong>
+                  {partialMetrics.hitRateReal === null
+                    ? '—'
+                    : `${Number(partialMetrics.hitRateReal).toFixed(1)}%`}
+                </strong>
+                <small>
+                  {partialMetrics.hitWinsReal} de {partialMetrics.hitEligibleReal}
+                </small>
+              </div>
+              <div>
+                <span>APOSTAS LIQUIDADAS</span>
+                <strong>{partialMetrics.settledBets}</strong>
+                <small>no período selecionado</small>
+              </div>
+            </div>
+            {report.data ? (
+              <section aria-label="Resultados do relatório">
+                <h3>Resultados registrados</h3>
+                <ul>
+                  {report.data.timeline.slice(-7).map((bucket) => (
+                    <li key={bucket.date}>
+                      {bucket.date}: {signedUnitText(bucket.metrics.profitUnits)} ·{' '}
+                      {formatDisplayMoney(bucket.metrics.profit)}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
     );
-  if (!report.data || !dashboard.data) return <p role="status">Loading analytics…</p>;
+  }
 
   const summary = report.data.metrics;
   const indicators = dashboard.data.indicators;
@@ -392,6 +454,20 @@ export function BetTrackAnalyticsPage({
         </div>
       ) : null}
       <div className="bettrack-analytics-divider" />
+      {report.isError ? (
+        <AnalyticsErrorCard
+          message="Não foi possível atualizar o relatório de análises."
+          onRetry={() => void report.refetch()}
+          isRetrying={report.isFetching}
+        />
+      ) : null}
+      {dashboard.isError ? (
+        <AnalyticsErrorCard
+          message="Não foi possível atualizar os indicadores do painel."
+          onRetry={() => void dashboard.refetch()}
+          isRetrying={dashboard.isFetching}
+        />
+      ) : null}
       <h2 className="bettrack-analytics-confidence">{sampleHeadline}</h2>
       <div className="bettrack-analytics-kpis">
         <div>
@@ -903,14 +979,14 @@ export default function AnalyticsPage({
               Incluir datas estimadas
             </label>
           </div>
-          {options.isError ? (
-            <AnalyticsErrorCard
-              message="Couldn't load sports."
-              onRetry={() => void options.refetch()}
-              isRetrying={options.isFetching}
-            />
-          ) : null}
         </details>
+        {options.isError ? (
+          <AnalyticsErrorCard
+            message="Não foi possível carregar as opções de esportes."
+            onRetry={() => void options.refetch()}
+            isRetrying={options.isFetching}
+          />
+        ) : null}
         <div className="button-row">
           <Button type="submit">Aplicar filtros</Button>
           <Button

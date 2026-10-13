@@ -21,7 +21,7 @@ import {
   type GlobalMetricView,
 } from './polymarket-global-view.js';
 import { ApiFailure, request } from './api.js';
-import { formatDisplayDate } from './preferences.js';
+
 import { ProductErrorIcon } from './product-error-icon.js';
 
 const rankingSorts = [
@@ -311,93 +311,8 @@ export function PolymarketGlobalPage() {
   );
 }
 
-type TipsterPosition = {
-  title?: string | null;
-  outcome?: string | null;
-  current_size?: number | null;
-  avg_price?: number | null;
-  current_price?: number | null;
-  current_value?: number | null;
-  realized_pnl?: number | null;
-  unrealized_pnl?: number | null;
-  total_pnl?: number | null;
-  redeemable?: boolean | null;
-  last_event_at?: number | null;
-};
-type PositionStatus = 'OPEN' | 'CLOSED';
-
-function parsePositions(payload: unknown): TipsterPosition[] {
-  if (
-    !payload ||
-    typeof payload !== 'object' ||
-    !Array.isArray((payload as { data?: unknown }).data)
-  ) {
-    throw new Error('Resposta inválida da API do Polymarket.');
-  }
-  return (payload as { data: unknown[] }).data.map((item) => {
-    if (!item || typeof item !== 'object')
-      throw new Error('Posição inválida recebida do Polymarket.');
-    const row = item as Record<string, unknown>;
-    const text = (key: string) => (typeof row[key] === 'string' ? (row[key] as string) : null);
-    const number = (key: string) => (typeof row[key] === 'number' ? (row[key] as number) : null);
-    return {
-      title: text('title'),
-      outcome: text('outcome'),
-      current_size: number('current_size'),
-      avg_price: number('avg_price'),
-      current_price: number('current_price'),
-      current_value: number('current_value'),
-      realized_pnl: number('realized_pnl'),
-      unrealized_pnl: number('unrealized_pnl'),
-      total_pnl: number('total_pnl'),
-      redeemable: typeof row.redeemable === 'boolean' ? row.redeemable : null,
-      last_event_at: number('last_event_at'),
-    };
-  });
-}
-
-async function loadTipsterPositions(wallet: string, status: PositionStatus, signal: AbortSignal) {
-  const query = new URLSearchParams({
-    user: wallet,
-    status,
-    limit: '100',
-    sort_by: status === 'OPEN' ? 'CURRENT_VALUE' : 'REALIZED_PNL',
-    sort_direction: 'DESC',
-  });
-  const response = await fetch(`https://data-api.polymarket.com/v2/positions?${query}`, {
-    signal,
-    headers: { accept: 'application/json' },
-  });
-  if (!response.ok) throw new Error(`Polymarket retornou ${response.status}.`);
-  return parsePositions(await response.json());
-}
-
-const usd = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 2,
-});
-const price = (value: number | null | undefined) =>
-  value == null
-    ? '—'
-    : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value * 100)}¢`;
-
 export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
-  const [status, setStatus] = useState<PositionStatus>('OPEN');
-  const openQuery = useQuery({
-    queryKey: ['polymarket', 'positions', wallet, 'OPEN'],
-    queryFn: ({ signal }) => loadTipsterPositions(wallet, 'OPEN', signal),
-    enabled: wallet.length > 0,
-    staleTime: 30_000,
-  });
-  const closedQuery = useQuery({
-    queryKey: ['polymarket', 'positions', wallet, 'CLOSED'],
-    queryFn: ({ signal }) => loadTipsterPositions(wallet, 'CLOSED', signal),
-    enabled: wallet.length > 0,
-    staleTime: 30_000,
-  });
-  const query = status === 'OPEN' ? openQuery : closedQuery;
-  const positions = query.data ?? [];
+  const [status, setStatus] = useState<'OPEN' | 'CLOSED'>('OPEN');
   const displayName = wallet;
 
   return (
@@ -417,8 +332,6 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
       <div className="tipster-position-tabs" role="tablist" aria-label="Apostas do tipster">
         {(['OPEN', 'CLOSED'] as const).map((option) => {
           const selected = status === option;
-          const data = option === 'OPEN' ? openQuery.data : closedQuery.data;
-          const count = data?.length;
           return (
             <button
               key={option}
@@ -430,7 +343,7 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
               onClick={() => setStatus(option)}
             >
               {option === 'OPEN' ? 'Apostas abertas' : 'Apostas fechadas'}
-              <span>{count ?? '—'}</span>
+              <span>—</span>
             </button>
           );
         })}
@@ -443,88 +356,10 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
         aria-labelledby={`tipster-tab-${status.toLowerCase()}`}
         tabIndex={0}
       >
-        {query.isPending ? (
-          <p className="tipster-position-state" role="status">
-            Carregando apostas…
-          </p>
-        ) : query.isError ? (
-          <div className="tipster-position-error" role="alert">
-            <span>Não foi possível carregar as posições deste perfil.</span>
-            <button type="button" onClick={() => void query.refetch()}>
-              Tentar novamente
-            </button>
-          </div>
-        ) : positions.length === 0 ? (
-          <p className="tipster-position-state">Nenhuma aposta nesta aba.</p>
-        ) : (
-          <div className="tipster-position-list">
-            {positions.map((position, index) => {
-              const pnl =
-                status === 'OPEN'
-                  ? position.unrealized_pnl
-                  : (position.realized_pnl ?? position.total_pnl);
-              return (
-                <article className="tipster-position-row" key={`${position.title}-${index}`}>
-                  <div className="tipster-position-market">
-                    <strong>{position.title || 'Mercado sem título'}</strong>
-                    <span>{position.outcome || 'Resultado não informado'}</span>
-                  </div>
-                  <div>
-                    <span className="tipster-position-label">PREÇO DE ENTRADA</span>
-                    <strong>{price(position.avg_price)}</strong>
-                  </div>
-                  {status === 'OPEN' ? (
-                    <div>
-                      <span className="tipster-position-label">PREÇO ATUAL</span>
-                      <strong>{price(position.current_price)}</strong>
-                    </div>
-                  ) : (
-                    <div>
-                      <span className="tipster-position-label">ENCERRADA</span>
-                      <strong>
-                        {position.last_event_at
-                          ? formatDisplayDate(
-                              new Date(position.last_event_at * 1000).toISOString(),
-                              { dateStyle: 'medium' },
-                            )
-                          : '—'}
-                      </strong>
-                    </div>
-                  )}
-                  <div className="tipster-position-result">
-                    <span className="tipster-position-label">
-                      {status === 'OPEN' ? 'VALOR ATUAL' : 'RESULTADO'}
-                    </span>
-                    {/* D8: valor de posição ABERTA é não realizado — nunca verde.
-                        R2: `current_value` desconhecido é ausência ('—'), não US$ 0,00. */}
-                    <strong
-                      className={
-                        status === 'OPEN'
-                          ? ''
-                          : pnl == null
-                            ? ''
-                            : pnl >= 0
-                              ? 'is-positive'
-                              : 'is-negative'
-                      }
-                    >
-                      {status === 'OPEN'
-                        ? position.current_value == null
-                          ? '—'
-                          : usd.format(position.current_value)
-                        : pnl == null
-                          ? '—'
-                          : usd.format(pnl)}
-                    </strong>
-                  </div>
-                  {status === 'OPEN' && position.redeemable ? (
-                    <span className="tipster-redeemable">RESGATÁVEL</span>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
+        <p className="tipster-position-state" role="status">
+          As posições {status === 'OPEN' ? 'abertas' : 'fechadas'} deste perfil não estão
+          disponíveis. A integração depende de autorização específica.
+        </p>
       </div>
     </section>
   );

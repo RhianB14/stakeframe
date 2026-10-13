@@ -680,6 +680,30 @@ describe('financial core with PostgreSQL', () => {
     expect((await service.bet(tenantContext, historic.id)).bet.unitAmount).toBe('5.00');
     expect((await service.bet(tenantContext, pending.id)).bet.unitAmount).toBeNull();
   });
+  it('marks mixed historical unit aggregates unavailable without losing the missing-unit count', async () => {
+    const { bookmakerId } = await initialized();
+    await createBet(bookmakerId, {
+      placedAt: '2020-01-16T12:00:00-03:00',
+      allowMissingUnit: true,
+    });
+    await command({
+      type: 'unit.set',
+      month: '2020-01',
+      amount: '5.00',
+      reason: 'Unidade histórica conferida',
+    });
+    await createBet(bookmakerId, { placedAt: '2020-01-15T12:00:00-03:00' });
+
+    const page = await service.bets(tenantContext, { page: 1, pageSize: 25 });
+    expect(page.summary).toMatchObject({
+      count: 2,
+      missingUnitBets: 1,
+      stake: '200.00',
+      profit: '0.00',
+      stakeUnits: null,
+      profitUnits: null,
+    });
+  });
   it('rolls back invalid event dates and preserves partial dates without invented times', async () => {
     const { bookmakerId } = await initialized();
     await expect(

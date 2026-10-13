@@ -322,16 +322,20 @@ export async function readBets(client: PoolClient, query: BetQuery) {
     await client.query<{
       stake: string;
       profit: string;
+      missing_unit_bets: number;
       stake_units: string | null;
       profit_units: string | null;
     }>(
       `select
          coalesce(sum(b.stake),0)::numeric(16,2)::text as stake,
          coalesce(sum(financial.profit),0)::numeric(16,2)::text as profit,
-         case when count(b.unit_amount)>0
+         count(*) filter(where b.unit_amount is null or b.unit_amount<=0)::int as missing_unit_bets,
+         case when count(*)=0 then '0.00'
+           when count(*) filter(where b.unit_amount is null or b.unit_amount<=0)=0
            then coalesce(sum(round(b.stake/nullif(b.unit_amount,0),2)),0)::numeric(16,2)::text
            else null end as stake_units,
-         case when count(b.unit_amount)>0
+         case when count(*)=0 then '0.00'
+           when count(*) filter(where b.unit_amount is null or b.unit_amount<=0)=0
            then coalesce(sum(round(financial.profit/nullif(b.unit_amount,0),2)),0)::numeric(16,2)::text
            else null end as profit_units
        from finance.bet b
@@ -360,6 +364,7 @@ export async function readBets(client: PoolClient, query: BetQuery) {
     pageSize: query.pageSize,
     summary: {
       count: Number(count.count),
+      missingUnitBets: Number(summary.missing_unit_bets),
       stake: summary.stake,
       profit: summary.profit,
       stakeUnits: summary.stake_units,

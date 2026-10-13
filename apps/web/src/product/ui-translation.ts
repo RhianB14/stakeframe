@@ -129,10 +129,10 @@ const ptBR: Record<string, string> = {
     'Resultado acumulado das apostas liquidadas por data do evento.',
   'at your best point': 'No seu melhor momento',
   insights: 'Insights',
-  'unit out of range': 'Unidade fora da faixa',
+
   '0 of 14 days in the red': '0 de 14 dias no negativo',
   'last 14 days': 'Últimos 14 dias',
-  'when healthy is 1–3%': 'a faixa saudável é de 1–3%',
+
   days: 'dias',
   underwater: 'em recuperação',
   'days underwater': 'dias em recuperação',

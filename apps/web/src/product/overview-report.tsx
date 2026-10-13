@@ -382,20 +382,14 @@ export function OverviewReport({
               <h2>INSIGHTS</h2>
             </div>
           </div>
-          <div
-            className={`bettrack-insight-card${unitPercent === null || unitPercent < 1 || unitPercent > 3 ? ' is-warning' : ''}`}
-          >
-            <strong>
-              {unitPercent === null || unitPercent < 1 || unitPercent > 3
-                ? 'UNIT OUT OF RANGE'
-                : 'UNIT IN RANGE'}
-            </strong>
+          <div className="bettrack-insight-card">
+            <strong>UNIT / BANKROLL</strong>
             <span>
               {hideAmounts
                 ? '••••'
                 : unitPercent === null
-                  ? 'No unit set'
-                  : `${unitPercent.toFixed(1)}% when healthy is 1–3%`}
+                  ? 'No unit configured'
+                  : `${unitPercent.toFixed(1)}% of current bankroll`}
             </span>
           </div>
           <div className="bettrack-insight-card">
