@@ -58,17 +58,20 @@ const rankingSorts = [
  *    "Sem base" — nunca uma casa vazia.
  *  - Não há cor inline, não há `style={{}}` e não há termo de avaliação.
  *
- * O preview de desenvolvimento usa a série local validada para demonstrar a
- * apresentação; builds de produção consultam o endpoint autenticado, cuja
- * série depende do worker de ingestão. Quando ela não existe, a interface
- * explica isso sem recorrer a perfis fictícios.
+ * O preview em desenvolvimento/loopback usa a série local validada para
+ * demonstrar a apresentação; origens de produção consultam o endpoint
+ * autenticado, cuja série depende do worker de ingestão. Quando ela não
+ * existe, a interface explica isso sem recorrer a perfis fictícios.
  */
 export function PolymarketGlobalPage() {
   const [filter, setFilter] = useState<PolymarketGlobalFilter>('ALL');
   const [sort, setSort] = useState<PolymarketGlobalSort>('PNL');
   const [pageSize, setPageSize] = useState(12);
   const [page, setPage] = useState(1);
-  const isDemo = import.meta.env.DEV;
+  const isLoopbackPreview =
+    typeof window !== 'undefined' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  const isDemo = import.meta.env.DEV || isLoopbackPreview;
   const view = isDemo ? globalView(localPolymarketGlobal, { category: filter, sort }) : null;
   const category = filter === 'ALL' ? 'OVERALL' : filter;
   const orderBy = sort === 'VOLUME' ? 'VOL' : 'PNL';
