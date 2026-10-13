@@ -19,6 +19,7 @@ export function DashboardPanel({ search, version }: { search: string; version: n
       <AnalyticsErrorCard
         message="Couldn't load analytics indicators."
         onRetry={() => void dashboard.refetch()}
+        isRetrying={dashboard.isFetching}
       />
     );
   if (!dashboard.data) return <p role="status">Calculando indicadores...</p>;

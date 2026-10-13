@@ -132,6 +132,52 @@ describe('analytics dashboard (STK-F2-02)', () => {
     expect((await reports.report(tenantContext, query)).metrics).toEqual(dash.metrics);
   });
 
+  it('classifica faixas de unidade sem sobreposição e sem arredondar limites', async () => {
+    await run({
+      type: 'unit.set',
+      month: '2026-09',
+      amount: '100.00',
+      reason: 'Teste de limites de unidade',
+    });
+    const bets = [
+      { stake: '99.99', returnAmount: '199.98', placedAt: '2026-09-05T12:00:00-03:00' },
+      { stake: '100.00', returnAmount: '200.00', placedAt: '2026-09-05T12:00:00-03:00' },
+      { stake: '300.00', returnAmount: '600.00', placedAt: '2026-09-05T12:00:00-03:00' },
+      { stake: '300.01', returnAmount: '600.02', placedAt: '2026-09-05T12:00:00-03:00' },
+      {
+        stake: '100.00',
+        returnAmount: '200.00',
+        placedAt: '2025-09-05T12:00:00-03:00',
+        allowMissingUnit: true,
+      },
+    ];
+    for (const item of bets) {
+      const created = await bet(item);
+      await run({
+        type: 'bet.settle',
+        id: created.id,
+        outcome: 'win',
+        returnAmount: item.returnAmount,
+        closedPrincipal: item.stake,
+        settledAt: new Date().toISOString(),
+        reason: 'Liquidação de teste',
+      });
+    }
+
+    const dashboard = await reports.dashboard(tenantContext, query);
+    expect(dashboard.indicators).toMatchObject({
+      underOneUnitBets: 1,
+      oneToThreeUnitBets: 2,
+      overThreeUnitBets: 1,
+    });
+    expect(dashboard.metrics.missingUnitBets).toBe(1);
+    expect(
+      dashboard.indicators.underOneUnitBets +
+        dashboard.indicators.oneToThreeUnitBets +
+        dashboard.indicators.overThreeUnitBets,
+    ).toBe(4);
+  });
+
   it('arredonda as razões para duas casas sem misturar freebets no denominador', async () => {
     const first = await bet();
     await settle(first.id);

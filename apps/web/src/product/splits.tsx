@@ -23,6 +23,7 @@ export function SplitsPanel({ search, version }: { search: string; version: numb
       <AnalyticsErrorCard
         message="Couldn't load dimension comparisons."
         onRetry={() => void splits.refetch()}
+        isRetrying={splits.isFetching}
       />
     );
   if (!splits.data) return <p role="status">Calculando as dimensões...</p>;

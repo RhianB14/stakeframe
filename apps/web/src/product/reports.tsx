@@ -205,8 +205,12 @@ export function ReportsPage() {
             <ProductErrorIcon />
             <div>
               <p>Não foi possível gerar o relatório.</p>
-              <Button variant="secondary" onClick={() => void report.refetch()}>
-                Tentar novamente
+              <Button
+                variant="secondary"
+                disabled={report.isFetching}
+                onClick={() => void report.refetch()}
+              >
+                {report.isFetching ? 'Tentando…' : 'Tentar novamente'}
               </Button>
             </div>
           </div>
@@ -218,17 +222,6 @@ export function ReportsPage() {
             <div>
               <p>Não foi possível carregar esta versão do relatório.</p>
               <Button variant="secondary" onClick={() => void version.refetch()}>
-                Tentar novamente
-              </Button>
-            </div>
-          </div>
-        ) : null}
-        {history.isError ? (
-          <div className="notice warning product-error-alert" role="alert">
-            <ProductErrorIcon />
-            <div>
-              <p>Não foi possível carregar o histórico de relatórios.</p>
-              <Button variant="secondary" onClick={() => void history.refetch()}>
                 Tentar novamente
               </Button>
             </div>
@@ -416,7 +409,7 @@ export function ReportsPage() {
         </>
       ) : null}
 
-      {history.data && history.data.items.length > 0 ? (
+      {history.isError || (history.data && history.data.items.length > 0) ? (
         <section className="panel">
           <div className="section-heading">
             <div>
@@ -424,46 +417,63 @@ export function ReportsPage() {
               <p>Relatórios congelados desta conta, do mais recente para o mais antigo.</p>
             </div>
           </div>
-          <div
-            className="table-scroll"
-            role="region"
-            aria-label="Histórico de relatórios"
-            tabIndex={0}
-          >
-            <table className="product-table">
-              <thead>
-                <tr>
-                  <th>Período</th>
-                  <th>Versão</th>
-                  <th>Emitido em</th>
-                  <th>Versão do financeiro</th>
-                  <th>
-                    <span className="sr-only">Abrir</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.data.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.title}</td>
-                    <td>{item.version}</td>
-                    <td>
-                      {formatDisplayDate(item.createdAt, {
-                        dateStyle: 'short',
-                        timeStyle: 'short',
-                      })}
-                    </td>
-                    <td className="tabular">{item.financialVersion}</td>
-                    <td>
-                      <Button variant="ghost" size="small" onClick={() => setSelectedId(item.id)}>
-                        Abrir
-                      </Button>
-                    </td>
+          {history.isError ? (
+            <div className="notice warning product-error-alert" role="alert">
+              <ProductErrorIcon />
+              <div>
+                <p>Não foi possível carregar o histórico de relatórios.</p>
+                <Button
+                  variant="secondary"
+                  disabled={history.isFetching}
+                  onClick={() => void history.refetch()}
+                >
+                  {history.isFetching ? 'Tentando…' : 'Tentar novamente'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {history.data && history.data.items.length > 0 ? (
+            <div
+              className="table-scroll"
+              role="region"
+              aria-label="Histórico de relatórios"
+              tabIndex={0}
+            >
+              <table className="product-table">
+                <thead>
+                  <tr>
+                    <th>Período</th>
+                    <th>Versão</th>
+                    <th>Emitido em</th>
+                    <th>Versão do financeiro</th>
+                    <th>
+                      <span className="sr-only">Abrir</span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {history.data.items.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.title}</td>
+                      <td>{item.version}</td>
+                      <td>
+                        {formatDisplayDate(item.createdAt, {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                      </td>
+                      <td className="tabular">{item.financialVersion}</td>
+                      <td>
+                        <Button variant="ghost" size="small" onClick={() => setSelectedId(item.id)}>
+                          Abrir
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </>

@@ -276,6 +276,7 @@ export function BetTrackAnalyticsPage({
             : "Couldn't load analytics indicators."
         }
         onRetry={() => void (report.isError ? report.refetch() : dashboard.refetch())}
+        isRetrying={report.isError ? report.isFetching : dashboard.isFetching}
       />
     );
   if (!report.data || !dashboard.data) return <p role="status">Loading analytics…</p>;
@@ -436,6 +437,7 @@ export function BetTrackAnalyticsPage({
           <AnalyticsErrorCard
             message="Couldn't load weekly results."
             onRetry={() => void weeklyReport.refetch()}
+            isRetrying={weeklyReport.isFetching}
           />
         ) : weeklyReport.isPending ? (
           <p role="status">Loading weekly results…</p>
@@ -679,6 +681,7 @@ export function BetTrackAnalyticsPage({
               <AnalyticsErrorCard
                 message="Couldn't load daily limit details."
                 onRetry={() => void dailyLimit.refetch()}
+                isRetrying={dailyLimit.isFetching}
               />
             ) : (
               <>
@@ -904,6 +907,7 @@ export default function AnalyticsPage({
             <AnalyticsErrorCard
               message="Couldn't load sports."
               onRetry={() => void options.refetch()}
+              isRetrying={options.isFetching}
             />
           ) : null}
         </details>
@@ -938,6 +942,7 @@ export default function AnalyticsPage({
         <AnalyticsErrorCard
           message="Couldn't load the report."
           onRetry={() => void report.refetch()}
+          isRetrying={report.isFetching}
         />
       ) : !report.data ? (
         <p role="status">Calculando resultados…</p>
@@ -1093,6 +1098,7 @@ export default function AnalyticsPage({
               <AnalyticsErrorCard
                 message="Couldn't load report details."
                 onRetry={() => void bets.refetch()}
+                isRetrying={bets.isFetching}
               />
             ) : !bets.data ? (
               <p role="status">Carregando apostas…</p>

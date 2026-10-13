@@ -760,7 +760,10 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toBeVisible();
 
+  const beforeRemoveRequestCount = historyRequests.length;
   await page.getByRole('button', { name: 'Remover filtro de busca Aurora' }).click();
+  await expect.poll(() => historyRequests.length).toBeGreaterThan(beforeRemoveRequestCount);
+  expect(historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
@@ -771,7 +774,10 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   await page.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Central');
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
+  const beforeClearRequestCount = historyRequests.length;
   await page.getByRole('button', { name: 'Limpar filtros' }).click();
+  await expect.poll(() => historyRequests.length).toBeGreaterThan(beforeClearRequestCount);
+  expect(historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Remover filtro de busca/ })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
