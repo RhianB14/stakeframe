@@ -3951,9 +3951,50 @@
               "hitWinsReal",
               "hitEligibleReal"
             ]
+          },
+          "indicators": {
+            "type": "object",
+            "properties": {
+              "grossWinProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "grossLossProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "lossBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "underOneUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "oneToThreeUnitBets": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "overThreeUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "currentWinStreak": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "longestWinStreak": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "parlayStakeSharePct": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              }
+            },
+            "required": [
+              "grossWinProfit",
+              "grossLossProfit",
+              "lossBets",
+              "underOneUnitBets",
+              "oneToThreeUnitBets",
+              "overThreeUnitBets",
+              "currentWinStreak",
+              "longestWinStreak",
+              "parlayStakeSharePct"
+            ]
           }
         },
-        "required": ["generatedAt", "version", "filters", "minSample", "lowSample", "metrics"]
+        "required": [
+          "generatedAt",
+          "version",
+          "filters",
+          "minSample",
+          "lowSample",
+          "metrics",
+          "indicators"
+        ]
       },
       "AnalyticsSplitsInput": {
         "type": "object",
@@ -9933,9 +9974,51 @@
               "hitEligibleReal"
             ],
             "additionalProperties": false
+          },
+          "indicators": {
+            "type": "object",
+            "properties": {
+              "grossWinProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "grossLossProfit": { "type": "string", "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$" },
+              "lossBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "underOneUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "oneToThreeUnitBets": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "overThreeUnitBets": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "currentWinStreak": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "longestWinStreak": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "parlayStakeSharePct": {
+                "nullable": true,
+                "type": "string",
+                "pattern": "^-?(0|[1-9]\\d{0,29})\\.\\d{2}$"
+              }
+            },
+            "required": [
+              "grossWinProfit",
+              "grossLossProfit",
+              "lossBets",
+              "underOneUnitBets",
+              "oneToThreeUnitBets",
+              "overThreeUnitBets",
+              "currentWinStreak",
+              "longestWinStreak",
+              "parlayStakeSharePct"
+            ],
+            "additionalProperties": false
           }
         },
-        "required": ["generatedAt", "version", "filters", "minSample", "lowSample", "metrics"],
+        "required": [
+          "generatedAt",
+          "version",
+          "filters",
+          "minSample",
+          "lowSample",
+          "metrics",
+          "indicators"
+        ],
         "additionalProperties": false
       },
       "AnalyticsSplits": {
@@ -13395,6 +13478,12 @@
             "schema": { "type": "string", "minLength": 1, "maxLength": 80 },
             "in": "query",
             "name": "sport",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "in": "query",
+            "name": "marketType",
             "required": false
           },
           {

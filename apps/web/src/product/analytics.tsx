@@ -18,7 +18,7 @@ import {
   LabelList,
 } from 'recharts';
 import {
-  betPageSchema,
+  analyticsDashboardSchema,
   reportSchema,
   reportBetPageSchema,
   reportOptionsSchema,
@@ -246,29 +246,28 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
     queryFn: () =>
       request(`/api/v1/reports?from=${twoWeeksBackStart}&to=${lastCompletedDate}`, reportSchema),
   });
-  const betParams = new URLSearchParams({ page: '1', pageSize: '100' }).toString();
-  const bets = useQuery({
-    queryKey: ['product', 'bets', workspace.version, betParams],
-    queryFn: () => request(`/api/v1/bets?${betParams}`, betPageSchema),
+  const dashboard = useQuery({
+    queryKey: ['product', 'dashboard', month, today, workspace.version],
+    queryFn: () =>
+      request(
+        `/api/v1/dashboard?from=${month}-01&to=${today}&kind=all&includeEstimated=false`,
+        analyticsDashboardSchema,
+      ),
   });
   const dailyLimit = useQuery({
     queryKey: ['product', 'daily-limit', workspace.version],
     queryFn: () => request('/api/v1/bankroll/rules', dailyLimitStateSchema),
   });
   const [dimension, setDimension] = useState<'sport' | 'book' | 'tipster' | 'amount'>('sport');
-  if (report.isError || bets.isError) return <p role="alert">Could not load your analytics.</p>;
-  if (!report.data || !bets.data) return <p role="status">Loading analytics…</p>;
+  if (report.isError || dashboard.isError)
+    return <p role="alert">Could not load your analytics.</p>;
+  if (!report.data || !dashboard.data) return <p role="status">Loading analytics…</p>;
 
   const summary = report.data.metrics;
-  const settled = bets.data.items.filter((bet) => bet.state === 'settled');
-  const positiveCents = settled.reduce((total, bet) => {
-    const profit = exactCents(bet.profit);
-    return total + (profit > 0n ? profit : 0n);
-  }, 0n);
-  const negativeCents = settled.reduce(
-    (total, bet) => total + (exactCents(bet.profit) < 0n ? -exactCents(bet.profit) : 0n),
-    0n,
-  );
+  const indicators = dashboard.data.indicators;
+  const settledCount = dashboard.data.metrics.settledBets;
+  const positiveCents = exactCents(indicators.grossWinProfit);
+  const negativeCents = exactCents(indicators.grossLossProfit);
   const profitFactor =
     negativeCents > 0n
       ? (Number(positiveCents) / Number(negativeCents)).toFixed(2)
@@ -316,7 +315,7 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
   });
   const redWeeks = weeklyNet.filter((week) => week.units < 0).length;
   const chartTokens = readChartTokens();
-  const sample = summary.settledBets;
+  const sample = settledCount;
   const sampleLabel =
     sample < 25 ? 'TOO EARLY' : sample < 100 ? 'A HINT' : sample < 300 ? 'A TREND' : 'PER SPORT';
   const sampleHeadline =
@@ -344,15 +343,10 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
   const amountRows =
     dimension === 'amount'
       ? [
-          { label: 'UNDER 1 U', bets: settled.filter((bet) => Number(bet.stakeUnits ?? 0) < 1) },
-          {
-            label: '1–3 U',
-            bets: settled.filter(
-              (bet) => Number(bet.stakeUnits ?? 0) >= 1 && Number(bet.stakeUnits ?? 0) <= 3,
-            ),
-          },
-          { label: 'OVER 3 U', bets: settled.filter((bet) => Number(bet.stakeUnits ?? 0) > 3) },
-        ].filter((row) => row.bets.length > 0)
+          { label: 'UNDER 1 U', bets: indicators.underOneUnitBets },
+          { label: '1–3 U', bets: indicators.oneToThreeUnitBets },
+          { label: 'OVER 3 U', bets: indicators.overThreeUnitBets },
+        ].filter((row) => row.bets > 0)
       : [];
   const bestDay = report.data.timeline
     .filter((bucket) => bucket.metrics.settledBets > 0)
@@ -363,25 +357,12 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
           : best,
       null,
     );
-  let currentStreak = 0;
-  let longestStreak = 0;
-  for (const bet of [...settled].sort((a, b) => a.placedAt.localeCompare(b.placedAt))) {
-    currentStreak = exactCents(bet.profit) > 0n ? currentStreak + 1 : 0;
-    longestStreak = Math.max(longestStreak, currentStreak);
-  }
-  const latestWinStreak = currentStreak;
+  const latestWinStreak = indicators.currentWinStreak;
+  const longestStreak = indicators.longestWinStreak;
   const unit = workspace.units.find((item) => item.month === month)?.amount ?? null;
-  const betsInsideRange = settled.filter((bet) => {
-    const value = Number(bet.stakeUnits ?? 0);
-    return value >= 1 && value <= 3;
-  });
-  const parlayStake = settled
-    .filter((bet) => bet.ticketKind !== 'simple')
-    .reduce((total, bet) => total + exactCents(bet.stake ?? '0.00'), 0n);
-  const totalStake = settled.reduce((total, bet) => total + exactCents(bet.stake ?? '0.00'), 0n);
-  const parlayShare =
-    totalStake > 0n ? Math.round((Number(parlayStake) / Number(totalStake)) * 100) : 0;
-  const lossCount = settled.filter((bet) => exactCents(bet.profit) < 0n).length;
+  const betsInsideRange = indicators.oneToThreeUnitBets;
+  const parlayShare = Math.round(Number(indicators.parlayStakeSharePct));
+  const lossCount = indicators.lossBets;
 
   return (
     <div className="bettrack-analytics">
@@ -585,7 +566,7 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
             ? amountRows.map((row) => (
                 <div className="bettrack-segment-row" key={row.label}>
                   <strong>{row.label}</strong>
-                  <span>{row.bets.length}</span>
+                  <span>{row.bets}</span>
                   <span>—</span>
                   <span>—</span>
                 </div>
@@ -661,7 +642,7 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
           <article className="is-fact">
             <span>FACT · NEEDS NO SAMPLE</span>
             <h3>
-              {betsInsideRange.length} OF {settled.length} BETS FIT IN 1–3 U
+              {betsInsideRange} OF {settledCount} BETS FIT IN 1–3 U
             </h3>
             <p>The professional standard is 1–3% of the bankroll per bet.</p>
           </article>
@@ -704,13 +685,13 @@ export function BetTrackAnalyticsPage({ workspace }: { workspace: Workspace }) {
             <small>{lossCount} OF 20 LOSSES</small>
           </article>
           <article>
-            <span>{settled.length < 25 ? 'STREAK · NO READING' : 'WINNING STREAK'}</span>
+            <span>{settledCount < 25 ? 'STREAK · NO READING' : 'WINNING STREAK'}</span>
             <h3>
               {latestWinStreak || longestStreak} WINS IN A ROW
-              {settled.length < 25 ? ', AND THAT’S EXPECTED' : ''}
+              {settledCount < 25 ? ', AND THAT’S EXPECTED' : ''}
             </h3>
             <p>
-              At {settled.length} bets, a run of up to 3 either way is normal. A streak is not a
+              At {settledCount} bets, a run of up to 3 either way is normal. A streak is not a
               measure of skill.
             </p>
           </article>

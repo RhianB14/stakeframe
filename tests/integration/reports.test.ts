@@ -125,6 +125,33 @@ describe('performance cohorts and portability', () => {
     expect(report.timeline.map((row) => row.date)).toEqual(['9999-12-31']);
     expect(report.metrics.bets).toBe(0);
   });
+  it('aggregates analytics indicators from the full filtered cohort beyond the first 100 rows', async () => {
+    for (let index = 0; index < 101; index += 1) {
+      const created = await bet({ stake: '10.00', placedAt: '2026-09-05T12:00:00.000Z' });
+      await run({
+        type: 'bet.settle',
+        id: created.id,
+        outcome: index === 100 ? 'loss' : 'win',
+        returnAmount: index === 100 ? '0.00' : '20.00',
+        closedPrincipal: '10.00',
+        settledAt: new Date().toISOString(),
+        reason: 'Resultado analítico de regressão',
+      });
+    }
+    const dashboard = await reports.dashboard(tenantContext, query);
+    expect(dashboard).toMatchObject({
+      lowSample: false,
+      metrics: { bets: 101, settledBets: 101 },
+      indicators: {
+        grossWinProfit: '1000.00',
+        grossLossProfit: '10.00',
+        lossBets: 1,
+        underOneUnitBets: 101,
+        currentWinStreak: 0,
+        longestWinStreak: 100,
+      },
+    });
+  });
   it('counts multiples once at the last event and reconciles dimensions, detail and CSV', async () => {
     const first = await bet({
       selections: [selection, { ...selection, event: 'Outro evento', eventDate: '2026-09-06' }],

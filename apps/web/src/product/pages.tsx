@@ -691,6 +691,28 @@ export function BetsPage({
   owner: string;
   compact?: boolean;
 }) {
+  type HistoryFilters = {
+    search: string;
+    bookmakerId: string;
+    tipsterId: string;
+    from: string;
+    to: string;
+    sport: string;
+    ticketKind: string;
+    marketType: string;
+    outcome: 'all' | 'open' | 'settled' | 'won' | 'lost' | 'void' | 'cashout';
+  };
+  const emptyHistoryFilters: HistoryFilters = {
+    search: '',
+    bookmakerId: '',
+    tipsterId: '',
+    from: '',
+    to: '',
+    sport: '',
+    ticketKind: '',
+    marketType: '',
+    outcome: 'all',
+  };
   const [page, setPage] = useState(1);
   const [state, setState] = useState('');
   const [house, setHouse] = useState('');
@@ -699,14 +721,8 @@ export function BetsPage({
   const [to, setTo] = useState('');
   const [amountMode, setAmountMode] = useState<'money' | 'units'>('units');
   const [hideAmounts, setHideAmounts] = useState(false);
-  const [historyOutcome, setHistoryOutcome] = useState<
-    'all' | 'open' | 'settled' | 'won' | 'lost' | 'void' | 'cashout'
-  >('all');
-  const [historySearch, setHistorySearch] = useState('');
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [historySport, setHistorySport] = useState('');
-  const [historyType, setHistoryType] = useState('');
-  const [historyMarketType, setHistoryMarketType] = useState('');
+  const [draftHistoryFilters, setDraftHistoryFilters] = useState(emptyHistoryFilters);
+  const [activeHistoryFilters, setActiveHistoryFilters] = useState(emptyHistoryFilters);
   const [visibleHistoryColumns, setVisibleHistoryColumns] = useState<BetHistoryColumnKey[]>(() =>
     readBetHistoryColumns(owner),
   );
@@ -749,10 +765,7 @@ export function BetsPage({
     column: BetTableColumnKey;
     direction: BetTableSortDirection;
   } | null>(null);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setHistorySearchQuery(historySearch.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [historySearch]);
+
   useEffect(() => {
     setVisibleHistoryColumns(readBetHistoryColumns(owner));
   }, [owner]);
@@ -774,14 +787,21 @@ export function BetsPage({
     pageSize: '100',
     historyBefore: saoPauloDate(new Date()),
   });
-  if (historySearchQuery) historyParams.set('search', historySearchQuery);
-  if (house) historyParams.set('bookmakerId', house);
-  if (historySport) historyParams.set('sport', historySport);
-  if (historyType) historyParams.set('ticketKind', historyType);
-  if (tipster) historyParams.set('tipsterId', tipster);
-  if (from) historyParams.set('from', from);
-  if (to) historyParams.set('to', to);
-  if (historyOutcome !== 'all') historyParams.set('historyOutcome', historyOutcome);
+  if (activeHistoryFilters.search.trim())
+    historyParams.set('search', activeHistoryFilters.search.trim());
+  if (activeHistoryFilters.bookmakerId)
+    historyParams.set('bookmakerId', activeHistoryFilters.bookmakerId);
+  if (activeHistoryFilters.sport) historyParams.set('sport', activeHistoryFilters.sport);
+  if (activeHistoryFilters.ticketKind)
+    historyParams.set('ticketKind', activeHistoryFilters.ticketKind);
+  if (activeHistoryFilters.marketType)
+    historyParams.set('marketType', activeHistoryFilters.marketType);
+  if (activeHistoryFilters.tipsterId)
+    historyParams.set('tipsterId', activeHistoryFilters.tipsterId);
+  if (activeHistoryFilters.from) historyParams.set('from', activeHistoryFilters.from);
+  if (activeHistoryFilters.to) historyParams.set('to', activeHistoryFilters.to);
+  if (activeHistoryFilters.outcome !== 'all')
+    historyParams.set('historyOutcome', activeHistoryFilters.outcome);
   const historyQuery = useQuery({
     queryKey: ['product', 'bets', 'history', workspace.version, historyParams.toString()],
     queryFn: () => request(`/api/v1/bets?${historyParams}`, betPageSchema),
@@ -812,21 +832,30 @@ export function BetsPage({
         : { column, direction: 'ascending' },
     );
   };
+  const changeHistoryDraft = <K extends keyof HistoryFilters>(key: K, value: HistoryFilters[K]) =>
+    setDraftHistoryFilters((current) => ({ ...current, [key]: value }));
   const change = (setter: (value: string) => void, value: string) => {
     setter(value);
     setPage(1);
   };
-  const advancedFilterCount =
-    [
-      house,
-      tipster,
-      from,
-      to,
-      historySearch.trim(),
-      historySport,
-      historyType,
-      historyMarketType,
-    ].filter(Boolean).length + (historyOutcome === 'all' ? 0 : 1);
+  const applyHistoryFilters = () => {
+    setActiveHistoryFilters({ ...draftHistoryFilters });
+    setPage(1);
+  };
+  const clearHistoryFilters = () => {
+    setDraftHistoryFilters(emptyHistoryFilters);
+    setActiveHistoryFilters(emptyHistoryFilters);
+    setPage(1);
+  };
+  const advancedFilterCount = Object.entries(activeHistoryFilters).filter(([key, value]) =>
+    key === 'outcome' ? value !== 'all' : Boolean(value),
+  ).length;
+  const compactAdvancedFilterCount = [house, tipster, from, to].filter(Boolean).length;
+  const historyFiltersDirty = Object.keys(emptyHistoryFilters).some(
+    (key) =>
+      draftHistoryFilters[key as keyof HistoryFilters] !==
+      activeHistoryFilters[key as keyof HistoryFilters],
+  );
   // STK-F2-18 (PR-3): a dica de rolagem passa a ser medida, não estimada.
   // Antes ela dependia de `columns.length > 8`, um proxy que mentia: oito
   // colunas cabem na largura útil em algumas janelas e não cabem em outras,
@@ -862,15 +891,7 @@ export function BetsPage({
     historyColumns.length,
     sortedRows.length,
     historyQueryRows.length,
-    historyOutcome,
-    historySearchQuery,
-    historySport,
-    historyType,
-    historyMarketType,
-    house,
-    tipster,
-    from,
-    to,
+    activeHistoryFilters,
   ]);
 
   if (!compact) {
@@ -993,30 +1014,43 @@ export function BetsPage({
       });
       return [...new Set(selections.filter(Boolean))].join(' · ') || '—';
     };
-    const searchTerm = historySearchQuery.toLocaleLowerCase(displayLocale());
+    const searchTerm = activeHistoryFilters.search.trim().toLocaleLowerCase(displayLocale());
     const historyRows = historyQueryRows.filter((row) => {
       const scheduled = betScheduledDate(row.bet);
       if (scheduled !== null && scheduled >= today) return false;
       const placedDate = saoPauloDate(new Date(row.bet.placedAt));
-      if (house && row.bet.bookmakerId !== house) return false;
-      if (tipster && row.bet.tipsterId !== tipster) return false;
-      if (from && placedDate < from) return false;
-      if (to && placedDate > to) return false;
       if (
-        historySport &&
+        activeHistoryFilters.bookmakerId &&
+        row.bet.bookmakerId !== activeHistoryFilters.bookmakerId
+      )
+        return false;
+      if (activeHistoryFilters.tipsterId && row.bet.tipsterId !== activeHistoryFilters.tipsterId)
+        return false;
+      if (activeHistoryFilters.from && placedDate < activeHistoryFilters.from) return false;
+      if (activeHistoryFilters.to && placedDate > activeHistoryFilters.to) return false;
+      if (
+        activeHistoryFilters.sport &&
         !row.bet.selections.some(
           (selection) =>
-            selection.sport?.trim().toLocaleLowerCase() === historySport.toLocaleLowerCase(),
+            selection.sport?.trim().toLocaleLowerCase() ===
+            activeHistoryFilters.sport.toLocaleLowerCase(),
         )
       )
         return false;
-      if (historyType && row.bet.ticketKind !== historyType) return false;
+      if (activeHistoryFilters.ticketKind && row.bet.ticketKind !== activeHistoryFilters.ticketKind)
+        return false;
       if (
-        historyMarketType &&
-        !marketTypesFor(row.bet).some((marketType) => marketType === historyMarketType)
+        activeHistoryFilters.marketType &&
+        !marketTypesFor(row.bet).some(
+          (marketType) => marketType === activeHistoryFilters.marketType,
+        )
       )
         return false;
-      if (historyOutcome !== 'all' && outcomeFor(row.bet) !== historyOutcome) return false;
+      if (
+        activeHistoryFilters.outcome !== 'all' &&
+        outcomeFor(row.bet) !== activeHistoryFilters.outcome
+      )
+        return false;
       if (searchTerm) {
         const searchable = [
           row.bet.reference,
@@ -1099,6 +1133,30 @@ export function BetsPage({
         : historySummary.stakeUnits === null
           ? '—'
           : `${historySummary.stakeUnits}U`;
+    const activeHistoryChips = (
+      Object.entries(activeHistoryFilters) as [keyof HistoryFilters, string][]
+    )
+      .filter(([key, value]) => (key === 'outcome' ? value !== 'all' : Boolean(value)))
+      .map(([key, value]) => {
+        const label = {
+          search: 'SEARCH',
+          bookmakerId: 'BOOKMAKER',
+          tipsterId: 'TIPSTER',
+          from: 'FROM',
+          to: 'TO',
+          sport: 'SPORT',
+          ticketKind: 'TICKET TYPE',
+          marketType: 'BET TYPE',
+          outcome: 'RESULT',
+        }[key];
+        const displayValue =
+          key === 'bookmakerId' || key === 'tipsterId'
+            ? (workspace.catalog.find((item) => item.id === value)?.name ?? value)
+            : key === 'outcome'
+              ? (BET_HISTORY_OUTCOMES.find(([outcome]) => outcome === value)?.[1] ?? value)
+              : value;
+        return { key, label, value, displayValue, clearedValue: key === 'outcome' ? 'all' : '' };
+      });
     const sportsByLabel = new Map<string, string>();
     rows.forEach((row) =>
       row.bet.selections.forEach((selection) => {
@@ -1565,18 +1623,20 @@ export function BetsPage({
             <span>SEARCH</span>
             <input
               type="search"
-              value={historySearch}
+              value={draftHistoryFilters.search}
               placeholder="Bet, event, bookmaker or ID"
               aria-label="Search bet history"
               onChange={(event) => {
-                setHistorySearch(event.target.value);
-                setPage(1);
+                changeHistoryDraft('search', event.target.value);
               }}
             />
           </label>
           <label>
             <span>BOOKMAKER</span>
-            <select value={house} onChange={(event) => change(setHouse, event.target.value)}>
+            <select
+              value={draftHistoryFilters.bookmakerId}
+              onChange={(event) => changeHistoryDraft('bookmakerId', event.target.value)}
+            >
               <option value="">ALL BOOKMAKERS</option>
               {workspace.catalog
                 .filter((item) => item.kind === 'bookmaker')
@@ -1590,8 +1650,8 @@ export function BetsPage({
           <label>
             <span>SPORT / LEAGUE</span>
             <select
-              value={historySport}
-              onChange={(event) => change(setHistorySport, event.target.value)}
+              value={draftHistoryFilters.sport}
+              onChange={(event) => changeHistoryDraft('sport', event.target.value)}
             >
               <option value="">ALL SPORTS</option>
               {historySportOptions.map((sport) => (
@@ -1599,17 +1659,19 @@ export function BetsPage({
                   {sport.label}
                 </option>
               ))}
-              {historySport &&
-              !historySportOptions.some((sport) => sport.value === historySport) ? (
-                <option value={historySport}>{ticketSportLabel(historySport)}</option>
+              {draftHistoryFilters.sport &&
+              !historySportOptions.some((sport) => sport.value === draftHistoryFilters.sport) ? (
+                <option value={draftHistoryFilters.sport}>
+                  {ticketSportLabel(draftHistoryFilters.sport)}
+                </option>
               ) : null}
             </select>
           </label>
           <label>
             <span>BET TYPE</span>
             <select
-              value={historyMarketType}
-              onChange={(event) => change(setHistoryMarketType, event.target.value)}
+              value={draftHistoryFilters.marketType}
+              onChange={(event) => changeHistoryDraft('marketType', event.target.value)}
             >
               <option value="">ALL BET TYPES</option>
               {historyMarketTypeOptions.map((marketType) => (
@@ -1622,8 +1684,8 @@ export function BetsPage({
           <label>
             <span>TICKET TYPE</span>
             <select
-              value={historyType}
-              onChange={(event) => change(setHistoryType, event.target.value)}
+              value={draftHistoryFilters.ticketKind}
+              onChange={(event) => changeHistoryDraft('ticketKind', event.target.value)}
             >
               <option value="">ALL TYPES</option>
               <option value="simple">STRAIGHT</option>
@@ -1633,7 +1695,10 @@ export function BetsPage({
           </label>
           <label>
             <span>TIPSTER</span>
-            <select value={tipster} onChange={(event) => change(setTipster, event.target.value)}>
+            <select
+              value={draftHistoryFilters.tipsterId}
+              onChange={(event) => changeHistoryDraft('tipsterId', event.target.value)}
+            >
               <option value="">ALL TIPSTERS</option>
               {workspace.catalog
                 .filter((item) => item.kind === 'tipster')
@@ -1648,13 +1713,17 @@ export function BetsPage({
             <span>FROM</span>
             <input
               type="date"
-              value={from}
-              onChange={(event) => change(setFrom, event.target.value)}
+              value={draftHistoryFilters.from}
+              onChange={(event) => changeHistoryDraft('from', event.target.value)}
             />
           </label>
           <label>
             <span>TO</span>
-            <input type="date" value={to} onChange={(event) => change(setTo, event.target.value)} />
+            <input
+              type="date"
+              value={draftHistoryFilters.to}
+              onChange={(event) => changeHistoryDraft('to', event.target.value)}
+            />
           </label>
           <details className="bets-history-columns">
             <summary>
@@ -1692,28 +1761,52 @@ export function BetsPage({
               </button>
             </div>
           </details>
-          {advancedFilterCount > 0 ? (
-            <button
-              className="bets-history-clear"
-              type="button"
-              onClick={() => {
-                setHistorySearch('');
-                setHistorySearchQuery('');
-                setHouse('');
-                setHistorySport('');
-                setHistoryType('');
-                setHistoryMarketType('');
-                setTipster('');
-                setFrom('');
-                setTo('');
-                setHistoryOutcome('all');
-                setPage(1);
-              }}
-            >
+          <button
+            className="bets-history-apply"
+            type="button"
+            onClick={applyHistoryFilters}
+            disabled={!historyFiltersDirty}
+          >
+            APPLY FILTERS
+          </button>
+          {advancedFilterCount > 0 || historyFiltersDirty ? (
+            <button className="bets-history-clear" type="button" onClick={clearHistoryFilters}>
               CLEAR FILTERS
             </button>
           ) : null}
         </div>
+        {activeHistoryChips.length > 0 ? (
+          <div className="bets-history-active-filters" role="group" aria-label="Active filters">
+            {activeHistoryChips.map((chip) => (
+              <button
+                key={chip.key}
+                className="bets-history-chip"
+                type="button"
+                aria-label={`Remove ${chip.label.toLocaleLowerCase(displayLocale())} filter ${chip.displayValue}`}
+                onClick={() => {
+                  const next = {
+                    ...activeHistoryFilters,
+                    [chip.key]: chip.clearedValue,
+                  } as HistoryFilters;
+                  setActiveHistoryFilters(next);
+                  setDraftHistoryFilters(
+                    (current) =>
+                      ({
+                        ...current,
+                        [chip.key]: chip.clearedValue,
+                      }) as HistoryFilters,
+                  );
+                  setPage(1);
+                }}
+              >
+                <span>
+                  {chip.label}: {chip.displayValue}
+                </span>
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="bets-history-summary" aria-label="Summary for the filtered period">
           <div>
             <span>FILTERED PERIOD</span>
@@ -1736,11 +1829,10 @@ export function BetsPage({
               <button
                 key={value}
                 type="button"
-                className={historyOutcome === value ? 'is-active' : ''}
-                aria-pressed={historyOutcome === value}
+                className={draftHistoryFilters.outcome === value ? 'is-active' : ''}
+                aria-pressed={draftHistoryFilters.outcome === value}
                 onClick={() => {
-                  setHistoryOutcome(value);
-                  setPage(1);
+                  changeHistoryDraft('outcome', value);
                 }}
               >
                 {label}
@@ -1855,10 +1947,12 @@ export function BetsPage({
               </button>
             ))}
           </div>
-          <details className="bet-advanced-filters" open={advancedFilterCount > 0}>
+          <details className="bet-advanced-filters" open={compactAdvancedFilterCount > 0}>
             <summary>
               Filtros avançados
-              {advancedFilterCount > 0 ? <span>{advancedFilterCount} ativos</span> : null}
+              {compactAdvancedFilterCount > 0 ? (
+                <span>{compactAdvancedFilterCount} ativos</span>
+              ) : null}
             </summary>
             <div className="filter-grid">
               <Field label="Casa">

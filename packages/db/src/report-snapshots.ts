@@ -7,8 +7,9 @@ import {
   reportWindow,
   reportNarrativeSchema,
   reportMetricsSchema,
-  analyticsDashboardSchema,
+  analyticsSnapshotDashboardSchema,
   type AnalyticsDashboard,
+  type AnalyticsSnapshotDashboard,
   type ReportMetrics,
   type ReportPeriod,
   type ReportNarrative,
@@ -65,7 +66,7 @@ export type ReportSnapshotRecord = {
   to: string;
   financialVersion: number;
   metrics: ReportMetrics;
-  dashboard: AnalyticsDashboard;
+  dashboard: AnalyticsSnapshotDashboard;
   narrative: ReportNarrative;
   title: string;
   contentSha256: string;
@@ -204,7 +205,9 @@ export function createReportSnapshotService(database: Database) {
       to: row.to,
       financialVersion: row.financial_version,
       metrics: reportMetricsSchema.parse(row.metrics),
-      dashboard: analyticsDashboardSchema.parse((row.payload as { dashboard: unknown }).dashboard),
+      dashboard: analyticsSnapshotDashboardSchema.parse(
+        (row.payload as { dashboard: unknown }).dashboard,
+      ),
       narrative: reportNarrativeSchema.parse((row.payload as { narrative: unknown }).narrative),
       title: reportPeriodTitle(period, row.from, row.to),
       contentSha256: row.content_sha256,

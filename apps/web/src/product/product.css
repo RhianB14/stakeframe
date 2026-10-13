@@ -7417,6 +7417,7 @@
   font-size: 8px;
 }
 .bettrack-theme .bets-history-columns-popover > button,
+.bettrack-theme .bets-history-apply,
 .bettrack-theme .bets-history-clear {
   min-height: 44px;
   padding: 0 10px;
@@ -7431,6 +7432,7 @@
 .bettrack-theme .bets-history-columns-popover > button {
   margin-top: 7px;
 }
+.bettrack-theme .bets-history-apply:not(:disabled):hover,
 .bettrack-theme .bets-history-clear:hover,
 .bettrack-theme .bets-history-columns-popover > button:not(:disabled):hover {
   border-color: var(--web-accent);
@@ -7439,6 +7441,37 @@
 .bettrack-theme .bets-history-columns-popover > button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+.bettrack-theme .bets-history-apply:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.bettrack-theme .bets-history-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.bettrack-theme .bets-history-chip {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--web-border-strong);
+  background: var(--web-panel-hover);
+  color: var(--web-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.bettrack-theme .bets-history-chip:hover {
+  border-color: var(--web-accent);
+  color: var(--web-accent);
+}
+.bettrack-theme .bets-history-chip > span:last-child {
+  color: var(--web-accent);
+  font-size: 14px;
 }
 .bettrack-theme .bets-history-summary {
   display: flex;

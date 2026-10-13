@@ -70,6 +70,18 @@ export const reportSchema = z
   })
   .meta({ id: 'PerformanceReport' });
 export type PerformanceReport = z.infer<typeof reportSchema>;
+export const analyticsIndicatorsSchema = z.object({
+  grossWinProfit: reportMoneySchema,
+  grossLossProfit: reportMoneySchema,
+  lossBets: count,
+  underOneUnitBets: count,
+  oneToThreeUnitBets: count,
+  overThreeUnitBets: count,
+  currentWinStreak: count,
+  longestWinStreak: count,
+  parlayStakeSharePct: percent,
+});
+export type AnalyticsIndicators = z.infer<typeof analyticsIndicatorsSchema>;
 /**
  * STK-F2-02 — dashboard analítico: ROI, P&L, yield e N vêm juntos num payload
  * enxuto (uma agregação indexada, cache curto no servidor). `minSample` é o
@@ -84,9 +96,16 @@ export const analyticsDashboardSchema = z
     minSample: count,
     lowSample: z.boolean(),
     metrics: reportMetricsSchema,
+    indicators: analyticsIndicatorsSchema,
   })
   .meta({ id: 'AnalyticsDashboard' });
 export type AnalyticsDashboard = z.infer<typeof analyticsDashboardSchema>;
+// Snapshots already persisted before the indicator expansion remain readable;
+// new live dashboard responses always use the complete required schema above.
+export const analyticsSnapshotDashboardSchema = analyticsDashboardSchema.extend({
+  indicators: analyticsIndicatorsSchema.optional(),
+});
+export type AnalyticsSnapshotDashboard = z.infer<typeof analyticsSnapshotDashboardSchema>;
 /**
  * STK-F2-03 — os 12 splits analíticos (Plano §8.5, §15). Cada dimensão devolve
  * linhas com ROI, P&L, yield e `N` juntos; `lowSample` é calculado no servidor

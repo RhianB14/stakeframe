@@ -248,6 +248,16 @@ export async function readBets(client: PoolClient, query: BetQuery) {
       query.sport,
     );
   }
+  if (query.marketType) {
+    where(
+      `exists (
+        select 1 from finance.selection s
+        where s.organization_id=b.organization_id and s.bet_id=b.id
+          and lower(trim(s.market))=lower(trim(?))
+      )`,
+      query.marketType,
+    );
+  }
   const ticketKindExpression = `coalesce(
     (
       select case

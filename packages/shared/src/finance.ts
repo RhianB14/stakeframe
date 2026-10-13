@@ -329,6 +329,7 @@ export const betQuerySchema = pageQuerySchema.extend({
   to: z.iso.date().optional(),
   search: z.string().trim().min(1).max(120).optional(),
   sport: z.string().trim().min(1).max(80).optional(),
+  marketType: z.string().trim().min(1).max(120).optional(),
   ticketKind: z.enum(['simple', 'multiple', 'betbuild']).optional(),
   historyOutcome: z.enum(['open', 'settled', 'won', 'lost', 'void', 'cashout']).optional(),
   historyBefore: z.iso.date().optional(),

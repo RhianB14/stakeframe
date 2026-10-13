@@ -68,6 +68,17 @@ function dashboardFixture(metrics: ReportMetrics, lowSample = true) {
     minSample: 30,
     lowSample,
     metrics,
+    indicators: {
+      grossWinProfit: '100.00',
+      grossLossProfit: '0.00',
+      lossBets: 0,
+      underOneUnitBets: 0,
+      oneToThreeUnitBets: 8,
+      overThreeUnitBets: 0,
+      currentWinStreak: 8,
+      longestWinStreak: 8,
+      parlayStakeSharePct: '0.00',
+    },
   };
 }
 // STK-F2-03: payload de GET /api/v1/analytics/splits (12 dimensões, N e unknown).
@@ -685,6 +696,54 @@ test('bets table sorts by the proposed columns on desktop', async ({ page }) => 
   await stakeHeader.getByRole('button').click();
   await expect(stakeHeader).toHaveAttribute('aria-sort', 'descending');
   await expect(firstTicket).toContainText('#3');
+});
+test('bet-history filters stay as drafts until applied and active chips can be removed or cleared', async ({
+  page,
+}) => {
+  await enabledProduct(page, fixture(), [bet]);
+  const historyRequests: URL[] = [];
+  await page.route('**/api/v1/bets?*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has('historyBefore')) historyRequests.push(url);
+    await route.fulfill({
+      json: {
+        items: [bet],
+        total: 1,
+        page: Number(url.searchParams.get('page') ?? 1),
+        pageSize: 100,
+        summary: {
+          count: 1,
+          stake: '100.00',
+          profit: '0.00',
+          stakeUnits: '10.00',
+          profitUnits: '0.00',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'HISTORY' })).toBeVisible();
+  await expect.poll(() => historyRequests.length).toBeGreaterThan(0);
+  const initialRequestCount = historyRequests.length;
+
+  await page.getByRole('searchbox', { name: 'Search bet history' }).fill('Aurora');
+  await page.waitForTimeout(300);
+  expect(historyRequests).toHaveLength(initialRequestCount);
+  await page.getByRole('button', { name: 'APPLY FILTERS' }).click();
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Aurora');
+  await expect(page.getByRole('button', { name: 'Remove search filter Aurora' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Remove search filter Aurora' }).click();
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
+  await expect(page.getByRole('searchbox', { name: 'Search bet history' })).toHaveValue('');
+
+  await page.getByRole('searchbox', { name: 'Search bet history' }).fill('Central');
+  await page.getByRole('button', { name: 'APPLY FILTERS' }).click();
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Central');
+  await page.getByRole('button', { name: 'CLEAR FILTERS' }).click();
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.has('search')).toBe(false);
+  await expect(page.getByRole('searchbox', { name: 'Search bet history' })).toHaveValue('');
 });
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,
