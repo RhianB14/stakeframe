@@ -287,6 +287,9 @@ async function enabledProduct(
   );
   await page.route('**/api/v1/workspace', (route) => route.fulfill({ json: workspace }));
   await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: reportFixture() }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(reportFixture().metrics) }),
+  );
   // STK-F2-03: os 12 splits no painel de análises (mesmos filtros do relatório).
   await page.route('**/api/v1/analytics/splits?*', (route) =>
     route.fulfill({ json: splitsFixture() }),
@@ -2270,7 +2273,9 @@ test('sports options failure stays visible while more filters are collapsed and 
   await page.goto('/#analytics');
   await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
 
-  const filters = page.locator('details.report-definitions');
+  const filters = page
+    .locator('details.report-definitions')
+    .filter({ has: page.getByText('Mais filtros', { exact: true }) });
   await expect(filters).toBeVisible();
   await expect(filters).toHaveJSProperty('open', false);
   const optionsError = page.getByRole('alert').filter({

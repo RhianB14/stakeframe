@@ -77,7 +77,7 @@ async function abrirGlobal(page: Page) {
       },
     }),
   );
-  await page.goto('/#pm-global');
+  await page.goto('/?previewPolymarket=true#pm-global');
   await expect(page.getByTestId('global-card')).toHaveCount(6);
 }
 

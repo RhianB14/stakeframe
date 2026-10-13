@@ -152,12 +152,13 @@ describe('analytics dashboard (STK-F2-02)', () => {
       },
     ];
     for (const item of bets) {
-      const created = await bet(item);
+      const { returnAmount, ...betInput } = item;
+      const created = await bet(betInput);
       await run({
         type: 'bet.settle',
         id: created.id,
         outcome: 'win',
-        returnAmount: item.returnAmount,
+        returnAmount,
         closedPrincipal: item.stake,
         settledAt: new Date().toISOString(),
         reason: 'Liquidação de teste',
