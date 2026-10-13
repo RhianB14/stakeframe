@@ -133,7 +133,10 @@ describe('performance cohorts and portability', () => {
       reason: 'Unidade da coorte analítica de regressão',
     });
     for (let index = 0; index < 101; index += 1) {
-      const created = await bet({ stake: '10.00', placedAt: '2026-09-05T12:00:00.000Z' });
+      const created = await bet({
+        stake: '10.00',
+        placedAt: new Date(Date.parse('2026-09-05T12:00:00.000Z') + index * 1_000).toISOString(),
+      });
       await run({
         type: 'bet.settle',
         id: created.id,
@@ -156,6 +159,32 @@ describe('performance cohorts and portability', () => {
         currentWinStreak: 0,
         longestWinStreak: 100,
       },
+    });
+  });
+  it('counts a winning run from the first settled row when the cohort has no earlier loss', async () => {
+    for (let index = 0; index < 3; index += 1) {
+      const created = await bet({
+        stake: '10.00',
+        placedAt: '2026-09-05T12:00:00.000Z',
+        allowMissingUnit: true,
+      });
+      await run({
+        type: 'bet.settle',
+        id: created.id,
+        outcome: 'win',
+        returnAmount: '20.00',
+        closedPrincipal: '10.00',
+        settledAt: new Date().toISOString(),
+        reason: 'Vitória inicial para regressão da sequência',
+      });
+    }
+    const dashboard = await reports.dashboard(tenantContext, query);
+    expect(dashboard.metrics.settledBets).toBe(3);
+    expect(dashboard.indicators).toMatchObject({
+      currentWinStreak: 3,
+      longestWinStreak: 3,
+      lossBets: 0,
+      grossWinProfit: '30.00',
     });
   });
   it('counts multiples once at the last event and reconciles dimensions, detail and CSV', async () => {

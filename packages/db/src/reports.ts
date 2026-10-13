@@ -103,9 +103,9 @@ export function createReportService(database: Database, options: ReportServiceOp
         ) tk on true
       ), settled as (
         select *,row_number() over(order by placed_at,id) as sequence,
-          sum(case when profit<=0 then 1 else 0 end) over(
+          coalesce(sum(case when profit<=0 then 1 else 0 end) over(
             order by placed_at,id rows between unbounded preceding and 1 preceding
-          ) as previous_losses
+          ),0) as previous_losses
         from categorized where state='settled'
       ), streaks as (
         select previous_losses,count(*)::int as length

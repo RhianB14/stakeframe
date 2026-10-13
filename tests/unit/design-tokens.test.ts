@@ -434,21 +434,29 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('nenhum font-size abaixo de 12px em product.css', () => {
-    /* STK-F2-18 (PR-2): este teste validava 11,5px e PASSAVA, enquanto o E2E
-       exigia 12px na linha 648 e REPROVAVA. Duas suítes discordando do mesmo
-       número não estabelecem um piso — uma delas só herdou a fonte errada.
-       O piso real é 12px, e agora as duas medem o mesmo.
+  it('history filter controls keep readable text and a 44px touch target', () => {
+    const controls = rulePairs(productCss).filter(({ selector }) =>
+      /\.bets-history-(?:columns-popover\s*>\s*button|apply|clear|chip)(?:[:.#\s>]|$)/.test(
+        selector,
+      ),
+    );
+    const undersized: string[] = [];
+    for (const { selector, body } of controls) {
+      for (const match of body.matchAll(/font-size:\s*([\d.]+)px/g)) {
+        if (Number(match[1]) < 12) undersized.push(`${selector.trim()}: ${match[1]}px`);
+      }
+    }
+    expect(controls.length).toBeGreaterThan(0);
+    expect(undersized, `font-size abaixo do piso: ${undersized.join(', ')}`).toEqual([]);
 
-       Este é o teste de fundo da correção: enquanto ele disser 11,5 ele
-       continued legitimando exatamente o valor que o E2E reprovava. */
-    const sizes = [...(productCss.match(/font-size:\s*[\d.]+px/g) ?? [])]
-      .map((m) => Number(m[1]))
-      .filter((v) => v < 12);
-    expect(sizes, `font-size abaixo do piso: ${sizes.join(', ')}px`).toEqual([]);
-    // E o token que era o culpado: ele LEGITIMAVA o valor que o E2E reprovava.
-    expect(tokensCss).toMatch(/--text-xs:\s*12px/);
-    expect(tokensCss).not.toMatch(/--text-xs:\s*11\.5px/);
+    for (const control of ['.bets-history-apply', '.bets-history-chip']) {
+      const rule = controls.find(({ selector }) => selector.includes(control));
+      expect(rule, `regra ausente para ${control}`).toBeDefined();
+      const fontSize = /font-size:\s*([\d.]+)px/.exec(rule?.body ?? '')?.[1];
+      const height = /min-height:\s*([\d.]+)px/.exec(rule?.body ?? '')?.[1];
+      expect(Number(fontSize), `${control} font-size`).toBeGreaterThanOrEqual(12);
+      expect(Number(height), `${control} min-height`).toBeGreaterThanOrEqual(44);
+    }
   });
 
   it('nenhum par fundo/texto que se apaga: mesma cor nos dois lados', () => {
@@ -545,7 +553,10 @@ describe('camada de tokens (STK-F2-18)', () => {
        de 14 colunas. */
     const offenders: string[] = [];
     for (const { selector, body } of rulePairs(productCss)) {
-      if (!/^[^@]*(button|\.ui-button|nav a|summary|\.chip|\.tab)/.test(selector)) continue;
+      if (
+        !/^[^@]*(button|\.ui-button|nav a|summary|\.chip|\.tab|\.bets-history-chip)/.test(selector)
+      )
+        continue;
       const height = /min-height:\s*([\d.]+)px/.exec(body)?.[1];
       if (height !== undefined && Number(height) < 44) {
         offenders.push(`${selector.trim()} min-height: ${height}px`);

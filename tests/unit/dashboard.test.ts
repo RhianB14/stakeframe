@@ -157,10 +157,12 @@ describe('dashboard payload (STK-F2-02)', () => {
     expect(payload.minSample).toBe(30);
     expect(payload.metrics).toMatchObject({ bets: 2, roiReal: '14.29', yieldReal: '12.50' });
     expect(payload.metrics.settledBets).toBeLessThan(payload.minSample);
-    // Snapshots imutáveis já persistidos antes da expansão continuam legíveis.
-    expect(
-      analyticsSnapshotDashboardSchema.parse({ ...payload, indicators: undefined }).indicators,
-    ).toBeUndefined();
+    // Snapshots imutáveis pré-expansão não serializavam a chave indicators.
+    const legacyPayload = Object.fromEntries(
+      Object.entries(payload).filter(([key]) => key !== 'indicators'),
+    );
+    expect(analyticsSnapshotDashboardSchema.parse(legacyPayload).indicators).toBeUndefined();
+    expect(() => analyticsDashboardSchema.parse(legacyPayload)).toThrow();
     // unknown não é normalizado para zero pelo cliente nem pelo schema.
     const unknown = analyticsDashboardSchema.parse({
       ...payload,

@@ -499,7 +499,7 @@ describe('financial core with PostgreSQL', () => {
       bankroll: '985.00',
       exposure: '60.00',
     });
-    await command({
+    const final = await command({
       type: 'bet.settle',
       id: bet.id,
       outcome: 'cashout',
@@ -523,6 +523,25 @@ describe('financial core with PostgreSQL', () => {
       bankroll: '1020.00',
       exposure: '40.00',
     });
+    await command({
+      type: 'settlement.reverse',
+      id: final.id,
+      effectiveAt: now(),
+      reason: 'Reabrir principal final mantendo histórico de reversão',
+    });
+    const reopened = (await service.bet(tenantContext, bet.id)).bet;
+    expect(reopened).toMatchObject({ state: 'open', remaining: '100.00' });
+    await expect(
+      command({
+        type: 'bet.update',
+        id: bet.id,
+        tipsterId: null,
+        reference: reopened.reference ?? '',
+        reason: 'Não deve reescrever histórico com reversão parcial',
+        stake: '110.00',
+        selections: reopened.selections,
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
   });
   it('keeps freebet principal out of the bank and credits only real payout', async () => {
     const { bookmakerId } = await initialized();
