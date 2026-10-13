@@ -242,7 +242,7 @@ export function createReportService(database: Database, options: ReportServiceOp
           version,
           filters: query,
           minSample: dashboard.minSample,
-          lowSample: current.settledBets < dashboard.minSample,
+          lowSample: current.bets < dashboard.minSample,
           metrics: current,
           indicators,
         });
@@ -280,7 +280,7 @@ export function createReportService(database: Database, options: ReportServiceOp
             return {
               key: String(row.key),
               label: String(row.label),
-              lowSample: parsed.settledBets < dashboard.minSample,
+              lowSample: parsed.bets < dashboard.minSample,
               metrics: parsed,
             };
           });
@@ -298,7 +298,7 @@ export function createReportService(database: Database, options: ReportServiceOp
           version,
           filters: query,
           minSample: dashboard.minSample,
-          lowSample: overall.settledBets < dashboard.minSample,
+          lowSample: overall.bets < dashboard.minSample,
           metrics: overall,
           dimensions,
         });

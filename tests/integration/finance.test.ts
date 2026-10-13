@@ -415,7 +415,7 @@ describe('financial core with PostgreSQL', () => {
     expect(updated).toMatchObject({
       bookmakerId: secondBookmakerId,
       stake: '125.00',
-      odds: '2.20',
+      odds: '2.2000',
       unitMonth: previousMonth,
       unitAmount: '12.00',
     });

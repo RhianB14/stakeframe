@@ -126,6 +126,12 @@ describe('performance cohorts and portability', () => {
     expect(report.metrics.bets).toBe(0);
   });
   it('aggregates analytics indicators from the full filtered cohort beyond the first 100 rows', async () => {
+    await run({
+      type: 'unit.set',
+      month: '2026-09',
+      amount: '50.00',
+      reason: 'Unidade da coorte analítica de regressão',
+    });
     for (let index = 0; index < 101; index += 1) {
       const created = await bet({ stake: '10.00', placedAt: '2026-09-05T12:00:00.000Z' });
       await run({
