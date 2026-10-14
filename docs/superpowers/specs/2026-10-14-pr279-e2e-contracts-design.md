@@ -28,7 +28,7 @@ Alinhar a resposta de detalhe da aposta com o item do calendário: a selection d
 
 ### Seletores acessíveis
 
-O campo de tipo de mercado com datalist é exposto como combobox; localizar pelo papel combobox. Localizar o resumo histórico pelo grupo nomeado definido na especificação de comportamento e conferir o rótulo localizado “2 Apostas”, sem getByLabel em div genérico nem dependência de texto oculto.
+O campo de tipo de mercado com datalist é exposto como combobox; localizar pelo papel combobox. Localizar o resumo histórico pelo grupo nomeado definido na especificação de comportamento e conferir o texto vigente “2 BETS”, sem getByLabel em div genérico nem dependência de texto oculto.
 
 ### Cache e filtros do histórico
 
