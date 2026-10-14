@@ -2175,7 +2175,7 @@ test('analytics distinguishes missing units and failed data from empty results',
   let detailAttempts = 0;
   await page.route('**/api/v1/reports/bets?*', (route) => {
     detailAttempts += 1;
-    return detailAttempts === 1
+    return detailAttempts <= 2
       ? route.fulfill({ status: 503, json: {} })
       : route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } });
   });
@@ -2195,7 +2195,7 @@ test('analytics distinguishes missing units and failed data from empty results',
     page.getByText('Nenhuma aposta corresponde a estes filtros.', { exact: true }),
   ).toBeVisible();
   await expect(detailsError).toHaveCount(0);
-  expect(detailAttempts).toBe(2);
+  expect(detailAttempts).toBe(3);
 });
 
 test('overview analytics errors announce, show an icon and retry main and weekly reports', async ({
@@ -2211,12 +2211,12 @@ test('overview analytics errors announce, show an icon and retry main and weekly
     const from = new URL(route.request().url()).searchParams.get('from');
     if (from === monthStart) {
       mainAttempts += 1;
-      if (mainAttempts === 1) return route.fulfill({ status: 503, json: {} });
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (mainAttempts <= 2) return route.fulfill({ status: 503, json: {} });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       return route.fulfill({ json: report });
     }
     weeklyAttempts += 1;
-    return weeklyAttempts === 1
+    return weeklyAttempts <= 2
       ? route.fulfill({ status: 503, json: {} })
       : route.fulfill({ json: report });
   });
@@ -2234,9 +2234,9 @@ test('overview analytics errors announce, show an icon and retry main and weekly
   await expect(page.getByText('APOSTAS LIQUIDADAS', { exact: true })).toBeVisible();
   await expect(mainError.locator('svg[aria-hidden="true"]')).toBeVisible();
   await mainError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
-  await expect(mainError.getByRole('button', { name: 'Tentando…', exact: true })).toBeDisabled();
+  await expect(page.getByText('Carregando relatório de análises…', { exact: true })).toBeVisible();
   await expect(mainError).toHaveCount(0);
-  await expect.poll(() => mainAttempts).toBe(2);
+  await expect.poll(() => mainAttempts).toBe(3);
   expect(dashboardAttempts).toBe(1);
 
   const weeklyError = page.getByRole('alert').filter({
@@ -2246,7 +2246,7 @@ test('overview analytics errors announce, show an icon and retry main and weekly
   await expect(weeklyError.locator('svg[aria-hidden="true"]')).toBeVisible();
   await weeklyError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(weeklyError).toHaveCount(0);
-  await expect.poll(() => weeklyAttempts).toBe(2);
+  await expect.poll(() => weeklyAttempts).toBe(3);
 });
 
 test('analytics dashboard failure leaves the report visible and retries only the dashboard', async ({
@@ -2279,7 +2279,7 @@ test('analytics dashboard failure leaves the report visible and retries only the
   });
   await page.route('**/api/v1/dashboard?*', (route) => {
     dashboardAttempts += 1;
-    return dashboardAttempts === 1
+    return dashboardAttempts <= 2
       ? route.fulfill({ status: 503, json: {} })
       : route.fulfill({ json: dashboardFixture(report.metrics) });
   });
@@ -2293,7 +2293,7 @@ test('analytics dashboard failure leaves the report visible and retries only the
   await expect(page.getByRole('region', { name: 'Resultados do relatório' })).toContainText(today);
   await dashboardError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(dashboardError).toHaveCount(0);
-  await expect.poll(() => dashboardAttempts).toBe(2);
+  await expect.poll(() => dashboardAttempts).toBe(3);
   expect(mainReportAttempts).toBe(1);
 });
 
@@ -2309,7 +2309,7 @@ test('sports options failure stays visible while more filters are collapsed and 
   let optionsAttempts = 0;
   await page.route('**/api/v1/reports/options', (route) => {
     optionsAttempts += 1;
-    return optionsAttempts === 1
+    return optionsAttempts <= 2
       ? route.fulfill({ status: 503, json: {} })
       : route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } });
   });
@@ -2330,7 +2330,7 @@ test('sports options failure stays visible while more filters are collapsed and 
   await expect(optionsError).toBeVisible();
   await optionsError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(optionsError).toHaveCount(0);
-  await expect.poll(() => optionsAttempts).toBe(2);
+  await expect.poll(() => optionsAttempts).toBe(3);
   await expect(filters).toHaveJSProperty('open', false);
 });
 
