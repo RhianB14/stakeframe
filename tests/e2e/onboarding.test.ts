@@ -304,7 +304,8 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
   await page.getByLabel('Casa de apostas', { exact: true }).selectOption({ label: 'Bet365' });
   await page.getByLabel('Valor', { exact: true }).fill('100,00');
   await page.getByRole('button', { name: 'SAVE BET' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The form is a routed page, not a dialog; wait for the command response and its onDone navigation.
+  await expect(page).toHaveURL(/#bets$/);
   expect(
     harness.commands.filter((item) => (item as { type?: string }).type === 'bet.create'),
   ).toHaveLength(1);
