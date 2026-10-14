@@ -735,12 +735,10 @@ test('mixed known and missing historical units never produce a partial unit summ
     unitAmount: null,
     stakeUnits: null,
   };
-  await enabledProduct(page, fixture(), [bet, missingUnitBet]);
-  await page.goto('/');
-  await openMobileProductNavigation(page);
-  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+  await enabledProduct(page, fixture(), [bet, missingUnitBet], bet, 'en');
+  await page.goto('/#bets');
 
-  const summary = page.getByLabel('Summary for the filtered period');
+  const summary = page.getByRole('group', { name: 'Summary for the filtered period' });
   await expect(summary).toContainText('2 BETS');
   await expect(summary.locator('p').nth(0).locator('strong')).toHaveText('—');
   await expect(summary.locator('p').nth(1).locator('strong')).toHaveText('—');

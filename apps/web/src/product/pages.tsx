@@ -1823,7 +1823,11 @@ export function BetsPage({
             ))}
           </div>
         ) : null}
-        <div className="bets-history-summary" aria-label="Summary for the filtered period">
+        <div
+          className="bets-history-summary"
+          role="group"
+          aria-label="Summary for the filtered period"
+        >
           <div>
             <span>FILTERED PERIOD</span>
             <strong>
