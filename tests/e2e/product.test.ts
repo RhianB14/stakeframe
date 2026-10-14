@@ -1038,9 +1038,11 @@ test('first use requires explicit balance confirmation and preserves decimal str
     return route.fulfill({ json: { id: 'initial', version: workspace.version } });
   });
   await page.goto('/');
-  await openMobileProductNavigation(page);
-
-  await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
+  const dashboardBetEntry = page.locator(
+    '.bettrack-dashboard-widget .bettrack-dashboard-empty button',
+  );
+  await expect(dashboardBetEntry).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Nova aposta', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Conferir saldos iniciais' }).click();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('1.234,56');
   await page.getByLabel('Bet365 (R$)', { exact: true }).fill('765,44');
@@ -1049,6 +1051,7 @@ test('first use requires explicit balance confirmation and preserves decimal str
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Confirmar saldos iniciais' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(dashboardBetEntry).toBeEnabled();
   expect(commands[0]).toMatchObject({
     type: 'bankroll.initialize',
     expectedVersion: 1,

@@ -1612,7 +1612,11 @@ function BetTrackDashboardBottom({
             <p>
               Once there are bets on this date, this shows how the stake splits by type or sport.
             </p>
-            <Button variant="secondary" onClick={() => open({ kind: 'bet' })}>
+            <Button
+              variant="secondary"
+              disabled={!workspace.initialized}
+              onClick={() => open({ kind: 'bet' })}
+            >
               LOG ONE
             </Button>
           </div>
