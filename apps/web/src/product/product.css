@@ -6940,6 +6940,13 @@
   text-align: right;
   text-decoration: none;
 }
+/* The desktop BetTrack override above is intentionally compact. Match its
+   specificity here so the later 28px rule cannot shrink mobile touch targets. */
+@media (max-width: 760px) {
+  .bettrack-theme .product-sidebar .bettrack-nav-item > a {
+    min-height: 44px;
+  }
+}
 .bettrack-theme .product-sidebar .bettrack-nav-item > a:hover {
   background: var(--web-panel);
   color: var(--web-text);
@@ -7134,9 +7141,6 @@
 }
 .bettrack-theme .bets-reference-heading h2 {
   font-size: 36px;
-}
-.bettrack-theme .bets-reference-actions .columns-panel {
-  display: none;
 }
 .bettrack-theme .bets-reference-empty {
   min-height: 406px;
@@ -11220,16 +11224,28 @@
   color: var(--web-negative);
 }
 .bettrack-theme .bet-list-cards {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
   gap: 10px;
 }
 .bettrack-theme .bet-table-desktop {
-  display: none;
+  display: block;
+}
+.bettrack-theme .bets-reference-table:not(.bets-history-table) {
+  width: max-content;
+  min-width: calc(148px * var(--bet-columns, 8));
 }
 .bettrack-theme .bets-history-table-wrap {
   display: block;
+}
+@media (max-width: 900px) {
+  .bettrack-theme .bet-table-desktop:not(.bets-history-table-wrap) {
+    display: none;
+  }
+  .bettrack-theme .bet-list-cards {
+    display: grid;
+  }
 }
 .bettrack-theme .bet-list-card.bettrack-ticket-card {
   position: relative;

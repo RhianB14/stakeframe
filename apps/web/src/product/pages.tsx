@@ -292,13 +292,13 @@ function BetStatusTag({ bet }: { bet: Bet }) {
   );
 }
 
-function BetTableCell({ row, column }: { row: BetTableRow; column: BetTableColumnKey }) {
+function BetTableCell({ row, column, amountMode, hideAmounts }: { row: BetTableRow; column: BetTableColumnKey; amountMode: 'money' | 'units'; hideAmounts: boolean }) {
   const { bet, details, tipster, bookmaker } = row;
   switch (column) {
     case 'ticket':
       return (
         <>
-          <strong>#{bet.ticketNumber}</strong>
+          <strong>#{bet.reference?.trim() || String(bet.ticketNumber).padStart(6, '0')}</strong>
           {bet.freebetId ? <small>Freebet</small> : null}
         </>
       );
@@ -323,15 +323,24 @@ function BetTableCell({ row, column }: { row: BetTableRow; column: BetTableColum
       return <>{tipster}</>;
     case 'bookmaker':
       return <>{bookmaker}</>;
-    case 'stake':
-      return <>{bet.stake === null ? 'A definir' : formatDisplayMoney(bet.stake)}</>;
+    case 'stake': {
+      if (hideAmounts) return <>••••</>;
+      if (bet.stake === null) return <>A definir</>;
+      return amountMode === 'money'
+        ? <>{formatDisplayMoney(bet.stake)}</>
+        : <>{unitsValue(bet.stake, bet.unitAmount) ?? '—'}</>;
+    }
     case 'odds':
       return <>{formatDisplayOdds(bet.odds)}</>;
     case 'return': {
       const financial = betFinancialDisplay(bet);
+      const value =
+        financial.returnText === '—' || amountMode === 'money'
+          ? financial.returnText
+          : (unitsValue(bet.returnAmount, bet.unitAmount) ?? '—');
       return (
         <>
-          {financial.returnText}
+          {hideAmounts ? '••••' : value}
           {financial.qualifier !== 'Realizado' ? <small>{financial.qualifier}</small> : null}
         </>
       );
@@ -1182,7 +1191,71 @@ export function BetsPage({
     const historySportOptions = [...sportsByLabel]
       .map(([label, value]) => ({ label, value }))
       .sort((left, right) => left.label.localeCompare(right.label));
-    const renderBetTable = (tableRows: BetTableRow[], history = false) => (
+    const renderBetTable = (tableRows: BetTableRow[], history = false) => {
+      if (!history) {
+        const sortedTableRows = sort ? sortBetRows(tableRows, sort.column, sort.direction) : tableRows;
+        return (
+          <div
+            ref={scrollRef}
+            className="bets-reference-table-wrap table-scroll bet-table-desktop"
+            role="region"
+            aria-label="Today’s bets table"
+            tabIndex={0}
+          >
+            <table
+              className="product-table bet-detail-table bets-reference-table"
+              style={{ '--bet-columns': String(columns.length + 1) } as CSSProperties}
+            >
+              <caption className="sr-only">Bets with event, selection, amount, and result</caption>
+              <thead>
+                <tr>
+                  {columns.map((column) => (
+                    <th
+                      key={column.key}
+                      data-column={column.key}
+                      aria-sort={column.key === sort?.column ? sort.direction : 'none'}
+                    >
+                      <button type="button" className="table-sort" onClick={() => toggleSort(column.key)}>
+                        {column.label}
+                      </button>
+                    </th>
+                  ))}
+                  <th data-column="open"><span className="sr-only">Abrir</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedTableRows.map((row) => {
+                  const financial = betFinancialDisplay(row.bet);
+                  return (
+                    <tr key={row.bet.id} data-state={row.bet.state} data-outcome={row.bet.latestOutcome ?? undefined}>
+                      {columns.map((column) => (
+                        <td
+                          key={column.key}
+                          data-column={column.key}
+                          className={column.key === 'return' ? 'tabular ' + financial.tone : columnClassNames[column.key]}
+                        >
+                          <BetTableCell row={row} column={column.key} amountMode={amountMode} hideAmounts={hideAmounts} />
+                        </td>
+                      ))}
+                      <td data-column="open" className="bet-actions-cell">
+                        <div className="bet-row-actions">
+                          <Button variant="ghost" size="small" className="bet-row-action" aria-label={'Ver aposta ' + betAccessibleTitle(row.bet)} onClick={() => open({ kind: 'detail', id: row.bet.id })}>
+                            Ver
+                          </Button>
+                          <Button variant="ghost" size="small" className="bet-row-action" aria-label={'Editar aposta ' + betAccessibleTitle(row.bet)} onClick={() => open({ kind: 'bet', bet: row.bet })}>
+                            Editar
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      return (
       <div
         ref={history ? historyScrollRef : scrollRef}
         className={`bets-reference-table-wrap bet-table-desktop${history ? ' bets-history-table-wrap' : ''}`}
@@ -1515,7 +1588,8 @@ export function BetsPage({
           </tbody>
         </table>
       </div>
-    );
+      );
+    };
     return (
       <section className="bets-reference-page" aria-label="Bets">
         <header className="bets-reference-heading">
@@ -1543,6 +1617,7 @@ export function BetsPage({
                 U
               </button>
             </div>
+            <BetColumnsPanel owner={owner} columns={visibleColumns} onChange={setVisibleColumns} />
             <button
               className="bets-visibility-toggle"
               type="button"
@@ -2160,7 +2235,7 @@ export function BetsPage({
                                   : columnClassNames[column.key]
                               }
                             >
-                              <BetTableCell row={row} column={column.key} />
+                              <BetTableCell row={row} column={column.key} amountMode={amountMode} hideAmounts={hideAmounts} />
                             </td>
                           ))}
                           <td data-column="open" className="bet-actions-cell">
@@ -2714,6 +2789,17 @@ export function BetTrackBetDetailPage({
           {bet.state === 'open' ? (
             <section className="bettrack-settle-card" aria-labelledby="bettrack-settle-title">
               <h3 id="bettrack-settle-title">SETTLE THIS BET</h3>
+              <button
+                type="button"
+                className="is-cashout"
+                aria-label="Liquidar aposta"
+                disabled={actions.busy || !!actions.pending}
+                onClick={() => open({ kind: 'settle', bet })}
+              >
+                <span className="bettrack-settle-icon" aria-hidden="true">⇄</span>
+                <strong>LIQUIDAR APOSTA</strong>
+                <small>Registre uma liquidação parcial ou integral</small>
+              </button>
               <button
                 type="button"
                 className="is-won"

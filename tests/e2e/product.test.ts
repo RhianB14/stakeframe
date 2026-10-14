@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { todayBet } from './product-fixtures.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
@@ -325,6 +326,8 @@ for (const scenario of [
   {
     name: 'open without settlement',
     state: 'open' as const,
+    latestOutcome: null,
+    statusExpected: 'Pendente',
     returnAmount: '0.00',
     returnExpected: '—',
     profit: '0.00',
@@ -335,6 +338,8 @@ for (const scenario of [
   {
     name: 'open after positive partial cashout',
     state: 'open' as const,
+    latestOutcome: 'partial_cashout' as const,
+    statusExpected: 'Cashout parcial',
     returnAmount: '65.00',
     returnExpected: 'R$ 65,00',
     profit: '25.00',
@@ -345,6 +350,8 @@ for (const scenario of [
   {
     name: 'open after negative partial cashout',
     state: 'open' as const,
+    latestOutcome: 'partial_cashout' as const,
+    statusExpected: 'Cashout parcial',
     returnAmount: '25.00',
     returnExpected: 'R$ 25,00',
     profit: '-15.00',
@@ -355,6 +362,8 @@ for (const scenario of [
   {
     name: 'settled with a win',
     state: 'settled' as const,
+    latestOutcome: 'win' as const,
+    statusExpected: 'Ganha',
     returnAmount: '200.00',
     returnExpected: 'R$ 200,00',
     profit: '100.00',
@@ -365,6 +374,8 @@ for (const scenario of [
   {
     name: 'settled with a loss',
     state: 'settled' as const,
+    latestOutcome: 'loss' as const,
+    statusExpected: 'Perdida',
     returnAmount: '0.00',
     returnExpected: 'R$ 0,00',
     profit: '-100.00',
@@ -375,6 +386,8 @@ for (const scenario of [
   {
     name: 'settled with zero profit',
     state: 'settled' as const,
+    latestOutcome: 'void' as const,
+    statusExpected: 'Reembolso',
     returnAmount: '100.00',
     returnExpected: 'R$ 100,00',
     profit: '0.00',
@@ -384,9 +397,9 @@ for (const scenario of [
   },
 ]) {
   test(`financial display distinguishes ${scenario.name}`, async ({ page }) => {
-    const sample: Bet = {
-      ...bet,
+    const sample: Bet = todayBet({
       state: scenario.state,
+      latestOutcome: scenario.latestOutcome,
       remaining:
         scenario.state === 'settled'
           ? '0.00'
@@ -395,32 +408,52 @@ for (const scenario of [
             : '100.00',
       returnAmount: scenario.returnAmount,
       profit: scenario.profit,
-    };
+    });
     await enabledProduct(page, fixture(), [sample], sample);
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        'bettrack.preview.preferences',
+        JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+      ),
+    );
     await page.goto('/');
     await exerciseShowAmountsToggle(page);
     await openMobileProductNavigation(page);
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    // STK-F2-18: casa a célula pelo NOME da coluna, não pelo índice. A Fase 3
-    // passou a mostrar 8 das 14 colunas por padrão, o que deslocou a coluna de
-    // retorno — e o índice 11 passou a apontar para outra célula, fazendo o
-    // teste reprovar por um motivo que não tinha nada a ver com o que ele
-    // verifica. Localizar pelo `th` é o que o teste quer dizer.
-    const realizedReturn = page
-      .locator('.product-table:not(.bets-history-table) tbody tr')
-      .first()
-      .locator('td[data-column="return"]');
-    await expect(realizedReturn).toContainText(scenario.returnExpected);
-    await expect(realizedReturn).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
-    if (scenario.qualifier !== 'Realizado') {
-      await expect(realizedReturn).toContainText(scenario.qualifier);
-    }
-    await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
-    const detail = page.getByRole('dialog').locator('.detail-metrics');
-    const profit = detail.locator('div').filter({ hasText: 'Resultado realizado' });
-    await expect(profit).toContainText(scenario.expected);
-    if (scenario.qualifier !== 'Realizado') {
-      await expect(profit).toContainText(scenario.qualifier);
+    await page.getByRole('button', { name: '$', exact: true }).click();
+    if ((page.viewportSize()?.width ?? 0) > 900) {
+      const row = page.locator('.product-table:not(.bets-history-table) tbody tr').first();
+      const realizedReturn = row.locator('td[data-column="return"]');
+      await expect(realizedReturn).toContainText(scenario.returnExpected);
+      await expect(realizedReturn).toHaveClass(new RegExp('\\b' + scenario.tone + '\\b'));
+      if (scenario.qualifier !== 'Realizado') {
+        await expect(realizedReturn).toContainText(scenario.qualifier);
+      }
+      await expect(row.locator('td[data-column="result"] .status-badge')).toHaveText(
+        scenario.statusExpected,
+      );
+    } else {
+      const card = page.locator('.bettrack-ticket-card').first();
+      await expect(card).toBeVisible();
+      await expect(card.locator('.bettrack-ticket-result')).toHaveClass(
+        new RegExp('\\b' + scenario.tone + '\\b'),
+      );
+      await expect(card).toHaveAttribute('href', '#bets/' + sample.id);
+      const returnCell = card.locator('.bettrack-ticket-amounts > div').nth(1);
+      if (scenario.returnExpected === '—') {
+        await expect(returnCell).toContainText('Retorno potencial');
+        await expect(returnCell).toContainText('R$ 200,00');
+      } else {
+        await expect(returnCell).toContainText('Pago');
+        await expect(returnCell).toContainText(scenario.returnExpected);
+      }
+      if (scenario.latestOutcome === null) {
+        await expect(card.locator('.bettrack-ticket-open-label')).toHaveText('Aberta');
+      } else {
+        await expect(card.locator('.bettrack-ticket-result strong')).toHaveText(
+          scenario.expected.replace(/^\+/, ''),
+        );
+      }
     }
   });
 }
@@ -436,21 +469,30 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     aliases: [],
     active: true,
   });
+  const currentBet = todayBet();
+  const todayLocal = currentBet.selections[0]!.eventDate!;
+  const todayDisplay = [
+    todayLocal.slice(8, 10),
+    todayLocal.slice(5, 7),
+    todayLocal.slice(0, 4),
+  ].join('/');
+  const firstEventAt = todayLocal + 'T20:00:00Z';
+  const secondEventAt = todayLocal + 'T22:30:00Z';
   const scheduledBet: Bet = {
-    ...bet,
+    ...currentBet,
     tipsterId,
     selections: [
       {
-        ...bet.selections[0]!,
-        eventAt: '2026-09-21T20:00:00Z',
-        eventDate: '2026-09-21',
+        ...currentBet.selections[0]!,
+        eventAt: firstEventAt,
+        eventDate: todayLocal,
         dateStatus: 'confirmed',
       },
     ],
   };
   const multipleId = '10000000-0000-4000-8000-000000000005';
   const multipleBet: Bet = {
-    ...bet,
+    ...currentBet,
     id: multipleId,
     ticketNumber: 2,
     ticketKind: 'multiple',
@@ -462,8 +504,8 @@ test('bets page exposes game, market, ticket kind and result details responsivel
         market: 'Resultado final',
         selection: 'Bandeirantes',
         odds: null,
-        eventDate: '2026-09-21',
-        eventAt: '2026-09-21T20:00:00Z',
+        eventDate: todayLocal,
+        eventAt: firstEventAt,
         dateStatus: 'confirmed',
       },
       {
@@ -472,13 +514,19 @@ test('bets page exposes game, market, ticket kind and result details responsivel
         market: 'Total de gols',
         selection: 'Mais de 1,5',
         odds: null,
-        eventDate: '2026-09-22',
-        eventAt: '2026-09-22T22:30:00Z',
+        eventDate: todayLocal,
+        eventAt: secondEventAt,
         dateStatus: 'confirmed',
       },
     ],
   };
   await enabledProduct(page, workspace, [scheduledBet, multipleBet], scheduledBet);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'bettrack.preview.preferences',
+      JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+    ),
+  );
   await page.route(`**/api/v1/bets/${multipleId}`, (route) =>
     route.fulfill({ json: { bet: multipleBet, settlements: [] } }),
   );
@@ -490,57 +538,30 @@ test('bets page exposes game, market, ticket kind and result details responsivel
   await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
 
+  await page.getByRole('button', { name: '$', exact: true }).click();
   if ((page.viewportSize()?.width ?? 0) <= 900) {
-    const card = page.locator('.bet-list-card').first();
+    await expect(page.locator('.bet-table-desktop:not(.bets-history-table-wrap)')).toBeHidden();
+    const cards = page.locator('.bettrack-ticket-card');
+    await expect(cards).toHaveCount(2);
+    const card = cards.nth(0);
     await expect(card).toBeVisible();
-    const fields = card.locator('.bet-list-card-fields');
-    await expect(fields.locator('dt')).toHaveText([
-      'Nº do bilhete',
-      'Data do jogo',
-      'Hora do jogo',
-      'Evento',
-      'Aposta/seleção',
-      'Mercado',
-      'Tipo da aposta',
-      'Tipster',
-      'Casa de aposta',
-      'Valor apostado',
-      'Odd',
-      'Retorno recebido',
-      'Resultado/status',
-      'ID técnico da aposta',
-    ]);
-    await expect(fields).toContainText('21/09/2026');
-    await expect(fields).toContainText('17:00');
-    await expect(fields).toContainText('Gols');
-    await expect(fields).toContainText('Simples');
-    await expect(fields).toContainText('Analista');
-    await expect(fields).toContainText('Bet365');
-    await expect(fields).toContainText('R$ 100,00');
-    await expect(fields).toContainText('2.00');
-    await expect(fields).toContainText('Não liquidado');
-    await expect(fields).toContainText('Pendente');
-    await expect(fields).toContainText(scheduledBet.id);
-    await page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }).click();
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(scheduledBet.id);
-    const multipleCard = page.locator('.bet-list-card').nth(1);
-    await expect(multipleCard.locator('.bet-list-card-fields')).toContainText(
-      'Vários jogos/horários',
-    );
-    await multipleCard.getByText('Seleções do bilhete (2)').click();
-    await expect(multipleCard).toContainText('Bandeirantes x Litoral');
-    await expect(multipleCard).toContainText('21/09/2026');
-    await expect(multipleCard).toContainText('17:00');
-    await expect(multipleCard).toContainText('Serra x Vale');
-    await expect(multipleCard).toContainText('22/09/2026');
-    await expect(multipleCard).toContainText('19:30');
-    await expect(
-      page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
-    ).toHaveText('Copiar');
+    await expect(card).toHaveAttribute('href', '#bets/' + scheduledBet.id);
+    await expect(card).toContainText('Mais de 2,5');
+    await expect(card).toContainText('Aurora × Central');
+    await expect(card.locator('.bettrack-ticket-amounts')).toContainText('R$ 100,00');
+    await expect(card.locator('.bettrack-ticket-amounts')).toContainText('Retorno potencial');
+    await expect(card.locator('.bettrack-ticket-amounts')).toContainText('R$ 200,00');
+    await expect(card.locator('.bettrack-ticket-open-label')).toHaveText('Aberta');
+
+    const multipleCard = cards.nth(1);
+    await expect(multipleCard).toHaveAttribute('href', '#bets/' + multipleBet.id);
+    await expect(multipleCard).toContainText('2 seleções');
+    await expect(multipleCard).toContainText('Bandeirantes');
+    await expect(multipleCard).toContainText('Mais de 1,5');
     await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
   } else {
+    await expect(page.locator('.bet-table-desktop:not(.bets-history-table-wrap)')).toBeVisible();
+    await expect(page.locator('.bettrack-theme .bet-list-cards')).toBeHidden();
     await expect(
       page.getByText('A tabela é mais larga que a tela.', { exact: false }),
     ).toBeVisible();
@@ -593,8 +614,8 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     // lerem a tabela, não o painel.
     await page.locator('.bet-detail-table thead th').first().click();
     await expect(page.locator('.bet-detail-table tbody tr').first().locator('td')).toHaveText([
-      /#1/,
-      /21\/09\/2026/,
+      /#000001/,
+      new RegExp(todayDisplay),
       /Aurora × Central/,
       /Bet365/,
       /R\$ 100,00/,
@@ -639,31 +660,14 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(scheduledBet.id);
     await page.getByRole('button', { name: 'Ver aposta Bandeirantes x Litoral' }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toContainText('Bandeirantes x Litoral');
-    await expect(dialog).toContainText('21/09/2026');
-    await expect(dialog).toContainText('17:00');
-    await expect(dialog).toContainText('Serra x Vale');
-    await expect(dialog).toContainText('19:30');
-    /* STK-F2-18 (pendência 1): era `getByRole('button', { name: 'Fechar
-       janela' })`, que não existe aqui. O detalhe da aposta é um DRAWER
-       (bet-drawer.tsx), ancorado à direita desde a Fase 3, e o seu nome
-       acessível é "Fechar detalhe da aposta".
-
-       Duas coisas seguindo o caminho fácil, e por que nenhuma:
-
-       - Não se muda o componente para "Fechar janela": passaria a anunciar
-         janela um painel lateral, que é geometricamente falso. Trocar um
-         nome acessível bom por um que faz o teste passar é uma regressão
-         silenciosa para quem usa leitor de tela.
-       - Não se solta o nome: sem `name`, o locator casa QUALQUER botão do
-         diálogo e a asserção para de provar alguma coisa.
-
-       O que fica é o que a asserção queria provar desde o começo — que
-       existe um botão que fecha ESTA superfície, e que ela fecha de fato.
-       Fixar a string exata só provaria que alguém escreveu aquela string,
-       e reprovaria no dia em que o nome ficasse mais específico. */
-    await dialog.getByRole('button', { name: /Fechar detalhe da aposta/ }).click();
+    await expect(page).toHaveURL(new RegExp(`#bets/${multipleId}$`));
+    await expect(page.getByRole('heading', { name: /PARLAY/ })).toBeVisible();
+    await expect(page.getByText('Bandeirantes x Litoral', { exact: true })).toBeVisible();
+    await expect(page.getByText('Serra x Vale', { exact: true })).toBeVisible();
+    // The BetTrack detail is a full route, not a drawer; return through its
+    // own navigation link before continuing to inspect the table.
+    await page.getByRole('link', { name: /BETS/ }).click();
+    await expect(page).toHaveURL(/#bets$/);
     await expect(
       page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
     ).toHaveText('Copiar');
@@ -690,10 +694,11 @@ test('bets table sorts by the proposed columns on desktop', async ({ page }) => 
   test.skip((page.viewportSize()?.width ?? 0) <= 900, 'sorting belongs to the desktop table');
   const secondId = '10000000-0000-4000-8000-000000000006';
   const thirdId = '10000000-0000-4000-8000-000000000007';
+  const currentBet = todayBet();
   const sortedBets: Bet[] = [
-    { ...bet, id: thirdId, ticketNumber: 3, stake: '300.00' },
-    { ...bet, ticketNumber: 1, stake: '100.00' },
-    { ...bet, id: secondId, ticketNumber: 2, stake: '50.00' },
+    { ...currentBet, id: thirdId, ticketNumber: 3, stake: '300.00' },
+    { ...currentBet, ticketNumber: 1, stake: '100.00' },
+    { ...currentBet, id: secondId, ticketNumber: 2, stake: '50.00' },
   ];
   await enabledProduct(page, fixture(), sortedBets, sortedBets[0]!);
   await page.goto('/');
@@ -899,12 +904,19 @@ test('unsupported stored language falls back to the supported Portuguese interfa
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,
 }, info) => {
-  await enabledProduct(page, fixture(), [bet]);
+  const currentBet = todayBet();
+  await enabledProduct(page, fixture(), [currentBet], currentBet, null);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'bettrack.preview.preferences',
+      JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+    ),
+  );
   await page.goto('/');
   await exerciseShowAmountsToggle(page);
   await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(
-    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+    page.locator('.overview-dashboard-metrics').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
   const smallText = await page
     .locator('.sidebar-caption, .product-eyebrow, .metric-card small, .product-footer')
@@ -951,22 +963,25 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('group', { name: /Filtrar histórico por resultado/i })).toBeVisible();
-  await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
+  if ((page.viewportSize()?.width ?? 0) <= 900) {
+    const currentCard = page.locator(
+      '.bettrack-ticket-card[href="#bets/' + currentBet.id + '"]',
+    );
+    await expect(currentCard).toBeVisible();
+    await currentCard.click();
+  } else {
+    await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
+  }
+  await expect(page).toHaveURL(new RegExp('#bets/' + currentBet.id + '$'));
+  await expect(page.getByRole('heading', { name: 'MAIS DE 2,5', exact: true })).toBeVisible();
+  await expect(page.locator('.bettrack-detail-ticket')).toContainText('Aurora × Central');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
-  // STK-F2-18 (pendência 1): mesmo drawer, mesmo motivo que a linha 614 —
-  // o detalhe da aposta é um drawer e o nome acessível dele é específico.
-  // A linha 1244 deste arquivo NÃO entra aqui: ela abre o `Dialog`
-  // centralizado de Importação, cujo nome acessível já é "Fechar janela".
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: /Fechar detalhe da aposta/ })
-    .click();
+  await page.getByRole('link', { name: /BETS/ }).click();
+  await expect(page).toHaveURL(/#bets$/);
   if ((page.viewportSize()?.width ?? 0) <= 760) {
+    await openMobileProductNavigation(page);
     const nav = page.locator('.product-sidebar nav');
-    const configLabel = page
-      .getByRole('link', { name: 'Configurações', exact: true })
-      .locator('.nav-label');
+    const configLabel = page.getByRole('link', { name: 'Configurações', exact: true });
     const navLayout = await nav.evaluate((element) => ({
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
@@ -996,13 +1011,11 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     expect(labelLayout.scrollWidth).toBeLessThanOrEqual(labelLayout.width);
     expect(labelLayout.height).toBeGreaterThan(12);
 
-    await openMobileProductNavigation(page);
-    await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    await expect(page.locator('.bet-list-card').last()).toBeVisible();
+    await expect(page.locator('.bettrack-ticket-card').last()).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const bottomSpacing = await page.evaluate(() => {
       const navElement = document.querySelector('.product-sidebar');
-      const lastRow = document.querySelector('.bet-list-card:last-child');
+      const lastRow = document.querySelector('.bettrack-ticket-card:last-child');
       if (!navElement || !lastRow) throw new Error('Mobile nav or last bet card missing');
       return {
         navTop: navElement.getBoundingClientRect().top,
@@ -1012,7 +1025,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     expect(bottomSpacing.rowBottom).toBeLessThanOrEqual(bottomSpacing.navTop + 1);
   }
   await page.getByRole('link', { name: 'Configurações', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Unidades mensais' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Configurações', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 test('first use requires explicit balance confirmation and preserves decimal strings', async ({
@@ -1105,7 +1118,8 @@ test('ambiguous network result is recovered with the same key and body after rel
 test('partial cashout sends closed principal independently from received money', async ({
   page,
 }) => {
-  await enabledProduct(page, fixture(), [bet]);
+  const todayCashoutBet = todayBet();
+  await enabledProduct(page, fixture(), [todayCashoutBet], todayCashoutBet);
   let command: unknown;
   await page.route('**/api/v1/commands', (route) => {
     command = route.request().postDataJSON();
@@ -1114,8 +1128,14 @@ test('partial cashout sends closed principal independently from received money',
   await page.goto('/');
   await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-  const cashoutBet = page.locator(`a.bet-list-card[href="#bets/${betId}"]`);
-  await expect(cashoutBet).toHaveAttribute('aria-label', /^Open .+ — Open$/);
+  const isDesktop = (page.viewportSize()?.width ?? 0) > 900;
+  const cashoutBet = isDesktop
+    ? page.getByRole('button', { name: 'Ver aposta Aurora × Central', exact: true })
+    : page.locator(`a.bettrack-ticket-card[href="#bets/${betId}"]`);
+  await expect(cashoutBet).toBeVisible();
+  if (!isDesktop) {
+    await expect(cashoutBet).toHaveAttribute('aria-label', /^Open .+ — Open$/);
+  }
   await cashoutBet.click();
   await page.getByRole('button', { name: 'Liquidar aposta', exact: true }).click();
   await page.getByLabel('Resultado', { exact: true }).selectOption('partial_cashout');
@@ -1132,14 +1152,21 @@ test('partial cashout sends closed principal independently from received money',
   });
 });
 test('an expired API session removes cached private records', async ({ page }) => {
-  await enabledProduct(page, fixture(), [bet]);
+  await enabledProduct(page, fixture(), [bet], bet, null);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'bettrack.preview.preferences',
+      JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+    ),
+  );
   await page.goto('/');
   await exerciseShowAmountsToggle(page);
   await expect(
-    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+    page.locator('.overview-dashboard-metrics').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
   await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
   await page.route('**/api/v1/journal?*', (route) => route.fulfill({ status: 401, json: {} }));
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Banca', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Entrar com Google' })).toBeVisible();
   await expect(page.getByText('R$ 1.000,00', { exact: true })).toHaveCount(0);
