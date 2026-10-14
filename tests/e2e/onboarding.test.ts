@@ -296,16 +296,25 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
   // O formulário foi convertido em wizard: primeiro se escolhe o tipo, depois
   // são informadas as seleções obrigatórias, e só então aparecem valor e casa.
   await page.getByRole('button', { name: /Simples/ }).click();
-  await page.getByRole('button', { name: 'Continuar para seleções' }).click();
-  await page.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
-  await page.getByLabel('Tipo de aposta 1', { exact: true }).fill('Gols');
-  await page.getByLabel('Palpite 1', { exact: true }).fill('Mais de 2,5');
-  await page.getByRole('button', { name: 'Continuar para valor' }).click();
-  await page.getByLabel('Casa de aposta').selectOption({ label: 'Bet365' });
-  await page.getByLabel('Valor apostado (R$)').fill('100,00');
-  await page.getByLabel('Odd total').fill('1,85');
-  await page.getByRole('button', { name: 'Registrar aposta' }).click();
+  await page.getByLabel('Evento', { exact: true }).fill('Time A × Time B');
+  await page.getByLabel('Tipo de aposta', { exact: true }).fill('Gols');
+  await page.getByLabel('Seleção', { exact: true }).fill('Mais de 2,5');
+  await page.getByLabel('Odds', { exact: true }).fill('1,85');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Casa de apostas', { exact: true }).selectOption({ label: 'Bet365' });
+  await page.getByLabel('Valor', { exact: true }).fill('100,00');
+  await page.getByRole('button', { name: 'SAVE BET' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(
+    harness.commands.filter((item) => (item as { type?: string }).type === 'bet.create'),
+  ).toHaveLength(1);
+
+  // The onboarding confirmation is shown after returning to its overview route.
+  await page.getByRole('link', { name: 'StakeFrame, visão geral', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
+  await expect(page.getByText('Primeira aposta registrada')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await expect(page.getByText('Primeira aposta registrada')).toBeVisible();
 
   // Finish explicitly and land on the regular overview.
