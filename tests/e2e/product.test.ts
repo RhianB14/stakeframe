@@ -865,7 +865,7 @@ test('history accepts a custom market type not present on the first page', async
   await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
-  const marketType = page.getByRole('textbox', { name: 'Tipo de mercado' });
+  const marketType = page.getByRole('combobox', { name: 'Tipo de mercado' });
   await expect(
     page.locator(`#bets-history-market-type-options option[value="${customMarket}"]`),
   ).toHaveCount(0);
