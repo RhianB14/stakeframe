@@ -7107,7 +7107,7 @@
   border-radius: 0;
   font-family: var(--font-body);
 }
-.bettrack-theme .product-main > .metric-grid {
+.bettrack-theme .bettrack-page-overview > .metric-grid {
   display: none;
 }
 .bettrack-theme .overview-accounts {

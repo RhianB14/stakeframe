@@ -1866,6 +1866,20 @@ test('an uncertain event search reuses its key and input after reloading without
   expect(attempts[0]).toEqual(attempts[1]);
 });
 
+test('overview and analytics expose their intended metric grids', async ({ page }) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
+  await page.goto('/');
+  await expect(page.locator('.bettrack-page-overview > .metric-grid')).toBeHidden();
+  await expect(page.locator('.bettrack-page-overview .overview-dashboard-metrics')).toBeVisible();
+  await page.goto('/#analytics');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
+  await expect(page.locator('.bettrack-page-analytics .report-metrics')).toBeVisible();
+});
+
 test('analytics filters reconcile visible results, CSV and bet drilldown on desktop and mobile', async ({
   page,
 }, info) => {
@@ -1982,7 +1996,9 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
     .fill(saoPauloDate(new Date()).slice(0, 8) + '01');
   await page.getByLabel('Data final da análise').fill(saoPauloDate(new Date()));
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
-  await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator('.report-metrics').getByText('12,50%', { exact: true }).first(),
+  ).toBeVisible();
   // STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
   // aviso de baixa amostra (N = 8 abaixo do mínimo configurado de 30).
   await expect(page.getByText('Yield real', { exact: true }).first()).toBeVisible();
@@ -2021,7 +2037,8 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   await expect(csv).toHaveAttribute('href', /sport=sport%3Afutebol/);
   await expect(csv).toHaveAttribute('href', /includeEstimated=true/);
   await page.getByRole('button', { name: 'Aurora × Central', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp('#bets/' + betId + '$'));
+  await expect(page.getByRole('heading', { name: 'MAIS DE 2,5', exact: true })).toBeVisible();
 });
 
 test('analytics chart axis labels honour the same 12px floor as the rest of the product', async ({
@@ -2145,7 +2162,9 @@ test('analytics distinguishes missing units and failed data from empty results',
   });
   await page.goto('/#analytics');
   await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
-  await expect(page.getByText('Unidades a conferir', { exact: true })).toBeVisible();
+  await expect(
+    page.locator('.report-metrics').getByText('Unidades a conferir', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('O total em reais está completo', { exact: false })).toBeVisible();
   const detailsError = page.getByRole('alert').filter({
     hasText: 'Não foi possível carregar os detalhes do relatório.',
