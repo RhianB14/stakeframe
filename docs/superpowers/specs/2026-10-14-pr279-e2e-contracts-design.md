@@ -24,7 +24,7 @@ Atualizar o teste de primeira aposta para o fluxo de referência vigente: seleci
 
 ### Identidade do calendário
 
-Alinhar a resposta de detalhe da aposta com o item do calendário: a selection detalhada deve ter o mesmo ID de seleção usado pelo fixture de evento. Manter o contrato real que só oferece “Conferir data e fontes” quando há selection.id; não adicionar ID fictício na lógica do produto.
+Alinhar a resposta de detalhe da aposta com o item do calendário: a selection detalhada deve ter o mesmo ID do fixture de evento. Isso corrige apenas a identidade do mock: mesmo com `selection.id`, a rota ativa BetTrack detail não renderiza “Conferir data e fontes” (a ação existe no detalhe legado). A decisão entre restaurar a ação via EventReview existente ou assumir a ausência como comportamento intencional permanece pendente do proprietário; não alterar UI/assertions dessa ação até decisão. Não adicionar ID fictício na lógica do produto.
 
 ### Seletores acessíveis
 
@@ -53,7 +53,7 @@ Manter o retry global retry=1. Os testes que verificam estado de erro e retry ma
 4. Calendário e detalhe compartilham identidade de seleção válida.
 5. Limpar filtro valida linhas/chips/campo restaurados, sem exigir refetch dentro da janela fresca de 15 segundos.
 6. Erros persistentes de analytics permanecem visíveis após o retry automático; a ação explícita recupera somente a consulta falha, com contagem compatível com retry=1.
-7. Nenhum teste é ignorado, removido, rebaixado para assertion mais fraca ou estabilizado aumentando timeouts sem evidência.
+7. Nenhum teste é removido, rebaixado para assertion mais fraca ou estabilizado aumentando timeouts sem evidência; nenhum novo skip é adicionado. Preservar somente o skip condicional pré-existente da ordenação no mobile, pois a tabela ordenável pertence ao desktop.
 8. A suíte E2E completa, em desktop Chromium e mobile Chromium, passa localmente e nos dois jobs CI (AMD64 e ARM64).
 
 ## Fora de escopo e restrições

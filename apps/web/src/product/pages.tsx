@@ -292,7 +292,17 @@ function BetStatusTag({ bet }: { bet: Bet }) {
   );
 }
 
-function BetTableCell({ row, column, amountMode, hideAmounts }: { row: BetTableRow; column: BetTableColumnKey; amountMode: 'money' | 'units'; hideAmounts: boolean }) {
+function BetTableCell({
+  row,
+  column,
+  amountMode,
+  hideAmounts,
+}: {
+  row: BetTableRow;
+  column: BetTableColumnKey;
+  amountMode: 'money' | 'units';
+  hideAmounts: boolean;
+}) {
   const { bet, details, tipster, bookmaker } = row;
   switch (column) {
     case 'ticket':
@@ -326,9 +336,11 @@ function BetTableCell({ row, column, amountMode, hideAmounts }: { row: BetTableR
     case 'stake': {
       if (hideAmounts) return <>••••</>;
       if (bet.stake === null) return <>A definir</>;
-      return amountMode === 'money'
-        ? <>{formatDisplayMoney(bet.stake)}</>
-        : <>{unitsValue(bet.stake, bet.unitAmount) ?? '—'}</>;
+      return amountMode === 'money' ? (
+        <>{formatDisplayMoney(bet.stake)}</>
+      ) : (
+        <>{unitsValue(bet.stake, bet.unitAmount) ?? '—'}</>
+      );
     }
     case 'odds':
       return <>{formatDisplayOdds(bet.odds)}</>;
@@ -1193,7 +1205,9 @@ export function BetsPage({
       .sort((left, right) => left.label.localeCompare(right.label));
     const renderBetTable = (tableRows: BetTableRow[], history = false) => {
       if (!history) {
-        const sortedTableRows = sort ? sortBetRows(tableRows, sort.column, sort.direction) : tableRows;
+        const sortedTableRows = sort
+          ? sortBetRows(tableRows, sort.column, sort.direction)
+          : tableRows;
         return (
           <div
             ref={scrollRef}
@@ -1215,34 +1229,65 @@ export function BetsPage({
                       data-column={column.key}
                       aria-sort={column.key === sort?.column ? sort.direction : 'none'}
                     >
-                      <button type="button" className="table-sort" onClick={() => toggleSort(column.key)}>
+                      <button
+                        type="button"
+                        className="table-sort"
+                        onClick={() => toggleSort(column.key)}
+                      >
                         {column.label}
                       </button>
                     </th>
                   ))}
-                  <th data-column="open"><span className="sr-only">Abrir</span></th>
+                  <th data-column="open">
+                    <span className="sr-only">Abrir</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedTableRows.map((row) => {
                   const financial = betFinancialDisplay(row.bet);
                   return (
-                    <tr key={row.bet.id} data-state={row.bet.state} data-outcome={row.bet.latestOutcome ?? undefined}>
+                    <tr
+                      key={row.bet.id}
+                      data-state={row.bet.state}
+                      data-outcome={row.bet.latestOutcome ?? undefined}
+                    >
                       {columns.map((column) => (
                         <td
                           key={column.key}
                           data-column={column.key}
-                          className={column.key === 'return' ? 'tabular ' + financial.tone : columnClassNames[column.key]}
+                          className={
+                            column.key === 'return'
+                              ? 'tabular ' + financial.tone
+                              : columnClassNames[column.key]
+                          }
                         >
-                          <BetTableCell row={row} column={column.key} amountMode={amountMode} hideAmounts={hideAmounts} />
+                          <BetTableCell
+                            row={row}
+                            column={column.key}
+                            amountMode={amountMode}
+                            hideAmounts={hideAmounts}
+                          />
                         </td>
                       ))}
                       <td data-column="open" className="bet-actions-cell">
                         <div className="bet-row-actions">
-                          <Button variant="ghost" size="small" className="bet-row-action" aria-label={'Ver aposta ' + betAccessibleTitle(row.bet)} onClick={() => open({ kind: 'detail', id: row.bet.id })}>
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            className="bet-row-action"
+                            aria-label={'Ver aposta ' + betAccessibleTitle(row.bet)}
+                            onClick={() => open({ kind: 'detail', id: row.bet.id })}
+                          >
                             Ver
                           </Button>
-                          <Button variant="ghost" size="small" className="bet-row-action" aria-label={'Editar aposta ' + betAccessibleTitle(row.bet)} onClick={() => open({ kind: 'bet', bet: row.bet })}>
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            className="bet-row-action"
+                            aria-label={'Editar aposta ' + betAccessibleTitle(row.bet)}
+                            onClick={() => open({ kind: 'bet', bet: row.bet })}
+                          >
                             Editar
                           </Button>
                         </div>
@@ -1256,338 +1301,342 @@ export function BetsPage({
         );
       }
       return (
-      <div
-        ref={history ? historyScrollRef : scrollRef}
-        className={`bets-reference-table-wrap bet-table-desktop${history ? ' bets-history-table-wrap' : ''}`}
-        role="region"
-        aria-label={history ? 'Bet history table' : 'Today’s bets table'}
-        tabIndex={0}
-      >
-        <table
-          className={`product-table bet-detail-table bets-reference-table${history ? ' bets-history-table' : ''}`}
-          style={
-            history
-              ? ({
-                  '--bet-columns': String(historyColumns.length),
-                  minWidth: `${historyTableWidth}px`,
-                } as CSSProperties)
-              : ({ '--bet-columns': '6' } as CSSProperties)
-          }
+        <div
+          ref={history ? historyScrollRef : scrollRef}
+          className={`bets-reference-table-wrap bet-table-desktop${history ? ' bets-history-table-wrap' : ''}`}
+          role="region"
+          aria-label={history ? 'Bet history table' : 'Today’s bets table'}
+          tabIndex={0}
         >
-          {history ? (
-            <colgroup>
-              {historyColumns.map((column) => (
-                <col key={column.key} style={{ width: `${column.width}px` }} />
-              ))}
-            </colgroup>
-          ) : null}
-          <thead>
-            <tr>
-              {history ? (
-                historyColumns.map((column) => (
-                  <th key={column.key} className={`bets-history-column-${column.key}`} scope="col">
-                    {column.label}
-                  </th>
-                ))
-              ) : (
-                <>
-                  <th>SP</th>
-                  <th>SELECTION</th>
-                  <th>ODDS</th>
-                  <th>AMOUNT</th>
-                  <th>STATUS</th>
-                  <th>RESULT</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {tableRows.map((row) => {
-              const expandable =
-                history && row.bet.ticketKind !== 'simple' && row.bet.selections.length > 1;
-              const expanded = expandedHistorySelections.has(row.bet.id);
-              const displayId =
-                row.bet.reference?.trim() || String(row.bet.ticketNumber).padStart(6, '0');
-              const eventDate = row.bet.selections.find(
-                (selection) => selection.eventDate,
-              )?.eventDate;
-              const eventDateLabel = eventDate
-                ? new Intl.DateTimeFormat(displayLocale(), {
-                    month: 'short',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  }).format(new Date(`${eventDate}T12:00:00.000Z`))
-                : null;
-              return (
-                <Fragment key={row.bet.id}>
-                  <tr
-                    data-state={row.bet.state}
-                    data-outcome={row.bet.latestOutcome ?? undefined}
-                    data-sport={sportTag(row.bet).toLowerCase()}
-                  >
-                    {history ? (
-                      historyColumns.map((column) => {
-                        const historyColumnClass = `bets-history-column-${column.key}`;
-                        switch (column.key) {
-                          case 'dateTime':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} bets-history-date-time tabular`}
-                              >
-                                {`${formatDisplayDate(row.bet.placedAt, { year: 'numeric', month: 'short', day: 'numeric' })} · ${placedTime(row.bet.placedAt)}`}
-                              </td>
-                            );
-                          case 'selection':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} bets-history-selection`}
-                                title={selectionLabel(row.bet)}
-                              >
-                                <div className="bets-history-selection-content">
-                                  {expandable ? (
-                                    <button
-                                      className="bets-history-expand"
-                                      type="button"
-                                      aria-label={`${expanded ? 'Hide' : 'Show'} the ${row.bet.selections.length} selections`}
-                                      aria-expanded={expanded}
-                                      onClick={() =>
-                                        setExpandedHistorySelections((current) => {
-                                          const next = new Set(current);
-                                          if (next.has(row.bet.id)) next.delete(row.bet.id);
-                                          else next.add(row.bet.id);
-                                          return next;
-                                        })
-                                      }
-                                    >
-                                      {expanded ? '⌄' : '›'}
-                                    </button>
-                                  ) : null}
-                                  <span>{selectionLabel(row.bet)}</span>
-                                </div>
-                              </td>
-                            );
-                          case 'id':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} bets-history-id`}
-                                title={`#${displayId}`}
-                              >
-                                #{displayId}
-                              </td>
-                            );
-                          case 'bookmaker':
-                            return (
-                              <td
-                                key={column.key}
-                                className={historyColumnClass}
-                                title={row.bookmaker}
-                              >
-                                {row.bookmaker}
-                              </td>
-                            );
-                          case 'sport':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} bets-history-sport`}
-                                title={sportsLabel(row.bet)}
-                              >
-                                {sportsLabel(row.bet)}
-                              </td>
-                            );
-                          case 'betType':
-                            return (
-                              <td
-                                key={column.key}
-                                className={historyColumnClass}
-                                title={typeTitleFor(row.bet)}
-                              >
-                                {typeLabelFor(row.bet)}
-                              </td>
-                            );
-                          case 'tipster':
-                            return (
-                              <td
-                                key={column.key}
-                                className={historyColumnClass}
-                                title={row.tipster}
-                              >
-                                {row.tipster}
-                              </td>
-                            );
-                          case 'event':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} bets-history-event`}
-                                title={row.details.event}
-                              >
-                                {row.details.event}
-                              </td>
-                            );
-                          case 'stake':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} tabular`}
-                                title={row.bet.stake ?? '—'}
-                              >
-                                {hideAmounts
-                                  ? '••••'
-                                  : amountMode === 'money'
-                                    ? formatDisplayMoney(row.bet.stake)
-                                    : row.bet.stakeUnits === null
-                                      ? '—'
-                                      : `${Number(row.bet.stakeUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}U`}
-                              </td>
-                            );
-                          case 'odds':
-                            return (
-                              <td key={column.key} className={`${historyColumnClass} tabular`}>
-                                {formatDisplayOdds(row.bet.odds)}
-                              </td>
-                            );
-                          case 'status':
-                            return (
-                              <td key={column.key} className={historyColumnClass}>
-                                <span
-                                  className={`bets-reference-status is-${statusText(row.bet).toLowerCase().replace(/\s+/g, '-')}`}
-                                >
-                                  {statusText(row.bet)}
-                                </span>
-                              </td>
-                            );
-                          case 'result':
-                            return (
-                              <td
-                                key={column.key}
-                                className={`${historyColumnClass} tabular ${betFinancialDisplay(row.bet).tone}`}
-                              >
-                                {hideAmounts
-                                  ? '••••'
-                                  : amountMode === 'money'
-                                    ? betFinancialDisplay(row.bet).profitText
-                                    : (() => {
-                                        const result = unitsValue(
-                                          row.bet.profit,
-                                          row.bet.unitAmount,
-                                        );
-                                        return result &&
-                                          result !== '—' &&
-                                          !result.startsWith('-') &&
-                                          row.bet.profit !== '0.00'
-                                          ? `+${result}`
-                                          : (result?.replace('-', '−') ?? '—');
-                                      })()}
-                              </td>
-                            );
-                        }
-                      })
-                    ) : (
-                      <>
-                        <td
-                          className={`bets-reference-sport is-${sportTag(row.bet).toLowerCase()}`}
-                        >
-                          {expandable ? (
-                            <button
-                              className="bets-history-expand"
-                              type="button"
-                              aria-label={`${expanded ? 'Hide' : 'Show'} the ${row.bet.selections.length} selections`}
-                              aria-expanded={expanded}
-                              onClick={() =>
-                                setExpandedHistorySelections((current) => {
-                                  const next = new Set(current);
-                                  if (next.has(row.bet.id)) next.delete(row.bet.id);
-                                  else next.add(row.bet.id);
-                                  return next;
-                                })
-                              }
-                            >
-                              {expanded ? '⌄' : '›'}
-                            </button>
-                          ) : null}
-                          <span>{sportTag(row.bet)}</span>
-                        </td>
-                        <td className="bets-reference-selection">
-                          <button
-                            className="bets-row-open"
-                            type="button"
-                            onClick={() => open({ kind: 'detail', id: row.bet.id })}
-                          >
-                            {row.bet.ticketKind === 'multiple' && row.bet.selections.length > 1
-                              ? `Parlay · ${row.bet.selections.length} legs`
-                              : row.details.selection}
-                          </button>
-                          <small>
-                            {row.details.event.trim()}
-                            {eventDateLabel ? ` · ${eventDateLabel}` : ''}
-                          </small>
-                        </td>
-                        <td className="tabular">{formatDisplayOdds(row.bet.odds)}</td>
-                        <td className="tabular">
-                          {hideAmounts
-                            ? '••••'
-                            : amountMode === 'money'
-                              ? formatDisplayMoney(row.bet.stake)
-                              : row.bet.stakeUnits === null
-                                ? '—'
-                                : `${Number(row.bet.stakeUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}U`}
-                        </td>
-                        <td>
-                          <span
-                            className={`bets-reference-status is-${statusText(row.bet).toLowerCase().replace(/\s+/g, '-')}`}
-                          >
-                            {statusText(row.bet)}
-                          </span>
-                        </td>
-                        <td className={`tabular ${betFinancialDisplay(row.bet).tone}`}>
-                          {hideAmounts
-                            ? '••••'
-                            : amountMode === 'money'
-                              ? betFinancialDisplay(row.bet).profitText
-                              : (() => {
-                                  const result = unitsValue(row.bet.profit, row.bet.unitAmount);
-                                  return result &&
-                                    result !== '—' &&
-                                    !result.startsWith('-') &&
-                                    row.bet.profit !== '0.00'
-                                    ? `+${result}`
-                                    : (result?.replace('-', '−') ?? '—');
-                                })()}
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                  {expandable && expanded ? (
+          <table
+            className={`product-table bet-detail-table bets-reference-table${history ? ' bets-history-table' : ''}`}
+            style={
+              history
+                ? ({
+                    '--bet-columns': String(historyColumns.length),
+                    minWidth: `${historyTableWidth}px`,
+                  } as CSSProperties)
+                : ({ '--bet-columns': '6' } as CSSProperties)
+            }
+          >
+            {history ? (
+              <colgroup>
+                {historyColumns.map((column) => (
+                  <col key={column.key} style={{ width: `${column.width}px` }} />
+                ))}
+              </colgroup>
+            ) : null}
+            <thead>
+              <tr>
+                {history ? (
+                  historyColumns.map((column) => (
+                    <th
+                      key={column.key}
+                      className={`bets-history-column-${column.key}`}
+                      scope="col"
+                    >
+                      {column.label}
+                    </th>
+                  ))
+                ) : (
+                  <>
+                    <th>SP</th>
+                    <th>SELECTION</th>
+                    <th>ODDS</th>
+                    <th>AMOUNT</th>
+                    <th>STATUS</th>
+                    <th>RESULT</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((row) => {
+                const expandable =
+                  history && row.bet.ticketKind !== 'simple' && row.bet.selections.length > 1;
+                const expanded = expandedHistorySelections.has(row.bet.id);
+                const displayId =
+                  row.bet.reference?.trim() || String(row.bet.ticketNumber).padStart(6, '0');
+                const eventDate = row.bet.selections.find(
+                  (selection) => selection.eventDate,
+                )?.eventDate;
+                const eventDateLabel = eventDate
+                  ? new Intl.DateTimeFormat(displayLocale(), {
+                      month: 'short',
+                      day: 'numeric',
+                      timeZone: 'UTC',
+                    }).format(new Date(`${eventDate}T12:00:00.000Z`))
+                  : null;
+                return (
+                  <Fragment key={row.bet.id}>
                     <tr
-                      className="bets-history-selections-row"
+                      data-state={row.bet.state}
+                      data-outcome={row.bet.latestOutcome ?? undefined}
                       data-sport={sportTag(row.bet).toLowerCase()}
                     >
-                      <td colSpan={history ? historyColumns.length : 6}>
-                        <div className="bets-history-selections">
-                          {row.bet.selections.map((selection) => (
-                            <div key={selection.id ?? `${row.bet.id}-${selection.selection}`}>
-                              <strong>{ticketSportLabel(selection.sport)}</strong>
-                              <span>{selection.selection}</span>
-                              <small>
-                                {selection.market} · {selection.event}
-                              </small>
-                              <b>{formatDisplayOdds(selection.odds)}</b>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
+                      {history ? (
+                        historyColumns.map((column) => {
+                          const historyColumnClass = `bets-history-column-${column.key}`;
+                          switch (column.key) {
+                            case 'dateTime':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} bets-history-date-time tabular`}
+                                >
+                                  {`${formatDisplayDate(row.bet.placedAt, { year: 'numeric', month: 'short', day: 'numeric' })} · ${placedTime(row.bet.placedAt)}`}
+                                </td>
+                              );
+                            case 'selection':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} bets-history-selection`}
+                                  title={selectionLabel(row.bet)}
+                                >
+                                  <div className="bets-history-selection-content">
+                                    {expandable ? (
+                                      <button
+                                        className="bets-history-expand"
+                                        type="button"
+                                        aria-label={`${expanded ? 'Hide' : 'Show'} the ${row.bet.selections.length} selections`}
+                                        aria-expanded={expanded}
+                                        onClick={() =>
+                                          setExpandedHistorySelections((current) => {
+                                            const next = new Set(current);
+                                            if (next.has(row.bet.id)) next.delete(row.bet.id);
+                                            else next.add(row.bet.id);
+                                            return next;
+                                          })
+                                        }
+                                      >
+                                        {expanded ? '⌄' : '›'}
+                                      </button>
+                                    ) : null}
+                                    <span>{selectionLabel(row.bet)}</span>
+                                  </div>
+                                </td>
+                              );
+                            case 'id':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} bets-history-id`}
+                                  title={`#${displayId}`}
+                                >
+                                  #{displayId}
+                                </td>
+                              );
+                            case 'bookmaker':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={historyColumnClass}
+                                  title={row.bookmaker}
+                                >
+                                  {row.bookmaker}
+                                </td>
+                              );
+                            case 'sport':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} bets-history-sport`}
+                                  title={sportsLabel(row.bet)}
+                                >
+                                  {sportsLabel(row.bet)}
+                                </td>
+                              );
+                            case 'betType':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={historyColumnClass}
+                                  title={typeTitleFor(row.bet)}
+                                >
+                                  {typeLabelFor(row.bet)}
+                                </td>
+                              );
+                            case 'tipster':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={historyColumnClass}
+                                  title={row.tipster}
+                                >
+                                  {row.tipster}
+                                </td>
+                              );
+                            case 'event':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} bets-history-event`}
+                                  title={row.details.event}
+                                >
+                                  {row.details.event}
+                                </td>
+                              );
+                            case 'stake':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} tabular`}
+                                  title={row.bet.stake ?? '—'}
+                                >
+                                  {hideAmounts
+                                    ? '••••'
+                                    : amountMode === 'money'
+                                      ? formatDisplayMoney(row.bet.stake)
+                                      : row.bet.stakeUnits === null
+                                        ? '—'
+                                        : `${Number(row.bet.stakeUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}U`}
+                                </td>
+                              );
+                            case 'odds':
+                              return (
+                                <td key={column.key} className={`${historyColumnClass} tabular`}>
+                                  {formatDisplayOdds(row.bet.odds)}
+                                </td>
+                              );
+                            case 'status':
+                              return (
+                                <td key={column.key} className={historyColumnClass}>
+                                  <span
+                                    className={`bets-reference-status is-${statusText(row.bet).toLowerCase().replace(/\s+/g, '-')}`}
+                                  >
+                                    {statusText(row.bet)}
+                                  </span>
+                                </td>
+                              );
+                            case 'result':
+                              return (
+                                <td
+                                  key={column.key}
+                                  className={`${historyColumnClass} tabular ${betFinancialDisplay(row.bet).tone}`}
+                                >
+                                  {hideAmounts
+                                    ? '••••'
+                                    : amountMode === 'money'
+                                      ? betFinancialDisplay(row.bet).profitText
+                                      : (() => {
+                                          const result = unitsValue(
+                                            row.bet.profit,
+                                            row.bet.unitAmount,
+                                          );
+                                          return result &&
+                                            result !== '—' &&
+                                            !result.startsWith('-') &&
+                                            row.bet.profit !== '0.00'
+                                            ? `+${result}`
+                                            : (result?.replace('-', '−') ?? '—');
+                                        })()}
+                                </td>
+                              );
+                          }
+                        })
+                      ) : (
+                        <>
+                          <td
+                            className={`bets-reference-sport is-${sportTag(row.bet).toLowerCase()}`}
+                          >
+                            {expandable ? (
+                              <button
+                                className="bets-history-expand"
+                                type="button"
+                                aria-label={`${expanded ? 'Hide' : 'Show'} the ${row.bet.selections.length} selections`}
+                                aria-expanded={expanded}
+                                onClick={() =>
+                                  setExpandedHistorySelections((current) => {
+                                    const next = new Set(current);
+                                    if (next.has(row.bet.id)) next.delete(row.bet.id);
+                                    else next.add(row.bet.id);
+                                    return next;
+                                  })
+                                }
+                              >
+                                {expanded ? '⌄' : '›'}
+                              </button>
+                            ) : null}
+                            <span>{sportTag(row.bet)}</span>
+                          </td>
+                          <td className="bets-reference-selection">
+                            <button
+                              className="bets-row-open"
+                              type="button"
+                              onClick={() => open({ kind: 'detail', id: row.bet.id })}
+                            >
+                              {row.bet.ticketKind === 'multiple' && row.bet.selections.length > 1
+                                ? `Parlay · ${row.bet.selections.length} legs`
+                                : row.details.selection}
+                            </button>
+                            <small>
+                              {row.details.event.trim()}
+                              {eventDateLabel ? ` · ${eventDateLabel}` : ''}
+                            </small>
+                          </td>
+                          <td className="tabular">{formatDisplayOdds(row.bet.odds)}</td>
+                          <td className="tabular">
+                            {hideAmounts
+                              ? '••••'
+                              : amountMode === 'money'
+                                ? formatDisplayMoney(row.bet.stake)
+                                : row.bet.stakeUnits === null
+                                  ? '—'
+                                  : `${Number(row.bet.stakeUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}U`}
+                          </td>
+                          <td>
+                            <span
+                              className={`bets-reference-status is-${statusText(row.bet).toLowerCase().replace(/\s+/g, '-')}`}
+                            >
+                              {statusText(row.bet)}
+                            </span>
+                          </td>
+                          <td className={`tabular ${betFinancialDisplay(row.bet).tone}`}>
+                            {hideAmounts
+                              ? '••••'
+                              : amountMode === 'money'
+                                ? betFinancialDisplay(row.bet).profitText
+                                : (() => {
+                                    const result = unitsValue(row.bet.profit, row.bet.unitAmount);
+                                    return result &&
+                                      result !== '—' &&
+                                      !result.startsWith('-') &&
+                                      row.bet.profit !== '0.00'
+                                      ? `+${result}`
+                                      : (result?.replace('-', '−') ?? '—');
+                                  })()}
+                          </td>
+                        </>
+                      )}
                     </tr>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    {expandable && expanded ? (
+                      <tr
+                        className="bets-history-selections-row"
+                        data-sport={sportTag(row.bet).toLowerCase()}
+                      >
+                        <td colSpan={history ? historyColumns.length : 6}>
+                          <div className="bets-history-selections">
+                            {row.bet.selections.map((selection) => (
+                              <div key={selection.id ?? `${row.bet.id}-${selection.selection}`}>
+                                <strong>{ticketSportLabel(selection.sport)}</strong>
+                                <span>{selection.selection}</span>
+                                <small>
+                                  {selection.market} · {selection.event}
+                                </small>
+                                <b>{formatDisplayOdds(selection.odds)}</b>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       );
     };
     return (
@@ -2235,7 +2284,12 @@ export function BetsPage({
                                   : columnClassNames[column.key]
                               }
                             >
-                              <BetTableCell row={row} column={column.key} amountMode={amountMode} hideAmounts={hideAmounts} />
+                              <BetTableCell
+                                row={row}
+                                column={column.key}
+                                amountMode={amountMode}
+                                hideAmounts={hideAmounts}
+                              />
                             </td>
                           ))}
                           <td data-column="open" className="bet-actions-cell">
@@ -2535,6 +2589,16 @@ export function BetTrackBetDetailPage({
       : bet.ticketKind === 'betbuild'
         ? 'BET BUILDER'
         : 'STRAIGHT';
+  const potentialWinReturn =
+    bet.state === 'open' && bet.remaining !== null && bet.odds
+      ? suggestedReturn(
+          bet.remaining,
+          bet.odds,
+          'win',
+          !!bet.freebetId,
+          bet.freebetStakeReturned ?? false,
+        )
+      : null;
   const potentialProfit =
     bet.state === 'open' && bet.stake && bet.odds
       ? (Number(bet.stake) * (Number(bet.odds) - 1)).toFixed(2)
@@ -2765,13 +2829,7 @@ export function BetTrackBetDetailPage({
               <div>
                 <small>{bet.state === 'open' ? 'TO WIN' : 'PAID'}</small>
                 <strong>
-                  {displayAmount(
-                    bet.state === 'open'
-                      ? bet.stake && bet.odds
-                        ? (Number(bet.stake) * Number(bet.odds)).toFixed(2)
-                        : null
-                      : bet.returnAmount,
-                  )}
+                  {displayAmount(bet.state === 'open' ? potentialWinReturn : bet.returnAmount)}
                 </strong>
               </div>
             </div>
@@ -2796,7 +2854,9 @@ export function BetTrackBetDetailPage({
                 disabled={actions.busy || !!actions.pending}
                 onClick={() => open({ kind: 'settle', bet })}
               >
-                <span className="bettrack-settle-icon" aria-hidden="true">⇄</span>
+                <span className="bettrack-settle-icon" aria-hidden="true">
+                  ⇄
+                </span>
                 <strong>LIQUIDAR APOSTA</strong>
                 <small>Registre uma liquidação parcial ou integral</small>
               </button>
@@ -2808,14 +2868,7 @@ export function BetTrackBetDetailPage({
               >
                 <span className="bettrack-settle-icon">✓</span>
                 <strong>WON</strong>
-                <small>
-                  Pays{' '}
-                  {displayAmount(
-                    bet.stake && bet.odds
-                      ? (Number(bet.stake) * Number(bet.odds)).toFixed(2)
-                      : null,
-                  )}
-                </small>
+                <small>Pays {displayAmount(potentialWinReturn)}</small>
               </button>
               <button
                 type="button"

@@ -457,6 +457,61 @@ for (const scenario of [
     }
   });
 }
+const payoutPreviewCases: { name: string; overrides: Partial<Bet>; expected: string }[] = [
+  {
+    name: 'rounds exact half cents upward',
+    overrides: { stake: '0.01', remaining: '0.01', odds: '1.50' },
+    expected: 'R$ 0,02',
+  },
+  {
+    name: 'uses remaining principal after a partial cashout',
+    overrides: { stake: '100.00', remaining: '40.00', odds: '2.00' },
+    expected: 'R$ 80,00',
+  },
+  {
+    name: 'excludes freebet principal when it is not returned',
+    overrides: {
+      stake: '1.00',
+      remaining: '1.00',
+      odds: '2.00',
+      freebetId: '10000000-0000-4000-8000-00000000000b',
+      freebetStakeReturned: false,
+    },
+    expected: 'R$ 1,00',
+  },
+  {
+    name: 'honors a returned promotional stake',
+    overrides: {
+      stake: '1.00',
+      remaining: '1.00',
+      odds: '2.00',
+      freebetId: '10000000-0000-4000-8000-00000000000b',
+      freebetStakeReturned: true,
+    },
+    expected: 'R$ 2,00',
+  },
+];
+
+for (const scenario of payoutPreviewCases) {
+  test(`BetTrack payout preview matches settlement inputs: ${scenario.name}`, async ({ page }) => {
+    const sample = todayBet({ ...scenario.overrides, state: 'open', latestOutcome: null });
+    await enabledProduct(page, fixture(), [], sample);
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'bettrack.preview.preferences',
+        JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+      );
+      sessionStorage.setItem('bettrack:bet-edit-amount-mode', 'money');
+    });
+    await page.goto('/#bets/' + sample.id);
+    await expect(page).toHaveURL(new RegExp('#bets/' + sample.id + '$'));
+    await expect(
+      page.locator('.bettrack-detail-ticket-values > div').nth(1).locator('strong'),
+    ).toHaveText(scenario.expected);
+    await expect(page.locator('.bettrack-settle-card .is-won')).toContainText(scenario.expected);
+  });
+}
+
 test('bets page exposes game, market, ticket kind and result details responsively', async ({
   page,
 }, info) => {
@@ -798,8 +853,10 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toBeVisible();
 
+  const requestsBeforeRemovingChip = historyRequests.length;
   await page.getByRole('button', { name: 'Remover filtro de busca Aurora' }).click();
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  expect(historyRequests).toHaveLength(requestsBeforeRemovingChip);
   await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
     '',
@@ -809,8 +866,10 @@ test('bet-history filters stay as drafts until applied and active chips can be r
   await page.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Central');
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
+  const requestsBeforeClearingFilters = historyRequests.length;
   await page.getByRole('button', { name: 'Limpar filtros' }).click();
   await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  expect(historyRequests).toHaveLength(requestsBeforeClearingFilters);
   await expect(page.getByRole('button', { name: /Remover filtro de busca/ })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
     '',
@@ -958,9 +1017,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('group', { name: /Filtrar histórico por resultado/i })).toBeVisible();
   if ((page.viewportSize()?.width ?? 0) <= 900) {
-    const currentCard = page.locator(
-      '.bettrack-ticket-card[href="#bets/' + currentBet.id + '"]',
-    );
+    const currentCard = page.locator('.bettrack-ticket-card[href="#bets/' + currentBet.id + '"]');
     await expect(currentCard).toBeVisible();
     await currentCard.click();
   } else {
@@ -1650,6 +1707,12 @@ function calendarItem(): CalendarItem {
     scheduleStatus: 'scheduled',
   };
 }
+function calendarDetailBet(): Bet {
+  return {
+    ...bet,
+    selections: bet.selections.map((selection) => ({ ...selection, id: selectionId })),
+  };
+}
 async function eventRoutes(
   page: Page,
   item = calendarItem(),
@@ -1721,7 +1784,7 @@ async function eventRoutes(
 test('calendar distinguishes selections from bets and saves a partial date without inventing a time', async ({
   page,
 }, info) => {
-  await enabledProduct(page);
+  await enabledProduct(page, fixture(), [], calendarDetailBet());
   await eventRoutes(page);
   const commands: Record<string, unknown>[] = [];
   await page.route('**/api/v1/commands', (route) => {
@@ -1795,7 +1858,7 @@ test('source results preserve a manual date until explicitly selected and review
       },
     ],
   };
-  await enabledProduct(page);
+  await enabledProduct(page, fixture(), [], calendarDetailBet());
   await eventRoutes(page, item, [search]);
   const commands: Record<string, unknown>[] = [];
   await page.route('**/api/v1/commands', (route) => {
@@ -1838,7 +1901,7 @@ test('an uncertain event search reuses its key and input after reloading without
   page,
 }) => {
   const item = calendarItem();
-  await enabledProduct(page);
+  await enabledProduct(page, fixture(), [], calendarDetailBet());
   await eventRoutes(page, item, [], true);
   const attempts: { key: string | undefined; body: unknown }[] = [];
   await page.route('**/api/v1/event-search', async (route) => {
