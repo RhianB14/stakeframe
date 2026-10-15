@@ -1,43 +1,43 @@
 {
   "version": 1,
-  "authorization": "Rhian authorized production deployment of 0.1.0-beta.14 using the published ARM64 candidate-images run 37744276693 from main f711452e1cba25b3361bbb5b73f888c2292edc95. Beta14 adds no migrations. Production deployment remains manual by digest according to docs/deploy/promotion-runbook.md.",
-  "sourceSha": "f711452e1cba25b3361bbb5b73f888c2292edc95",
-  "sourceCiRunId": 37742669065,
-  "candidateRunId": 37744276693,
+  "authorization": "Rhian authorized public GHCR publication of the exact beta14 ARM64 candidate built from source ea7f04f88a840b3303100e332e6c49fc3c2d4859, source CI run 38747648700, and Release candidate run 38749456655. This approval covers only these five image digests and does not authorize production deployment, migration, network changes, or release v1.0.0. No database migrations are planned for this PR. Deployment remains a separate manual, digest-pinned gate per docs/deploy/promotion-runbook.md.",
+  "sourceSha": "ea7f04f88a840b3303100e332e6c49fc3c2d4859",
+  "sourceCiRunId": 38747648700,
+  "candidateRunId": 38749456655,
   "architecture": "arm64",
   "visibility": "public",
   "artifact": {
-    "id": 11534804747,
-    "name": "candidate-f711452e1cba25b3361bbb5b73f888c2292edc95-arm64",
-    "bytes": 586584821,
-    "sha256": "748701d6ca76a2b2a7715fb5ab9e56f0c8ca6309b42521687352d03972382f17",
-    "expiresAt": "2026-10-09T07:37:30Z"
+    "id": 11980751263,
+    "name": "candidate-ea7f04f88a840b3303100e332e6c49fc3c2d4859-arm64",
+    "bytes": 586652397,
+    "sha256": "6e7ab6c1422a1dff49916d4401d0ad4ca0f00bff23b29e76c7368cc9cf91c3a3",
+    "expiresAt": "2026-10-16T14:15:24Z"
   },
   "images": [
     {
       "target": "api",
       "repository": "ghcr.io/rhianb14/stakeframe-api",
-      "digest": "sha256:9d0a3e0622c9b0b3e8cfa11c368903544869a24f03009cd0a7f8c62d44e633c3"
+      "digest": "sha256:095ee2ade4c488e90004cfe0eafc657c17a0639563252bb7b9670ff9b0367bd8"
     },
     {
       "target": "worker",
       "repository": "ghcr.io/rhianb14/stakeframe-worker",
-      "digest": "sha256:9eef957e0b50c9be60f8564ac336dd94a7bff14748d0ae022407d322c213c509"
+      "digest": "sha256:52f21c4bb6bc25ba2531a5c6960d568cafc7066930f87ff4a0cd9e529de3ab36"
     },
     {
       "target": "migrate",
       "repository": "ghcr.io/rhianb14/stakeframe-migrate",
-      "digest": "sha256:cff835b7559776d4c04d168826f6c622e142fc66b92b73b28b60f836bc0a0328"
+      "digest": "sha256:700e79a595668c693312d944aef6ca05357b928fde4462de5389e445e31b92db"
     },
     {
       "target": "web-production",
       "repository": "ghcr.io/rhianb14/stakeframe-web-production",
-      "digest": "sha256:833474b582b7de700b1f8ebbf09af7867ebf3e99727588706919a4954e42d8cc"
+      "digest": "sha256:954ae811bd7ef6021e5e064879bef80e166a5ca317c26b87dbea18e5334949b8"
     },
     {
       "target": "operations",
       "repository": "ghcr.io/rhianb14/stakeframe-operations",
-      "digest": "sha256:8d33e9e981bd162e38b20b4146921acc8b072aaf7a54bff67e8fe1d7814bcc5a"
+      "digest": "sha256:f4baedb038a25982930b08b174f860a52c1986629ac87e5ab1eefebec57848dd"
     }
   ]
 }
