@@ -12,11 +12,11 @@ import {
   cents,
   money,
   normalizeDecimalInput,
-  saoPauloDate,
   type TicketKind,
   type FinanceCommand,
 } from '@stakeframe/shared';
 import { miniAppHeaders } from './miniapp-session.js';
+import { displayDateInTimeZone, displayLocale, displayTimeZone } from './preferences.js';
 
 export type CommandInput = FinanceCommand extends infer C
   ? C extends FinanceCommand
@@ -366,40 +366,83 @@ export function decimalInputOdds(value: string) {
 export function localNow() {
   const date = new Date();
   const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Sao_Paulo',
+    timeZone: displayTimeZone(),
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hourCycle: 'h23',
   }).format(date);
-  return `${saoPauloDate(date)}T${parts}`;
+  return `${displayDateInTimeZone(date)}T${parts}`;
+}
+export function localDateTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: displayTimeZone(),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}`;
 }
 export function localInstant(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value))
     throw new Error('Informe uma data e hora válidas.');
-  const matches = ['-03:00', '-02:00']
-    .map((offset) => new Date(`${value}${value.length === 16 ? ':00' : ''}${offset}`))
-    .filter((date) => {
-      if (!Number.isFinite(date.getTime()) || saoPauloDate(date) !== value.slice(0, 10))
-        return false;
-      const time = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'America/Sao_Paulo',
-        hour: '2-digit',
-        minute: '2-digit',
-        ...(value.length === 19 ? { second: '2-digit' as const } : {}),
-        hourCycle: 'h23',
-      }).format(date);
-      return time === value.slice(11);
-    });
-  if (matches.length !== 1)
+  const normalized = value.length === 16 ? `${value}:00` : value;
+  const [datePart, timePart] = normalized.split('T') as [string, string];
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute, second] = timePart.split(':').map(Number);
+  const target = Date.UTC(year!, month! - 1, day!, hour!, minute!, second!);
+  const timezone = displayTimeZone();
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const toLocalValue = (instant: Date) => {
+    const parts = formatter.formatToParts(instant);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((item) => item.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}`;
+  };
+  const matches = new Set<number>();
+  for (let hours = -36; hours <= 36; hours += 6) {
+    const sample = target + hours * 3_600_000;
+    const parts = formatter.formatToParts(new Date(sample));
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      Number(parts.find((item) => item.type === type)?.value ?? 0);
+    const localAsUtc = Date.UTC(
+      part('year'),
+      part('month') - 1,
+      part('day'),
+      part('hour'),
+      part('minute'),
+      part('second'),
+    );
+    const candidate = target - (localAsUtc - sample);
+    if (toLocalValue(new Date(candidate)) === normalized) matches.add(candidate);
+  }
+  const candidates = [...matches];
+  if (candidates.length !== 1)
     throw new Error(
       'Este horário é ambíguo ou não existiu na mudança de fuso. Confira o horário original.',
     );
-  return matches[0]!.toISOString();
+  return new Date(candidates[0]!).toISOString();
 }
 export const dateLabel = (value: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
+  new Intl.DateTimeFormat(displayLocale(), {
+    timeZone: displayTimeZone(),
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(new Date(value));

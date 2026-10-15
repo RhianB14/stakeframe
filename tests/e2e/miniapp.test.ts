@@ -295,7 +295,7 @@ test('a escrita financeira do Mini App exige confirmação e usa o comando canô
   await dialog.getByRole('button', { name: /Simples/ }).click();
   await dialog.getByRole('button', { name: 'Continuar para seleções' }).click();
   await dialog.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
-  await dialog.getByLabel('Mercado 1', { exact: true }).fill('Resultado');
+  await dialog.getByLabel('Tipo de aposta 1', { exact: true }).fill('Resultado');
   await dialog.getByLabel('Palpite 1', { exact: true }).fill('Time A');
   await dialog.getByRole('button', { name: 'Continuar para valor' }).click();
   await dialog
@@ -318,7 +318,7 @@ test('a escrita financeira do Mini App exige confirmação e usa o comando canô
   await again.getByRole('button', { name: 'Continuar para seleções' }).click();
   // Seleção 1 é obrigatória: evento, mercado e palpite.
   await again.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
-  await again.getByLabel('Mercado 1', { exact: true }).fill('Resultado');
+  await again.getByLabel('Tipo de aposta 1', { exact: true }).fill('Resultado');
   await again.getByLabel('Palpite 1', { exact: true }).fill('Time A');
   await again.getByRole('button', { name: 'Continuar para valor' }).click();
   await again

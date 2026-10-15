@@ -124,6 +124,9 @@ async function enableOnboarding(
     consentRequired?: boolean;
   } = {},
 ): Promise<Harness> {
+  await page.addInitScript(() => {
+    localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language: 'pt-BR' }));
+  });
   const workspace = options.workspace ?? emptyWorkspace();
   const onboarding = options.onboarding ?? pendingOnboarding();
   const harness: Harness = {
@@ -252,7 +255,7 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
 
   // Step 2 — first house, then the explicit balance confirmation (reuses the existing flows).
   await page.getByRole('button', { name: 'Adicionar casa' }).click();
-  await page.getByLabel('Nome', { exact: true }).fill('Bet365');
+  await page.getByLabel('Nome da casa', { exact: true }).fill('Bet365');
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.getByLabel('Bet365 (R$)', { exact: true })).toBeVisible();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('500,00');
@@ -288,25 +291,36 @@ test('first steps: profile, first bankroll (new house) and first manual bet surv
 
   // Step 3 — first manual bet through the existing form.
   await page.getByRole('button', { name: 'Registrar aposta manual' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Nova aposta');
+  await expect(page).toHaveURL(/#bets\/new$/);
+  await expect(page.getByRole('heading', { name: 'Nova aposta', exact: true })).toBeVisible();
   // O formulário foi convertido em wizard: primeiro se escolhe o tipo, depois
   // são informadas as seleções obrigatórias, e só então aparecem valor e casa.
   await page.getByRole('button', { name: /Simples/ }).click();
-  await page.getByRole('button', { name: 'Continuar para seleções' }).click();
-  await page.getByLabel('Evento 1', { exact: true }).fill('Time A × Time B');
-  await page.getByLabel('Mercado 1', { exact: true }).fill('Gols');
-  await page.getByLabel('Palpite 1', { exact: true }).fill('Mais de 2,5');
-  await page.getByRole('button', { name: 'Continuar para valor' }).click();
-  await page.getByLabel('Casa de aposta').selectOption({ label: 'Bet365' });
-  await page.getByLabel('Valor apostado (R$)').fill('100,00');
-  await page.getByLabel('Odd total').fill('1,85');
-  await page.getByRole('button', { name: 'Registrar aposta' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByLabel('Evento', { exact: true }).fill('Time A × Time B');
+  await page.getByLabel('Tipo de aposta', { exact: true }).fill('Gols');
+  await page.getByLabel('Seleção', { exact: true }).fill('Mais de 2,5');
+  await page.getByLabel('Odds', { exact: true }).fill('1,85');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByLabel('Casa de apostas', { exact: true }).selectOption({ label: 'Bet365' });
+  await page.getByLabel('Valor', { exact: true }).fill('100,00');
+  await page.getByRole('button', { name: 'SAVE BET' }).click();
+  // The form is a routed page, not a dialog; wait for the command response and its onDone navigation.
+  await expect(page).toHaveURL(/#bets$/);
+  expect(
+    harness.commands.filter((item) => (item as { type?: string }).type === 'bet.create'),
+  ).toHaveLength(1);
+
+  // The onboarding confirmation is shown after returning to its overview route.
+  await page.getByRole('link', { name: 'StakeFrame, visão geral', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
+  await expect(page.getByText('Primeira aposta registrada')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await expect(page.getByText('Primeira aposta registrada')).toBeVisible();
 
   // Finish explicitly and land on the regular overview.
   await page.getByRole('button', { name: 'Concluir primeiros passos' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await noHorizontalOverflow(page);
   expect(harness.finishChoices).toEqual(['registered']);
 });
@@ -322,7 +336,7 @@ test('concluding without a bet requires the explicit deferral choice', async ({ 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
   expect(harness.onboarding.steps.firstBet).toEqual({
     completed: true,
@@ -435,7 +449,7 @@ test('a finished onboarding opens the regular overview without the first-steps f
   workspace.initialized = true;
   await enableOnboarding(page, { onboarding: finishedOnboarding(), workspace });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Primeiros passos' })).toHaveCount(0);
 });
 
@@ -498,15 +512,15 @@ test('the Telegram step issues a single-use deep link and confirms it on the sit
   expect(harness.finishPosts).toHaveLength(0);
 
   // Confirming on the site is what links the account; the Telegram account
-  // itself is never chosen in the browser. The Settings panel is the
+  // itself is never chosen in the browser. The Telegram destination is the
   // always-available surface for the same operation.
-  await page.goto('/#settings');
+  await page.goto('/#pm-telegram');
   // Chega pelo deep link como o Telegram abriria: UMA navegação. Atribuir
   // `location.search` dentro de evaluate TAMBÉM navega, e essa navegação ainda
   // estava no ar quando o `page.goto` seguinte começou — as duas disputam a
   // mesma URL e a segunda aborta a primeira (net::ERR_ABORTED / "interrupted
   // by another navigation"). O destino final é idêntico; o evaluate, não.
-  await page.goto('/?telegram=fixture-token-value-000000#settings');
+  await page.goto('/?telegram=fixture-token-value-000000#pm-telegram');
   await expect(page.getByRole('button', { name: 'Confirmar vínculo' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar vínculo' }).click();
   await expect(page.getByText(/Conta do Telegram conectada/)).toBeVisible();
@@ -563,7 +577,7 @@ test('the onboarding is fully operable by keyboard with visible focus', async ({
   await add.focus();
   await add.press('Enter');
   await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByLabel('Nome', { exact: true }).fill('Bet365');
+  await page.getByLabel('Nome da casa', { exact: true }).fill('Bet365');
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.getByLabel('Bet365 (R$)', { exact: true })).toBeVisible();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('400,00');
@@ -575,7 +589,7 @@ test('the onboarding is fully operable by keyboard with visible focus', async ({
   const defer = page.getByRole('button', { name: 'Continuar sem registrar aposta' });
   await defer.focus();
   await defer.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
 });
 
@@ -637,10 +651,10 @@ test('a finish failure keeps the step open, is announced and offers an explicit 
   await expect(page.getByRole('heading', { name: 'Sua primeira aposta' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar sem registrar aposta' }).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível concluir a solicitação.');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toHaveCount(0);
   failing = false;
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   expect(harness.finishChoices).toEqual(['deferred']);
 });
 

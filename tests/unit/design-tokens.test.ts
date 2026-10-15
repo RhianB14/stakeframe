@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // STK-F2-18 (PR-1) — o mesmo medidor que o E2E usa, importado uma vez.
 import {
@@ -23,7 +24,17 @@ const read = (relative: string) =>
 const tokensCss = read('../../apps/web/src/product/tokens.css');
 const productCss = read('../../apps/web/src/product/product.css');
 const styleCss = read('../../apps/web/src/style.css');
+const uiSourceRoot = fileURLToPath(new URL('../../apps/web/src', import.meta.url));
+
+function uiStyleFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return uiStyleFiles(path);
+    return /\.(?:css|tsx)$/.test(entry.name) ? [path] : [];
+  });
+}
 const productApp = read('../../apps/web/src/product/ProductApp.tsx');
+const appShell = read('../../apps/web/src/product/app-shell.tsx');
 
 /**
  * STK-F2-18 (Fase 4) — os arquivos JSX da Fase 4 entram na guarda.
@@ -120,6 +131,18 @@ const SKIN_PALETTE = new Set([
   '#04b5d1',
   '#17b8a6',
   '#8bc927',
+  '#0d0d0d',
+  '#191919',
+  '#222222',
+  '#333333',
+  '#535353',
+  '#f2f2f0',
+  '#ecece8',
+  '#a4a4a4',
+  '#ff7900',
+  '#c5f639',
+  '#141509',
+  '#e85c6e',
 ]);
 
 /**
@@ -421,21 +444,92 @@ describe('camada de tokens (STK-F2-18)', () => {
     expect(fromOklch).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('nenhum font-size abaixo de 12px em product.css', () => {
-    /* STK-F2-18 (PR-2): este teste validava 11,5px e PASSAVA, enquanto o E2E
-       exigia 12px na linha 648 e REPROVAVA. Duas suítes discordando do mesmo
-       número não estabelecem um piso — uma delas só herdou a fonte errada.
-       O piso real é 12px, e agora as duas medem o mesmo.
+  it('all web UI text and chart labels respect the D3 12px floor', () => {
+    const files = uiStyleFiles(uiSourceRoot).map((path) => ({
+      path,
+      source: readFileSync(path, 'utf8').replace(/\r\n/g, '\n'),
+    }));
+    const fontTokens = new Map<string, string>();
+    for (const file of files.filter(({ path }) => path.endsWith('.css'))) {
+      for (const match of file.source.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
+        fontTokens.set(match[1]!, match[2]!.trim());
+      }
+    }
 
-       Este é o teste de fundo da correção: enquanto ele disser 11,5 ele
-       continued legitimando exatamente o valor que o E2E reprovava. */
-    const sizes = [...(productCss.match(/font-size:\s*[\d.]+px/g) ?? [])]
-      .map((m) => Number(m[1]))
-      .filter((v) => v < 12);
-    expect(sizes, `font-size abaixo do piso: ${sizes.join(', ')}px`).toEqual([]);
-    // E o token que era o culpado: ele LEGITIMAVA o valor que o E2E reprovava.
-    expect(tokensCss).toMatch(/--text-xs:\s*12px/);
-    expect(tokensCss).not.toMatch(/--text-xs:\s*11\.5px/);
+    const pixels = (value: string, depth = 0): number | undefined => {
+      if (depth > 5) return undefined;
+      const normalized = value.trim().replace(/\s*!important\s*$/i, '');
+      if (/^(?:inherit|initial|unset)$/i.test(normalized)) return 12;
+      const token = /^var\(--([\w-]+)(?:\s*,\s*([^)]*))?\)$/.exec(normalized);
+      if (token) {
+        const resolved = fontTokens.get(token[1]!) ?? token[2];
+        return resolved ? pixels(resolved, depth + 1) : undefined;
+      }
+      const clamp = /^clamp\(([^,]+)/.exec(normalized);
+      const candidate = clamp?.[1]?.trim() ?? normalized;
+      const size = /^([\d.]+)(px|rem|em|pt)?$/.exec(candidate);
+      if (!size) return undefined;
+      const amount = Number(size[1]);
+      if (size[2] === 'px') return amount;
+      if (size[2] === 'rem') return amount * 16;
+      if (size[2] === 'em') return amount * 12;
+      if (size[2] === 'pt') return amount * (4 / 3);
+      return amount;
+    };
+
+    const undersized: string[] = [];
+    const unresolved: string[] = [];
+    for (const file of files) {
+      const css = file.path.endsWith('.css');
+      file.source.split('\n').forEach((line, index) => {
+        const declarations = css
+          ? [...line.matchAll(/font-size\s*:\s*([^;]+);?/gi)].map((match) => match[1]!.trim())
+          : [
+              ...line.matchAll(/fontSize\s*=\s*\{\s*([^}]+)\s*\}/g),
+              ...line.matchAll(/fontSize\s*:\s*([^,;}]+)/g),
+            ].map((match) => match[1]!.trim());
+        for (const declaration of declarations) {
+          const size = pixels(declaration);
+          const location = `${file.path}:${index + 1} ${declaration}`;
+          if (size === undefined) unresolved.push(location);
+          else if (size < 12) undersized.push(`${location} (${size}px)`);
+        }
+      });
+    }
+
+    // The sole exception is the collapsed sidebar's icon-only new-bet CTA:
+    // the semantic button label remains in the DOM, while a visible 18px `+`
+    // pseudo-element is its only rendered glyph at that breakpoint.
+    const hiddenText = undersized.filter((entry) => /\(0px\)$/.test(entry));
+    const hasAccessibleCollapsedPlus =
+      hiddenText.length === 1 &&
+      appShell.includes('+ NEW BET') &&
+      /\.product-web-theme\s+\.product-sidebar\[data-mode=['"]collapsed['"]\]\s+\.product-new-bet,[\s\S]*?\.product-new-bet\s*\{[^}]*font-size:\s*0\s*;[^}]*\}/.test(
+        productCss,
+      ) &&
+      /\.product-web-theme\s+\.product-sidebar\[data-mode=['"]collapsed['"]\]\s+\.product-new-bet::before,[\s\S]*?\.product-new-bet::before\s*\{[^}]*content:\s*['"]\+['"];[^}]*font-size:\s*18px;/.test(
+        productCss,
+      );
+    const violations = undersized.filter((entry) => !hiddenText.includes(entry));
+    if (hiddenText.length > 0) expect(hasAccessibleCollapsedPlus).toBe(true);
+    expect(unresolved, `font-size sem valor verificável: ${unresolved.join(', ')}`).toEqual([]);
+    expect(violations, `font-size abaixo do piso: ${violations.join(', ')}`).toEqual([]);
+  });
+
+  it('history filter controls keep a 44px touch target', () => {
+    const controls = rulePairs(productCss).filter(({ selector }) =>
+      /\.bets-history-(?:columns-popover\s*>\s*button|apply|clear|chip)(?:[:.#\s>]|$)/.test(
+        selector,
+      ),
+    );
+    expect(controls.length).toBeGreaterThan(0);
+
+    for (const control of ['.bets-history-apply', '.bets-history-chip']) {
+      const rule = controls.find(({ selector }) => selector.includes(control));
+      expect(rule, `regra ausente para ${control}`).toBeDefined();
+      const height = /min-height:\s*([\d.]+)px/.exec(rule?.body ?? '')?.[1];
+      expect(Number(height), `${control} min-height`).toBeGreaterThanOrEqual(44);
+    }
   });
 
   it('nenhum par fundo/texto que se apaga: mesma cor nos dois lados', () => {
@@ -532,7 +626,10 @@ describe('camada de tokens (STK-F2-18)', () => {
        de 14 colunas. */
     const offenders: string[] = [];
     for (const { selector, body } of rulePairs(productCss)) {
-      if (!/^[^@]*(button|\.ui-button|nav a|summary|\.chip|\.tab)/.test(selector)) continue;
+      if (
+        !/^[^@]*(button|\.ui-button|nav a|summary|\.chip|\.tab|\.bets-history-chip)/.test(selector)
+      )
+        continue;
       const height = /min-height:\s*([\d.]+)px/.exec(body)?.[1];
       if (height !== undefined && Number(height) < 44) {
         offenders.push(`${selector.trim()} min-height: ${height}px`);
@@ -605,7 +702,7 @@ describe('casca do produto (STK-F2-18)', () => {
     expect(productApp).toContain('href="#product-main"');
     expect(productApp).toMatch(/id="product-main"/);
     // O alvo precisa ser focável por script, senão o foco some nele.
-    expect(productApp).toMatch(/id="product-main" tabIndex=\{-1\}/);
+    expect(productApp).toMatch(/id="product-main"\s+tabIndex=\{-1\}/);
   });
 
   it('a navegação declara os três estados de interação', () => {
@@ -627,15 +724,24 @@ describe('casca do produto (STK-F2-18)', () => {
     for (const id of used) {
       expect(declared, `Page não declara '${id}'`).toContain(id);
     }
-    // `sidebarGroups` é a OUTRA fonte de verdade da navegação (as categorias da
-    // sidebar) e nasceu sem teste: um id inexistente ali só apareceria em runtime.
-    const grouped = quoted(
-      productApp,
-      /const sidebarGroups = \[([\s\S]*?)\] as const/,
-      /'([a-z-]+)'/g,
-    );
-    for (const id of grouped) {
-      expect(declared, `Page não declara '${id}' (sidebarGroups)`).toContain(id);
+    // Confere também as rotas que o shell exibe, incluindo destinos não
+    // incluídos na navegação plana usada pelo resolvedor de hash.
+    const shellRoutes = [
+      'overview',
+      'bets',
+      'calendar',
+      'finance',
+      'analytics',
+      'hedge',
+      'settings',
+      'pm-global',
+      'pm-favorites',
+      'pm-telegram',
+      'pm-simulation',
+    ];
+    for (const id of shellRoutes) {
+      expect(declared, `Page não declara '${id}' (sidebar)`).toContain(id);
+      expect(appShell, `sidebar sem rota '${id}'`).toContain(`['${id}'`);
     }
     // `imports` é rota por hash e não aparece no menu — declarada, sem item.
     expect(declared).toContain('imports');

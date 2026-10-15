@@ -1,4 +1,5 @@
-import { formatReportBRL, type ReportMetrics } from '@stakeframe/shared';
+import type { ReportMetrics } from '@stakeframe/shared';
+import { formatDisplayMoney } from './preferences.js';
 
 /**
  * STK-F2-02 — apresentação do dashboard analítico (ROI, P&L, yield e N juntos).
@@ -39,10 +40,10 @@ export function dashboardCards(input: {
     {
       key: 'profit',
       label: 'P&L realizado',
-      value: formatReportBRL(metrics.profit),
+      value: formatDisplayMoney(metrics.profit),
       details: [
         ...context([
-          `Real ${formatReportBRL(metrics.realProfit)} · Freebets ${formatReportBRL(metrics.freebetProfit)}`,
+          `Real ${formatDisplayMoney(metrics.realProfit)} · Freebets ${formatDisplayMoney(metrics.freebetProfit)}`,
         ]),
         units(metrics.profitUnits),
         n,
@@ -54,7 +55,7 @@ export function dashboardCards(input: {
       value: percent(metrics.roiReal),
       details: [
         ...context([
-          `Sobre ${formatReportBRL(metrics.realPrincipalClosed)} de principal real liquidado`,
+          `Sobre ${formatDisplayMoney(metrics.realPrincipalClosed)} de principal real liquidado`,
         ]),
         n,
       ],
@@ -64,7 +65,7 @@ export function dashboardCards(input: {
       label: 'Yield real',
       value: percent(metrics.yieldReal),
       details: [
-        ...context([`Sobre ${formatReportBRL(metrics.realStake)} apostados em dinheiro real`]),
+        ...context([`Sobre ${formatDisplayMoney(metrics.realStake)} apostados em dinheiro real`]),
         n,
       ],
     },
@@ -80,13 +81,13 @@ export function dashboardCards(input: {
     {
       key: 'stake',
       label: 'Valor apostado real',
-      value: formatReportBRL(metrics.realStake),
+      value: formatDisplayMoney(metrics.realStake),
       details: [...context(['Dinheiro real no período']), n],
     },
     {
       key: 'exposure',
       label: 'Exposição atual do período',
-      value: formatReportBRL(metrics.exposure),
+      value: formatDisplayMoney(metrics.exposure),
       details: [...context(['Principal real ainda aberto nas apostas deste filtro']), n],
     },
   ];

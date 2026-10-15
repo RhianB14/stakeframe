@@ -6,8 +6,9 @@ import {
   telegramLinkStatusSchema,
   type TelegramLinkStatus,
 } from '@stakeframe/shared';
-import { request, ApiFailure } from './api.js';
+import { request, ApiFailure, dateLabel } from './api.js';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 
 /**
  * Vínculo com a conta do Telegram (STK-F2-04).
@@ -130,9 +131,15 @@ export function TelegramLinkPanel() {
       </div>
       <TelegramLinkState status={status.data} />
       {status.isError ? (
-        <p role="alert" className="form-error">
-          Não foi possível consultar sua conta do Telegram.
-        </p>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível consultar sua conta do Telegram.</p>
+            <Button variant="secondary" onClick={() => void status.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
       ) : null}
       {notice ? (
         <p className="notice" role="status">
@@ -189,7 +196,7 @@ function TelegramLinkState({ status }: { status: TelegramLinkStatus | undefined 
     return (
       <p className="notice" role="status">
         Conta do Telegram conectada
-        {status.linkedAt ? ` em ${new Date(status.linkedAt).toLocaleString('pt-BR')}` : ''}.
+        {status.linkedAt ? ` em ${dateLabel(status.linkedAt)}` : ''}.
       </p>
     );
   return (

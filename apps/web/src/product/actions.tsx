@@ -140,12 +140,16 @@ export function CommandForm({
   onDone,
   submitLabel = 'Salvar',
   onAdvance,
+  className,
+  footer,
 }: {
   children: ReactNode;
   onSubmit: () => CommandInput;
   onDone: () => void;
   submitLabel?: string;
   onAdvance?: () => void;
+  className?: string;
+  footer?: ReactNode;
 }) {
   const actions = useFinanceActions();
   const [validation, setValidation] = useState<string | null>(null);
@@ -173,7 +177,7 @@ export function CommandForm({
   };
   return (
     <form
-      className="product-form"
+      className={`product-form${className ? ` ${className}` : ''}`}
       onSubmit={(event) => {
         void submit(event);
       }}
@@ -185,24 +189,28 @@ export function CommandForm({
         </p>
       ) : null}
       <div className="form-actions">
-        <Button variant="secondary" onClick={onDone}>
-          Fechar
-        </Button>
-        {actions.pending && !actions.busy ? (
-          <Button
-            onClick={() => {
-              void actions
-                .recover()
-                .then(onDone)
-                .catch(() => undefined);
-            }}
-          >
-            Verificar operação
-          </Button>
-        ) : (
-          <Button type="submit" disabled={actions.busy}>
-            {actions.busy ? 'Salvando…' : submitLabel}
-          </Button>
+        {footer ?? (
+          <>
+            <Button variant="secondary" onClick={onDone}>
+              Fechar
+            </Button>
+            {actions.pending && !actions.busy ? (
+              <Button
+                onClick={() => {
+                  void actions
+                    .recover()
+                    .then(onDone)
+                    .catch(() => undefined);
+                }}
+              >
+                Verificar operação
+              </Button>
+            ) : (
+              <Button type="submit" disabled={actions.busy}>
+                {actions.busy ? 'Salvando…' : submitLabel}
+              </Button>
+            )}
+          </>
         )}
       </div>
     </form>

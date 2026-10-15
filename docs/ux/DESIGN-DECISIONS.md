@@ -192,7 +192,9 @@ dispositivos móveis, **não** o mínimo exigido pelo nível AA. Fontes:
 
 Bloqueios herdados de STK-G0-23 e preservados integralmente:
 
-- Fail-closed para valor, odd e campos sem comando canônico.
+- Fail-closed para importações sem comando canônico; a Web corrige valor e
+  odd de aposta aberta com histórico compensatório e bloqueia esses campos
+  depois de qualquer liquidação.
 - Confirmação financeira explícita antes de liquidação/estorno.
 - Fechamento do Mini App **somente** após sucesso integral.
 - Idempotência, isolamento por organização, controle de versão e auditoria.

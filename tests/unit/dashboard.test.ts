@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyticsDashboardSchema,
+  analyticsSnapshotDashboardSchema,
   reportMetricsSchema,
   type ReportMetrics,
 } from '../../packages/shared/src/index.js';
@@ -128,15 +129,40 @@ describe('dashboard payload (STK-F2-02)', () => {
       filters: { from: '2026-09-01', to: '2026-09-30', kind: 'all', includeEstimated: 'false' },
       minSample: 30,
       lowSample: true,
-      metrics: metrics({ bets: 2 }),
+      metrics: metrics({ bets: 2, settledBets: 2 }),
+      indicators: {
+        grossWinProfit: '10.00',
+        grossLossProfit: '5.00',
+        lossBets: 1,
+        underOneUnitBets: 2,
+        oneToThreeUnitBets: 0,
+        overThreeUnitBets: 0,
+        currentWinStreak: 0,
+        longestWinStreak: 1,
+        parlayStakeSharePct: '0.00',
+      },
     });
     expect(Object.keys(payload).sort()).toEqual(
-      ['filters', 'generatedAt', 'lowSample', 'metrics', 'minSample', 'version'].sort(),
+      [
+        'filters',
+        'generatedAt',
+        'lowSample',
+        'metrics',
+        'minSample',
+        'version',
+        'indicators',
+      ].sort(),
     );
     expect(payload.lowSample).toBe(true);
     expect(payload.minSample).toBe(30);
     expect(payload.metrics).toMatchObject({ bets: 2, roiReal: '14.29', yieldReal: '12.50' });
-    expect(payload.metrics.bets).toBeLessThan(payload.minSample);
+    expect(payload.metrics.settledBets).toBeLessThan(payload.minSample);
+    // Snapshots imutáveis pré-expansão não serializavam a chave indicators.
+    const legacyPayload = Object.fromEntries(
+      Object.entries(payload).filter(([key]) => key !== 'indicators'),
+    );
+    expect(analyticsSnapshotDashboardSchema.parse(legacyPayload).indicators).toBeUndefined();
+    expect(() => analyticsDashboardSchema.parse(legacyPayload)).toThrow();
     // unknown não é normalizado para zero pelo cliente nem pelo schema.
     const unknown = analyticsDashboardSchema.parse({
       ...payload,

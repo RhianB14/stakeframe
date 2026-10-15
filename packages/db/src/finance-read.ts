@@ -204,25 +204,156 @@ export async function readBets(client: PoolClient, query: BetQuery) {
   const values: unknown[] = [];
   // The organization predicate is always the first clause: reads can never widen it.
   const clauses: string[] = [
-    'organization_id=current_setting($$app.organization_id$$, true)::uuid',
+    'b.organization_id=current_setting($$app.organization_id$$, true)::uuid',
   ];
   const where = (expression: string, value: unknown) => {
     values.push(value);
     clauses.push(expression.replace('?', `$${values.length}`));
   };
-  if (query.state) where('state=?', query.state);
-  if (query.bookmakerId) where('bookmaker_id=?', query.bookmakerId);
-  if (query.tipsterId) where('tipster_id=?', query.tipsterId);
-  if (query.from) where("(placed_at at time zone 'America/Sao_Paulo')::date>=?::date", query.from);
-  if (query.to) where("(placed_at at time zone 'America/Sao_Paulo')::date<=?::date", query.to);
+  if (query.state) where('b.state=?', query.state);
+  if (query.bookmakerId) where('b.bookmaker_id=?', query.bookmakerId);
+  if (query.tipsterId) where('b.tipster_id=?', query.tipsterId);
+  if (query.from)
+    where("(b.placed_at at time zone 'America/Sao_Paulo')::date>=?::date", query.from);
+  if (query.to) where("(b.placed_at at time zone 'America/Sao_Paulo')::date<=?::date", query.to);
+  if (query.search) {
+    values.push(`%${query.search}%`);
+    const pattern = `$${values.length}`;
+    clauses.push(`(
+      coalesce(b.reference,'') ilike ${pattern}
+      or b.ticket_number::text ilike ${pattern}
+      or exists (
+        select 1 from finance.catalog c
+        where c.organization_id=b.organization_id and c.id=b.bookmaker_id and c.name ilike ${pattern}
+      )
+      or exists (
+        select 1 from finance.catalog t
+        where t.organization_id=b.organization_id and t.id=b.tipster_id and t.name ilike ${pattern}
+      )
+      or exists (
+        select 1 from finance.selection s
+        where s.organization_id=b.organization_id and s.bet_id=b.id
+          and (s.event ilike ${pattern} or s.sport ilike ${pattern}
+            or s.market ilike ${pattern} or s.selection ilike ${pattern})
+      )
+    )`);
+  }
+  if (query.sport) {
+    where(
+      `exists (
+      select 1 from finance.selection s
+      where s.organization_id=b.organization_id and s.bet_id=b.id
+        and lower(trim(s.sport))=lower(?)
+    )`,
+      query.sport,
+    );
+  }
+  if (query.marketType) {
+    where(
+      `exists (
+        select 1 from finance.selection s
+        where s.organization_id=b.organization_id and s.bet_id=b.id
+          and lower(trim(s.market))=lower(trim(?))
+      )`,
+      query.marketType,
+    );
+  }
+  const ticketKindExpression = `coalesce(
+    (
+      select case
+        when i.metadata->'userOverrides'->>'ticketKind' in ('simple','multiple','betbuild')
+          then i.metadata->'userOverrides'->>'ticketKind'
+        else null
+      end
+      from integration.inbox i
+      where i.organization_id=b.organization_id and i.imported_bet_id=b.id
+      order by i.updated_at desc,i.id desc limit 1
+    ),
+    (
+      select case
+        when count(*) <= 1 then 'simple'
+        when count(*) filter(where s.event is null or btrim(s.event)='') > 0 then 'multiple'
+        when count(distinct regexp_replace(lower(trim(s.event)), '[^[:alnum:]]+', ' ', 'g')) = 1 then 'betbuild'
+        else 'multiple'
+      end
+      from finance.selection s
+      where s.organization_id=b.organization_id and s.bet_id=b.id
+    )
+  )`;
+  if (query.ticketKind) where(`${ticketKindExpression}=?`, query.ticketKind);
+  const latestOutcomeExpression = `(
+    select settlement.outcome
+    from finance.settlement settlement
+    left join finance.settlement_reversal reversal
+      on reversal.organization_id=settlement.organization_id
+      and reversal.settlement_id=settlement.id
+    where settlement.organization_id=b.organization_id and settlement.bet_id=b.id
+      and reversal.settlement_id is null
+    order by settlement.settled_at desc,settlement.created_at desc,settlement.id desc
+    limit 1
+  )`;
+  if (query.historyOutcome) {
+    const outcome = {
+      open: `b.state='open' and ${latestOutcomeExpression} is null`,
+      settled: `b.state='settled'`,
+      won: `${latestOutcomeExpression} in ('win','half_win')`,
+      lost: `${latestOutcomeExpression} in ('loss','half_loss')`,
+      void: `(b.state='cancelled' or ${latestOutcomeExpression}='void')`,
+      cashout: `${latestOutcomeExpression} in ('cashout','partial_cashout')`,
+    }[query.historyOutcome];
+    clauses.push(`(${outcome})`);
+  }
+  if (query.historyBefore) {
+    values.push(query.historyBefore);
+    const before = `$${values.length}::date`;
+    const earliestConfirmedDate = `(
+      select min(coalesce((s.event_at at time zone 'America/Sao_Paulo')::date,s.event_date))
+      from finance.selection s
+      where s.organization_id=b.organization_id and s.bet_id=b.id
+        and s.date_status='confirmed'
+    )`;
+    clauses.push(`coalesce(${earliestConfirmedDate},${before} - 1) < ${before}`);
+  }
   const filter = clauses.length ? `where ${clauses.join(' and ')}` : '';
   const count = (
-    await client.query<{ count: string }>(`select count(*) from finance.bet ${filter}`, values)
+    await client.query<{ count: string }>(`select count(*) from finance.bet b ${filter}`, values)
+  ).rows[0]!;
+  const summary = (
+    await client.query<{
+      stake: string;
+      profit: string;
+      missing_unit_bets: number;
+      stake_units: string | null;
+      profit_units: string | null;
+    }>(
+      `select
+         coalesce(sum(b.stake),0)::numeric(16,2)::text as stake,
+         coalesce(sum(financial.profit),0)::numeric(16,2)::text as profit,
+         count(*) filter(where b.unit_amount is null or b.unit_amount<=0)::int as missing_unit_bets,
+         case when count(*)=0 then '0.00'
+           when count(*) filter(where b.unit_amount is null or b.unit_amount<=0)=0
+           then coalesce(sum(round(b.stake/nullif(b.unit_amount,0),2)),0)::numeric(16,2)::text
+           else null end as stake_units,
+         case when count(*)=0 then '0.00'
+           when count(*) filter(where b.unit_amount is null or b.unit_amount<=0)=0
+           then coalesce(sum(round(financial.profit/nullif(b.unit_amount,0),2)),0)::numeric(16,2)::text
+           else null end as profit_units
+       from finance.bet b
+       left join lateral (
+         select coalesce(sum(s.return_amount-s.real_principal_closed),0)::numeric(16,2) as profit
+         from finance.settlement s
+         left join finance.settlement_reversal r
+           on r.organization_id=s.organization_id and r.settlement_id=s.id
+         where s.organization_id=b.organization_id and s.bet_id=b.id and r.settlement_id is null
+       ) financial on true
+       ${filter}`,
+      values,
+    )
   ).rows[0]!;
   values.push(query.pageSize, (query.page - 1) * query.pageSize);
   const rows = (
     await client.query<BetRow>(
-      `select * from finance.bet ${filter} order by placed_at desc,id desc limit $${values.length - 1} offset $${values.length}`,
+      `select b.* from finance.bet b ${filter} order by b.placed_at desc,b.id desc limit $${values.length - 1} offset $${values.length}`,
       values,
     )
   ).rows;
@@ -231,6 +362,14 @@ export async function readBets(client: PoolClient, query: BetQuery) {
     total: Number(count.count),
     page: query.page,
     pageSize: query.pageSize,
+    summary: {
+      count: Number(count.count),
+      missingUnitBets: Number(summary.missing_unit_bets),
+      stake: summary.stake,
+      profit: summary.profit,
+      stakeUnits: summary.stake_units,
+      profitUnits: summary.profit_units,
+    },
   };
 }
 export async function readBetDetail(client: PoolClient, id: string) {

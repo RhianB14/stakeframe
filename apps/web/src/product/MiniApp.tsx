@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { importDetailSchema } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import {
   ApiFailure,
   request,
@@ -127,11 +128,16 @@ export function MiniAppPage() {
     return (
       <div className="product-loading">
         <h1>Stakeframe</h1>
-        <p role="alert">
-          Não foi possível carregar a importação. Confirme que você abriu o link pela mensagem do
-          bot.
-        </p>
-        <Button onClick={() => void detail.refetch()}>Tentar novamente</Button>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>
+              Não foi possível carregar a importação. Confirme que você abriu o link pela mensagem
+              do bot.
+            </p>
+            <Button onClick={() => void detail.refetch()}>Tentar novamente</Button>
+          </div>
+        </div>
       </div>
     );
   if (!detail.data)

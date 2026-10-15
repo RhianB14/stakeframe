@@ -87,20 +87,14 @@ const count = async (query: string, params: unknown[] = []) =>
   Number((await database.pool.query<{ n: string }>(query, params)).rows[0]!.n);
 
 /**
- * As contagens de APOSTAS e de ESTORNOS são POR LOTE, e não do banco inteiro.
- *
- * A limpeza entre casos REVERTE pelo caminho canônico (`bet.cancel`), então a
- * aposta e o seu journal de reversão permanecem no histórico — que é o
- * comportamento correto do produto, e por isso o total do banco só cresce. O
- * que o teste precisa é do que AQUELA operação fez, e a aposta revertida
- * anterior é de outro lote.
+ * Counts canonical `bet_cancel` journals emitted by batch rollback. Tests compare
+ * the delta around each operation; cleanup uses a different reason.
  */
 const betsOfBatch = (batchId: string) =>
   count('select count(*)::text as n from finance.bet where import_batch_id=$1', [batchId]);
-const reversalsOfBatch = (batchId: string) =>
+const rollbackJournals = () =>
   count(
-    "select count(*)::text as n from finance.journal j where j.kind='reversal' and j.reversal_of in (select stake_journal_id from finance.bet where import_batch_id=$1)",
-    [batchId],
+    "select count(*)::text as n from finance.journal where kind='bet_cancel' and reason='Reversão do lote de importação por arquivo'",
   );
 
 const betCount = () => count('select count(*)::text as n from finance.bet');
@@ -561,6 +555,7 @@ describe('STK-F2-09 §15 — rollback do lote', () => {
     expect(result.bets).toHaveLength(2);
     expect(await openBets()).toBe(2);
     const exposed = await exposure();
+    const rollbackBaseline = await rollbackJournals();
 
     const reverted = await batches.rollback(context, randomUUID(), batchId, { version });
     expect(reverted.state).toBe('rolled_back');
@@ -571,9 +566,8 @@ describe('STK-F2-09 §15 — rollback do lote', () => {
     expect(await openBets()).toBe(0);
     expect(await exposure()).toBe('0.00');
     expect(Number(exposed)).toBeGreaterThan(0);
-    // O journal de reversão é o que mantém a verdade contábil, e é UM por
-    // aposta do lote — nunca dois para a mesma.
-    expect(await reversalsOfBatch(batchId)).toBe(2);
+    // O journal canônico de cancelamento representa cada aposta revertida.
+    expect((await rollbackJournals()) - rollbackBaseline).toBe(2);
     // E as apostas continuam marcadas com a origem do lançamento, mesmo
     // depois de revertidas: a marcação é do fato, não do estado.
     expect(
@@ -591,19 +585,21 @@ describe('STK-F2-09 §15 — rollback do lote', () => {
       version,
       reason: 'importacao para reverter duas vezes',
     });
+    const rollbackBaseline = await rollbackJournals();
     const first = await batches.rollback(context, randomUUID(), batchId, { version });
     const second = await batches.rollback(context, randomUUID(), batchId, { version });
     expect(second.state).toBe(first.state);
-    expect(await reversalsOfBatch(batchId)).toBe(1);
+    expect((await rollbackJournals()) - rollbackBaseline).toBe(1);
   });
 
   it('reverter um lote em preview não toca em nada — nada foi gravado', async () => {
     const content = csv(TEMPLATE_HEADERS, [templateRow({ reference: 'R-4' })]);
     const { batchId, version } = await preview(content);
+    const rollbackBaseline = await rollbackJournals();
     const reverted = await batches.rollback(context, randomUUID(), batchId, { version });
     expect(reverted.state).toBe('rolled_back');
     expect(await betsOfBatch(batchId)).toBe(0);
-    expect(await reversalsOfBatch(batchId)).toBe(0);
+    expect((await rollbackJournals()) - rollbackBaseline).toBe(0);
   });
 });
 

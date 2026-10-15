@@ -87,6 +87,49 @@ export function createReportService(database: Database, options: ReportServiceOp
       ).rows[0],
     );
   }
+  async function analyticsIndicators(client: PoolClient, query: ReportQuery) {
+    const result = await client.query(
+      `${reportPopulation}, categorized as (
+        select e.*,case
+          when tk.override_value in ('simple','multiple','betbuild') then tk.override_value
+          else e.ticket_kind_key end as resolved_ticket_kind
+        from eligible e
+        left join lateral (
+          select i.metadata->'userOverrides'->>'ticketKind' as override_value
+          from integration.inbox i
+          where i.organization_id=current_setting($$app.organization_id$$, true)::uuid
+            and i.imported_bet_id=e.id
+          order by i.updated_at desc,i.id desc limit 1
+        ) tk on true
+      ), settled as (
+        select *,row_number() over(order by placed_at,id) as sequence,
+          coalesce(sum(case when profit<=0 then 1 else 0 end) over(
+            order by placed_at,id rows between unbounded preceding and 1 preceding
+          ),0) as previous_losses
+        from categorized where state='settled'
+      ), streaks as (
+        select previous_losses,count(*)::int as length
+        from settled where profit>0 group by previous_losses
+      ), summary as (
+        select
+          coalesce(sum(profit) filter(where profit>0),0)::numeric(32,2)::text as "grossWinProfit",
+          coalesce(sum(-profit) filter(where profit<0),0)::numeric(32,2)::text as "grossLossProfit",
+          count(*) filter(where profit<0)::int as "lossBets",
+          count(*) filter(where unit_amount>0 and stake/unit_amount<1)::int as "underOneUnitBets",
+          count(*) filter(where unit_amount>0 and stake>=unit_amount and stake<=3*unit_amount)::int as "oneToThreeUnitBets",
+          count(*) filter(where unit_amount>0 and stake>3*unit_amount)::int as "overThreeUnitBets",
+          coalesce(round(100*sum(stake) filter(where resolved_ticket_kind<>'simple')/nullif(sum(stake),0),2),0)::numeric(32,2)::text as "parlayStakeSharePct"
+        from categorized where state='settled'
+      )
+      select summary.*,
+        coalesce((select count(*) from settled) -
+          coalesce((select max(sequence) from settled where profit<=0),0),0)::int as "currentWinStreak",
+        coalesce((select max(length) from streaks),0)::int as "longestWinStreak"
+      from summary`,
+      reportValues(query),
+    );
+    return result.rows[0];
+  }
   return {
     /** Returns the authenticated user's organization context (provisioning on first use). */
     ensureContext(userId: string) {
@@ -193,6 +236,7 @@ export function createReportService(database: Database, options: ReportServiceOp
         const cached = dashboardCache.get(cacheKey);
         if (cached) return cached;
         const current = await metrics(client, query);
+        const indicators = await analyticsIndicators(client, query);
         const payload = analyticsDashboardSchema.parse({
           generatedAt: new Date().toISOString(),
           version,
@@ -200,6 +244,7 @@ export function createReportService(database: Database, options: ReportServiceOp
           minSample: dashboard.minSample,
           lowSample: current.bets < dashboard.minSample,
           metrics: current,
+          indicators,
         });
         dashboardCache.set(cacheKey, payload);
         return payload;

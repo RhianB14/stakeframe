@@ -179,9 +179,17 @@ export const financeCommandSchema = z
     command.extend({
       type: z.literal('bet.update'),
       id: z.uuid(),
+      bookmakerId: z.uuid().optional(),
       tipsterId: z.uuid().nullable(),
       reference: z.string().trim().max(150),
       selections: z.array(selectionInputSchema).min(1).max(40),
+      // Financial fields are optional for existing Telegram callers. The web
+      // editor sends them together so the command can correct the ledger and
+      // the bet snapshot atomically.
+      stake: positiveMoneySchema.optional(),
+      odds: oddsSchema.optional(),
+      placedAt: instant.optional(),
+      allowMissingUnit: z.boolean().optional(),
       reason: note,
     }),
     command.extend({
@@ -319,6 +327,12 @@ export const betQuerySchema = pageQuerySchema.extend({
   tipsterId: z.uuid().optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+  sport: z.string().trim().min(1).max(80).optional(),
+  marketType: z.string().trim().min(1).max(120).optional(),
+  ticketKind: z.enum(['simple', 'multiple', 'betbuild']).optional(),
+  historyOutcome: z.enum(['open', 'settled', 'won', 'lost', 'void', 'cashout']).optional(),
+  historyBefore: z.iso.date().optional(),
 });
 export type BetQuery = z.infer<typeof betQuerySchema>;
 export const betPageSchema = z
@@ -327,6 +341,16 @@ export const betPageSchema = z
     total: z.number().int().nonnegative(),
     page: z.number().int(),
     pageSize: z.number().int(),
+    summary: z
+      .object({
+        count: z.number().int().nonnegative(),
+        missingUnitBets: z.number().int().nonnegative(),
+        stake: moneySchema,
+        profit: signedMoneySchema,
+        stakeUnits: signedMoneySchema.nullable(),
+        profitUnits: signedMoneySchema.nullable(),
+      })
+      .optional(),
   })
   .meta({ id: 'BetPage' });
 export const settlementSchema = z.object({

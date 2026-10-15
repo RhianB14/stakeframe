@@ -51,6 +51,10 @@ export const reportPopulation = `with selection_rollup as (
   select bet_id, case when bool_and(event_date is not null) then max(event_date) end event_date,
     bool_and(date_status='confirmed') confirmed,
     string_agg(event,' / ' order by position) event_summary,
+    count(*)::int selection_count,
+    count(*) filter (where nullif(trim(event),'') is null)::int missing_event_count,
+    count(distinct translate(lower(regexp_replace(trim(event),'\\s+',' ','g')),
+      'áàâãäéèêëíìîïóòôõöúùûüç','aaaaaeeeeiiiiooooouuuuc')) distinct_event_count,
     case when bool_or(sport is null or trim(sport)='') then 'unknown'
       when count(distinct translate(lower(regexp_replace(trim(sport),'\\s+',' ','g')),
         'áàâãäéèêëíìîïóòôõöúùûüç','aaaaaeeeeiiiiooooouuuuc'))>1 then 'mixed'
@@ -63,6 +67,10 @@ export const reportPopulation = `with selection_rollup as (
     b.stake,b.remaining,b.state,b.placed_at,b.unit_amount,b.freebet_id is not null freebet,
     sr.event_date,coalesce(sr.confirmed,false) confirmed,coalesce(sr.event_summary,'') event_summary,
     coalesce(sr.sport_key,'unknown') sport_key,
+    case when coalesce(sr.selection_count,0)<=1 then 'simple'
+      when sr.missing_event_count>0 then 'multiple'
+      when coalesce(sr.distinct_event_count,0)<=1 then 'betbuild'
+      else 'multiple' end ticket_kind_key,
     case when sr.sport_key='mixed' then 'Múltiplos esportes'
       when sr.sport_key is null or sr.sport_key='unknown' then 'Esporte a conferir'
       else initcap(substring(sr.sport_key from 7)) end sport,

@@ -9,6 +9,7 @@ import {
 import { request, ApiFailure } from './api.js';
 import { Field, InitializeForm } from './forms.js';
 import { Button } from '../components/ui/button.js';
+import { ProductErrorIcon } from './product-error-icon.js';
 import { TelegramLinkPanel } from './telegram-link.js';
 import type { OpenModal } from './ProductApp.js';
 
@@ -67,17 +68,12 @@ export function OnboardingPage({ workspace, open }: { workspace: Workspace; open
             <p>Preparando seu fluxo de entrada</p>
           </div>
         </div>
-        <p role="alert" className="notice warning">
-          Não foi possível carregar seu progresso.
-        </p>
-        <div className="onboarding-actions">
-          <Button
-            onClick={() => {
-              void status.refetch();
-            }}
-          >
-            Tentar novamente
-          </Button>
+        <div className="notice warning product-error-alert" role="alert">
+          <ProductErrorIcon />
+          <div>
+            <p>Não foi possível carregar seu progresso.</p>
+            <Button onClick={() => void status.refetch()}>Tentar novamente</Button>
+          </div>
         </div>
       </div>
     );

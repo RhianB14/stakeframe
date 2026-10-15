@@ -67,9 +67,23 @@
   --web-avatar-red: #ed4552;
   --web-avatar-violet: #8655e8;
   --web-avatar-pink: #e54a9b;
+  --web-sport-basketball: #e85c6e;
   --web-avatar-cyan: #04b5d1;
   --web-avatar-green: #17b8a6;
   --web-avatar-lime: #8bc927;
+
+  /* Original BetTrack web skin values, registered here instead of in component CSS. */
+  --bettrack-background: #0d0d0d;
+  --bettrack-panel: #191919;
+  --bettrack-panel-hover: #222222;
+  --bettrack-border: #333333;
+  --bettrack-border-strong: #535353;
+  --bettrack-copy: #f2f2f0;
+  --bettrack-edit-text: #ecece8;
+  --bettrack-edit-muted: #a4a4a4;
+  --bettrack-orange: #ff7900;
+  --bettrack-accent: #c5f639;
+  --bettrack-ink: #141509;
 
   /* Tomas que faltavam e deixavam declaracao invalida em computed-value time
      (a barra de unidades ficava transparente). Apontam para tokens registrados. */
@@ -161,6 +175,7 @@
   --scrim: rgb(6 9 16 / 0.72); /* overlay do diálogo; --bg sob ele é 7:1 */
   --shadow-panel: 0 30px 100px rgb(0 0 0 / 0.47); /* elevação do diálogo */
   --shadow-float: 0 18px 48px rgb(0 0 0 / 0.4); /* popover sobre a tabela */
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.6); /* popovers compactos */
 
   /* ---------------------------------------------------------------------
      Layout da casca

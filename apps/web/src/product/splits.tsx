@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsSplitsSchema, type SplitDimensionId } from '@stakeframe/shared';
-import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { request } from './api.js';
 import { splitNotice, splitRowViews } from './splits-metrics.js';
+import { AnalyticsErrorCard } from './analytics-error.js';
 
 /**
  * STK-F2-03 — os 12 splits analíticos no painel de análises: uma dimensão por
@@ -20,12 +20,11 @@ export function SplitsPanel({ search, version }: { search: string; version: numb
   });
   if (splits.isError)
     return (
-      <div className="notice warning" role="alert">
-        Não foi possível carregar as comparações por dimensão.{' '}
-        <Button variant="secondary" onClick={() => void splits.refetch()}>
-          Tentar novamente
-        </Button>
-      </div>
+      <AnalyticsErrorCard
+        message="Couldn't load dimension comparisons."
+        onRetry={() => void splits.refetch()}
+        isRetrying={splits.isFetching}
+      />
     );
   if (!splits.data) return <p role="status">Calculando as dimensões...</p>;
   const dimension =

@@ -1,3 +1,5 @@
+import { displayLocale } from './preferences.js';
+
 /**
  * STK-F3-03 — a escala do eixo Y do gráfico de resultado realizado.
  *
@@ -40,7 +42,7 @@ export function resultDomain(values: number[]): [number, number] {
 
 /** Uma cota do eixo Y arredondada a um número "redondo", para o rótulo ler bem. */
 export function axisTick(value: number): string {
-  return value.toLocaleString('pt-BR', {
+  return value.toLocaleString(displayLocale(), {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });

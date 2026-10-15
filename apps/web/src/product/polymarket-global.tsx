@@ -9,17 +9,26 @@ import {
   polymarketFavoriteCreatedSchema,
   polymarketFavoriteRemovedSchema,
   polymarketFavoritesResponseSchema,
+  polymarketRankingSchema,
+  formatExactDecimal,
+  rankingSampleLabel,
   type PolymarketGlobalFilter,
   type PolymarketGlobalSort,
 } from '@stakeframe/shared';
 import { localPolymarketGlobal } from './polymarket-global-data.js';
 import {
   globalView,
-  globalCardView,
   type GlobalCardView,
   type GlobalMetricView,
 } from './polymarket-global-view.js';
 import { ApiFailure, request } from './api.js';
+
+import { ProductErrorIcon } from './product-error-icon.js';
+
+const rankingSorts = [
+  { value: 'PNL', label: 'PnL' },
+  { value: 'VOLUME', label: 'Volume' },
+] as const;
 
 /**
  * STK-F3-04 — a tela Global do Polymarket em CARDS.
@@ -51,22 +60,46 @@ import { ApiFailure, request } from './api.js';
  *    "Sem base" — nunca uma casa vazia.
  *  - Não há cor inline, não há `style={{}}` e não há termo de avaliação.
  *
- * A INTEGRAÇÃO ESTÁ PENDENTE: os dados vêm de `polymarket-global-data.ts`,
- * que é o que se substitui quando o gate F2-18 for autorizado. A tela acima
- * do dado não muda.
+ * A fixture local só é habilitada em desenvolvimento quando a URL pede
+ * explicitamente `?previewPolymarket=true`. A navegação normal, inclusive em
+ * localhost com banco real, sempre consulta o ranking persistido pela API.
  */
 export function PolymarketGlobalPage() {
   const [filter, setFilter] = useState<PolymarketGlobalFilter>('ALL');
   const [sort, setSort] = useState<PolymarketGlobalSort>('PNL');
   const [pageSize, setPageSize] = useState(12);
   const [page, setPage] = useState(1);
-  const view = globalView(localPolymarketGlobal, { category: filter, sort });
-  const pageCount = Math.max(1, Math.ceil(view.cards.length / pageSize));
+  const isDemo =
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('previewPolymarket') === 'true';
+  const view = isDemo ? globalView(localPolymarketGlobal, { category: filter, sort }) : null;
+  const category = filter === 'ALL' ? 'OVERALL' : filter;
+  const orderBy = sort === 'VOLUME' ? 'VOL' : 'PNL';
+  const query = useQuery({
+    queryKey: ['polymarket', 'ranking', category, orderBy],
+    queryFn: () => {
+      const params = new URLSearchParams({ category, timePeriod: 'MONTH', orderBy, limit: '100' });
+      return request(`/api/v1/polymarket/ranking?${params}`, polymarketRankingSchema);
+    },
+    staleTime: 60_000,
+    enabled: !isDemo,
+  });
+  const rows = query.data?.rows ?? [];
+  const rowCount = view?.cards.length ?? rows.length;
+  const pageCount = Math.max(1, Math.ceil(rowCount / pageSize));
   const currentPage = Math.min(page, pageCount);
   const firstIndex = (currentPage - 1) * pageSize;
-  const cards = view.cards.slice(firstIndex, firstIndex + pageSize);
-  const firstVisible = view.cards.length === 0 ? 0 : firstIndex + 1;
-  const lastVisible = Math.min(firstIndex + pageSize, view.cards.length);
+  const demoCards = view?.cards.slice(firstIndex, firstIndex + pageSize) ?? [];
+  const liveCards = rows.slice(firstIndex, firstIndex + pageSize);
+  const sortOptions = view
+    ? POLYMARKET_GLOBAL_SORTS.map((value) => ({
+        value,
+        label: POLYMARKET_GLOBAL_SORT_LABELS[value],
+      }))
+    : rankingSorts;
+  const firstVisible = rowCount === 0 ? 0 : firstIndex + 1;
+  const lastVisible = Math.min(firstIndex + pageSize, rowCount);
 
   const changeFilter = (next: PolymarketGlobalFilter) => {
     setFilter(next);
@@ -81,18 +114,21 @@ export function PolymarketGlobalPage() {
     <section className="panel" aria-labelledby="polymarket-global-title">
       <div className="section-heading">
         <div>
-          <h2 id="polymarket-global-title">{view.title}</h2>
-          <p>{view.subtitle}</p>
+          <h2 id="polymarket-global-title">{view?.title ?? 'Ranking global · Polymarket'}</h2>
+          <p>
+            {view?.subtitle ??
+              'Leaderboard mensal publicado pela Polymarket · valores em US$ da origem'}
+          </p>
         </div>
-        {/* A contagem é a do resultado FILTRADO, e ela diz de onde veio. */}
         <span className="live-label" data-testid="global-count">
-          {view.shown} de {view.total} tipsters
+          {view
+            ? `${view.shown} de ${view.total} tipsters`
+            : query.data
+              ? `${query.data.returned} de ${query.data.requested} traders`
+              : 'RANKING'}
         </span>
       </div>
 
-      {/* Os DOIS grupos de filtro: categoria e ordenação. Ambos funcionam, e
-          a distinção é o que impede a confusão do dono — filtro muda QUEM
-          aparece, ordenação muda EM QUE ORDEM. */}
       <div className="global-filters">
         <div className="global-filter-group" role="group" aria-label="Filtrar por categoria">
           {POLYMARKET_GLOBAL_FILTERS.map((option) => (
@@ -104,22 +140,20 @@ export function PolymarketGlobalPage() {
               onClick={() => changeFilter(option)}
             >
               {POLYMARKET_GLOBAL_FILTER_LABELS[option]}
-              {/* A contagem por categoria é DADO, não ornamento: ela mostra
-                  que o filtro tem o que encontrar antes de ele ser usado. */}
-              <span className="global-chip-count">{view.counts[option]}</span>
+              {view ? <span className="global-chip-count">{view.counts[option]}</span> : null}
             </button>
           ))}
         </div>
         <div className="global-filter-group" role="group" aria-label="Ordenar por">
-          {POLYMARKET_GLOBAL_SORTS.map((option) => (
+          {sortOptions.map(({ value, label }) => (
             <button
-              key={option}
+              key={value}
               type="button"
-              className={`global-chip${sort === option ? ' is-active' : ''}`}
-              aria-pressed={sort === option}
-              onClick={() => changeSort(option)}
+              className={`global-chip${sort === value ? ' is-active' : ''}`}
+              aria-pressed={sort === value}
+              onClick={() => changeSort(value)}
             >
-              {POLYMARKET_GLOBAL_SORT_LABELS[option]}
+              {label}
             </button>
           ))}
         </div>
@@ -143,25 +177,99 @@ export function PolymarketGlobalPage() {
           </select>
         </label>
         <span className="global-results-count" aria-live="polite">
-          {firstVisible}–{lastVisible} de {view.cards.length} tipsters
+          {firstVisible}–{lastVisible} de {rowCount} {view ? 'tipsters' : 'traders'}
         </span>
       </div>
 
-      {view.cards.length === 0 ? (
-        <div className="empty-state">
-          <span aria-hidden="true">▤</span>
-          <h3>{view.emptyTitle}</h3>
-          <p>{view.emptyDetail}</p>
+      {view ? (
+        view.cards.length === 0 ? (
+          <div className="empty-state">
+            <span aria-hidden="true">▤</span>
+            <h3>{view.emptyTitle}</h3>
+            <p>{view.emptyDetail}</p>
+          </div>
+        ) : (
+          <ul className="global-grid" data-testid="global-grid">
+            {demoCards.map((card) => (
+              <li key={card.key}>
+                <TipsterCard card={card} />
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+      {!view && query.isPending ? <p role="status">Carregando leaderboard oficial…</p> : null}
+      {!view && query.isError ? (
+        <div className="empty-state polymarket-error-card" role="alert">
+          <ProductErrorIcon />
+          <h3>Ranking oficial indisponível</h3>
+          <p>
+            A prévia precisa de uma sessão autenticada e de uma série Polymarket ingerida no
+            backend.
+          </p>
+          <button type="button" onClick={() => void query.refetch()}>
+            Tentar novamente
+          </button>
         </div>
-      ) : (
+      ) : null}
+      {!view && !query.isError && query.data && !query.data.series.available ? (
+        <div className="empty-state" role="status">
+          <h3>{query.data.completeness.label}</h3>
+          <p>{query.data.completeness.detail}</p>
+        </div>
+      ) : null}
+      {!view && !query.isError && query.data?.series.available && rows.length === 0 ? (
+        <div className="empty-state">
+          <h3>Nenhum trader nesta série</h3>
+          <p>A coleta está disponível, mas não trouxe linhas para esta categoria.</p>
+        </div>
+      ) : !view && query.data?.series.available ? (
         <ul className="global-grid" data-testid="global-grid">
-          {cards.map((card) => (
-            <li key={card.key}>
-              <TipsterCard card={card} />
+          {liveCards.map((trader) => (
+            <li key={trader.proxyWallet}>
+              <article
+                className="global-card"
+                data-testid="global-card"
+                data-wallet={trader.proxyWallet}
+              >
+                <FavoriteStar
+                  proxyWallet={trader.proxyWallet}
+                  traderName={trader.userName || trader.proxyWallet}
+                />
+                <a
+                  className="global-card-link"
+                  href={`#/polymarket/tipster/${trader.proxyWallet}`}
+                  aria-label={`${trader.userName || trader.proxyWallet}, rank ${trader.rank}, P and L ${formatExactDecimal(trader.pnl)}, volume ${formatExactDecimal(trader.vol)}`}
+                >
+                  <header className="global-card-head">
+                    <span className="global-avatar" aria-hidden="true">
+                      {(trader.userName.trim()[0] || '?').toUpperCase()}
+                    </span>
+                    <span className="global-card-identity">
+                      <span className="global-card-name">
+                        {trader.userName || trader.proxyWallet}
+                      </span>
+                      <span className="global-card-scope">{category}</span>
+                    </span>
+                    <span className="global-card-rank">#{trader.rank}</span>
+                  </header>
+                  <dl className="global-metrics">
+                    <div>
+                      <dt>P&amp;L · 30D</dt>
+                      <dd>{formatExactDecimal(trader.pnl)}</dd>
+                    </div>
+                    <div>
+                      <dt>VOLUME · 30D</dt>
+                      <dd>{formatExactDecimal(trader.vol)}</dd>
+                    </div>
+                  </dl>
+                  <span className="global-card-wallet">{trader.proxyWallet}</span>
+                </a>
+              </article>
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
 
       <div className="global-pagination" aria-label="Paginação do ranking global">
         <button
@@ -187,159 +295,37 @@ export function PolymarketGlobalPage() {
         </button>
       </div>
 
-      <p className="panel-footnote">
-        Cada métrica derivada mostra a contagem de amostras ao lado; valor desconhecido aparece como
-        “Sem base” e métrica que depende de série completa aparece como “bloqueado”.
-      </p>
+      {view ? (
+        <p className="panel-footnote">
+          Cada métrica derivada mostra a contagem de amostras ao lado; valor desconhecido aparece
+          como “Sem base” e métrica que depende de série completa aparece como “bloqueado”.
+        </p>
+      ) : null}
+      {query.data?.series.available ? (
+        <p className="panel-footnote">
+          {query.data.completeness.label}: {query.data.completeness.detail} ·{' '}
+          {query.data.series.ingested} traders coletados · backfill desde{' '}
+          {query.data.series.backfillFrom}
+        </p>
+      ) : null}
+      {query.data?.series.available ? (
+        <p className="panel-footnote" data-testid="polymarket-ranking-sample">
+          {rankingSampleLabel(query.data.sample.n)} · mínimo {query.data.sample.minSample}
+          {query.data.sample.lowSample ? ' · Amostra baixa' : ''}
+        </p>
+      ) : null}
+      {query.data?.aggregate.blocked ? (
+        <p className="panel-footnote" role="status" data-testid="polymarket-aggregate-blocked">
+          Métrica bloqueada: {query.data.aggregate.reason}
+        </p>
+      ) : null}
     </section>
   );
 }
 
-type TipsterPosition = {
-  title?: string | null;
-  outcome?: string | null;
-  current_size?: number | null;
-  avg_price?: number | null;
-  current_price?: number | null;
-  current_value?: number | null;
-  realized_pnl?: number | null;
-  unrealized_pnl?: number | null;
-  total_pnl?: number | null;
-  redeemable?: boolean | null;
-  last_event_at?: number | null;
-};
-type PositionStatus = 'OPEN' | 'CLOSED';
-
-function parsePositions(payload: unknown): TipsterPosition[] {
-  if (
-    !payload ||
-    typeof payload !== 'object' ||
-    !Array.isArray((payload as { data?: unknown }).data)
-  ) {
-    throw new Error('Resposta inválida da API do Polymarket.');
-  }
-  return (payload as { data: unknown[] }).data.map((item) => {
-    if (!item || typeof item !== 'object')
-      throw new Error('Posição inválida recebida do Polymarket.');
-    const row = item as Record<string, unknown>;
-    const text = (key: string) => (typeof row[key] === 'string' ? (row[key] as string) : null);
-    const number = (key: string) => (typeof row[key] === 'number' ? (row[key] as number) : null);
-    return {
-      title: text('title'),
-      outcome: text('outcome'),
-      current_size: number('current_size'),
-      avg_price: number('avg_price'),
-      current_price: number('current_price'),
-      current_value: number('current_value'),
-      realized_pnl: number('realized_pnl'),
-      unrealized_pnl: number('unrealized_pnl'),
-      total_pnl: number('total_pnl'),
-      redeemable: typeof row.redeemable === 'boolean' ? row.redeemable : null,
-      last_event_at: number('last_event_at'),
-    };
-  });
-}
-
-async function loadTipsterPositions(wallet: string, status: PositionStatus, signal: AbortSignal) {
-  const query = new URLSearchParams({
-    user: wallet,
-    status,
-    limit: '100',
-    sort_by: status === 'OPEN' ? 'CURRENT_VALUE' : 'REALIZED_PNL',
-    sort_direction: 'DESC',
-  });
-  const response = await fetch(`https://data-api.polymarket.com/v2/positions?${query}`, {
-    signal,
-    headers: { accept: 'application/json' },
-  });
-  if (!response.ok) throw new Error(`Polymarket retornou ${response.status}.`);
-  return parsePositions(await response.json());
-}
-
-function demoPositions(
-  card: GlobalCardView | undefined,
-  status: PositionStatus,
-): TipsterPosition[] {
-  const market = card?.topMarket.text ?? 'Mercado de exemplo';
-  const now = Math.floor(Date.now() / 1000);
-  if (status === 'OPEN') {
-    return [
-      {
-        title: market,
-        outcome: 'Sim',
-        current_size: 248,
-        avg_price: 0.42,
-        current_price: 0.57,
-        current_value: 141.36,
-        unrealized_pnl: 37.2,
-        redeemable: false,
-      },
-      {
-        title: `Próximo resultado · ${market}`,
-        outcome: 'Não',
-        current_size: 120,
-        avg_price: 0.63,
-        current_price: 0.51,
-        current_value: 61.2,
-        unrealized_pnl: -14.4,
-        redeemable: false,
-      },
-    ];
-  }
-  return [
-    {
-      title: market,
-      outcome: 'Sim',
-      avg_price: 0.38,
-      current_size: 0,
-      current_value: 0,
-      realized_pnl: 82.5,
-      total_pnl: 82.5,
-      last_event_at: now - 86_400,
-    },
-    {
-      title: `Resultado anterior · ${market}`,
-      outcome: 'Não',
-      avg_price: 0.54,
-      current_size: 0,
-      current_value: 0,
-      realized_pnl: -24.75,
-      total_pnl: -24.75,
-      last_event_at: now - 3 * 86_400,
-    },
-  ];
-}
-
-const usd = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 2,
-});
-const price = (value: number | null | undefined) =>
-  value == null
-    ? '—'
-    : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value * 100)}¢`;
-
 export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
-  const [status, setStatus] = useState<PositionStatus>('OPEN');
-  const rawCard = localPolymarketGlobal.cards.find((candidate) => candidate.proxyWallet === wallet);
-  const card = rawCard ? globalCardView(rawCard) : undefined;
-  const isDemo = import.meta.env.DEV;
-  const openQuery = useQuery({
-    queryKey: ['polymarket', 'positions', wallet, 'OPEN'],
-    queryFn: ({ signal }) => loadTipsterPositions(wallet, 'OPEN', signal),
-    enabled: !isDemo && wallet.length > 0,
-    staleTime: 30_000,
-  });
-  const closedQuery = useQuery({
-    queryKey: ['polymarket', 'positions', wallet, 'CLOSED'],
-    queryFn: ({ signal }) => loadTipsterPositions(wallet, 'CLOSED', signal),
-    enabled: !isDemo && wallet.length > 0,
-    staleTime: 30_000,
-  });
-  const query = status === 'OPEN' ? openQuery : closedQuery;
-  const positions = isDemo ? demoPositions(card, status) : (query.data ?? []);
-  const displayName = card?.name.text ?? wallet;
+  const [status, setStatus] = useState<'OPEN' | 'CLOSED'>('OPEN');
+  const displayName = wallet;
 
   return (
     <section className="tipster-detail-page" aria-labelledby="tipster-detail-title">
@@ -350,18 +336,14 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
         <div>
           <span className="tipster-detail-kicker">PERFIL PÚBLICO · POLYMARKET</span>
           <h2 id="tipster-detail-title">{displayName}</h2>
-          <p>{card ? `${card.scope} · ${card.topMarket.text}` : wallet}</p>
+          <p>CARTEIRA PÚBLICA · POLYMARKET</p>
         </div>
-        <span className="tipster-detail-rank">{card?.rankLabel ?? 'PERFIL'}</span>
+        <span className="tipster-detail-rank">PERFIL</span>
       </header>
-
-      {isDemo ? <p className="tipster-demo-note">PRÉVIA COM DADOS DE DEMONSTRAÇÃO</p> : null}
 
       <div className="tipster-position-tabs" role="tablist" aria-label="Apostas do tipster">
         {(['OPEN', 'CLOSED'] as const).map((option) => {
           const selected = status === option;
-          const data = option === 'OPEN' ? openQuery.data : closedQuery.data;
-          const count = isDemo ? demoPositions(card, option).length : data?.length;
           return (
             <button
               key={option}
@@ -373,7 +355,7 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
               onClick={() => setStatus(option)}
             >
               {option === 'OPEN' ? 'Apostas abertas' : 'Apostas fechadas'}
-              <span>{count ?? '—'}</span>
+              <span>—</span>
             </button>
           );
         })}
@@ -386,101 +368,15 @@ export function PolymarketTipsterPage({ wallet }: { wallet: string }) {
         aria-labelledby={`tipster-tab-${status.toLowerCase()}`}
         tabIndex={0}
       >
-        {query.isPending && !isDemo ? (
-          <p className="tipster-position-state" role="status">
-            Carregando apostas…
-          </p>
-        ) : query.isError && !isDemo ? (
-          <div className="tipster-position-error" role="alert">
-            <span>Não foi possível carregar as posições deste perfil.</span>
-            <button type="button" onClick={() => void query.refetch()}>
-              Tentar novamente
-            </button>
-          </div>
-        ) : positions.length === 0 ? (
-          <p className="tipster-position-state">Nenhuma aposta nesta aba.</p>
-        ) : (
-          <div className="tipster-position-list">
-            {positions.map((position, index) => {
-              const pnl =
-                status === 'OPEN'
-                  ? position.unrealized_pnl
-                  : (position.realized_pnl ?? position.total_pnl);
-              return (
-                <article className="tipster-position-row" key={`${position.title}-${index}`}>
-                  <div className="tipster-position-market">
-                    <strong>{position.title || 'Mercado sem título'}</strong>
-                    <span>{position.outcome || 'Resultado não informado'}</span>
-                  </div>
-                  <div>
-                    <span className="tipster-position-label">PREÇO DE ENTRADA</span>
-                    <strong>{price(position.avg_price)}</strong>
-                  </div>
-                  {status === 'OPEN' ? (
-                    <div>
-                      <span className="tipster-position-label">PREÇO ATUAL</span>
-                      <strong>{price(position.current_price)}</strong>
-                    </div>
-                  ) : (
-                    <div>
-                      <span className="tipster-position-label">ENCERRADA</span>
-                      <strong>
-                        {position.last_event_at
-                          ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(
-                              new Date(position.last_event_at * 1000),
-                            )
-                          : '—'}
-                      </strong>
-                    </div>
-                  )}
-                  <div className="tipster-position-result">
-                    <span className="tipster-position-label">
-                      {status === 'OPEN' ? 'VALOR ATUAL' : 'RESULTADO'}
-                    </span>
-                    {/* D8: valor de posição ABERTA é não realizado — nunca verde.
-                        R2: `current_value` desconhecido é ausência ('—'), não US$ 0,00. */}
-                    <strong
-                      className={
-                        status === 'OPEN'
-                          ? ''
-                          : pnl == null
-                            ? ''
-                            : pnl >= 0
-                              ? 'is-positive'
-                              : 'is-negative'
-                      }
-                    >
-                      {status === 'OPEN'
-                        ? position.current_value == null
-                          ? '—'
-                          : usd.format(position.current_value)
-                        : pnl == null
-                          ? '—'
-                          : usd.format(pnl)}
-                    </strong>
-                  </div>
-                  {status === 'OPEN' && position.redeemable ? (
-                    <span className="tipster-redeemable">RESGATÁVEL</span>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
+        <p className="tipster-position-state" role="status">
+          As posições {status === 'OPEN' ? 'abertas' : 'fechadas'} deste perfil não estão
+          disponíveis. A integração depende de autorização específica.
+        </p>
       </div>
     </section>
   );
 }
 
-/**
- * O card de um tipster, e ele é uma ÂNCORA.
- *
- * A âncora é a decisão de acessibilidade que importa aqui: o card inteiro
- * é o alvo, então ele recebe foco, responde a Enter e tem um `href` que
- * pode ser copiado e colado. O `title` do nome carrega o texto completo
- * quando a reticência cortou, e o `aria-label` do card carrega as métricas
- * em linguagem falada — inclusive o `N`auditado de cada uma.
- */
 function TipsterCard({ card }: { card: GlobalCardView }) {
   return (
     <article
@@ -491,9 +387,6 @@ function TipsterCard({ card }: { card: GlobalCardView }) {
       <FavoriteStar proxyWallet={card.key} traderName={card.name.text} />
       <a className="global-card-link" href={card.href} aria-label={card.ariaLabel}>
         <header className="global-card-head">
-          {/* A inicial é decorativa: o nome está no texto do lado, e repetir
-              o nome no `aria-label` do avatar faria o leitor de tela falar o
-              mesmo nome duas vezes. */}
           <span className="global-avatar" aria-hidden="true">
             {card.avatar}
           </span>
@@ -508,21 +401,12 @@ function TipsterCard({ card }: { card: GlobalCardView }) {
           </span>
           <span className="global-card-rank">{card.rankLabel}</span>
         </header>
-
         {card.coverage.truncated ? (
-          // O aviso de truncamento fica DENTRO do card, e não como rodapé da
-          // grade: o card truncado é o que precisa do aviso, e um aviso longe
-          // do card obriga o usuário a casar duas informações.
           <p className="global-truncated" role="status">
             <strong>{card.coverage.label}</strong>
             <span>{card.coverage.reason}</span>
           </p>
         ) : null}
-
-        {/* O mercado de maior participação. O rótulo é FACTUAL ("onde mais
-          aposta"), e não "melhor mercado": superlativo é avaliação, e a R8
-          proíbe a tela de avaliar. O dado é o mesmo, e ele não diz que aquele
-          mercado é bom. */}
         <p
           className="global-card-market-label"
           title={card.topMarket.truncated ? card.topMarket.text : undefined}
@@ -535,17 +419,40 @@ function TipsterCard({ card }: { card: GlobalCardView }) {
         >
           {card.topMarket.text}
         </p>
-
         <dl className="global-metrics">
-          <Metric term="P&amp;L 30d" metric={card.pnl} emphasis />
+          <Metric term="P&L 30d" metric={card.pnl} emphasis />
           <Metric term="ROI" metric={card.roi} />
           <Metric term="Taxa de acerto" metric={card.hitRate} />
-          {/* O resumo mantém as métricas centrais; amostra e números auxiliares
-              continuam disponíveis no aria-label completo do link. */}
           <Metric term="Unidades/mês" metric={card.monthlyUnits} />
         </dl>
       </a>
     </article>
+  );
+}
+
+function Metric({
+  term,
+  metric,
+  emphasis = false,
+}: {
+  term: string;
+  metric: GlobalMetricView;
+  emphasis?: boolean;
+}) {
+  const toneClass = metric.tone === 'pos' ? ' is-pos' : metric.tone === 'neg' ? ' is-neg' : '';
+  const stateClass = metric.blocked ? ' is-blocked' : metric.unknown ? ' is-unknown' : '';
+  return (
+    <div className={`global-metric${emphasis ? ' is-emphasis' : ''}${stateClass}`}>
+      <dt>{term}</dt>
+      <dd>
+        <span className={`global-metric-value${toneClass}`} data-global-metric={term}>
+          {metric.value}
+        </span>
+        <span className="global-metric-n" data-global-n={term}>
+          {metric.sample}
+        </span>
+      </dd>
+    </div>
   );
 }
 
@@ -624,45 +531,6 @@ function FavoriteStar({ proxyWallet, traderName }: { proxyWallet: string; trader
           {error}
         </span>
       ) : null}
-    </div>
-  );
-}
-
-/**
- * UMA métrica: o termo, o valor e a amostra.
- *
- * Este é o único lugar do arquivo que escreve uma métrica, e ele escreve as
- * TRÊS coisas sempre: termo, valor, `N`. Não existe uma segunda linha de
- * métrica em nenhum outro lugar da tela — é essa unicidade que torna a R1
- * impossível de violar por descuido.
- */
-function Metric({
-  term,
-  metric,
-  emphasis = false,
-}: {
-  term: string;
-  metric: GlobalMetricView;
-  emphasis?: boolean;
-}) {
-  // A cor vem do TOM, que a view calculou a partir do sinal — nunca de uma
-  // comparação feita no JSX. E um valor desconhecido não recebe cor: "Sem
-  // base" em verde seria uma leitura de resultado que não existe.
-  const toneClass = metric.tone === 'pos' ? ' is-pos' : metric.tone === 'neg' ? ' is-neg' : '';
-  const stateClass = metric.blocked ? ' is-blocked' : metric.unknown ? ' is-unknown' : '';
-  return (
-    <div className={`global-metric${emphasis ? ' is-emphasis' : ''}${stateClass}`}>
-      <dt>{term}</dt>
-      <dd>
-        {/* `data-global-n` existe para o E2E medir que a amostra está NA
-            TELA de cada métrica, e não só no atributo de acessibilidade. */}
-        <span className={`global-metric-value${toneClass}`} data-global-metric={term}>
-          {metric.value}
-        </span>
-        <span className="global-metric-n" data-global-n={term}>
-          {metric.sample}
-        </span>
-      </dd>
     </div>
   );
 }

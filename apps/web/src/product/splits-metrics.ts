@@ -1,8 +1,5 @@
-import {
-  formatReportBRL,
-  type AnalyticsSplitDimension,
-  type AnalyticsSplitRow,
-} from '@stakeframe/shared';
+import { type AnalyticsSplitDimension, type AnalyticsSplitRow } from '@stakeframe/shared';
+import { formatDisplayMoney } from './preferences.js';
 import { percent, sampleLabel } from './dashboard-metrics.js';
 
 /**
@@ -27,7 +24,7 @@ export function splitRowView(row: AnalyticsSplitRow): SplitRowView {
   return {
     key: row.key,
     label: row.label,
-    profit: formatReportBRL(row.metrics.profit),
+    profit: formatDisplayMoney(row.metrics.profit),
     roi: percent(row.metrics.roiReal),
     yieldReal: percent(row.metrics.yieldReal),
     n: sampleLabel(row.metrics.bets),

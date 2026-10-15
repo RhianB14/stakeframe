@@ -232,6 +232,24 @@ export const bet: Bet = {
   ],
 };
 
+export function todayBet(overrides: Partial<Bet> = {}): Bet {
+  const today = saoPauloDate(new Date());
+  const placedAt = today + 'T15:00:00.000Z';
+  return {
+    ...bet,
+    placedAt,
+    createdAt: placedAt,
+    unitMonth: today.slice(0, 7),
+    selections: bet.selections.map((selection) => ({
+      ...selection,
+      eventDate: today,
+      eventAt: null,
+      dateStatus: 'confirmed' as const,
+    })),
+    ...overrides,
+  };
+}
+
 export async function enabledProduct(
   page: Page,
   workspace = fixture(),

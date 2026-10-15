@@ -46,18 +46,26 @@ async function command(input: CommandInput) {
     expectedVersion: (await service.workspace(tenantContext)).version,
   } as FinanceCommand);
 }
-async function initialized() {
+async function initialized(includeSecondBookmaker = false) {
   const workspace = await service.workspace(tenantContext);
   const bookmaker = workspace.catalog.find((item) => item.name === 'Bet365')!;
+  const secondBookmaker = includeSecondBookmaker
+    ? workspace.catalog.find((item) => item.kind === 'bookmaker' && item.id !== bookmaker.id)
+    : undefined;
+  if (includeSecondBookmaker && !secondBookmaker) throw new Error('SECOND_BOOKMAKER_UNAVAILABLE');
   await command({
     type: 'bankroll.initialize',
     reserve: '500.00',
-    balances: [{ bookmakerId: bookmaker.id, amount: '500.00' }],
+    balances: [
+      { bookmakerId: bookmaker.id, amount: '500.00' },
+      ...(secondBookmaker ? [{ bookmakerId: secondBookmaker.id, amount: '500.00' }] : []),
+    ],
     unitPercent: '1.00',
   });
   const updated = await service.workspace(tenantContext);
   return {
     bookmakerId: bookmaker.id,
+    secondBookmakerId: secondBookmaker?.id,
     house: updated.accounts.find((account) => account.bookmakerId === bookmaker.id)!.id,
     reserve: updated.accounts.find((account) => account.kind === 'reserve')!.id,
   };
@@ -341,6 +349,140 @@ describe('financial core with PostgreSQL', () => {
       latestOutcome: null,
     });
   });
+  it('filters market type before pagination and keeps page totals and summaries on the same cohort', async () => {
+    const { bookmakerId } = await initialized();
+    for (let index = 0; index < 105; index += 1) {
+      await createBet(bookmakerId, {
+        stake: '1.00',
+        selections: [{ ...selection, market: 'Resultado', selection: `Pick ${index}` }],
+      });
+    }
+    for (let index = 0; index < 4; index += 1) {
+      await createBet(bookmakerId, {
+        stake: '1.00',
+        selections: [{ ...selection, market: 'Total de gols', selection: `Pick ${index}` }],
+      });
+    }
+
+    const firstPage = await service.bets(tenantContext, {
+      page: 1,
+      pageSize: 100,
+      marketType: 'Resultado',
+    });
+    const secondPage = await service.bets(tenantContext, {
+      page: 2,
+      pageSize: 100,
+      marketType: 'Resultado',
+    });
+    expect(firstPage).toMatchObject({ total: 105, summary: { count: 105, stake: '105.00' } });
+    expect(firstPage.items).toHaveLength(100);
+    expect(secondPage.items).toHaveLength(5);
+    expect(
+      [...firstPage.items, ...secondPage.items].every((bet) =>
+        bet.selections.some((item) => item.market === 'Resultado'),
+      ),
+    ).toBe(true);
+  });
+  it('audits all financial corrections, recalculates the target month unit, and blocks edits after settlement history', async () => {
+    const { bookmakerId, secondBookmakerId } = await initialized(true);
+    if (!secondBookmakerId) throw new Error('SECOND_BOOKMAKER_UNAVAILABLE');
+    const month = saoPauloDate(new Date()).slice(0, 7);
+    const previousMonthDate = new Date(`${month}-01T00:00:00.000Z`);
+    previousMonthDate.setUTCMonth(previousMonthDate.getUTCMonth() - 1);
+    const previousMonth = previousMonthDate.toISOString().slice(0, 7);
+    const targetPlacedAt = `${previousMonth}-15T12:00:00.000Z`;
+    await command({
+      type: 'unit.set',
+      month: previousMonth,
+      amount: '12.00',
+      reason: 'Unidade histórica para correção',
+    });
+    const bet = await createBet(bookmakerId);
+    const before = (await service.bet(tenantContext, bet.id)).bet;
+    await command({
+      type: 'bet.update',
+      id: bet.id,
+      tipsterId: null,
+      reference: before.reference ?? '',
+      reason: 'Corrigir valor e cotação conferidos',
+      bookmakerId: secondBookmakerId,
+      stake: '125.00',
+      odds: '2.20',
+      placedAt: targetPlacedAt,
+      selections: before.selections,
+    });
+    const updated = (await service.bet(tenantContext, bet.id)).bet;
+    expect(updated).toMatchObject({
+      bookmakerId: secondBookmakerId,
+      stake: '125.00',
+      odds: '2.2000',
+      unitMonth: previousMonth,
+      unitAmount: '12.00',
+    });
+    expect(updated.placedAt).toBe(targetPlacedAt);
+    const journal = await service.journal(tenantContext, { page: 1, pageSize: 100 });
+    const correction = journal.items.find((entry) => entry.kind === 'bet_stake_correction');
+    const accounts = (await service.workspace(tenantContext)).accounts;
+    expect(correction?.postings).toHaveLength(3);
+    expect(correction?.postings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: accounts.find((account) => account.bookmakerId === bookmakerId)!.id,
+          amount: '100.00',
+        }),
+        expect.objectContaining({
+          accountId: accounts.find((account) => account.bookmakerId === secondBookmakerId)!.id,
+          amount: '-125.00',
+        }),
+        expect.objectContaining({ amount: '25.00' }),
+      ]),
+    );
+    expect(correction?.postings.reduce((sum, posting) => sum + Number(posting.amount), 0)).toBe(0);
+    expect(correction?.reason).toContain('Corrigir valor e cotação conferidos');
+
+    const settled = await createBet(bookmakerId);
+    const settlement = await command({
+      type: 'bet.settle',
+      id: settled.id,
+      outcome: 'win',
+      closedPrincipal: '100.00',
+      returnAmount: '200.00',
+      settledAt: now(),
+      reason: 'Resultado confirmado',
+    });
+    const settledBet = (await service.bet(tenantContext, settled.id)).bet;
+    await expect(
+      command({
+        type: 'bet.update',
+        id: settled.id,
+        tipsterId: null,
+        reference: settledBet.reference ?? '',
+        reason: 'Não deve reescrever histórico liquidado',
+        stake: '110.00',
+        selections: settledBet.selections,
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+    await command({
+      type: 'settlement.reverse',
+      id: settlement.id,
+      effectiveAt: now(),
+      reason: 'Estorno integral confirmado para teste de histórico',
+    });
+    const reversedBet = (await service.bet(tenantContext, settled.id)).bet;
+    expect(reversedBet).toMatchObject({ state: 'open', remaining: '100.00' });
+    await expect(
+      command({
+        type: 'bet.update',
+        id: settled.id,
+        tipsterId: null,
+        reference: reversedBet.reference ?? '',
+        reason: 'Não deve reescrever histórico revertido',
+        bookmakerId: secondBookmakerId,
+        stake: '110.00',
+        selections: reversedBet.selections,
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+  });
   it('tracks partial cashout principal independently from payout and reverses without deleting history', async () => {
     const { bookmakerId } = await initialized();
     const bet = await createBet(bookmakerId);
@@ -357,7 +499,7 @@ describe('financial core with PostgreSQL', () => {
       bankroll: '985.00',
       exposure: '60.00',
     });
-    await command({
+    const final = await command({
       type: 'bet.settle',
       id: bet.id,
       outcome: 'cashout',
@@ -381,6 +523,36 @@ describe('financial core with PostgreSQL', () => {
       bankroll: '1020.00',
       exposure: '40.00',
     });
+    await expect(
+      command({
+        type: 'bet.update',
+        id: bet.id,
+        tipsterId: null,
+        reference: detail.bet.reference ?? '',
+        reason: 'Não deve reescrever histórico após reversão parcial',
+        stake: '110.00',
+        selections: detail.bet.selections,
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
+    await command({
+      type: 'settlement.reverse',
+      id: final.id,
+      effectiveAt: now(),
+      reason: 'Reabrir principal final mantendo histórico de reversão',
+    });
+    const reopened = (await service.bet(tenantContext, bet.id)).bet;
+    expect(reopened).toMatchObject({ state: 'open', remaining: '100.00' });
+    await expect(
+      command({
+        type: 'bet.update',
+        id: bet.id,
+        tipsterId: null,
+        reference: reopened.reference ?? '',
+        reason: 'Não deve reescrever histórico com reversão parcial',
+        stake: '110.00',
+        selections: reopened.selections,
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' });
   });
   it('keeps freebet principal out of the bank and credits only real payout', async () => {
     const { bookmakerId } = await initialized();
@@ -507,6 +679,30 @@ describe('financial core with PostgreSQL', () => {
     const historic = await createBet(bookmakerId, { placedAt: '2020-01-16T12:00:00-03:00' });
     expect((await service.bet(tenantContext, historic.id)).bet.unitAmount).toBe('5.00');
     expect((await service.bet(tenantContext, pending.id)).bet.unitAmount).toBeNull();
+  });
+  it('marks mixed historical unit aggregates unavailable without losing the missing-unit count', async () => {
+    const { bookmakerId } = await initialized();
+    await createBet(bookmakerId, {
+      placedAt: '2020-01-16T12:00:00-03:00',
+      allowMissingUnit: true,
+    });
+    await command({
+      type: 'unit.set',
+      month: '2020-01',
+      amount: '5.00',
+      reason: 'Unidade histórica conferida',
+    });
+    await createBet(bookmakerId, { placedAt: '2020-01-15T12:00:00-03:00' });
+
+    const page = await service.bets(tenantContext, { page: 1, pageSize: 25 });
+    expect(page.summary).toMatchObject({
+      count: 2,
+      missingUnitBets: 1,
+      stake: '200.00',
+      profit: '0.00',
+      stakeUnits: null,
+      profitUnits: null,
+    });
   });
   it('rolls back invalid event dates and preserves partial dates without invented times', async () => {
     const { bookmakerId } = await initialized();

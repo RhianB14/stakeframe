@@ -1,11 +1,13 @@
 import { polymarketGlobalResponseSchema, type PolymarketGlobalResponse } from '@stakeframe/shared';
 
 /**
- * STK-F3-04 — os DADOS LOCAIS da tela Global, e por que eles existem.
+ * STK-F3-04 — fixture de PREVIEW da tela Global, isolada do fluxo de usuário.
  *
- * A INTEGRAÇÃO ESTÁ PENDENTE. Esta tela ainda não está ligada a um endpoint:
- * o gate F2-18 não foi autorizado, e nada aqui finge que está. Os dados
- * abaixo são LOCAIS e COERENTES com o formato do contrato
+ * A fixture só pode aparecer no modo explícito de desenvolvimento
+ * `?previewPolymarket=true`; localhost sem esse parâmetro usa a API e nunca
+ * substitui dados do banco por demonstração. O endpoint do ranking continua
+ * sendo somente leitura, sem ativar feed externo (F2-18). Os dados abaixo são
+ * locais e coerentes com o formato do contrato
  * (`polymarketGlobalResponseSchema`) — eles passam pelo MESMO parse que um
  * payload real passaria, e o teste os valida a cada execução. Se a integração
  * for autorizada, este arquivo é o que se substitui por uma chamada de rede,

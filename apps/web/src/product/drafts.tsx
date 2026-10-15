@@ -1,5 +1,6 @@
+import { formatDisplayDate, formatDisplayMoney } from './preferences.js';
 import { useEffect, useState } from 'react';
-import { deriveBetOrigin, formatBRL, type ImportDetail, type TicketKind } from '@stakeframe/shared';
+import { deriveBetOrigin, type ImportDetail, type TicketKind } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
 import { Field } from './forms.js';
 import { localInstant } from './api.js';
@@ -9,11 +10,8 @@ import { MiniDraftEditor } from './MiniDraftEditor.js';
 // formulário de revisão web e o Mini App do Telegram. Nenhuma opção de origem
 // vem marcada por padrão e nada é inferido da imagem/IA.
 
-const instantFormat = new Intl.DateTimeFormat('pt-BR', {
-  timeZone: 'America/Sao_Paulo',
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
+const instantFormat = (value: string) =>
+  formatDisplayDate(value, { dateStyle: 'short', timeStyle: 'short' });
 
 export type DraftBody = {
   version: number;
@@ -220,7 +218,7 @@ function LegacyDraftControls({
             <option value="">Selecione o crédito</option>
             {detail.credits.map((item) => (
               <option key={item.id} value={item.id}>
-                {`${formatBRL(item.amount)} · expira ${item.expiresOn}${
+                {`${formatDisplayMoney(item.amount)} · expira ${item.expiresOn}${
                   item.stakeReturned ? ' · devolve principal' : ''
                 }`}
               </option>
@@ -231,9 +229,9 @@ function LegacyDraftControls({
       <p className="notice" role="status">
         {provisional
           ? detail.telegramReceivedAt
-            ? `Data provisória (envio no Telegram): ${instantFormat.format(new Date(detail.telegramReceivedAt))} — ajuste para a data/hora real do jogo.`
+            ? `Data provisória (envio no Telegram): ${instantFormat(detail.telegramReceivedAt)} — ajuste para a data/hora real do jogo.`
             : 'Este registro nasce sem data de evento; informe a data/hora real do jogo quando souber.'
-          : `Data do jogo confirmada: ${instantFormat.format(new Date(detail.eventAt!))}.`}
+          : `Data do jogo confirmada: ${instantFormat(detail.eventAt!)}.`}
       </p>
       <Field
         label="Data/hora real do jogo"
@@ -555,7 +553,7 @@ function ImportedControls({
             </option>
             {(credits ?? []).map((item) => (
               <option key={item.id} value={item.id}>
-                {`${formatBRL(item.amount)} · expira ${item.expiresOn}${
+                {`${formatDisplayMoney(item.amount)} · expira ${item.expiresOn}${
                   item.stakeReturned ? ' · devolve principal' : ''
                 }`}
               </option>
@@ -580,9 +578,7 @@ function ImportedControls({
         <div key={item.id} className="selection-date-row">
           <span>
             {item.event} — {item.selection}{' '}
-            {item.eventAt
-              ? `· ${instantFormat.format(new Date(item.eventAt))} (confirmada)`
-              : '· data pendente'}
+            {item.eventAt ? `· ${instantFormat(item.eventAt)} (confirmada)` : '· data pendente'}
           </span>
           <input
             type="datetime-local"

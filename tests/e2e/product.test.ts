@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { todayBet } from './product-fixtures.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
@@ -9,7 +10,6 @@ import {
   type Bet,
   type ImportDetail,
   type CalendarItem,
-  type EventSearch,
 } from '../../packages/shared/src/index.js';
 // STK-F2-18 (PR-1): o medidor vive em tests/helpers/color.ts e é o MESMO que
 // o unit consome. A cópia local que existia aqui só entendia `rgb()` — para um
@@ -68,6 +68,17 @@ function dashboardFixture(metrics: ReportMetrics, lowSample = true) {
     minSample: 30,
     lowSample,
     metrics,
+    indicators: {
+      grossWinProfit: '100.00',
+      grossLossProfit: '0.00',
+      lossBets: 0,
+      underOneUnitBets: 0,
+      oneToThreeUnitBets: 8,
+      overThreeUnitBets: 0,
+      currentWinStreak: 8,
+      longestWinStreak: 8,
+      parlayStakeSharePct: '0.00',
+    },
   };
 }
 // STK-F2-03: payload de GET /api/v1/analytics/splits (12 dimensões, N e unknown).
@@ -232,7 +243,12 @@ async function enabledProduct(
   workspace = fixture(),
   bets: Bet[] = [],
   detailBet: Bet = bet,
+  preferenceLanguage: string | null = 'pt-BR',
 ) {
+  if (preferenceLanguage !== null)
+    await page.addInitScript((language) => {
+      localStorage.setItem('bettrack.preview.preferences', JSON.stringify({ language }));
+    }, preferenceLanguage);
   await page.route('**/api/v1/system/status', (route) =>
     route.fulfill({
       json: {
@@ -276,6 +292,9 @@ async function enabledProduct(
   );
   await page.route('**/api/v1/workspace', (route) => route.fulfill({ json: workspace }));
   await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: reportFixture() }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(reportFixture().metrics) }),
+  );
   // STK-F2-03: os 12 splits no painel de análises (mesmos filtros do relatório).
   await page.route('**/api/v1/analytics/splits?*', (route) =>
     route.fulfill({ json: splitsFixture() }),
@@ -293,10 +312,21 @@ async function enabledProduct(
     route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
   );
 }
+async function openMobileProductNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 0) <= 760) {
+    await page.getByRole('button', { name: 'Abrir navegação', exact: true }).click();
+  }
+}
+async function exerciseShowAmountsToggle(page: Page) {
+  await page.getByRole('button', { name: 'Ocultar valores', exact: true }).click();
+  await page.getByRole('button', { name: 'Mostrar valores', exact: true }).click();
+}
 for (const scenario of [
   {
     name: 'open without settlement',
     state: 'open' as const,
+    latestOutcome: null,
+    statusExpected: 'Pendente',
     returnAmount: '0.00',
     returnExpected: '—',
     profit: '0.00',
@@ -307,6 +337,8 @@ for (const scenario of [
   {
     name: 'open after positive partial cashout',
     state: 'open' as const,
+    latestOutcome: 'partial_cashout' as const,
+    statusExpected: 'Cashout parcial',
     returnAmount: '65.00',
     returnExpected: 'R$ 65,00',
     profit: '25.00',
@@ -317,6 +349,8 @@ for (const scenario of [
   {
     name: 'open after negative partial cashout',
     state: 'open' as const,
+    latestOutcome: 'partial_cashout' as const,
+    statusExpected: 'Cashout parcial',
     returnAmount: '25.00',
     returnExpected: 'R$ 25,00',
     profit: '-15.00',
@@ -327,6 +361,8 @@ for (const scenario of [
   {
     name: 'settled with a win',
     state: 'settled' as const,
+    latestOutcome: 'win' as const,
+    statusExpected: 'Ganha',
     returnAmount: '200.00',
     returnExpected: 'R$ 200,00',
     profit: '100.00',
@@ -337,6 +373,8 @@ for (const scenario of [
   {
     name: 'settled with a loss',
     state: 'settled' as const,
+    latestOutcome: 'loss' as const,
+    statusExpected: 'Perdida',
     returnAmount: '0.00',
     returnExpected: 'R$ 0,00',
     profit: '-100.00',
@@ -347,6 +385,8 @@ for (const scenario of [
   {
     name: 'settled with zero profit',
     state: 'settled' as const,
+    latestOutcome: 'void' as const,
+    statusExpected: 'Reembolso',
     returnAmount: '100.00',
     returnExpected: 'R$ 100,00',
     profit: '0.00',
@@ -356,9 +396,9 @@ for (const scenario of [
   },
 ]) {
   test(`financial display distinguishes ${scenario.name}`, async ({ page }) => {
-    const sample: Bet = {
-      ...bet,
+    const sample: Bet = todayBet({
       state: scenario.state,
+      latestOutcome: scenario.latestOutcome,
       remaining:
         scenario.state === 'settled'
           ? '0.00'
@@ -367,33 +407,110 @@ for (const scenario of [
             : '100.00',
       returnAmount: scenario.returnAmount,
       profit: scenario.profit,
-    };
+    });
     await enabledProduct(page, fixture(), [sample], sample);
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        'bettrack.preview.preferences',
+        JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+      ),
+    );
     await page.goto('/');
+    await exerciseShowAmountsToggle(page);
+    await openMobileProductNavigation(page);
     await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    // STK-F2-18: casa a célula pelo NOME da coluna, não pelo índice. A Fase 3
-    // passou a mostrar 8 das 14 colunas por padrão, o que deslocou a coluna de
-    // retorno — e o índice 11 passou a apontar para outra célula, fazendo o
-    // teste reprovar por um motivo que não tinha nada a ver com o que ele
-    // verifica. Localizar pelo `th` é o que o teste quer dizer.
-    const realizedReturn = page
-      .locator('.product-table tbody tr')
-      .first()
-      .locator('td[data-column="return"]');
-    await expect(realizedReturn).toContainText(scenario.returnExpected);
-    await expect(realizedReturn).toHaveClass(new RegExp(`\\b${scenario.tone}\\b`));
-    if (scenario.qualifier !== 'Realizado') {
-      await expect(realizedReturn).toContainText(scenario.qualifier);
-    }
-    await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
-    const detail = page.getByRole('dialog').locator('.detail-metrics');
-    const profit = detail.locator('div').filter({ hasText: 'Resultado realizado' });
-    await expect(profit).toContainText(scenario.expected);
-    if (scenario.qualifier !== 'Realizado') {
-      await expect(profit).toContainText(scenario.qualifier);
+    await page.getByRole('button', { name: '$', exact: true }).click();
+    if ((page.viewportSize()?.width ?? 0) > 900) {
+      const row = page.locator('.product-table:not(.bets-history-table) tbody tr').first();
+      const realizedReturn = row.locator('td[data-column="return"]');
+      await expect(realizedReturn).toContainText(scenario.returnExpected);
+      await expect(realizedReturn).toHaveClass(new RegExp('\\b' + scenario.tone + '\\b'));
+      if (scenario.qualifier !== 'Realizado') {
+        await expect(realizedReturn).toContainText(scenario.qualifier);
+      }
+      await expect(row.locator('td[data-column="result"] .status-badge')).toHaveText(
+        scenario.statusExpected,
+      );
+    } else {
+      const card = page.locator('.bettrack-ticket-card').first();
+      await expect(card).toBeVisible();
+      await expect(card.locator('.bettrack-ticket-result')).toHaveClass(
+        new RegExp('\\b' + scenario.tone + '\\b'),
+      );
+      await expect(card).toHaveAttribute('href', '#bets/' + sample.id);
+      const returnCell = card.locator('.bettrack-ticket-amounts > div').nth(1);
+      if (scenario.returnExpected === '—') {
+        await expect(returnCell).toContainText('Retorno potencial');
+        await expect(returnCell).toContainText('R$ 200,00');
+      } else {
+        await expect(returnCell).toContainText('Pago');
+        await expect(returnCell).toContainText(scenario.returnExpected);
+      }
+      if (scenario.latestOutcome === null) {
+        await expect(card.locator('.bettrack-ticket-open-label')).toHaveText('Aberta');
+      } else {
+        await expect(card.locator('.bettrack-ticket-result strong')).toHaveText(
+          scenario.expected.replace(/^\+/, ''),
+        );
+      }
     }
   });
 }
+const payoutPreviewCases: { name: string; overrides: Partial<Bet>; expected: string }[] = [
+  {
+    name: 'rounds exact half cents upward',
+    overrides: { stake: '0.01', remaining: '0.01', odds: '1.50' },
+    expected: 'R$ 0,02',
+  },
+  {
+    name: 'uses remaining principal after a partial cashout',
+    overrides: { stake: '100.00', remaining: '40.00', odds: '2.00' },
+    expected: 'R$ 80,00',
+  },
+  {
+    name: 'excludes freebet principal when it is not returned',
+    overrides: {
+      stake: '1.00',
+      remaining: '1.00',
+      odds: '2.00',
+      freebetId: '10000000-0000-4000-8000-00000000000b',
+      freebetStakeReturned: false,
+    },
+    expected: 'R$ 1,00',
+  },
+  {
+    name: 'honors a returned promotional stake',
+    overrides: {
+      stake: '1.00',
+      remaining: '1.00',
+      odds: '2.00',
+      freebetId: '10000000-0000-4000-8000-00000000000b',
+      freebetStakeReturned: true,
+    },
+    expected: 'R$ 2,00',
+  },
+];
+
+for (const scenario of payoutPreviewCases) {
+  test(`BetTrack payout preview matches settlement inputs: ${scenario.name}`, async ({ page }) => {
+    const sample = todayBet({ ...scenario.overrides, state: 'open', latestOutcome: null });
+    await enabledProduct(page, fixture(), [], sample);
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'bettrack.preview.preferences',
+        JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+      );
+      sessionStorage.setItem('bettrack:bet-edit-amount-mode', 'money');
+    });
+    await page.goto('/#bets/' + sample.id);
+    await expect(page).toHaveURL(new RegExp('#bets/' + sample.id + '$'));
+    await expect(
+      page.locator('.bettrack-detail-ticket-values > div').nth(1).locator('strong'),
+    ).toHaveText(scenario.expected);
+    await expect(page.locator('.bettrack-settle-card .is-won')).toContainText(scenario.expected);
+  });
+}
+
 test('bets page exposes game, market, ticket kind and result details responsively', async ({
   page,
 }, info) => {
@@ -406,21 +523,30 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     aliases: [],
     active: true,
   });
+  const currentBet = todayBet();
+  const todayLocal = currentBet.selections[0]!.eventDate!;
+  const todayDisplay = [
+    todayLocal.slice(8, 10),
+    todayLocal.slice(5, 7),
+    todayLocal.slice(0, 4),
+  ].join('/');
+  const firstEventAt = todayLocal + 'T20:00:00Z';
+  const secondEventAt = todayLocal + 'T22:30:00Z';
   const scheduledBet: Bet = {
-    ...bet,
+    ...currentBet,
     tipsterId,
     selections: [
       {
-        ...bet.selections[0]!,
-        eventAt: '2026-09-21T20:00:00Z',
-        eventDate: '2026-09-21',
+        ...currentBet.selections[0]!,
+        eventAt: firstEventAt,
+        eventDate: todayLocal,
         dateStatus: 'confirmed',
       },
     ],
   };
   const multipleId = '10000000-0000-4000-8000-000000000005';
   const multipleBet: Bet = {
-    ...bet,
+    ...currentBet,
     id: multipleId,
     ticketNumber: 2,
     ticketKind: 'multiple',
@@ -432,8 +558,8 @@ test('bets page exposes game, market, ticket kind and result details responsivel
         market: 'Resultado final',
         selection: 'Bandeirantes',
         odds: null,
-        eventDate: '2026-09-21',
-        eventAt: '2026-09-21T20:00:00Z',
+        eventDate: todayLocal,
+        eventAt: firstEventAt,
         dateStatus: 'confirmed',
       },
       {
@@ -442,71 +568,54 @@ test('bets page exposes game, market, ticket kind and result details responsivel
         market: 'Total de gols',
         selection: 'Mais de 1,5',
         odds: null,
-        eventDate: '2026-09-22',
-        eventAt: '2026-09-22T22:30:00Z',
+        eventDate: todayLocal,
+        eventAt: secondEventAt,
         dateStatus: 'confirmed',
       },
     ],
   };
   await enabledProduct(page, workspace, [scheduledBet, multipleBet], scheduledBet);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'bettrack.preview.preferences',
+      JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+    ),
+  );
   await page.route(`**/api/v1/bets/${multipleId}`, (route) =>
     route.fulfill({ json: { bet: multipleBet, settlements: [] } }),
   );
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  if ((page.viewportSize()?.width ?? 0) > 900) {
+    await page.setViewportSize({ width: 1024, height: 900 });
+  }
   await page.goto('/');
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
 
+  await page.getByRole('button', { name: '$', exact: true }).click();
   if ((page.viewportSize()?.width ?? 0) <= 900) {
-    const card = page.locator('.bet-list-card').first();
+    await expect(page.locator('.bet-table-desktop:not(.bets-history-table-wrap)')).toBeHidden();
+    const cards = page.locator('.bettrack-ticket-card');
+    await expect(cards).toHaveCount(2);
+    const card = cards.nth(0);
     await expect(card).toBeVisible();
-    const fields = card.locator('.bet-list-card-fields');
-    await expect(fields.locator('dt')).toHaveText([
-      'Nº do bilhete',
-      'Data do jogo',
-      'Hora do jogo',
-      'Evento',
-      'Aposta/seleção',
-      'Mercado',
-      'Tipo da aposta',
-      'Tipster',
-      'Casa de aposta',
-      'Valor apostado',
-      'Odd',
-      'Retorno recebido',
-      'Resultado/status',
-      'ID técnico da aposta',
-    ]);
-    await expect(fields).toContainText('21/09/2026');
-    await expect(fields).toContainText('17:00');
-    await expect(fields).toContainText('Gols');
-    await expect(fields).toContainText('Simples');
-    await expect(fields).toContainText('Analista');
-    await expect(fields).toContainText('Bet365');
-    await expect(fields).toContainText('R$ 100,00');
-    await expect(fields).toContainText('2.00');
-    await expect(fields).toContainText('Não liquidado');
-    await expect(fields).toContainText('Pendente');
-    await expect(fields).toContainText(scheduledBet.id);
-    await page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }).click();
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(scheduledBet.id);
-    const multipleCard = page.locator('.bet-list-card').nth(1);
-    await expect(multipleCard.locator('.bet-list-card-fields')).toContainText(
-      'Vários jogos/horários',
-    );
-    await multipleCard.getByText('Seleções do bilhete (2)').click();
-    await expect(multipleCard).toContainText('Bandeirantes x Litoral');
-    await expect(multipleCard).toContainText('21/09/2026');
-    await expect(multipleCard).toContainText('17:00');
-    await expect(multipleCard).toContainText('Serra x Vale');
-    await expect(multipleCard).toContainText('22/09/2026');
-    await expect(multipleCard).toContainText('19:30');
-    await expect(
-      page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
-    ).toHaveText('Copiar');
+    await expect(card).toHaveAttribute('href', '#bets/' + scheduledBet.id);
+    await expect(card).toContainText('Mais de 2,5');
+    await expect(card).toContainText('Aurora × Central');
+    await expect(card.locator('.bettrack-ticket-amounts')).toContainText('R$ 100,00');
+    await expect(card.locator('.bettrack-ticket-amounts')).toContainText('Retorno potencial');
+    await expect(card.locator('.bettrack-ticket-amounts')).toContainText('R$ 200,00');
+    await expect(card.locator('.bettrack-ticket-open-label')).toHaveText('Aberta');
+
+    const multipleCard = cards.nth(1);
+    await expect(multipleCard).toHaveAttribute('href', '#bets/' + multipleBet.id);
+    await expect(multipleCard).toContainText('2 seleções');
+    await expect(multipleCard).toContainText('Bandeirantes');
+    await expect(multipleCard).toContainText('Mais de 1,5');
     await page.screenshot({ path: info.outputPath('bets-list.png'), fullPage: true });
   } else {
+    await expect(page.locator('.bet-table-desktop:not(.bets-history-table-wrap)')).toBeVisible();
+    await expect(page.locator('.bettrack-theme .bet-list-cards')).toBeHidden();
     await expect(
       page.getByText('A tabela é mais larga que a tela.', { exact: false }),
     ).toBeVisible();
@@ -559,8 +668,8 @@ test('bets page exposes game, market, ticket kind and result details responsivel
     // lerem a tabela, não o painel.
     await page.locator('.bet-detail-table thead th').first().click();
     await expect(page.locator('.bet-detail-table tbody tr').first().locator('td')).toHaveText([
-      /#1/,
-      /21\/09\/2026/,
+      /#000001/,
+      new RegExp(todayDisplay),
       /Aurora × Central/,
       /Bet365/,
       /R\$ 100,00/,
@@ -605,31 +714,14 @@ test('bets page exposes game, market, ticket kind and result details responsivel
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(scheduledBet.id);
     await page.getByRole('button', { name: 'Ver aposta Bandeirantes x Litoral' }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toContainText('Bandeirantes x Litoral');
-    await expect(dialog).toContainText('21/09/2026');
-    await expect(dialog).toContainText('17:00');
-    await expect(dialog).toContainText('Serra x Vale');
-    await expect(dialog).toContainText('19:30');
-    /* STK-F2-18 (pendência 1): era `getByRole('button', { name: 'Fechar
-       janela' })`, que não existe aqui. O detalhe da aposta é um DRAWER
-       (bet-drawer.tsx), ancorado à direita desde a Fase 3, e o seu nome
-       acessível é "Fechar detalhe da aposta".
-
-       Duas coisas seguindo o caminho fácil, e por que nenhuma:
-
-       - Não se muda o componente para "Fechar janela": passaria a anunciar
-         janela um painel lateral, que é geometricamente falso. Trocar um
-         nome acessível bom por um que faz o teste passar é uma regressão
-         silenciosa para quem usa leitor de tela.
-       - Não se solta o nome: sem `name`, o locator casa QUALQUER botão do
-         diálogo e a asserção para de provar alguma coisa.
-
-       O que fica é o que a asserção queria provar desde o começo — que
-       existe um botão que fecha ESTA superfície, e que ela fecha de fato.
-       Fixar a string exata só provaria que alguém escreveu aquela string,
-       e reprovaria no dia em que o nome ficasse mais específico. */
-    await dialog.getByRole('button', { name: /Fechar detalhe da aposta/ }).click();
+    await expect(page).toHaveURL(new RegExp(`#bets/${multipleId}$`));
+    await expect(page.getByRole('heading', { name: /PARLAY/ })).toBeVisible();
+    await expect(page.getByText('Bandeirantes x Litoral', { exact: true })).toBeVisible();
+    await expect(page.getByText('Serra x Vale', { exact: true })).toBeVisible();
+    // The BetTrack detail is a full route, not a drawer; return through its
+    // own navigation link before continuing to inspect the table.
+    await page.getByRole('link', { name: /BETS/ }).click();
+    await expect(page).toHaveURL(/#bets$/);
     await expect(
       page.getByRole('button', { name: 'Copiar ID técnico completo da aposta 1' }),
     ).toHaveText('Copiar');
@@ -656,44 +748,227 @@ test('bets table sorts by the proposed columns on desktop', async ({ page }) => 
   test.skip((page.viewportSize()?.width ?? 0) <= 900, 'sorting belongs to the desktop table');
   const secondId = '10000000-0000-4000-8000-000000000006';
   const thirdId = '10000000-0000-4000-8000-000000000007';
+  const currentBet = todayBet();
   const sortedBets: Bet[] = [
-    { ...bet, id: thirdId, ticketNumber: 3, stake: '300.00' },
-    { ...bet, ticketNumber: 1, stake: '100.00' },
-    { ...bet, id: secondId, ticketNumber: 2, stake: '50.00' },
+    { ...currentBet, id: thirdId, ticketNumber: 3, stake: '300.00' },
+    { ...currentBet, ticketNumber: 1, stake: '100.00' },
+    { ...currentBet, id: secondId, ticketNumber: 2, stake: '50.00' },
   ];
   await enabledProduct(page, fixture(), sortedBets, sortedBets[0]!);
   await page.goto('/');
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
 
-  const firstTicket = page.locator('.bet-detail-table tbody tr').first().locator('td').first();
-  await expect(firstTicket).toContainText('#3');
+  const firstTicket = page
+    .locator('.product-table:not(.bets-history-table) tbody tr')
+    .first()
+    .locator('td')
+    .first();
+  await expect(firstTicket).toHaveText('#000003');
 
   const ticketHeader = page.getByRole('columnheader', { name: 'Nº do bilhete' });
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'none');
   await ticketHeader.getByRole('button').click();
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'ascending');
-  await expect(firstTicket).toContainText('#1');
+  await expect(firstTicket).toHaveText('#000001');
   await ticketHeader.getByRole('button').click();
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'descending');
-  await expect(firstTicket).toContainText('#3');
+  await expect(firstTicket).toHaveText('#000003');
 
   const stakeHeader = page.getByRole('columnheader', { name: 'Valor apostado' });
   await stakeHeader.getByRole('button').click();
   await expect(stakeHeader).toHaveAttribute('aria-sort', 'ascending');
   await expect(ticketHeader).toHaveAttribute('aria-sort', 'none');
-  await expect(firstTicket).toContainText('#2');
+  await expect(firstTicket).toHaveText('#000002');
   await stakeHeader.getByRole('button').click();
   await expect(stakeHeader).toHaveAttribute('aria-sort', 'descending');
-  await expect(firstTicket).toContainText('#3');
+  await expect(firstTicket).toHaveText('#000003');
+});
+test('mixed known and missing historical units never produce a partial unit summary', async ({
+  page,
+}) => {
+  const missingUnitBet: Bet = {
+    ...bet,
+    id: '10000000-0000-4000-8000-000000000010',
+    ticketNumber: 10,
+    unitMonth: '2020-01',
+    unitAmount: null,
+    stakeUnits: null,
+  };
+  await enabledProduct(page, fixture(), [bet, missingUnitBet], bet, 'en');
+  await page.goto('/#bets');
+
+  const summary = page.getByRole('group', { name: 'Summary for the filtered period' });
+  await expect(summary).toContainText('2 BETS');
+  await expect(summary.locator('p').nth(0).locator('strong')).toHaveText('—');
+  await expect(summary.locator('p').nth(1).locator('strong')).toHaveText('—');
+});
+
+test('bet-history filters stay as drafts until applied and active chips can be removed or cleared', async ({
+  page,
+}) => {
+  const secondHistoryBet: Bet = {
+    ...bet,
+    id: '10000000-0000-4000-8000-000000000008',
+    ticketNumber: 2,
+    reference: 'TICKET-2',
+    selections: bet.selections.map((selection) => ({ ...selection, event: 'Pine × Harbor' })),
+  };
+  await enabledProduct(page, fixture(), [bet, secondHistoryBet]);
+  const historyRequests: URL[] = [];
+  await page.route('**/api/v1/bets?*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has('historyBefore')) historyRequests.push(url);
+    await route.fulfill({
+      json: {
+        items: url.searchParams.has('search') ? [bet] : [bet, secondHistoryBet],
+        total: url.searchParams.has('search') ? 1 : 2,
+        page: Number(url.searchParams.get('page') ?? 1),
+        pageSize: 100,
+        summary: {
+          count: url.searchParams.has('search') ? 1 : 2,
+          missingUnitBets: 0,
+          stake: url.searchParams.has('search') ? '100.00' : '200.00',
+          profit: '0.00',
+          stakeUnits: url.searchParams.has('search') ? '10.00' : '20.00',
+          profitUnits: '0.00',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  await openMobileProductNavigation(page);
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
+  await expect.poll(() => historyRequests.length).toBeGreaterThan(0);
+  const historyTable = page.locator('.bets-history-table');
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  const initialRequestCount = historyRequests.length;
+
+  await page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' }).fill('Aurora');
+  await page.waitForTimeout(300);
+  expect(historyRequests).toHaveLength(initialRequestCount);
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Aurora');
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toBeVisible();
+
+  const requestsBeforeRemovingChip = historyRequests.length;
+  await page.getByRole('button', { name: 'Remover filtro de busca Aurora' }).click();
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  expect(historyRequests).toHaveLength(requestsBeforeRemovingChip);
+  await expect(page.getByRole('button', { name: 'Remover filtro de busca Aurora' })).toHaveCount(0);
+  await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
+    '',
+  );
+
+  await page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' }).fill('Central');
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.get('search')).toBe('Central');
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toHaveCount(0);
+  const requestsBeforeClearingFilters = historyRequests.length;
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
+  await expect(historyTable.getByText('Pine × Harbor', { exact: true })).toBeVisible();
+  expect(historyRequests).toHaveLength(requestsBeforeClearingFilters);
+  await expect(page.getByRole('button', { name: /Remover filtro de busca/ })).toHaveCount(0);
+  await expect(page.getByRole('searchbox', { name: 'Buscar no histórico de apostas' })).toHaveValue(
+    '',
+  );
+});
+
+test('history accepts a custom market type not present on the first page', async ({ page }) => {
+  const firstPageBets = Array.from({ length: 100 }, (_, index) => ({
+    ...bet,
+    id: `10000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+    ticketNumber: index + 1,
+  }));
+  const customMarket = 'Regional Total';
+  const customMarketBet: Bet = {
+    ...bet,
+    id: '10000000-0000-4000-8000-000000000900',
+    ticketNumber: 101,
+    selections: [{ ...bet.selections[0]!, market: customMarket }],
+  };
+  const historyRequests: URL[] = [];
+  await enabledProduct(page, fixture(), firstPageBets);
+  await page.route('**/api/v1/bets?*', async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has('historyBefore')) return route.fallback();
+    historyRequests.push(url);
+    const filtered = url.searchParams.get('marketType') === customMarket;
+    const items = filtered ? [customMarketBet] : firstPageBets;
+    await route.fulfill({
+      json: {
+        items,
+        total: filtered ? 1 : 101,
+        page: Number(url.searchParams.get('page') ?? 1),
+        pageSize: 100,
+        summary: {
+          count: items.length,
+          missingUnitBets: 0,
+          stake: filtered ? customMarketBet.stake : '10000.00',
+          profit: '0.00',
+          stakeUnits: '1000.00',
+          profitUnits: '0.00',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  await openMobileProductNavigation(page);
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Histórico/i })).toBeVisible();
+  const marketType = page.getByRole('combobox', { name: 'Tipo de mercado' });
+  await expect(
+    page.locator(`#bets-history-market-type-options option[value="${customMarket}"]`),
+  ).toHaveCount(0);
+  await marketType.fill(customMarket);
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+  await expect
+    .poll(() => historyRequests.at(-1)?.searchParams.get('marketType'))
+    .toBe(customMarket);
+  await expect(page.getByText(`${customMarket}: Mais de 2,5`)).toBeVisible();
+});
+
+test('empty display preferences start in Portuguese and expose only translated languages', async ({
+  page,
+}) => {
+  await enabledProduct(page, fixture(), [bet], bet, null);
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+  await openMobileProductNavigation(page);
+  await expect(page.getByRole('link', { name: 'Apostas', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Configurações', exact: true }).click();
+  const language = page.getByRole('combobox', { name: 'Idioma' });
+  await expect(language).toHaveValue('pt-BR');
+  await expect(language.locator('option')).toHaveCount(2);
+  await expect(language.locator('option[value="es"]')).toHaveCount(0);
+});
+
+test('unsupported stored language falls back to the supported Portuguese interface', async ({
+  page,
+}) => {
+  await enabledProduct(page, fixture(), [bet], bet, 'es');
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+  await openMobileProductNavigation(page);
+  await expect(page.getByRole('link', { name: 'Apostas', exact: true })).toBeVisible();
 });
 test('private workspace renders real fixture amounts, usable navigation and responsive layouts', async ({
   page,
 }, info) => {
-  await enabledProduct(page, fixture(), [bet]);
+  const currentBet = todayBet();
+  await enabledProduct(page, fixture(), [currentBet], currentBet, null);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'bettrack.preview.preferences',
+      JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+    ),
+  );
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await exerciseShowAmountsToggle(page);
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(
-    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+    page.locator('.overview-dashboard-metrics').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
   const smallText = await page
     .locator('.sidebar-caption, .product-eyebrow, .metric-card small, .product-footer')
@@ -737,24 +1012,26 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     ),
   ).toBe(true);
   await page.screenshot({ path: info.outputPath('product-overview.png'), fullPage: true });
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Apostas', exact: true }).click();
   await expect(page.getByRole('group', { name: /Filtrar histórico por resultado/i })).toBeVisible();
-  await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Data do evento pendente');
+  if ((page.viewportSize()?.width ?? 0) <= 900) {
+    const currentCard = page.locator('.bettrack-ticket-card[href="#bets/' + currentBet.id + '"]');
+    await expect(currentCard).toBeVisible();
+    await currentCard.click();
+  } else {
+    await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
+  }
+  await expect(page).toHaveURL(new RegExp('#bets/' + currentBet.id + '$'));
+  await expect(page.getByRole('heading', { name: 'MAIS DE 2,5', exact: true })).toBeVisible();
+  await expect(page.locator('.bettrack-detail-ticket')).toContainText('Aurora × Central');
   await page.screenshot({ path: info.outputPath('product-detail.png'), fullPage: true });
-  // STK-F2-18 (pendência 1): mesmo drawer, mesmo motivo que a linha 614 —
-  // o detalhe da aposta é um drawer e o nome acessível dele é específico.
-  // A linha 1244 deste arquivo NÃO entra aqui: ela abre o `Dialog`
-  // centralizado de Importação, cujo nome acessível já é "Fechar janela".
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: /Fechar detalhe da aposta/ })
-    .click();
+  await page.getByRole('link', { name: /BETS/ }).click();
+  await expect(page).toHaveURL(/#bets$/);
   if ((page.viewportSize()?.width ?? 0) <= 760) {
+    await openMobileProductNavigation(page);
     const nav = page.locator('.product-sidebar nav');
-    const configLabel = page
-      .getByRole('link', { name: 'Configurações', exact: true })
-      .locator('.nav-label');
+    const configLabel = page.getByRole('link', { name: 'Configurações', exact: true });
     const navLayout = await nav.evaluate((element) => ({
       width: element.clientWidth,
       scrollWidth: element.scrollWidth,
@@ -784,12 +1061,11 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     expect(labelLayout.scrollWidth).toBeLessThanOrEqual(labelLayout.width);
     expect(labelLayout.height).toBeGreaterThan(12);
 
-    await page.getByRole('link', { name: 'Apostas', exact: true }).click();
-    await expect(page.locator('.bet-list-card').last()).toBeVisible();
+    await expect(page.locator('.bettrack-ticket-card').last()).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const bottomSpacing = await page.evaluate(() => {
       const navElement = document.querySelector('.product-sidebar');
-      const lastRow = document.querySelector('.bet-list-card:last-child');
+      const lastRow = document.querySelector('.bettrack-ticket-card:last-child');
       if (!navElement || !lastRow) throw new Error('Mobile nav or last bet card missing');
       return {
         navTop: navElement.getBoundingClientRect().top,
@@ -799,7 +1075,7 @@ test('private workspace renders real fixture amounts, usable navigation and resp
     expect(bottomSpacing.rowBottom).toBeLessThanOrEqual(bottomSpacing.navTop + 1);
   }
   await page.getByRole('link', { name: 'Configurações', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Unidades mensais' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Configurações', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 test('first use requires explicit balance confirmation and preserves decimal strings', async ({
@@ -823,8 +1099,11 @@ test('first use requires explicit balance confirmation and preserves decimal str
     return route.fulfill({ json: { id: 'initial', version: workspace.version } });
   });
   await page.goto('/');
-
-  await expect(page.getByRole('button', { name: '+ Nova aposta', exact: true })).toBeDisabled();
+  const dashboardBetEntry = page.locator(
+    '.bettrack-dashboard-widget .bettrack-dashboard-empty button',
+  );
+  await expect(dashboardBetEntry).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Nova aposta', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Conferir saldos iniciais' }).click();
   await page.getByLabel('Reserva (R$)', { exact: true }).fill('1.234,56');
   await page.getByLabel('Bet365 (R$)', { exact: true }).fill('765,44');
@@ -833,6 +1112,7 @@ test('first use requires explicit balance confirmation and preserves decimal str
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Confirmar saldos iniciais' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(dashboardBetEntry).toBeEnabled();
   expect(commands[0]).toMatchObject({
     type: 'bankroll.initialize',
     expectedVersion: 1,
@@ -861,12 +1141,7 @@ test('ambiguous network result is recovered with the same key and body after rel
   await page.goto('/#finance');
   await page.getByLabel('Valor da movimentação', { exact: true }).fill('25,50');
   await page.locator('.bankroll-move-card').getByRole('button', { name: 'Registrar' }).click();
-  await expect(page.getByLabel('Valor (R$)', { exact: true })).toHaveValue('25,50');
-  await page.getByLabel('Motivo / observação').fill('Aporte conferido');
-  await page.getByRole('button', { name: 'Registrar movimentação' }).click();
-  await expect(
-    page.getByRole('dialog').getByRole('button', { name: 'Verificar operação' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Verificar operação', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Verificar operação', exact: true })).toBeVisible();
   // A primeira chamada já falhou e foi abortada antes do reload. Aguarde a
@@ -893,14 +1168,25 @@ test('ambiguous network result is recovered with the same key and body after rel
 test('partial cashout sends closed principal independently from received money', async ({
   page,
 }) => {
-  await enabledProduct(page, fixture(), [bet]);
+  const todayCashoutBet = todayBet();
+  await enabledProduct(page, fixture(), [todayCashoutBet], todayCashoutBet);
   let command: unknown;
   await page.route('**/api/v1/commands', (route) => {
     command = route.request().postDataJSON();
     return route.fulfill({ json: { id: betId, version: 2 } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Ver aposta Aurora × Central' }).click();
+  await openMobileProductNavigation(page);
+  await page.getByRole('link', { name: 'Apostas', exact: true }).click();
+  const isDesktop = (page.viewportSize()?.width ?? 0) > 900;
+  const cashoutBet = isDesktop
+    ? page.getByRole('button', { name: 'Ver aposta Aurora × Central', exact: true })
+    : page.locator(`a.bettrack-ticket-card[href="#bets/${betId}"]`);
+  await expect(cashoutBet).toBeVisible();
+  if (!isDesktop) {
+    await expect(cashoutBet).toHaveAttribute('aria-label', /^Open .+ — Open$/);
+  }
+  await cashoutBet.click();
   await page.getByRole('button', { name: 'Liquidar aposta', exact: true }).click();
   await page.getByLabel('Resultado', { exact: true }).selectOption('partial_cashout');
   await page.getByLabel('Principal encerrado (R$)', { exact: true }).fill('40,00');
@@ -916,13 +1202,21 @@ test('partial cashout sends closed principal independently from received money',
   });
 });
 test('an expired API session removes cached private records', async ({ page }) => {
-  await enabledProduct(page, fixture(), [bet]);
+  await enabledProduct(page, fixture(), [bet], bet, null);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'bettrack.preview.preferences',
+      JSON.stringify({ language: 'pt-BR', currency: 'BRL' }),
+    ),
+  );
   await page.goto('/');
+  await exerciseShowAmountsToggle(page);
   await expect(
-    page.locator('.metric-grid .metric-card.featured').getByText('R$ 1.000,00', { exact: true }),
+    page.locator('.overview-dashboard-metrics').getByText('R$ 1.000,00', { exact: true }),
   ).toBeVisible();
   await page.route('**/api/v1/me', (route) => route.fulfill({ status: 401, json: {} }));
   await page.route('**/api/v1/journal?*', (route) => route.fulfill({ status: 401, json: {} }));
+  await openMobileProductNavigation(page);
   await page.getByRole('link', { name: 'Banca', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Entrar com Google' })).toBeVisible();
   await expect(page.getByText('R$ 1.000,00', { exact: true })).toHaveCount(0);
@@ -1217,7 +1511,7 @@ test('review displays conflicting evidence, leaves unknown dates blank and confi
       bet: {
         bookmakerId: house,
         stake: '25.50',
-        odds: '2.10',
+        odds: '2.1',
         placedAt: '2026-09-01T18:00:00.000Z',
         freebetId: null,
         selections: [{ eventDate: null, eventAt: null, dateStatus: 'pending' }],
@@ -1412,12 +1706,7 @@ function calendarItem(): CalendarItem {
     scheduleStatus: 'scheduled',
   };
 }
-async function eventRoutes(
-  page: Page,
-  item = calendarItem(),
-  searches: EventSearch[] = [],
-  enabled = false,
-) {
+async function calendarRoutes(page: Page, item = calendarItem()) {
   await page.route('**/api/v1/calendar?*', (route) => {
     const pending = new URL(route.request().url()).searchParams.get('view') === 'pending';
     return route.fulfill({
@@ -1453,38 +1742,13 @@ async function eventRoutes(
       },
     });
   });
-  await page.route(`**/api/v1/events/${selectionId}`, (route) => route.fulfill({ json: item }));
-  await page.route('**/api/v1/event-search/status', (route) =>
-    route.fulfill({
-      json: {
-        providers: [
-          {
-            provider: 'thesportsdb',
-            enabled,
-            dailyUsed: 1,
-            dailyLimit: 60,
-            monthlyUsed: 2,
-            monthlyLimit: 1500,
-          },
-          {
-            provider: 'tavily',
-            enabled: false,
-            dailyUsed: 0,
-            dailyLimit: 20,
-            monthlyUsed: 0,
-            monthlyLimit: 600,
-          },
-        ],
-      },
-    }),
-  );
-  await page.route('**/api/v1/event-search?*', (route) => route.fulfill({ json: searches }));
 }
-test('calendar distinguishes selections from bets and saves a partial date without inventing a time', async ({
+
+test('calendar preserves counts and opens linked bets without date-review actions', async ({
   page,
 }, info) => {
-  await enabledProduct(page);
-  await eventRoutes(page);
+  await enabledProduct(page, fixture(), []);
+  await calendarRoutes(page);
   const commands: Record<string, unknown>[] = [];
   await page.route('**/api/v1/commands', (route) => {
     commands.push(route.request().postDataJSON());
@@ -1501,134 +1765,38 @@ test('calendar distinguishes selections from bets and saves a partial date witho
       () => document.documentElement.scrollWidth <= (visualViewport?.width ?? innerWidth),
     ),
   ).toBe(true);
+  await expect(page.getByRole('button', { name: 'Conferir data', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Pendências (1)' }).click();
   await expect(page.getByRole('heading', { name: 'Datas a conferir' })).toBeVisible();
   await expect(page.getByText('Sem data', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Conferir data', exact: true })).toHaveCount(0);
+  await page
+    .getByRole('button', { name: /^Ver aposta/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(new RegExp('#bets/' + betId + '$'));
+  await expect(page.getByRole('heading', { name: 'Seleções' })).toBeVisible();
   await expect(
-    page.getByText('Fonte desativada neste ambiente. O preenchimento manual está disponível.'),
+    page.getByRole('heading', { name: bet.selections[0]!.selection, exact: true }),
   ).toBeVisible();
-  await page.getByLabel('Data do evento', { exact: true }).fill('2026-09-09');
-  await page.getByLabel('Motivo da atualização').fill('Data confirmada na programação oficial');
-  await page.getByRole('checkbox', { name: /Conferi o evento, a data e o fuso/ }).check();
-  await page.getByRole('button', { name: 'Salvar data conferida' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(commands).toHaveLength(1);
-  expect(commands[0]).toMatchObject({
-    type: 'event.update',
-    selectionId,
-    eventDate: '2026-09-09',
-    eventAt: null,
-    dateStatus: 'confirmed',
-    candidateId: null,
-    expectedVersion: 1,
-  });
-});
-test('source results preserve a manual date until explicitly selected and reviewed across a UTC day boundary', async ({
-  page,
-}, info) => {
-  const item = calendarItem();
-  const candidateId = '10000000-0000-4000-8000-000000000012';
-  const search: EventSearch = {
-    id: '10000000-0000-4000-8000-000000000013',
-    selectionId,
-    provider: 'thesportsdb',
-    query: item.selection.event,
-    dateHint: null,
-    state: 'complete',
-    errorCode: null,
-    cached: false,
-    createdAt: '2026-09-01T12:00:00Z',
-    candidates: [
-      {
-        id: candidateId,
-        provider: 'thesportsdb',
-        title: 'Aurora vs Central',
-        url: 'https://www.thesportsdb.com/event/123',
-        excerpt: 'Liga fictícia',
-        rawDate: '2026-09-01',
-        rawTime: '00:30:00Z',
-        suggestedAt: '2026-09-01T00:30:00Z',
-        postponed: false,
-      },
-    ],
-  };
-  await enabledProduct(page);
-  await eventRoutes(page, item, [search]);
-  const commands: Record<string, unknown>[] = [];
-  await page.route('**/api/v1/commands', (route) => {
-    commands.push(route.request().postDataJSON());
-    return route.fulfill({ json: { id: betId, version: 2 } });
-  });
-  await page.goto('/#calendar');
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
-  // STK-F2-18: o nome acessível do link de fonte externa não leva mais o
-  // glifo `↗`. Um caractere Unicode como parte do nome é anunciado pelo
-  // leitor de tela ("Aurora vs Central seta para cima à direita") e não
-  // descreve nada — o link JÁ É a ida para fora, e é `rel` que declara isso
-  // para a tecnologia assistiva.
-  await expect(page.getByRole('link', { name: 'Aurora vs Central', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Data do evento', { exact: true })).toHaveValue('2026-09-05');
+  await expect(
+    page.getByRole('button', { name: 'Conferir data e fontes', exact: true }),
+  ).toHaveCount(0);
   expect(commands).toHaveLength(0);
-  await page.getByRole('button', { name: 'Usar esta fonte na conferência' }).click();
-  await expect(page.getByLabel('Data do evento', { exact: true })).toHaveValue('2026-08-31');
-  await expect(page.getByLabel('Horário em São Paulo (opcional)')).toHaveValue('21:30:00');
-  await expect(page.getByLabel('Confiança na data')).toHaveValue('estimated');
-  await page.getByLabel('Confiança na data').selectOption('confirmed');
-  await page.getByLabel('Motivo da atualização').fill('Mesmo evento, horário e fuso conferidos');
-  await page.getByRole('checkbox', { name: /Conferi o evento, a data e o fuso/ }).check();
-  await page.screenshot({ path: info.outputPath('event-review.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Salvar data conferida' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(commands[0]).toMatchObject({
-    type: 'event.update',
-    eventDate: '2026-08-31',
-    eventAt: '2026-09-01T00:30:00.000Z',
-    candidateId,
-    dateStatus: 'confirmed',
-  });
 });
-test('an uncertain event search reuses its key and input after reloading without retrying automatically', async ({
-  page,
-}) => {
-  const item = calendarItem();
+
+test('overview and analytics expose their intended metric grids', async ({ page }) => {
   await enabledProduct(page);
-  await eventRoutes(page, item, [], true);
-  const attempts: { key: string | undefined; body: unknown }[] = [];
-  await page.route('**/api/v1/event-search', async (route) => {
-    attempts.push({
-      key: route.request().headers()['idempotency-key'],
-      body: route.request().postDataJSON(),
-    });
-    if (attempts.length === 1) await route.abort('failed');
-    else
-      await route.fulfill({
-        json: {
-          id: attempts[0]!.key,
-          selectionId,
-          provider: 'thesportsdb',
-          query: item.selection.event,
-          dateHint: '2026-09-05',
-          state: 'pending',
-          candidates: [],
-          errorCode: null,
-          cached: false,
-          createdAt: '2026-09-01T12:00:00Z',
-        },
-      });
-  });
-  await page.goto('/#calendar');
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Buscar programação' }).click();
-  await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
-  await page.reload();
-  await page.getByRole('button', { name: 'Conferir data', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
-  expect(attempts).toHaveLength(1);
-  await page.getByRole('button', { name: 'Verificar consulta' }).click();
-  await expect(page.getByRole('button', { name: 'Buscar programação' })).toBeVisible();
-  expect(attempts).toHaveLength(2);
-  expect(attempts[0]).toEqual(attempts[1]);
+  const report = reportFixture();
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
+  await page.goto('/');
+  await expect(page.locator('.bettrack-page-overview > .metric-grid')).toBeHidden();
+  await expect(page.locator('.bettrack-page-overview .overview-dashboard-metrics')).toBeVisible();
+  await page.goto('/#analytics');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
+  await expect(page.locator('.bettrack-page-analytics .report-metrics')).toBeVisible();
 });
 
 test('analytics filters reconcile visible results, CSV and bet drilldown on desktop and mobile', async ({
@@ -1659,8 +1827,10 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
     metrics: {
       ...emptyMetrics,
       bets: 1,
-      profit: i % 2 ? '50.00' : '-25.00',
-      realProfit: i % 2 ? '50.00' : '-25.00',
+      settledBets: 1,
+      profit: i === 0 ? '50.00' : i === 1 ? '40.00' : '-25.00',
+      realProfit: i === 0 ? '50.00' : i === 1 ? '40.00' : '-25.00',
+      profitUnits: i === 0 ? '1.000000' : i === 1 ? '2.000000' : '-0.500000',
     },
   }));
   report.byBookmaker = [{ key: house, label: 'Bet365', metrics: report.metrics }];
@@ -1705,6 +1875,10 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   );
   await page.goto('/#analytics');
   await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  const bestDay = page.locator('[data-testid="best-day"]');
+  await expect(bestDay.locator('strong')).toHaveText('+2.0 U');
+  await expect(bestDay.locator('small')).toContainText('2');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
   /* As DUAS bordas do período são preenchidas aqui, e as duas de propósito.
 
      A tela deriva `from` do primeiro dia do MÊS CORRENTE (analytics.tsx:213) e
@@ -1741,7 +1915,9 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
     .fill(saoPauloDate(new Date()).slice(0, 8) + '01');
   await page.getByLabel('Data final da análise').fill(saoPauloDate(new Date()));
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
-  await expect(page.getByText('12,50%', { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator('.report-metrics').getByText('12,50%', { exact: true }).first(),
+  ).toBeVisible();
   // STK-F2-02: ROI, P&L, yield e N juntos; N ao lado de cada métrica e
   // aviso de baixa amostra (N = 8 abaixo do mínimo configurado de 30).
   await expect(page.getByText('Yield real', { exact: true }).first()).toBeVisible();
@@ -1780,7 +1956,8 @@ test('analytics filters reconcile visible results, CSV and bet drilldown on desk
   await expect(csv).toHaveAttribute('href', /sport=sport%3Afutebol/);
   await expect(csv).toHaveAttribute('href', /includeEstimated=true/);
   await page.getByRole('button', { name: 'Aurora × Central', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp('#bets/' + betId + '$'));
+  await expect(page.getByRole('heading', { name: 'MAIS DE 2,5', exact: true })).toBeVisible();
 });
 
 test('analytics chart axis labels honour the same 12px floor as the rest of the product', async ({
@@ -1831,6 +2008,7 @@ test('analytics chart axis labels honour the same 12px floor as the rest of the 
   // tentativa (o id useId muda: _r_3g_, _r_3n_, _r_6i_…). É o mesmo guard do
   // teste de analytics acima, pela mesma razão.
   await expect(page.getByRole('heading', { name: 'Análises', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
   /* AS DUAS BORDAS SÃO PREENCHIDAS AQUI — segunda ocorrência da mesma armadilha
      de calendário, e a mesma união de mecanismos já aplicada no teste de
      analytics acima.
@@ -1894,16 +2072,166 @@ test('analytics distinguishes missing units and failed data from empty results',
     route.fulfill({ json: dashboardFixture(report.metrics) }),
   );
   await page.route('**/api/v1/reports/options', (route) => route.fulfill({ json: { sports: [] } }));
-  await page.route('**/api/v1/reports/bets?*', (route) => route.fulfill({ status: 503, json: {} }));
+  let detailAttempts = 0;
+  await page.route('**/api/v1/reports/bets?*', (route) => {
+    detailAttempts += 1;
+    return detailAttempts <= 2
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } });
+  });
   await page.goto('/#analytics');
-  await expect(page.getByText('Unidades a conferir', { exact: true })).toBeVisible();
-  await expect(page.getByText('O total em reais está completo', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
   await expect(
-    page.getByText('Não foi possível carregar o detalhamento.', { exact: false }),
+    page.locator('.report-metrics').getByText('Unidades a conferir', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText('O total em reais está completo', { exact: false })).toBeVisible();
+  const detailsError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar os detalhes do relatório.',
+  });
+  await expect(detailsError).toBeVisible();
+  await expect(detailsError.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await detailsError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(
     page.getByText('Nenhuma aposta corresponde a estes filtros.', { exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
+  await expect(detailsError).toHaveCount(0);
+  expect(detailAttempts).toBe(3);
+});
+
+test('overview analytics errors announce, show an icon and retry main and weekly reports', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  const monthStart = `${saoPauloDate(new Date()).slice(0, 7)}-01`;
+  let mainAttempts = 0;
+  let weeklyAttempts = 0;
+  let dashboardAttempts = 0;
+  await page.route('**/api/v1/reports?*', async (route) => {
+    const from = new URL(route.request().url()).searchParams.get('from');
+    if (from === monthStart) {
+      mainAttempts += 1;
+      if (mainAttempts <= 2) return route.fulfill({ status: 503, json: {} });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return route.fulfill({ json: report });
+    }
+    weeklyAttempts += 1;
+    return weeklyAttempts <= 2
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: report });
+  });
+  await page.route('**/api/v1/dashboard?*', (route) => {
+    dashboardAttempts += 1;
+    return route.fulfill({ json: dashboardFixture(report.metrics) });
+  });
+  await page.goto('/#analytics');
+
+  const mainError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar o relatório de análises.',
+  });
+  await expect(mainError).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Resumo carregado' })).toBeVisible();
+  await expect(page.getByText('APOSTAS LIQUIDADAS', { exact: true })).toBeVisible();
+  await expect(mainError.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await mainError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(page.getByText('Carregando relatório de análises…', { exact: true })).toBeVisible();
+  await expect(mainError).toHaveCount(0);
+  await expect.poll(() => mainAttempts).toBe(3);
+  expect(dashboardAttempts).toBe(1);
+
+  const weeklyError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar os resultados semanais.',
+  });
+  await expect(weeklyError).toBeVisible();
+  await expect(weeklyError.locator('svg[aria-hidden="true"]')).toBeVisible();
+  await weeklyError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(weeklyError).toHaveCount(0);
+  await expect.poll(() => weeklyAttempts).toBe(3);
+});
+
+test('analytics dashboard failure leaves the report visible and retries only the dashboard', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  const today = saoPauloDate(new Date());
+  const monthStart = `${today.slice(0, 7)}-01`;
+  report.metrics = {
+    ...emptyMetrics,
+    bets: 1,
+    settledBets: 1,
+    profit: '10.00',
+    realProfit: '10.00',
+    profitUnits: '1.000000',
+    knownProfitUnits: '1.000000',
+    yieldReal: '10.00',
+    hitRateReal: '100.00',
+    hitWinsReal: 1,
+    hitEligibleReal: 1,
+  };
+  report.timeline = [{ date: today, metrics: { ...report.metrics } }];
+  let mainReportAttempts = 0;
+  let dashboardAttempts = 0;
+  await page.route('**/api/v1/reports?*', (route) => {
+    if (new URL(route.request().url()).searchParams.get('from') === monthStart)
+      mainReportAttempts += 1;
+    return route.fulfill({ json: report });
+  });
+  await page.route('**/api/v1/dashboard?*', (route) => {
+    dashboardAttempts += 1;
+    return dashboardAttempts <= 2
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: dashboardFixture(report.metrics) });
+  });
+  await page.goto('/#analytics');
+
+  const dashboardError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar os indicadores do painel.',
+  });
+  await expect(dashboardError).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Relatório carregado' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Resultados do relatório' })).toContainText(today);
+  await dashboardError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(dashboardError).toHaveCount(0);
+  await expect.poll(() => dashboardAttempts).toBe(3);
+  expect(mainReportAttempts).toBe(1);
+});
+
+test('sports options failure stays visible while more filters are collapsed and recovers', async ({
+  page,
+}) => {
+  await enabledProduct(page);
+  const report = reportFixture();
+  await page.route('**/api/v1/reports?*', (route) => route.fulfill({ json: report }));
+  await page.route('**/api/v1/dashboard?*', (route) =>
+    route.fulfill({ json: dashboardFixture(report.metrics) }),
+  );
+  let optionsAttempts = 0;
+  await page.route('**/api/v1/reports/options', (route) => {
+    optionsAttempts += 1;
+    return optionsAttempts <= 2
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: { sports: [{ key: 'sport:futebol', label: 'Futebol' }] } });
+  });
+  await page.route('**/api/v1/reports/bets?*', (route) =>
+    route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 25 } }),
+  );
+  await page.goto('/#analytics');
+  await page.getByRole('button', { name: 'Abrir análise detalhada', exact: true }).click();
+
+  const filters = page
+    .locator('details.report-definitions')
+    .filter({ has: page.getByText('Mais filtros', { exact: true }) });
+  await expect(filters).toBeVisible();
+  await expect(filters).toHaveJSProperty('open', false);
+  const optionsError = page.getByRole('alert').filter({
+    hasText: 'Não foi possível carregar as opções de esportes.',
+  });
+  await expect(optionsError).toBeVisible();
+  await optionsError.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(optionsError).toHaveCount(0);
+  await expect.poll(() => optionsAttempts).toBe(3);
+  await expect(filters).toHaveJSProperty('open', false);
 });
 
 test('confirms origin and event date on the canonical draft before importing (R5)', async ({
@@ -2306,7 +2634,7 @@ test('the Mini App explains how to open it when Telegram is unavailable (R5)', a
 test('owner panel footer shows the stamped release version', async ({ page }) => {
   await enabledProduct(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel', exact: true })).toBeVisible();
   await expect(page.locator('.product-footer')).toContainText('v0.1.0-beta.1');
 });
 

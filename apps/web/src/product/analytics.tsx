@@ -1,3 +1,5 @@
+import { displayLocale, formatDisplayMoney } from './preferences.js';
+import { dailyLimitStateSchema } from './daily-limit.js';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -6,18 +8,20 @@ import {
   Line,
   BarChart,
   Bar,
+  Cell,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   ReferenceLine,
   Legend,
+  LabelList,
 } from 'recharts';
 import {
+  analyticsDashboardSchema,
   reportSchema,
   reportBetPageSchema,
   reportOptionsSchema,
-  formatReportBRL,
   saoPauloDate,
   type Workspace,
   type PerformanceReport,
@@ -31,6 +35,7 @@ import { betFinancialDisplay } from './financial-display.js';
 import { DashboardPanel } from './dashboard.js';
 import { readChartTokens } from './chart-tokens.js';
 import { SplitsPanel } from './splits.js';
+import { AnalyticsErrorCard } from './analytics-error.js';
 
 const dayLabel = (date: string) => date.split('-').reverse().join('/');
 const units = (value: string | null) =>
@@ -42,6 +47,13 @@ const decimal = (value: bigint) =>
   `${value < 0n ? '-' : ''}${(value < 0n ? -value : value) / 100n}.${String((value < 0n ? -value : value) % 100n).padStart(2, '0')}`;
 const percent = (value: string | null) =>
   value === null ? 'Sem base' : value.replace('.', ',') + '%';
+const exactCents = (value: string) => BigInt(value.replace('.', ''));
+const exactUnits = (value: string) => BigInt(value.replace('.', ''));
+const signedUnitText = (value: string | null) => {
+  if (value === null) return '—';
+  const units = Number(value);
+  return `${units > 0 ? '+' : units < 0 ? '−' : ''}${Math.abs(units).toFixed(1)} U`;
+};
 function params(query: ReportQuery) {
   return new URLSearchParams(
     Object.entries(query).filter(
@@ -116,7 +128,7 @@ function Evolution({ report }: { report: PerformanceReport }) {
                       <div className="report-tooltip">
                         {dayLabel(payload[0].payload.date)}
                         <br />
-                        {formatReportBRL(payload[0].payload.periodExact)}
+                        {formatDisplayMoney(payload[0].payload.periodExact)}
                       </div>
                     ) : null
                   }
@@ -145,9 +157,9 @@ function Evolution({ report }: { report: PerformanceReport }) {
                       <div className="report-tooltip">
                         {dayLabel(payload[0].payload.date)}
                         <br />
-                        Real: {formatReportBRL(payload[0].payload.realExact)}
+                        Real: {formatDisplayMoney(payload[0].payload.realExact)}
                         <br />
-                        Freebets: {formatReportBRL(payload[0].payload.promoExact)}
+                        Freebets: {formatDisplayMoney(payload[0].payload.promoExact)}
                       </div>
                     ) : null
                   }
@@ -198,15 +210,618 @@ function Evolution({ report }: { report: PerformanceReport }) {
                 <tr key={row.date}>
                   <td>{dayLabel(row.date)}</td>
                   <td>{row.metrics.bets}</td>
-                  <td>{formatReportBRL(row.metrics.realProfit)}</td>
-                  <td>{formatReportBRL(row.metrics.freebetProfit)}</td>
-                  <td>{formatReportBRL(row.metrics.profit)}</td>
+                  <td>{formatDisplayMoney(row.metrics.realProfit)}</td>
+                  <td>{formatDisplayMoney(row.metrics.freebetProfit)}</td>
+                  <td>{formatDisplayMoney(row.metrics.profit)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </details>
+    </div>
+  );
+}
+
+/** BetTrack presentation for the same account-owned report data. */
+export function BetTrackAnalyticsPage({
+  workspace,
+  onOpenDetailed,
+}: {
+  workspace: Workspace;
+  onOpenDetailed?: () => void;
+}) {
+  const today = saoPauloDate(new Date());
+  const month = today.slice(0, 7);
+  const monday = new Date(`${today}T12:00:00Z`);
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  const currentWeekStart = monday.toISOString().slice(0, 10);
+  const previousMonday = new Date(monday);
+  previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
+  const previousWeekStart = previousMonday.toISOString().slice(0, 10);
+  const twoWeeksBackDate = new Date(previousMonday);
+  twoWeeksBackDate.setUTCDate(twoWeeksBackDate.getUTCDate() - 7);
+  const twoWeeksBackStart = twoWeeksBackDate.toISOString().slice(0, 10);
+  const lastCompletedDay = new Date(monday);
+  lastCompletedDay.setUTCDate(lastCompletedDay.getUTCDate() - 1);
+  const lastCompletedDate = lastCompletedDay.toISOString().slice(0, 10);
+  const report = useQuery({
+    queryKey: ['product', 'overview-report', month, workspace.version],
+    queryFn: () => request(`/api/v1/reports?from=${month}-01&to=${today}`, reportSchema),
+  });
+  const weeklyReport = useQuery({
+    queryKey: ['product', 'weekly-net', twoWeeksBackStart, lastCompletedDate, workspace.version],
+    queryFn: () =>
+      request(`/api/v1/reports?from=${twoWeeksBackStart}&to=${lastCompletedDate}`, reportSchema),
+  });
+  const dashboard = useQuery({
+    queryKey: ['product', 'dashboard', month, today, workspace.version],
+    queryFn: () =>
+      request(
+        `/api/v1/dashboard?from=${month}-01&to=${today}&kind=all&includeEstimated=false`,
+        analyticsDashboardSchema,
+      ),
+  });
+  const dailyLimit = useQuery({
+    queryKey: ['product', 'daily-limit', workspace.version],
+    queryFn: () => request('/api/v1/bankroll/rules', dailyLimitStateSchema),
+  });
+  const [dimension, setDimension] = useState<'sport' | 'book' | 'tipster' | 'amount'>('sport');
+  if (!report.data || !dashboard.data) {
+    const partialMetrics = report.data?.metrics ?? dashboard.data?.metrics ?? null;
+    return (
+      <div className="bettrack-analytics">
+        {report.isError ? (
+          <AnalyticsErrorCard
+            message="Não foi possível carregar o relatório de análises."
+            onRetry={() => void report.refetch()}
+            isRetrying={report.isFetching}
+          />
+        ) : !report.data ? (
+          <p role="status">Carregando relatório de análises…</p>
+        ) : null}
+        {dashboard.isError ? (
+          <AnalyticsErrorCard
+            message="Não foi possível carregar os indicadores do painel."
+            onRetry={() => void dashboard.refetch()}
+            isRetrying={dashboard.isFetching}
+          />
+        ) : !dashboard.data ? (
+          <p role="status">Carregando indicadores do painel…</p>
+        ) : null}
+        {partialMetrics ? (
+          <section aria-label={report.data ? 'Relatório carregado' : 'Resumo carregado'}>
+            <h2>{report.data ? 'Relatório carregado' : 'Resumo carregado'}</h2>
+            <div className="bettrack-analytics-kpis">
+              <div>
+                <span>RESULTADO EM UNIDADES</span>
+                <strong>{signedUnitText(partialMetrics.profitUnits)}</strong>
+                <small>{formatDisplayMoney(partialMetrics.profit)}</small>
+              </div>
+              <div>
+                <span>RENDIMENTO</span>
+                <strong>
+                  {partialMetrics.yieldReal === null
+                    ? '—'
+                    : `${Number(partialMetrics.yieldReal).toFixed(1)}%`}
+                </strong>
+                <small>sobre o valor arriscado</small>
+              </div>
+              <div>
+                <span>TAXA DE ACERTO</span>
+                <strong>
+                  {partialMetrics.hitRateReal === null
+                    ? '—'
+                    : `${Number(partialMetrics.hitRateReal).toFixed(1)}%`}
+                </strong>
+                <small>
+                  {partialMetrics.hitWinsReal} de {partialMetrics.hitEligibleReal}
+                </small>
+              </div>
+              <div>
+                <span>APOSTAS LIQUIDADAS</span>
+                <strong>{partialMetrics.settledBets}</strong>
+                <small>no período selecionado</small>
+              </div>
+            </div>
+            {report.data ? (
+              <section aria-label="Resultados do relatório">
+                <h3>Resultados registrados</h3>
+                <ul>
+                  {report.data.timeline.slice(-7).map((bucket) => (
+                    <li key={bucket.date}>
+                      {bucket.date}: {signedUnitText(bucket.metrics.profitUnits)} ·{' '}
+                      {formatDisplayMoney(bucket.metrics.profit)}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
+    );
+  }
+
+  const summary = report.data.metrics;
+  const indicators = dashboard.data.indicators;
+  const settledCount = dashboard.data.metrics.settledBets;
+  const positiveCents = exactCents(indicators.grossWinProfit);
+  const negativeCents = exactCents(indicators.grossLossProfit);
+  const profitFactor =
+    negativeCents > 0n
+      ? (Number(positiveCents) / Number(negativeCents)).toFixed(2)
+      : positiveCents > 0n
+        ? '∞'
+        : '—';
+  const firstResult =
+    report.data.timeline.find((bucket) => bucket.metrics.settledBets > 0)?.date ?? today;
+  const firstResultLabel = new Intl.DateTimeFormat(displayLocale(), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${firstResult}T12:00:00Z`));
+  const weeklyNet = [twoWeeksBackStart, previousWeekStart].map((start, index) => {
+    const rows = (weeklyReport.data?.timeline ?? []).filter((bucket) => {
+      const upperBound = index === 0 ? previousWeekStart : currentWeekStart;
+      return bucket.date >= start && bucket.date < upperBound;
+    });
+    let total = 0n;
+    let missingUnits = false;
+    for (const row of rows) {
+      if (
+        row.metrics.settledBets > 0 &&
+        (row.metrics.profitUnits === null || row.metrics.missingUnitBets > 0)
+      )
+        missingUnits = true;
+      if (row.metrics.profitUnits !== null)
+        total += BigInt(row.metrics.profitUnits.replace('.', ''));
+    }
+    const absolute = total < 0n ? -total : total;
+    const unitsValue = missingUnits
+      ? null
+      : `${total < 0n ? '-' : ''}${absolute / 1_000_000n}.${String(absolute % 1_000_000n).padStart(6, '0')}`;
+    return {
+      label: new Intl.DateTimeFormat(displayLocale(), {
+        day: 'numeric',
+        month: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(`${start}T12:00:00Z`)),
+      units: unitsValue === null ? 0 : Number(unitsValue),
+      unitsLabel: unitsValue === null ? 'units unavailable' : signedUnitText(unitsValue),
+      missingUnits,
+    };
+  });
+  const redWeeks = weeklyNet.filter((week) => week.units < 0).length;
+  const chartTokens = readChartTokens();
+  const sample = settledCount;
+  const sampleLabel =
+    sample < 25 ? 'TOO EARLY' : sample < 100 ? 'A HINT' : sample < 300 ? 'A TREND' : 'PER SPORT';
+  const sampleHeadline =
+    sample < 25
+      ? "IT'S TOO EARLY TO TELL WHETHER YOU'RE WINNING"
+      : sample < 100
+        ? 'THERE IS A HINT, NOT A CONCLUSION'
+        : sample < 300
+          ? 'A TREND IS TAKING SHAPE'
+          : 'ENOUGH DATA TO COMPARE SPORTS';
+  const sampleWarningHeadline =
+    sample < 25
+      ? "THE MONEY IS REAL. THE CONCLUSION ISN'T."
+      : sample < 100
+        ? 'A HINT IS NOT A CONCLUSION.'
+        : 'A TREND IS NOT A PROMISE.';
+  const sourceRows =
+    dimension === 'sport'
+      ? report.data.bySport
+      : dimension === 'book'
+        ? report.data.byBookmaker
+        : dimension === 'tipster'
+          ? report.data.byTipster
+          : [];
+  const amountRows =
+    dimension === 'amount'
+      ? [
+          { label: 'UNDER 1 U', bets: indicators.underOneUnitBets },
+          { label: '1–3 U', bets: indicators.oneToThreeUnitBets },
+          { label: 'OVER 3 U', bets: indicators.overThreeUnitBets },
+        ].filter((row) => row.bets > 0)
+      : [];
+  const bestDay = report.data.timeline
+    .filter((bucket) => bucket.metrics.settledBets > 0 && bucket.metrics.profitUnits !== null)
+    .reduce<(typeof report.data.timeline)[number] | null>(
+      (best, bucket) =>
+        !best || exactUnits(bucket.metrics.profitUnits!) > exactUnits(best.metrics.profitUnits!)
+          ? bucket
+          : best,
+      null,
+    );
+  const latestWinStreak = indicators.currentWinStreak;
+  const longestStreak = indicators.longestWinStreak;
+  const unit = workspace.units.find((item) => item.month === month)?.amount ?? null;
+  const betsInsideRange = indicators.oneToThreeUnitBets;
+  const parlayShare = Math.round(Number(indicators.parlayStakeSharePct));
+  const lossCount = indicators.lossBets;
+
+  return (
+    <div className="bettrack-analytics">
+      {onOpenDetailed ? (
+        <div className="button-row">
+          <button className="ui-button ui-button-secondary" type="button" onClick={onOpenDetailed}>
+            Open detailed analytics
+          </button>
+        </div>
+      ) : null}
+      <div className="bettrack-analytics-divider" />
+      {report.isError ? (
+        <AnalyticsErrorCard
+          message="Não foi possível atualizar o relatório de análises."
+          onRetry={() => void report.refetch()}
+          isRetrying={report.isFetching}
+        />
+      ) : null}
+      {dashboard.isError ? (
+        <AnalyticsErrorCard
+          message="Não foi possível atualizar os indicadores do painel."
+          onRetry={() => void dashboard.refetch()}
+          isRetrying={dashboard.isFetching}
+        />
+      ) : null}
+      <h2 className="bettrack-analytics-confidence">{sampleHeadline}</h2>
+      <div className="bettrack-analytics-kpis">
+        <div>
+          <span>NET</span>
+          <strong className="is-positive">{signedUnitText(summary.profitUnits)}</strong>
+          <small>
+            {formatDisplayMoney(summary.profit)} · 1 U = {unit ? formatDisplayMoney(unit) : '—'}
+          </small>
+        </div>
+        <div>
+          <span>YIELD</span>
+          <strong>
+            {summary.yieldReal === null
+              ? '—'
+              : `${Number(summary.yieldReal) > 0 ? '+' : ''}${Number(summary.yieldReal).toFixed(1)}%`}
+          </strong>
+          <small>per unit risked</small>
+        </div>
+        <div>
+          <span>PROFIT FACTOR</span>
+          <strong>{profitFactor}</strong>
+          <small>
+            {profitFactor === '—' ? 'not enough settled results' : 'you win for every 1 you lose'}
+          </small>
+        </div>
+        <div>
+          <span>HIT RATE</span>
+          <strong>
+            {summary.hitRateReal === null ? '—' : `${Number(summary.hitRateReal).toFixed(1)}%`}
+          </strong>
+          <small>
+            {summary.hitWinsReal} of {summary.hitEligibleReal} · not the metric
+          </small>
+        </div>
+      </div>
+
+      <section className="bettrack-weekly-net" aria-labelledby="bettrack-weekly-net-title">
+        <header>
+          <h2 id="bettrack-weekly-net-title">WEEKLY NET · 2 WEEKS</h2>
+          <span>{redWeeks} IN THE RED</span>
+        </header>
+        {weeklyReport.isError ? (
+          <AnalyticsErrorCard
+            message="Couldn't load weekly results."
+            onRetry={() => void weeklyReport.refetch()}
+            isRetrying={weeklyReport.isFetching}
+          />
+        ) : weeklyReport.isPending ? (
+          <p role="status">Loading weekly results…</p>
+        ) : (
+          <div
+            className="bettrack-weekly-chart"
+            role="img"
+            aria-label={`Weekly net in units: ${weeklyNet.map((week) => `${week.label} ${week.unitsLabel}`).join(', ')}`}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyNet} margin={{ top: 22, right: 18, bottom: 0, left: 18 }}>
+                <CartesianGrid stroke={chartTokens['--border']} vertical={false} />
+                <XAxis dataKey="label" stroke={chartTokens['--text-tertiary']} />
+                <YAxis hide />
+                <ReferenceLine y={0} stroke={chartTokens['--border-strong']} />
+                <Tooltip
+                  formatter={(value) =>
+                    `${Number(value) > 0 ? '+' : ''}${Number(value).toFixed(1)} U`
+                  }
+                />
+                <Bar dataKey="units" isAnimationActive={false} minPointSize={5}>
+                  <LabelList
+                    dataKey="unitsLabel"
+                    position="top"
+                    fill={chartTokens['--text-secondary']}
+                    fontSize={12}
+                    fontWeight={700}
+                  />
+                  {weeklyNet.map((week) => (
+                    <Cell
+                      key={week.label}
+                      fill={week.units >= 0 ? chartTokens['--pos'] : chartTokens['--neg']}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {weeklyNet.some((week) => week.missingUnits) ? (
+          <p>UNITS ARE NOT AVAILABLE FOR SOME BETS IN THIS PERIOD.</p>
+        ) : null}
+      </section>
+
+      <section className="bettrack-sample-warning">
+        <div>
+          <h2>{sampleWarningHeadline}</h2>
+          <p>
+            You won or lost real money and it's in your bankroll. But at {sample} bets, the result
+            is almost all chance: the same number comes from someone with a method and from someone
+            lucky.
+          </p>
+        </div>
+        <div className="bettrack-sample-scale">
+          <strong>YOU'RE HERE · {sample} BETS</strong>
+          <div
+            className="bettrack-sample-track"
+            aria-label={`${sample} settled bets. ${sampleLabel}`}
+          >
+            {[25, 25, 25, 25].map((width, index) => (
+              <span
+                key={index}
+                className={
+                  (sample < 25 && index === 0) ||
+                  (sample >= 25 && sample < 100 && index === 1) ||
+                  (sample >= 100 && sample < 300 && index === 2) ||
+                  (sample >= 300 && index === 3)
+                    ? 'is-current'
+                    : ''
+                }
+                style={{ width: `${width}%` }}
+              />
+            ))}
+          </div>
+          <div className="bettrack-sample-labels">
+            <span>
+              0–24
+              <br />
+              too early
+            </span>
+            <span>
+              25–99
+              <br />a hint
+            </span>
+            <span>
+              100–299
+              <br />a trend
+            </span>
+            <span>
+              300+
+              <br />
+              per sport
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="bettrack-segments">
+        <header>
+          <div>
+            <h2>{sample < 25 ? 'NOTHING TO GO ON YET' : 'BY DIMENSION'}</h2>
+            <p>
+              {sample < 25
+                ? 'Yield per segment is missing on purpose: at these volumes it would be a number that looks like a finding and isn’t. Only the count goes here.'
+                : 'Yield per segment stays hidden at low volumes. Only the count goes here.'}
+            </p>
+          </div>
+          <div className="bettrack-segment-tabs" role="group" aria-label="Compare by">
+            <button
+              className={dimension === 'sport' ? 'is-active' : ''}
+              aria-pressed={dimension === 'sport'}
+              onClick={() => setDimension('sport')}
+            >
+              SPORT
+            </button>
+            <button
+              className={dimension === 'book' ? 'is-active' : ''}
+              aria-pressed={dimension === 'book'}
+              onClick={() => setDimension('book')}
+            >
+              BOOK
+            </button>
+            <button
+              className={dimension === 'tipster' ? 'is-active' : ''}
+              aria-pressed={dimension === 'tipster'}
+              onClick={() => setDimension('tipster')}
+            >
+              TIPSTER
+            </button>
+            <button
+              className={dimension === 'amount' ? 'is-active' : ''}
+              aria-pressed={dimension === 'amount'}
+              onClick={() => setDimension('amount')}
+            >
+              AMOUNT
+            </button>
+          </div>
+        </header>
+        <div className="bettrack-segment-table">
+          <div className="bettrack-segment-row is-heading">
+            <span>
+              {dimension === 'sport'
+                ? 'SPORT'
+                : dimension === 'book'
+                  ? 'BOOK'
+                  : dimension === 'tipster'
+                    ? 'TIPSTER'
+                    : 'AMOUNT'}
+            </span>
+            <span>BETS</span>
+            <span>UNITS</span>
+            <span>ROI</span>
+          </div>
+          {dimension === 'amount'
+            ? amountRows.map((row) => (
+                <div className="bettrack-segment-row" key={row.label}>
+                  <strong>{row.label}</strong>
+                  <span>{row.bets}</span>
+                  <span>—</span>
+                  <span>—</span>
+                </div>
+              ))
+            : sourceRows.map((row) => (
+                <div className="bettrack-segment-row" key={row.key}>
+                  <strong>{row.label.toUpperCase()}</strong>
+                  <span>{row.metrics.settledBets}</span>
+                  <span>
+                    {row.metrics.settledBets >= 25 ? signedUnitText(row.metrics.profitUnits) : '—'}
+                  </span>
+                  <span>{row.metrics.settledBets >= 25 ? percent(row.metrics.roiReal) : '—'}</span>
+                  {row.metrics.settledBets < 25 ? (
+                    <small>{25 - row.metrics.settledBets} MORE BEFORE THIS ROW SAYS ANYTHING</small>
+                  ) : null}
+                </div>
+              ))}
+          {dimension !== 'amount' && sourceRows.length === 0 ? (
+            <p className="bettrack-analytics-empty">NO SETTLED BETS IN THIS SEGMENT YET</p>
+          ) : null}
+        </div>
+        {sample < 25 ? (
+          <p className="bettrack-market-note">
+            MARKET CAN’T BE SEGMENTED YET · NEEDS STRUCTURE FROM EXTRACTION
+          </p>
+        ) : null}
+      </section>
+
+      <section className="bettrack-records">
+        <header>
+          <h2>YOUR FIRST RECORDS</h2>
+          <p>
+            Records and consistency, worked out from your own bets. They look backwards on purpose.
+          </p>
+        </header>
+        <div className="bettrack-record-grid">
+          <article data-testid="best-day">
+            <span>BEST DAY</span>
+            <strong>{bestDay ? signedUnitText(bestDay.metrics.profitUnits) : '—'}</strong>
+            <small>
+              {bestDay
+                ? new Intl.DateTimeFormat(displayLocale(), {
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  }).format(new Date(`${bestDay.date}T12:00:00Z`))
+                : settledCount > 0
+                  ? 'Units unavailable'
+                  : 'No settled bets yet'}
+            </small>
+          </article>
+          <article>
+            <span>LONGEST WINNING STREAK</span>
+            <strong>{longestStreak || '—'}</strong>
+            <small>
+              {bestDay
+                ? `${new Intl.DateTimeFormat(displayLocale(), { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${bestDay.date}T12:00:00Z`))} · a record, not where you are now`
+                : 'No settled bets yet'}
+            </small>
+          </article>
+          <article>
+            <span>BETS LOGGED</span>
+            <strong>{summary.bets}</strong>
+            <small>logging is what makes the rest possible</small>
+          </article>
+        </div>
+      </section>
+
+      <section className="bettrack-behaviour">
+        <header>
+          <h2>YOUR BEHAVIOUR CAN ALREADY BE SEEN</h2>
+          <p>Counting needs no sample; inferring does. Facts appear from the first bet.</p>
+        </header>
+        <div className="bettrack-behaviour-grid">
+          <article className="is-fact">
+            <span>FACT · NEEDS NO SAMPLE</span>
+            <h3>
+              {betsInsideRange} OF {settledCount} BETS FIT IN 1–3 U
+            </h3>
+          </article>
+          <article>
+            {dailyLimit.isError ? (
+              <AnalyticsErrorCard
+                message="Couldn't load daily limit details."
+                onRetry={() => void dailyLimit.refetch()}
+                isRetrying={dailyLimit.isFetching}
+              />
+            ) : (
+              <>
+                <span>
+                  {dailyLimit.isPending
+                    ? 'LIMIT LOADING'
+                    : dailyLimit.data?.dailyLimitPercent
+                      ? 'LIMIT SET'
+                      : 'NO LIMIT SET'}
+                </span>
+                <h3>
+                  {dailyLimit.data?.dailyLimit
+                    ? `${formatDisplayMoney(dailyLimit.data.dailyLimit)} DAILY LIMIT`
+                    : dailyLimit.isPending
+                      ? 'CHECKING YOUR BANKROLL'
+                      : "YOU HAVEN'T SET A DAILY LIMIT"}
+                </h3>
+                <p>
+                  {dailyLimit.data?.dailyLimit
+                    ? `${formatDisplayMoney(dailyLimit.data.usedToday)} USED · ${formatDisplayMoney(dailyLimit.data.remainingToday)} REMAINING TODAY`
+                    : 'A limit is configured from Bankroll and recalculates when your bankroll changes.'}
+                </p>
+                <a href="#finance">OPEN BANKROLL</a>
+              </>
+            )}
+          </article>
+          <article className="bettrack-behaviour-wide">
+            <span>{lossCount < 20 ? 'CAN’T BE READ YET' : 'LOSSES OBSERVED'}</span>
+            <h3>WHETHER YOU RAISE YOUR STAKE AFTER LOSING</h3>
+            <p>
+              It's the pattern that costs the most money, and seeing it needs at least 20 settled
+              losses. You're at {lossCount}. We won't say you do it: the data can't tell us yet.
+            </p>
+            <div className="bettrack-behaviour-track">
+              <i style={{ width: `${Math.min(100, (lossCount / 20) * 100)}%` }} />
+            </div>
+            <small>{lossCount} OF 20 LOSSES</small>
+          </article>
+          <article>
+            <span>{settledCount < 25 ? 'STREAK · NO READING' : 'WINNING STREAK'}</span>
+            <h3>
+              {latestWinStreak || longestStreak} WINS IN A ROW
+              {settledCount < 25 ? ', AND THAT’S EXPECTED' : ''}
+            </h3>
+            <p>
+              At {settledCount} bets, a run of up to 3 either way is normal. A streak is not a
+              measure of skill.
+            </p>
+          </article>
+          <article>
+            <span>PARLAYS · DATA</span>
+            <h3>{parlayShare}% OF WHAT YOU RISK GOES ON PARLAYS</h3>
+            <p>Their performance can be compared when enough settled tickets are available.</p>
+          </article>
+        </div>
+      </section>
+      <p className="bettrack-analytics-period">
+        {summary.settledBets} SETTLED BETS · SINCE {firstResultLabel.toUpperCase()} ·{' '}
+        <a
+          href={`/api/v1/exports/csv?from=${month}-01&to=${today}&kind=all&includeEstimated=false`}
+        >
+          EXPORT CSV ↓
+        </a>
+      </p>
     </div>
   );
 }
@@ -364,15 +979,14 @@ export default function AnalyticsPage({
               Incluir datas estimadas
             </label>
           </div>
-          {options.isError ? (
-            <p role="alert">
-              Não foi possível carregar os esportes.{' '}
-              <button type="button" className="text-link" onClick={() => void options.refetch()}>
-                Tentar novamente
-              </button>
-            </p>
-          ) : null}
         </details>
+        {options.isError ? (
+          <AnalyticsErrorCard
+            message="Não foi possível carregar as opções de esportes."
+            onRetry={() => void options.refetch()}
+            isRetrying={options.isFetching}
+          />
+        ) : null}
         <div className="button-row">
           <Button type="submit">Aplicar filtros</Button>
           <Button
@@ -401,12 +1015,11 @@ export default function AnalyticsPage({
           combináveis, unknown preservado e aviso de baixa amostra por split. */}
       <SplitsPanel search={search} version={workspace.version} />
       {report.isError ? (
-        <div className="notice warning" role="alert">
-          Não foi possível carregar a análise.{' '}
-          <Button variant="secondary" onClick={() => void report.refetch()}>
-            Tentar novamente
-          </Button>
-        </div>
+        <AnalyticsErrorCard
+          message="Couldn't load the report."
+          onRetry={() => void report.refetch()}
+          isRetrying={report.isFetching}
+        />
       ) : !report.data ? (
         <p role="status">Calculando resultados…</p>
       ) : (
@@ -446,7 +1059,7 @@ export default function AnalyticsPage({
           <div className="report-context">
             <p>
               Resultado anterior:{' '}
-              <strong>{formatReportBRL(report.data.previous.metrics.profit)}</strong>
+              <strong>{formatDisplayMoney(report.data.previous.metrics.profit)}</strong>
               <br />
               <small>
                 {dayLabel(report.data.previous.from)} a {dayLabel(report.data.previous.to)} · mesmos
@@ -454,9 +1067,9 @@ export default function AnalyticsPage({
               </small>
             </p>
             <p>
-              Resultado real: <strong>{formatReportBRL(report.data.metrics.realProfit)}</strong>
+              Resultado real: <strong>{formatDisplayMoney(report.data.metrics.realProfit)}</strong>
               <br />
-              <small>Freebets: {formatReportBRL(report.data.metrics.freebetProfit)}</small>
+              <small>Freebets: {formatDisplayMoney(report.data.metrics.freebetProfit)}</small>
             </p>
             <p>
               Taxa de acerto real: <strong>{percent(report.data.metrics.hitRateReal)}</strong>
@@ -470,19 +1083,19 @@ export default function AnalyticsPage({
           <Evolution report={report.data} />
           <div className="panel report-context">
             <p>
-              Retornos reais: <strong>{formatReportBRL(report.data.metrics.realReturns)}</strong>
+              Retornos reais: <strong>{formatDisplayMoney(report.data.metrics.realReturns)}</strong>
               <br />
               <small>Liquidações ativas, sem estornos</small>
             </p>
             <p>
               Retornos de freebets:{' '}
-              <strong>{formatReportBRL(report.data.metrics.freebetReturns)}</strong>
+              <strong>{formatDisplayMoney(report.data.metrics.freebetReturns)}</strong>
               <br />
               <small>Créditos recebidos na banca real</small>
             </p>
             <p>
               Valor apostado em freebets:{' '}
-              <strong>{formatReportBRL(report.data.metrics.freebetStake)}</strong>
+              <strong>{formatDisplayMoney(report.data.metrics.freebetStake)}</strong>
               <br />
               <small>Separado do principal real</small>
             </p>
@@ -539,7 +1152,7 @@ export default function AnalyticsPage({
                         </td>
                         <td>{row.metrics.bets}</td>
                         <td className={row.metrics.profit.startsWith('-') ? 'negative' : ''}>
-                          {formatReportBRL(row.metrics.profit)}
+                          {formatDisplayMoney(row.metrics.profit)}
                         </td>
                         <td>{units(row.metrics.profitUnits)}</td>
                         <td>{percent(row.metrics.roiReal)}</td>
@@ -558,12 +1171,11 @@ export default function AnalyticsPage({
               </div>
             </div>
             {bets.isError ? (
-              <p role="alert">
-                Não foi possível carregar o detalhamento.{' '}
-                <Button variant="ghost" onClick={() => void bets.refetch()}>
-                  Tentar novamente
-                </Button>
-              </p>
+              <AnalyticsErrorCard
+                message="Couldn't load report details."
+                onRetry={() => void bets.refetch()}
+                isRetrying={bets.isFetching}
+              />
             ) : !bets.data ? (
               <p role="status">Carregando apostas…</p>
             ) : (

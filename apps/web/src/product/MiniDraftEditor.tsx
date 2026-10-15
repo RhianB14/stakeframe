@@ -1,14 +1,14 @@
+import { formatDisplayDate, formatDisplayMoney } from './preferences.js';
 import { useEffect, useMemo, useState } from 'react';
 import {
   classifyTicketKind,
   deriveBetOrigin,
-  formatBRL,
   normalizeDecimalInput,
   potentialReturnFor,
   type TicketKind,
 } from '@stakeframe/shared';
 import { Button } from '../components/ui/button.js';
-import { ApiFailure, localInstant } from './api.js';
+import { ApiFailure, localDateTime, localInstant } from './api.js';
 import {
   partialFailureMessage,
   planConfirmedSave,
@@ -20,33 +20,16 @@ import { Field } from './forms.js';
 import { MobilePicker } from './MobilePicker.js';
 import { COUNTRY_OPTIONS, SPORT_PICKER_OPTIONS, type PickerOption } from './miniapp-options.js';
 
-const receivedFormat = new Intl.DateTimeFormat('pt-BR', {
-  timeZone: 'America/Sao_Paulo',
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
-
 const inputInstant = (value: string | null) => {
   if (!value) return { date: '', time: '' };
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(value));
-  const read = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? '';
+  const local = localDateTime(value);
   return {
-    date: `${read('year')}-${read('month')}-${read('day')}`,
-    time: `${read('hour')}:${read('minute')}`,
+    date: local.slice(0, 10),
+    time: local.slice(11, 16),
   };
 };
 
-const formatExpiry = (value: string) =>
-  new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T12:00:00Z`));
+const formatExpiry = (value: string) => formatDisplayDate(value);
 
 export function MiniDraftEditor({
   detail,
@@ -246,7 +229,7 @@ export function MiniDraftEditor({
 
   const creditOptions: PickerOption[] = compatibleCredits.map((item) => ({
     value: item.id,
-    label: `Aposta grátis ${formatBRL(item.amount)}`,
+    label: `Aposta grátis ${formatDisplayMoney(item.amount)}`,
     description: `Válida até ${formatExpiry(item.expiresOn)}`,
     icon: '🎟️',
   }));
@@ -552,7 +535,11 @@ export function MiniDraftEditor({
         </header>
         {detail.telegramReceivedAt ? (
           <p className="mini-received-at" role="status">
-            Enviado em {receivedFormat.format(new Date(detail.telegramReceivedAt))}
+            Enviado em{' '}
+            {formatDisplayDate(detail.telegramReceivedAt, {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            })}
           </p>
         ) : null}
         <div className="mini-two-columns">
@@ -773,7 +760,7 @@ export function MiniDraftEditor({
         </div>
         <div className="mini-return-preview">
           <span>Retorno potencial</span>
-          <strong>{potentialReturn ? formatBRL(potentialReturn) : 'Pendente'}</strong>
+          <strong>{potentialReturn ? formatDisplayMoney(potentialReturn) : 'Pendente'}</strong>
         </div>
         <Field label="Status">
           <select

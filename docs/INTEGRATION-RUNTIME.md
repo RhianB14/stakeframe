@@ -130,23 +130,29 @@ confirmação automática apenas reescrevem a resposta final
 (`edit_result_message` / `send_result_message`) e nunca zeram o vínculo. Só a
 limpeza o destrói. Enquanto a mensagem existe, os botões funcionam.
 
-### Limitação conhecida: editar depois da limpeza
+### Correções de apostas
 
-Depois que a aposta sai de `open`, a edição é **só pela Web** — e o comando
-`bet.update` hoje alcança apenas `tipsterId`, `reference` e `selections`
-(`packages/shared/src/finance.ts`). **Valor, odd e casa não têm comando
-corrigível em aposta confirmada**, em nenhum lugar do produto: a divergência
-é recusada com `STATE_CONFLICT` por `canonicalDivergences`
-(`packages/db/src/telegram-sync.ts`), e o bloqueio está registrado no próprio
-código como pendência de produto/contrato.
+`bet.update` aceita correções de tipster, referência e seleções. A Web também
+pode enviar casa, valor, odd total e data/hora em um único comando. Alterações
+de casa, valor ou data deixam o lançamento original intacto e registram a
+diferença em um lançamento compensatório; o histórico financeiro não é
+reescrito. O motivo fica no lançamento e no registro de auditoria.
 
-Isto é uma limitação **conhecida, aceita pelo dono e temporária** até o
-redesign da tela de edição. Não é bug escondido: significa que uma extração
-automática errada em valor ou odd não pode ser corrigida depois que a
-mensagem some. As mitigações hoje são a política fail-closed
-(`automatic-config.ts`), a reprovação em extração incerta
-(`automatic-import.ts`) e o bilhete `incomplete`, que não pode ser liquidado
-antes de ser completado pelo usuário.
+Valor, odd e data/hora de colocação só podem ser alterados enquanto a aposta
+está aberta e não tem histórico de liquidação, inclusive parcial já estornada.
+Depois de qualquer liquidação esses campos ficam bloqueados; seleções e data
+do evento continuam corrigíveis pela Web. A casa também pode mudar no editor
+quando a aposta é em dinheiro; apostas com freebet mantêm a casa compatível
+com o crédito. A unidade do mês é imutável: ao mudar valor ou data, a aposta
+recebe a unidade congelada do mês de destino. Se não existir unidade para esse
+mês, o usuário precisa autorizar salvar sem esse vínculo.
+
+O PATCH da importação no Telegram continua sem permissão para alterar valor,
+odd ou casa diretamente. Ele compara os dados recebidos com o registro
+canônico e recusa divergências, preservando a sincronização entre inbox,
+aposta financeira e mensagem. Importações automáticas incertas continuam
+indo para revisão; o bilhete `incomplete` não pode ser liquidado antes de ser
+completado pelo usuário.
 
 ## Configuração e operação
 

@@ -1,4 +1,5 @@
-import { formatReportBRL, type Bet } from '@stakeframe/shared';
+import type { Bet } from '@stakeframe/shared';
+import { formatDisplayMoney } from './preferences.js';
 
 type FinancialSnapshot = {
   state: Bet['state'];
@@ -29,9 +30,9 @@ export function betFinancialDisplay(bet: FinancialSnapshot): FinancialDisplay {
   }
 
   const profit = Number(bet.profit);
-  const formattedProfit = formatReportBRL(bet.profit);
+  const formattedProfit = formatDisplayMoney(bet.profit);
   return {
-    returnText: formatReportBRL(bet.returnAmount),
+    returnText: formatDisplayMoney(bet.returnAmount),
     profitText: profit > 0 ? `+${formattedProfit}` : formattedProfit,
     qualifier:
       bet.state === 'open'
@@ -70,11 +71,11 @@ export function journalNetEffect(postings: readonly JournalPosting[]): bigint {
   return total;
 }
 
-/** Centavos com sinal, no mesmo formato de `formatReportBRL`. */
+/** Centavos com sinal, usando as preferências de moeda da interface. */
 export function centsLabel(cents: bigint): string {
   const negative = cents < 0n;
   const absolute = negative ? -cents : cents;
   const whole = absolute / 100n;
   const fraction = String(absolute % 100n).padStart(2, '0');
-  return `${negative ? '−' : ''}R$ ${whole.toLocaleString('pt-BR')},${fraction}`;
+  return formatDisplayMoney(`${negative ? '-' : ''}${whole}.${fraction}`);
 }

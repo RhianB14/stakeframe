@@ -143,10 +143,12 @@ com os botões. A mensagem permanece no Telegram enquanto a aposta está
 (`settled` ou `cancelled`). O ciclo está em
 [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
 
-A consequência a levar em conta: depois que a mensagem some, corrigir valor,
-odd ou casa não é possível hoje (o comando `bet.update` não os alcança).
-Limitação **conhecida e aceita** até o redesign da tela de edição — ver a
-seção "Limitação conhecida" em [INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
+Depois que a mensagem some, a Web permite corrigir valor, odd e data/hora da
+aposta enquanto ela está aberta e sem histórico de liquidação. A correção
+financeira fica registrada por lançamentos compensatórios. A casa também pode
+ser corrigida para apostas em dinheiro; após qualquer liquidação, os campos
+financeiros ficam congelados. Veja
+[INTEGRATION-RUNTIME.md](INTEGRATION-RUNTIME.md).
 
 ## Rollback da policy
 
