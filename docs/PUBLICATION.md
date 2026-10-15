@@ -11,8 +11,7 @@ checksum do ZIP, destinos e digests aprovados. O workflow manual
 `Publish approved candidate` não recebe parâmetros para substituir esses valores.
 Só executa na `main` atual, após a CI de push e seus cinco checks aprovados.
 
-A origem das imagens continua sendo `13823486556454b56398db451e1c7887798f9c0e`;
-o commit posterior contém apenas o procedimento de publicação. O download
+Para esta publicação beta14, a origem das imagens é o `sourceSha` `ea7f04f88a840b3303100e332e6c49fc3c2d4859`, fixado no manifesto aprovado. O download
 ocorre dentro do GitHub Actions, com o token temporário do job. Antes de
 autenticar no registry, o procedimento confere run e artifact, checksum e
 tamanho do ZIP, a lista exata de arquivos, os cinco arquivos OCI, manifests e
@@ -31,7 +30,7 @@ público os cinco pacotes aprovados na interface do GitHub e verificar leitura
 anônima por digest. `published.json` registra o push, mas não declara leitura
 pública antes dessa verificação. Os relatórios são retidos por 30 dias.
 
-O ZIP aprovado expira em 08/09/2026 às 09:01:23 UTC. Se estiver indisponível,
+O ZIP ARM64 aprovado expira em `2026-10-16T14:15:24Z`. Se estiver indisponível,
 o procedimento falha; gerar novos bytes exige nova conferência e autorização.
 Deploy, migrações, rede e release `v1.0.0` permanecem nos gates de
 [FIRST-DEPLOYMENT.md](FIRST-DEPLOYMENT.md).
