@@ -24,7 +24,7 @@ Atualizar o teste de primeira aposta para o fluxo de referência vigente: seleci
 
 ### Identidade do calendário
 
-Alinhar a resposta de detalhe da aposta com o item do calendário: a selection detalhada deve ter o mesmo ID do fixture de evento. Isso corrige apenas a identidade do mock: mesmo com `selection.id`, a rota ativa BetTrack detail não renderiza “Conferir data e fontes” (a ação existe no detalhe legado). A decisão entre restaurar a ação via EventReview existente ou assumir a ausência como comportamento intencional permanece pendente do proprietário; não alterar UI/assertions dessa ação até decisão. Não adicionar ID fictício na lógica do produto.
+Decisão do proprietário (m06967): opção 3 — aceitar que a ação “Conferir data” seja removida do calendário e que BetTrack detail não exponha “Conferir data e fontes” nesta PR. Não restaurar UI. Atualizar E2E para preservar as verificações de contagem/pendências e navegação `Ver aposta`→detalhe, afirmando a ausência dos CTAs e que nenhum comando de revisão é enviado. Remover os dois E2Es de UI que exigem EventReview/event-search sem entrada ativa; manter cobertura de backend em `tests/integration/events.test.ts`. Sem alterações de aplicação/API/schema. Custo aceito: a revisão/busca de datas não fica acessível nesses fluxos da interface e perde sua cobertura E2E até eventual reintrodução explícita.
 
 ### Seletores acessíveis
 

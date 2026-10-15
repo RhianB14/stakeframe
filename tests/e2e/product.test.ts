@@ -10,7 +10,6 @@ import {
   type Bet,
   type ImportDetail,
   type CalendarItem,
-  type EventSearch,
 } from '../../packages/shared/src/index.js';
 // STK-F2-18 (PR-1): o medidor vive em tests/helpers/color.ts e é o MESMO que
 // o unit consome. A cópia local que existia aqui só entendia `rgb()` — para um
@@ -1707,18 +1706,7 @@ function calendarItem(): CalendarItem {
     scheduleStatus: 'scheduled',
   };
 }
-function calendarDetailBet(): Bet {
-  return {
-    ...bet,
-    selections: bet.selections.map((selection) => ({ ...selection, id: selectionId })),
-  };
-}
-async function eventRoutes(
-  page: Page,
-  item = calendarItem(),
-  searches: EventSearch[] = [],
-  enabled = false,
-) {
+async function calendarRoutes(page: Page, item = calendarItem()) {
   await page.route('**/api/v1/calendar?*', (route) => {
     const pending = new URL(route.request().url()).searchParams.get('view') === 'pending';
     return route.fulfill({
@@ -1754,38 +1742,13 @@ async function eventRoutes(
       },
     });
   });
-  await page.route(`**/api/v1/events/${selectionId}`, (route) => route.fulfill({ json: item }));
-  await page.route('**/api/v1/event-search/status', (route) =>
-    route.fulfill({
-      json: {
-        providers: [
-          {
-            provider: 'thesportsdb',
-            enabled,
-            dailyUsed: 1,
-            dailyLimit: 60,
-            monthlyUsed: 2,
-            monthlyLimit: 1500,
-          },
-          {
-            provider: 'tavily',
-            enabled: false,
-            dailyUsed: 0,
-            dailyLimit: 20,
-            monthlyUsed: 0,
-            monthlyLimit: 600,
-          },
-        ],
-      },
-    }),
-  );
-  await page.route('**/api/v1/event-search?*', (route) => route.fulfill({ json: searches }));
 }
-test('calendar distinguishes selections from bets and saves a partial date without inventing a time', async ({
+
+test('calendar preserves counts and opens linked bets without date-review actions', async ({
   page,
 }, info) => {
-  await enabledProduct(page, fixture(), [], calendarDetailBet());
-  await eventRoutes(page);
+  await enabledProduct(page, fixture(), []);
+  await calendarRoutes(page);
   const commands: Record<string, unknown>[] = [];
   await page.route('**/api/v1/commands', (route) => {
     commands.push(route.request().postDataJSON());
@@ -1802,150 +1765,24 @@ test('calendar distinguishes selections from bets and saves a partial date witho
       () => document.documentElement.scrollWidth <= (visualViewport?.width ?? innerWidth),
     ),
   ).toBe(true);
+  await expect(page.getByRole('button', { name: 'Conferir data', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Pendências (1)' }).click();
   await expect(page.getByRole('heading', { name: 'Datas a conferir' })).toBeVisible();
   await expect(page.getByText('Sem data', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Conferir data', exact: true })).toHaveCount(0);
   await page
     .getByRole('button', { name: /^Ver aposta/ })
     .first()
     .click();
-  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('#bets/' + betId + '$'));
+  await expect(page.getByRole('heading', { name: 'Seleções' })).toBeVisible();
   await expect(
-    page.getByText('Fonte desativada neste ambiente. O preenchimento manual está disponível.'),
+    page.getByRole('heading', { name: bet.selections[0]!.selection, exact: true }),
   ).toBeVisible();
-  await page.getByLabel('Data do evento', { exact: true }).fill('2026-09-09');
-  await page.getByLabel('Motivo da atualização').fill('Data confirmada na programação oficial');
-  await page.getByRole('checkbox', { name: /Conferi o evento, a data e o fuso/ }).check();
-  await page.getByRole('button', { name: 'Salvar data conferida' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(commands).toHaveLength(1);
-  expect(commands[0]).toMatchObject({
-    type: 'event.update',
-    selectionId,
-    eventDate: '2026-09-09',
-    eventAt: null,
-    dateStatus: 'confirmed',
-    candidateId: null,
-    expectedVersion: 1,
-  });
-});
-test('source results preserve a manual date until explicitly selected and reviewed across a UTC day boundary', async ({
-  page,
-}, info) => {
-  const item = calendarItem();
-  const candidateId = '10000000-0000-4000-8000-000000000012';
-  const search: EventSearch = {
-    id: '10000000-0000-4000-8000-000000000013',
-    selectionId,
-    provider: 'thesportsdb',
-    query: item.selection.event,
-    dateHint: null,
-    state: 'complete',
-    errorCode: null,
-    cached: false,
-    createdAt: '2026-09-01T12:00:00Z',
-    candidates: [
-      {
-        id: candidateId,
-        provider: 'thesportsdb',
-        title: 'Aurora vs Central',
-        url: 'https://www.thesportsdb.com/event/123',
-        excerpt: 'Liga fictícia',
-        rawDate: '2026-09-01',
-        rawTime: '00:30:00Z',
-        suggestedAt: '2026-09-01T00:30:00Z',
-        postponed: false,
-      },
-    ],
-  };
-  await enabledProduct(page, fixture(), [], calendarDetailBet());
-  await eventRoutes(page, item, [search]);
-  const commands: Record<string, unknown>[] = [];
-  await page.route('**/api/v1/commands', (route) => {
-    commands.push(route.request().postDataJSON());
-    return route.fulfill({ json: { id: betId, version: 2 } });
-  });
-  await page.goto('/#calendar');
-  await page
-    .getByRole('button', { name: /^Ver aposta/ })
-    .first()
-    .click();
-  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
-  // STK-F2-18: o nome acessível do link de fonte externa não leva mais o
-  // glifo `↗`. Um caractere Unicode como parte do nome é anunciado pelo
-  // leitor de tela ("Aurora vs Central seta para cima à direita") e não
-  // descreve nada — o link JÁ É a ida para fora, e é `rel` que declara isso
-  // para a tecnologia assistiva.
-  await expect(page.getByRole('link', { name: 'Aurora vs Central', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Data do evento', { exact: true })).toHaveValue('2026-09-05');
+  await expect(
+    page.getByRole('button', { name: 'Conferir data e fontes', exact: true }),
+  ).toHaveCount(0);
   expect(commands).toHaveLength(0);
-  await page.getByRole('button', { name: 'Usar esta fonte na conferência' }).click();
-  await expect(page.getByLabel('Data do evento', { exact: true })).toHaveValue('2026-08-31');
-  await expect(page.getByLabel('Horário em São Paulo (opcional)')).toHaveValue('21:30:00');
-  await expect(page.getByLabel('Confiança na data')).toHaveValue('estimated');
-  await page.getByLabel('Confiança na data').selectOption('confirmed');
-  await page.getByLabel('Motivo da atualização').fill('Mesmo evento, horário e fuso conferidos');
-  await page.getByRole('checkbox', { name: /Conferi o evento, a data e o fuso/ }).check();
-  await page.screenshot({ path: info.outputPath('event-review.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Salvar data conferida' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(commands[0]).toMatchObject({
-    type: 'event.update',
-    eventDate: '2026-08-31',
-    eventAt: '2026-09-01T00:30:00.000Z',
-    candidateId,
-    dateStatus: 'confirmed',
-  });
-});
-test('an uncertain event search reuses its key and input after reloading without retrying automatically', async ({
-  page,
-}) => {
-  const item = calendarItem();
-  await enabledProduct(page, fixture(), [], calendarDetailBet());
-  await eventRoutes(page, item, [], true);
-  const attempts: { key: string | undefined; body: unknown }[] = [];
-  await page.route('**/api/v1/event-search', async (route) => {
-    attempts.push({
-      key: route.request().headers()['idempotency-key'],
-      body: route.request().postDataJSON(),
-    });
-    if (attempts.length === 1) await route.abort('failed');
-    else
-      await route.fulfill({
-        json: {
-          id: attempts[0]!.key,
-          selectionId,
-          provider: 'thesportsdb',
-          query: item.selection.event,
-          dateHint: '2026-09-05',
-          state: 'pending',
-          candidates: [],
-          errorCode: null,
-          cached: false,
-          createdAt: '2026-09-01T12:00:00Z',
-        },
-      });
-  });
-  await page.goto('/#calendar');
-  await page
-    .getByRole('button', { name: /^Ver aposta/ })
-    .first()
-    .click();
-  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Buscar programação' }).click();
-  await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
-  await page.reload();
-  await page
-    .getByRole('button', { name: /^Ver aposta/ })
-    .first()
-    .click();
-  await page.getByRole('button', { name: 'Conferir data e fontes', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Verificar consulta' })).toBeVisible();
-  expect(attempts).toHaveLength(1);
-  await page.getByRole('button', { name: 'Verificar consulta' }).click();
-  await expect(page.getByRole('button', { name: 'Buscar programação' })).toBeVisible();
-  expect(attempts).toHaveLength(2);
-  expect(attempts[0]).toEqual(attempts[1]);
 });
 
 test('overview and analytics expose their intended metric grids', async ({ page }) => {
